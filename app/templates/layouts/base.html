@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}SkinSpire Clinic{% endblock %}</title>
+    
+    <!-- Tailwind CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css') }}">
+    
+    <!-- Custom Styles -->
+    {% block styles %}{% endblock %}
+</head>
+<body class="bg-gray-100 text-gray-900 flex flex-col min-h-screen">
+    {% block body %}{% endblock %}
+    
+    <!-- Core JavaScript -->
+    <script src="{{ url_for('static', filename='js/common/utils.js') }}"></script>
+    
+    <!-- Page-specific JavaScript -->
+    {% block scripts %}{% endblock %}
+</body>
+</html>

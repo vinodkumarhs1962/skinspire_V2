@@ -1,0 +1,84 @@
+# setup.py
+from setuptools import setup, find_packages
+import os
+import sys
+import json
+import subprocess
+from pathlib import Path
+
+class EnvironmentSetup:
+    def __init__(self):
+        self.base_path = Path(__file__).parent.absolute()
+        self.venv_name = "skinspire_v2-env"
+        self.venv_path = Path(os.path.expanduser("~")) / "AppData" / "Local" / "Programs" / self.venv_name if os.name == 'nt' else Path.home() / self.venv_name
+        self.scripts_path = self.venv_path / ("Scripts" if os.name == 'nt' else "bin")
+        self.python_path = self.scripts_path / ("python.exe" if os.name == 'nt' else "python")
+        self.pip_path = self.scripts_path / ("pip.exe" if os.name == 'nt' else "pip")
+
+    def check_postgres(self):
+        """Verify PostgreSQL installation"""
+        if os.name == 'nt':
+            postgres_base = Path(r"C:\Program Files\PostgreSQL")
+            if postgres_base.exists():
+                versions = [d for d in postgres_base.iterdir() if d.is_dir()]
+                if versions:
+                    latest = max(versions, key=lambda x: x.name)
+                    bin_path = latest / 'bin'
+                    if bin_path.exists():
+                        os.environ["PATH"] = f"{bin_path};{os.environ['PATH']}"
+                        return True
+        return False
+
+    def verify_environment(self):
+        """Verify required environment setup"""
+        if not self.check_postgres():
+            print("PostgreSQL installation not found")
+            return False
+        return True
+
+def run_setup():
+    """Run the setup process"""
+    env_setup = EnvironmentSetup()
+    if not env_setup.verify_environment():
+        sys.exit(1)
+
+    # Save path configuration
+    path_config = {
+        "VENV_PATH": str(env_setup.venv_path),
+        "SCRIPTS_PATH": str(env_setup.scripts_path),
+        "PYTHON_PATH": str(env_setup.python_path),
+        "PIP_PATH": str(env_setup.pip_path),
+        "PROJECT_ROOT": str(env_setup.base_path)
+    }
+    
+    with open('path_config.json', 'w') as f:
+        json.dump(path_config, f, indent=4)
+
+    # Run setuptools setup
+    setup(
+        name="skinspire_v2",
+        version="0.1",
+        packages=find_packages(),
+        install_requires=[
+            'Flask==3.1.0',
+            'Flask-SQLAlchemy==3.1.1',
+            'Flask-Login==0.6.3',
+            'Flask-Migrate==4.0.5',
+            'cryptography==42.0.2',
+            'PyJWT==2.8.0',
+            'python-dotenv==1.0.1',
+            'Werkzeug==3.1.3',
+            'polars==0.19.19',
+            'reportlab==4.0.8',
+            'SQLAlchemy==2.0.36',
+            'pytest==8.3.4',
+            'pytest-mock==3.14.0',
+            'schedule==1.2.2',
+            'setuptools==75.8.0',
+            'tabulate==0.9.0',
+        ],
+        python_requires='>=3.12',
+    )
+
+if __name__ == "__main__":
+    run_setup()
