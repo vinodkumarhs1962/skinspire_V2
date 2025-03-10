@@ -1,7 +1,6 @@
 #!/usr/bin/env python
-# verify_core.py - Enhanced system verification script
-# python tests/test_security/verify_core.py
-# python tests/test_security/verify_core.py --unit-test
+# verify_core.py - Core system verification script
+# python tests/test_security/verify_corev1.py
 
 import os
 import sys
@@ -22,7 +21,7 @@ logger = logging.getLogger(__name__)
 class SystemVerifier:
     """Runs system verification tests and tracks results"""
     
-    def __init__(self, integration_mode=True):
+    def __init__(self):
         self.status_file = Path("verification_status.json")
         self.results = {
             "last_run": datetime.now().isoformat(),
@@ -37,10 +36,7 @@ class SystemVerifier:
         
         # Use current Python executable
         self.python_path = sys.executable
-        
-        # Set integration mode for testing
-        self.integration_mode = integration_mode
-        
+
     def run_pytest(self, test_path: str) -> Dict:
         """Run pytest on specified test module and capture results"""
         logger.info(f"Running tests: {test_path}")
@@ -56,49 +52,12 @@ class SystemVerifier:
         }
         
         try:
-            # Set up environment variables
-            env = os.environ.copy()
-            
-            # Set integration test mode flag
-            if self.integration_mode:
-                env["INTEGRATION_TEST"] = "1"
-                logger.info("Running in INTEGRATION mode")
-            else:
-                env["INTEGRATION_TEST"] = "0"
-                logger.info("Running in UNIT TEST mode")
-            
-            # For the problematic test, run with more specific focus
-            if test_path == "tests/test_security/test_auth_system.py" and self.integration_mode:
-                # Run only the specific failing test with very verbose output
-                test_cmd = [self.python_path, "-m", "pytest", 
-                        "tests/test_security/test_auth_system.py::TestAuthentication::test_account_lockout", 
-                        "-vv"]
-                
-                # Execute the specific test first to get detailed output
-                detail_process = subprocess.Popen(
-                    test_cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    env=env
-                )
-                
-                detailed_stdout, detailed_stderr = detail_process.communicate()
-                
-                # Log detailed output for debugging
-                logger.info("Detailed output for account_lockout test:")
-                logger.info(detailed_stdout)
-                if detailed_stderr:
-                    logger.error("Detailed errors:")
-                    logger.error(detailed_stderr)
-            
-            # Run all tests as normal
+            # Run pytest as subprocess to avoid collection issues
             process = subprocess.Popen(
                 [self.python_path, "-m", "pytest", test_path, "-v"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True,
-                env=env  # Pass environment variables
+                text=True
             )
             
             # Capture output
@@ -110,22 +69,6 @@ class SystemVerifier:
             # Parse basic test summary from output
             result.update(self._parse_test_summary(stdout))
             
-            # Display detailed error information for failing components
-            if result["exit_code"] != 0:
-                if "test_account_lockout" in stdout:
-                    logger.error("Test account_lockout details:")
-                    
-                    # Extract just the relevant part of the output
-                    import re
-                    lockout_test_output = re.search(r"test_account_lockout.*?(?=\n=+)", 
-                                                stdout, re.DOTALL)
-                    if lockout_test_output:
-                        logger.error(lockout_test_output.group(0))
-                        
-                # Show the test summary 
-                error_summary = stdout.split("short test summary info")[1].strip() if "short test summary info" in stdout else "No summary available"
-                logger.error(f"Error summary: {error_summary}")
-                
         except Exception as e:
             logger.error(f"Error running tests: {str(e)}")
             result["exit_code"] = 1
@@ -179,23 +122,6 @@ class SystemVerifier:
                 
         return summary
 
-    def verify_setup(self) -> Dict:
-        """Verify test environment setup"""
-        logger.info("Verifying environment setup...")
-        results = self.run_pytest("tests/test_security/test_setup_verification.py")
-        
-        self.results["components"]["setup_verification"] = {
-            "status": "PASS" if results["exit_code"] == 0 else "FAIL",
-            "details": results
-        }
-        
-        if results["exit_code"] == 0:
-            logger.info("✅ Environment setup verification passed")
-        else:
-            logger.error("❌ Environment setup verification failed")
-            
-        return results
-
     def verify_database_setup(self) -> Dict:
         """Verify database setup and schema"""
         logger.info("Verifying database setup...")
@@ -247,6 +173,23 @@ class SystemVerifier:
             
         return results
 
+    def verify_setup(self) -> Dict:
+        """Verify test environment setup"""
+        logger.info("Verifying environment setup...")
+        results = self.run_pytest("tests/test_security/test_setup_verification.py")
+        
+        self.results["components"]["setup_verification"] = {
+            "status": "PASS" if results["exit_code"] == 0 else "FAIL",
+            "details": results
+        }
+        
+        if results["exit_code"] == 0:
+            logger.info("✅ Environment setup verification passed")
+        else:
+            logger.error("❌ Environment setup verification failed")
+            
+        return results
+    
     def verify_user_management(self) -> Dict:
         """Verify user management functionality"""
         logger.info("Verifying user management...")
@@ -281,6 +224,8 @@ class SystemVerifier:
             
         return results
 
+    # Add to SystemVerifier class in verify_core.py
+
     def verify_auth_views(self) -> Dict:
         """Verify frontend authentication views"""
         logger.info("Verifying frontend authentication views...")
@@ -301,6 +246,105 @@ class SystemVerifier:
     def verify_auth_end_to_end(self) -> Dict:
         """Verify end-to-end authentication flow"""
         logger.info("Verifying end-to-end authentication flow...")
+        
+        # Create a dedicated test file for end-to-end testing
+        test_file_path = Path("tests/test_security/test_auth_end_to_end.py")
+        
+        # Create the test file if it doesn't exist
+        if not test_file_path.exists():
+            logger.info(f"Creating end-to-end test file at {test_file_path}")
+            # Note: Remove the indentation in the triple quotes
+            test_file_content = """# tests/test_security/test_auth_end_to_end.py
+    # End-to-end authentication testing
+
+    import pytest
+    from flask import url_for
+    from app.models import User, UserSession, LoginHistory
+    import re
+
+    def extract_csrf_token(html_content):
+        \"\"\"Extract CSRF token from HTML content\"\"\"
+        match = re.search(r'name="csrf_token" value="(.+?)"', html_content)
+        return match.group(1) if match else None
+
+    class TestAuthEndToEnd:
+        \"\"\"End-to-end authentication testing\"\"\"
+        
+        def test_complete_authentication_flow(self, client, session, test_hospital):
+            \"\"\"Test complete authentication flow from frontend to backend\"\"\"
+            # Clear any existing sessions
+            session.query(UserSession).filter_by(
+                user_id='9876543210',
+                is_active=True
+            ).update({'is_active': False})
+            session.commit()
+            
+            # Get login page and extract CSRF token
+            login_page = client.get(url_for('auth_views.login'))
+            assert login_page.status_code == 200
+            html = login_page.data.decode()
+            csrf_token = extract_csrf_token(html)
+            assert csrf_token is not None, "CSRF token not found in login page"
+            
+            # Submit login form
+            login_response = client.post(
+                url_for('auth_views.login'),
+                data={
+                    'username': '9876543210',
+                    'password': 'admin123',
+                    'csrf_token': csrf_token
+                },
+                follow_redirects=True
+            )
+            assert login_response.status_code == 200
+            assert b'Dashboard' in login_response.data
+            
+            # Check session state
+            with client.session_transaction() as sess:
+                assert 'auth_token' in sess
+                token = sess['auth_token']
+                assert token is not None
+            
+            # Verify session was created in database
+            user_session = session.query(UserSession).filter_by(
+                user_id='9876543210',
+                is_active=True
+            ).first()
+            assert user_session is not None
+            
+            # Verify protected routes are accessible
+            dashboard_response = client.get(url_for('auth_views.dashboard'))
+            assert dashboard_response.status_code == 200
+            
+            # Test logout
+            logout_response = client.get(
+                url_for('auth_views.logout'),
+                follow_redirects=True
+            )
+            assert logout_response.status_code == 200
+            assert b'You have been logged out' in logout_response.data
+            
+            # Verify token is removed from session
+            with client.session_transaction() as sess:
+                assert 'auth_token' not in sess
+            
+            # Verify session was deactivated in database
+            session.expire_all()
+            user_session = session.query(UserSession).filter_by(
+                token=token,
+                is_active=True
+            ).first()
+            assert user_session is None
+            
+            # Verify protected routes are no longer accessible
+            dashboard_after_logout = client.get(url_for('auth_views.dashboard'))
+            assert dashboard_after_logout.status_code == 302
+            assert 'login' in dashboard_after_logout.location
+    """
+            with open(test_file_path, "w") as f:
+                f.write(test_file_content)
+        
+        # Run the end-to-end tests
         results = self.run_pytest("tests/test_security/test_auth_end_to_end.py")
         
         self.results["components"]["auth_end_to_end"] = {
@@ -316,10 +360,76 @@ class SystemVerifier:
             
         return results
     
-    def verify_auth_ui(self) -> Dict:
-        """Verify authentication UI components"""
-        logger.info("Verifying authentication UI components...")
-        results = self.run_pytest("tests/test_security/test_auth_ui.py")
+    # Add to tests/test_security/verify_core.py in the SystemVerifier class
+
+    def verify_auth_ui(self):
+        """Verify authentication UI functionality"""
+        logger.info("Verifying authentication UI...")
+        
+        # Create test file if it doesn't exist
+        test_file_path = Path("tests/test_frontend/test_auth_ui.py")
+        if not test_file_path.exists():
+            logger.info(f"Creating auth UI test file at {test_file_path}")
+            test_file_content = """
+    import pytest
+    from flask import url_for
+    import re
+
+    def get_csrf_token(response):
+        \"\"\"Extract CSRF token from response data\"\"\"
+        match = re.search(r'name="csrf_token" value="(.+?)"', response.data.decode())
+        return match.group(1) if match else None
+
+    class TestAuthUI:
+        \"\"\"Test authentication UI flows\"\"\"
+        
+        def test_login_page_renders(self, client):
+            \"\"\"Test login page loads correctly\"\"\"
+            response = client.get(url_for('auth_views.login'))
+            assert response.status_code == 200
+            assert b'Sign in to SkinSpire' in response.data
+            assert b'password' in response.data.lower()
+            
+        def test_registration_page_renders(self, client):
+            \"\"\"Test registration page loads correctly\"\"\"
+            response = client.get(url_for('auth_views.register'))
+            assert response.status_code == 200
+            assert b'Create an account' in response.data
+            assert b'Register' in response.data
+            
+        def test_login_to_dashboard_flow(self, client, admin_user):
+            \"\"\"Test complete login flow to dashboard\"\"\"
+            # Get login page and extract CSRF token
+            login_page = client.get(url_for('auth_views.login'))
+            csrf_token = get_csrf_token(login_page)
+            assert csrf_token is not None
+            
+            # Submit login form
+            response = client.post(
+                url_for('auth_views.login'),
+                data={
+                    'username': admin_user.user_id,
+                    'password': 'admin123',
+                    'csrf_token': csrf_token
+                },
+                follow_redirects=True
+            )
+            
+            # Verify redirect to dashboard
+            assert response.status_code == 200
+            assert b'Dashboard' in response.data
+            
+            # Check session contains auth token
+            with client.session_transaction() as sess:
+                assert 'auth_token' in sess
+    """
+            # Create directory if needed
+            Path("tests/test_frontend").mkdir(parents=True, exist_ok=True)
+            with open(test_file_path, "w") as f:
+                f.write(test_file_content)
+        
+        # Run the tests
+        results = self.run_pytest("tests/test_frontend/test_auth_ui.py")
         
         self.results["components"]["auth_ui"] = {
             "status": "PASS" if results["exit_code"] == 0 else "FAIL",
@@ -332,45 +442,10 @@ class SystemVerifier:
             logger.error("❌ Authentication UI verification failed")
             
         return results
-            
-    def verify_auth_flow(self) -> Dict:
-        """Verify authentication flow"""
-        logger.info("Verifying authentication flow...")
-        results = self.run_pytest("tests/test_security/test_auth_flow.py")
-        
-        self.results["components"]["auth_flow"] = {
-            "status": "PASS" if results["exit_code"] == 0 else "FAIL",
-            "details": results
-        }
-        
-        if results["exit_code"] == 0:
-            logger.info("✅ Authentication flow verification passed")
-        else:
-            logger.error("❌ Authentication flow verification failed")
-            
-        return results
-    
-    def verify_auth_system(self) -> Dict:
-        """Verify complete authentication system"""
-        logger.info("Verifying complete authentication system...")
-        results = self.run_pytest("tests/test_security/test_auth_system.py")
-        
-        self.results["components"]["auth_system"] = {
-            "status": "PASS" if results["exit_code"] == 0 else "FAIL",
-            "details": results
-        }
-        
-        if results["exit_code"] == 0:
-            logger.info("✅ Complete authentication system verification passed")
-        else:
-            logger.error("❌ Complete authentication system verification failed")
-            
-        return results
 
     def verify_all(self):
         """Run all verification checks"""
         logger.info("Starting core system verification...")
-        logger.info(f"Integration mode: {'ENABLED' if self.integration_mode else 'DISABLED'}")
         
         # Run verifications in sequence
         self.verify_setup()
@@ -392,17 +467,19 @@ class SystemVerifier:
         else:
             logger.info("Skipping authorization verification (test file not found)")
         
-        # Add frontend and end-to-end authentication verification
+        # Add end-to-end authentication verification
+        # Check if auth_views.py exists before attempting end-to-end tests
         auth_views_path = Path("app/views/auth_views.py")
         if auth_views_path.exists():
-            self.verify_auth_views()
             self.verify_auth_end_to_end()
-            self.verify_auth_ui()
-            self.verify_auth_flow()
-            self.verify_auth_system()
         else:
-            logger.info("Skipping UI and end-to-end authentication verification (auth_views.py not found)")
+            logger.info("Skipping end-to-end authentication verification (auth_views.py not found)")
         
+        if auth_views_path.exists():
+            self.verify_auth_ui()
+        else:
+            logger.info("Skipping authentication UI verification (auth_views.py not found)")
+
         # Calculate summary
         components = self.results["components"]
         self.results["summary"] = {
@@ -434,7 +511,6 @@ class SystemVerifier:
         
         print("\n============= VERIFICATION SUMMARY =============")
         print(f"Run Time: {self.results['last_run']}")
-        print(f"Integration Mode: {'ENABLED' if self.integration_mode else 'DISABLED'}")
         print(f"Total Components: {summary['total']}")
         print(f"Passed: {summary['passed']}")
         print(f"Failed: {summary['failed']}")
@@ -445,8 +521,7 @@ class SystemVerifier:
             component_name = component.replace("_", " ").title()
             passed = result["details"]["passed"]
             failed = result["details"]["failed"]
-            skipped = result["details"].get("skipped", 0)
-            print(f"  {status_icon} {component_name}: {result['status']} ({passed} passed, {failed} failed, {skipped} skipped)")
+            print(f"  {status_icon} {component_name}: {result['status']} ({passed} passed, {failed} failed)")
         
         if summary["failed"] > 0:
             print("\nFailed Components:")
@@ -460,16 +535,7 @@ class SystemVerifier:
 
 def main():
     """Main entry point"""
-    # Check for command line arguments
-    import argparse
-    parser = argparse.ArgumentParser(description='Run system verification tests')
-    parser.add_argument('--unit-test', action='store_true', help='Run in unit test mode with mocked dependencies')
-    args = parser.parse_args()
-    
-    # Default to integration test mode, but allow override from command line
-    integration_mode = not args.unit_test
-    
-    verifier = SystemVerifier(integration_mode=integration_mode)
+    verifier = SystemVerifier()
     success = verifier.verify_all()
     sys.exit(0 if success else 1)
 

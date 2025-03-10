@@ -84,6 +84,13 @@ def client(app):
     """Create test client"""
     return app.test_client()
 
+# Add to conftest.py  10.3
+@pytest.fixture(autouse=True)
+def ensure_app_context(app):
+    """Ensure tests run within application context"""
+    with app.app_context():
+        yield
+
 @pytest.fixture(scope='session')
 def db_manager(app):
     """Get database manager instance"""
