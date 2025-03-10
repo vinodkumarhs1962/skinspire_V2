@@ -360,6 +360,89 @@ class SystemVerifier:
             
         return results
     
+    # Add to tests/test_security/verify_core.py in the SystemVerifier class
+
+    def verify_auth_ui(self):
+        """Verify authentication UI functionality"""
+        logger.info("Verifying authentication UI...")
+        
+        # Create test file if it doesn't exist
+        test_file_path = Path("tests/test_frontend/test_auth_ui.py")
+        if not test_file_path.exists():
+            logger.info(f"Creating auth UI test file at {test_file_path}")
+            test_file_content = """
+    import pytest
+    from flask import url_for
+    import re
+
+    def get_csrf_token(response):
+        \"\"\"Extract CSRF token from response data\"\"\"
+        match = re.search(r'name="csrf_token" value="(.+?)"', response.data.decode())
+        return match.group(1) if match else None
+
+    class TestAuthUI:
+        \"\"\"Test authentication UI flows\"\"\"
+        
+        def test_login_page_renders(self, client):
+            \"\"\"Test login page loads correctly\"\"\"
+            response = client.get(url_for('auth_views.login'))
+            assert response.status_code == 200
+            assert b'Sign in to SkinSpire' in response.data
+            assert b'password' in response.data.lower()
+            
+        def test_registration_page_renders(self, client):
+            \"\"\"Test registration page loads correctly\"\"\"
+            response = client.get(url_for('auth_views.register'))
+            assert response.status_code == 200
+            assert b'Create an account' in response.data
+            assert b'Register' in response.data
+            
+        def test_login_to_dashboard_flow(self, client, admin_user):
+            \"\"\"Test complete login flow to dashboard\"\"\"
+            # Get login page and extract CSRF token
+            login_page = client.get(url_for('auth_views.login'))
+            csrf_token = get_csrf_token(login_page)
+            assert csrf_token is not None
+            
+            # Submit login form
+            response = client.post(
+                url_for('auth_views.login'),
+                data={
+                    'username': admin_user.user_id,
+                    'password': 'admin123',
+                    'csrf_token': csrf_token
+                },
+                follow_redirects=True
+            )
+            
+            # Verify redirect to dashboard
+            assert response.status_code == 200
+            assert b'Dashboard' in response.data
+            
+            # Check session contains auth token
+            with client.session_transaction() as sess:
+                assert 'auth_token' in sess
+    """
+            # Create directory if needed
+            Path("tests/test_frontend").mkdir(parents=True, exist_ok=True)
+            with open(test_file_path, "w") as f:
+                f.write(test_file_content)
+        
+        # Run the tests
+        results = self.run_pytest("tests/test_frontend/test_auth_ui.py")
+        
+        self.results["components"]["auth_ui"] = {
+            "status": "PASS" if results["exit_code"] == 0 else "FAIL",
+            "details": results
+        }
+        
+        if results["exit_code"] == 0:
+            logger.info("✅ Authentication UI verification passed")
+        else:
+            logger.error("❌ Authentication UI verification failed")
+            
+        return results
+
     def verify_all(self):
         """Run all verification checks"""
         logger.info("Starting core system verification...")
@@ -392,6 +475,11 @@ class SystemVerifier:
         else:
             logger.info("Skipping end-to-end authentication verification (auth_views.py not found)")
         
+        if auth_views_path.exists():
+            self.verify_auth_ui()
+        else:
+            logger.info("Skipping authentication UI verification (auth_views.py not found)")
+
         # Calculate summary
         components = self.results["components"]
         self.results["summary"] = {

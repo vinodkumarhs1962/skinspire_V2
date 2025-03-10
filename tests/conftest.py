@@ -39,20 +39,41 @@ def session(db_session):
 
 @pytest.fixture(scope='session')
 def app():
-    """Create test application with proper configuration and routes"""
-    app = Flask(__name__)
+    import os
+     # Create test application with proper configuration and routes
+    app = Flask(__name__, 
+                template_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'app', 'templates'))
+    
+    # """Create test application with proper configuration and routes"""
+    # app = Flask(__name__)
     
     # Configure application
     app.config.update({
         'TESTING': True,
         'SQLALCHEMY_DATABASE_URI': settings.get_database_url_for_env('testing'),
-        'SECRET_KEY': 'test_secret_key'
+        'SECRET_KEY': 'test_secret_key',
+        'WTF_CSRF_ENABLED': False  # Disable CSRF for testing
     })
     
-    # Register required blueprints for testing
-    from app.security.routes import auth_bp
-    app.register_blueprint(auth_bp)
+    # Initialize Flask-Login
+    from flask_login import LoginManager
+    login_manager = LoginManager()
+    login_manager.init_app(app)
     
+    # Set up user loader
+    @login_manager.user_loader
+    def load_user(user_id):
+        from app.models import User
+        db_manager = get_db()
+        with db_manager.get_session() as session:
+            return session.query(User).get(user_id)
+    
+    # Register blueprints
+    from app.security.routes import auth_bp
+    from app.views.auth_views import auth_views_bp
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(auth_views_bp)
+
     # Log successful setup
     app.logger.info("Test application created with auth blueprint registered")
     
@@ -111,12 +132,17 @@ def ensure_test_triggers_exist(session):
             session.commit()
             logger.info("Created update_timestamp trigger function for testing")
         
+        # Initialize variable before the if statement
+        extension_exists = False
+
         # Check if hash_password function exists (needed for password trigger tests)
         function_exists = session.execute(text(
             "SELECT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid "
             "WHERE n.nspname = 'public' AND p.proname = 'hash_password')"
         )).scalar()
         
+
+
         if not function_exists:
             # Check if pgcrypto extension exists
             extension_exists = session.execute(text(

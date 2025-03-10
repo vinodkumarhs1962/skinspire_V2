@@ -80,6 +80,10 @@ def create_app() -> Flask:
         from app.services.menu_service import register_menu_context_processor
         register_menu_context_processor(app)
 
+        # Register admin_views
+        from app.views.admin_views import admin_views_bp
+        app.register_blueprint(admin_views_bp)
+
         # Initialize Redis session management if available
         if hasattr(settings, 'REDIS_URL') and settings.REDIS_URL:
             try:

@@ -1,39 +1,82 @@
-{% extends "layouts/base.html" %}
+<!-- app/templates/dashboard/index.html -->
+{% extends "layouts/dashboard.html" %}
 
 {% block title %}Dashboard - SkinSpire Clinic{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
 
-{% block body %}
-<div class="min-h-screen bg-gray-100">
-    <header class="bg-white shadow">
-        <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-            <h1 class="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <div>
-                <a href="{{ url_for('auth_views.logout') }}" class="text-blue-600 hover:text-blue-800">
-                    Logout
-                </a>
+{% block content %}
+<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+    <!-- Welcome card -->
+    <div class="col-span-1 md:col-span-2 bg-white overflow-hidden shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <h2 class="text-xl font-semibold text-gray-900">Welcome, {{ current_user.first_name if hasattr(current_user, 'first_name') else current_user.user_id }}</h2>
+            <p class="mt-1 text-gray-600">
+                Welcome to the SkinSpire Hospital Management System.
+                {% if current_user.entity_type == 'staff' %}
+                    You are logged in as staff member.
+                {% else %}
+                    You are logged in as a patient.
+                {% endif %}
+            </p>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <dt class="text-sm font-medium text-gray-500 truncate">Account Status</dt>
+            <dd class="mt-1 text-3xl font-semibold text-gray-900">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    Active
+                </span>
+            </dd>
+        </div>
+    </div>
+    
+    {% if current_user.entity_type == 'staff' %}
+    <!-- Staff-specific cards -->
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <dt class="text-sm font-medium text-gray-500 truncate">Today's Appointments</dt>
+            <dd class="mt-1 text-3xl font-semibold text-gray-900">0</dd>
+        </div>
+    </div>
+    
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <dt class="text-sm font-medium text-gray-500 truncate">Pending Tasks</dt>
+            <dd class="mt-1 text-3xl font-semibold text-gray-900">0</dd>
+        </div>
+    </div>
+    {% else %}
+    <!-- Patient-specific cards -->
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <dt class="text-sm font-medium text-gray-500 truncate">Upcoming Appointments</dt>
+            <dd class="mt-1 text-3xl font-semibold text-gray-900">0</dd>
+        </div>
+    </div>
+    
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <dt class="text-sm font-medium text-gray-500 truncate">Prescriptions</dt>
+            <dd class="mt-1 text-3xl font-semibold text-gray-900">0</dd>
+        </div>
+    </div>
+    {% endif %}
+    
+    <div class="col-span-1 md:col-span-2 lg:col-span-3 bg-white overflow-hidden shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg font-medium text-gray-900">System Information</h3>
+            <div class="mt-4">
+                <p class="text-sm text-gray-600">
+                    SkinSpire Clinic Hospital Management System v1.0
+                </p>
+                <p class="mt-2 text-sm text-gray-600">
+                    For support, please contact the system administrator.
+                </p>
             </div>
         </div>
-    </header>
-    <main>
-        <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-            <div class="px-4 py-6 sm:px-0">
-                <div class="border-4 border-dashed border-gray-200 rounded-lg p-6 bg-white">
-                    <h2 class="text-2xl font-bold mb-4">Welcome to SkinSpire Clinic</h2>
-                    <p class="mb-4">You have successfully logged in to the system.</p>
-                    
-                    {% if current_user.is_authenticated %}
-                    <div class="mt-6">
-                        <h3 class="text-lg font-medium mb-2">Your Account Information</h3>
-                        <ul class="list-inside list-disc">
-                            <li>User ID: {{ current_user.user_id }}</li>
-                            <li>Entity Type: {{ current_user.entity_type if hasattr(current_user, 'entity_type') else 'N/A' }}</li>
-                            <li>Status: {{ "Active" if hasattr(current_user, 'is_active') and current_user.is_active else "N/A" }}</li>
-                        </ul>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </main>
+    </div>
 </div>
 {% endblock %}
