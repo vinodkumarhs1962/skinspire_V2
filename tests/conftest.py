@@ -353,3 +353,35 @@ def reset_login_attempts(session):
     except Exception as e:
         print(f"Error resetting login attempts: {e}")
         session.rollback()
+
+# Add to tests/conftest.py
+
+@pytest.fixture
+def admin_user(session):
+    """Get admin user for testing"""
+    user = session.query(User).filter_by(user_id="9876543210").first()
+    assert user is not None, "Admin user not found in test database"
+    return user
+
+@pytest.fixture
+def logged_in_client(client, admin_user, monkeypatch):
+    """A client that is logged in as admin"""
+    
+    # Mock Flask-Login's current_user
+    class MockUser:
+        is_authenticated = True
+        is_active = True
+        is_anonymous = False
+        
+        @property
+        def user_id(self):
+            return admin_user.user_id
+    
+    from flask_login import current_user
+    monkeypatch.setattr('flask_login.current_user', MockUser())
+    
+    # Set session token
+    with client.session_transaction() as sess:
+        sess['auth_token'] = 'test_token_123'
+    
+    return client

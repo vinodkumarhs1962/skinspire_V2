@@ -1,10 +1,11 @@
 # app/__init__.py
 
 from __future__ import annotations  # Enable future annotations
-from flask import Flask, Blueprint, session, request, g
+from flask import Flask, Blueprint, session, request, g, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, current_user
+from flask_wtf.csrf import CSRFProtect
 from .config.settings import settings
 from .security.bridge import initialize_security
 from app.views.test import test_bp
@@ -14,9 +15,10 @@ from pathlib import Path
 
 # Initialize extensions
 db = SQLAlchemy()
-print(f"Type of db: {type(db)}")
+# print(f"Type of db: {type(db)}")
 migrate = Migrate()
 login_manager = LoginManager()
+csrf = CSRFProtect()
 
 def create_app() -> Flask:
     """
@@ -60,6 +62,7 @@ def create_app() -> Flask:
         db.init_app(app)
         migrate.init_app(app, db)
         login_manager.init_app(app)
+        csrf.init_app(app)
         
         # Configure login manager
         login_manager.login_view = 'auth_views.login'

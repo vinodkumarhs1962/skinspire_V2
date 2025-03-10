@@ -223,6 +223,142 @@ class SystemVerifier:
             logger.error("❌ Authorization verification failed")
             
         return results
+
+    # Add to SystemVerifier class in verify_core.py
+
+    def verify_auth_views(self) -> Dict:
+        """Verify frontend authentication views"""
+        logger.info("Verifying frontend authentication views...")
+        results = self.run_pytest("tests/test_security/test_auth_views.py")
+        
+        self.results["components"]["auth_views"] = {
+            "status": "PASS" if results["exit_code"] == 0 else "FAIL",
+            "details": results
+        }
+        
+        if results["exit_code"] == 0:
+            logger.info("✅ Authentication views verification passed")
+        else:
+            logger.error("❌ Authentication views verification failed")
+            
+        return results
+    
+    def verify_auth_end_to_end(self) -> Dict:
+        """Verify end-to-end authentication flow"""
+        logger.info("Verifying end-to-end authentication flow...")
+        
+        # Create a dedicated test file for end-to-end testing
+        test_file_path = Path("tests/test_security/test_auth_end_to_end.py")
+        
+        # Create the test file if it doesn't exist
+        if not test_file_path.exists():
+            logger.info(f"Creating end-to-end test file at {test_file_path}")
+            # Note: Remove the indentation in the triple quotes
+            test_file_content = """# tests/test_security/test_auth_end_to_end.py
+    # End-to-end authentication testing
+
+    import pytest
+    from flask import url_for
+    from app.models import User, UserSession, LoginHistory
+    import re
+
+    def extract_csrf_token(html_content):
+        \"\"\"Extract CSRF token from HTML content\"\"\"
+        match = re.search(r'name="csrf_token" value="(.+?)"', html_content)
+        return match.group(1) if match else None
+
+    class TestAuthEndToEnd:
+        \"\"\"End-to-end authentication testing\"\"\"
+        
+        def test_complete_authentication_flow(self, client, session, test_hospital):
+            \"\"\"Test complete authentication flow from frontend to backend\"\"\"
+            # Clear any existing sessions
+            session.query(UserSession).filter_by(
+                user_id='9876543210',
+                is_active=True
+            ).update({'is_active': False})
+            session.commit()
+            
+            # Get login page and extract CSRF token
+            login_page = client.get(url_for('auth_views.login'))
+            assert login_page.status_code == 200
+            html = login_page.data.decode()
+            csrf_token = extract_csrf_token(html)
+            assert csrf_token is not None, "CSRF token not found in login page"
+            
+            # Submit login form
+            login_response = client.post(
+                url_for('auth_views.login'),
+                data={
+                    'username': '9876543210',
+                    'password': 'admin123',
+                    'csrf_token': csrf_token
+                },
+                follow_redirects=True
+            )
+            assert login_response.status_code == 200
+            assert b'Dashboard' in login_response.data
+            
+            # Check session state
+            with client.session_transaction() as sess:
+                assert 'auth_token' in sess
+                token = sess['auth_token']
+                assert token is not None
+            
+            # Verify session was created in database
+            user_session = session.query(UserSession).filter_by(
+                user_id='9876543210',
+                is_active=True
+            ).first()
+            assert user_session is not None
+            
+            # Verify protected routes are accessible
+            dashboard_response = client.get(url_for('auth_views.dashboard'))
+            assert dashboard_response.status_code == 200
+            
+            # Test logout
+            logout_response = client.get(
+                url_for('auth_views.logout'),
+                follow_redirects=True
+            )
+            assert logout_response.status_code == 200
+            assert b'You have been logged out' in logout_response.data
+            
+            # Verify token is removed from session
+            with client.session_transaction() as sess:
+                assert 'auth_token' not in sess
+            
+            # Verify session was deactivated in database
+            session.expire_all()
+            user_session = session.query(UserSession).filter_by(
+                token=token,
+                is_active=True
+            ).first()
+            assert user_session is None
+            
+            # Verify protected routes are no longer accessible
+            dashboard_after_logout = client.get(url_for('auth_views.dashboard'))
+            assert dashboard_after_logout.status_code == 302
+            assert 'login' in dashboard_after_logout.location
+    """
+            with open(test_file_path, "w") as f:
+                f.write(test_file_content)
+        
+        # Run the end-to-end tests
+        results = self.run_pytest("tests/test_security/test_auth_end_to_end.py")
+        
+        self.results["components"]["auth_end_to_end"] = {
+            "status": "PASS" if results["exit_code"] == 0 else "FAIL",
+            "details": results
+        }
+        
+        if results["exit_code"] == 0:
+            logger.info("✅ End-to-end authentication verification passed")
+        else:
+            logger.error("❌ End-to-end authentication verification failed")
+            logger.error(f"Error details: {results['error']}")
+            
+        return results
     
     def verify_all(self):
         """Run all verification checks"""
@@ -247,6 +383,14 @@ class SystemVerifier:
             self.verify_authorization()
         else:
             logger.info("Skipping authorization verification (test file not found)")
+        
+        # Add end-to-end authentication verification
+        # Check if auth_views.py exists before attempting end-to-end tests
+        auth_views_path = Path("app/views/auth_views.py")
+        if auth_views_path.exists():
+            self.verify_auth_end_to_end()
+        else:
+            logger.info("Skipping end-to-end authentication verification (auth_views.py not found)")
         
         # Calculate summary
         components = self.results["components"]

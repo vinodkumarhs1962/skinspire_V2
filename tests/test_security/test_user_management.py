@@ -10,7 +10,16 @@ import random
 from sqlalchemy import text
 from werkzeug.security import check_password_hash
 
-
+def is_valid_password_hash(hash_string):
+    """Check if a string is a valid password hash in any of the recognized formats"""
+    if not hash_string or not isinstance(hash_string, str):
+        return False
+    
+    # Check all supported hash formats
+    return (hash_string.startswith('$pbkdf2') or  # Werkzeug older versions
+            hash_string.startswith('$2') or       # bcrypt
+            hash_string.startswith('scrypt:'))    # Werkzeug newer versions
+            
 @pytest.fixture
 def admin_token(client):
     """Get admin auth token for testing"""
@@ -102,7 +111,7 @@ class TestUserManagement:
         assert (created_user.password_hash.startswith('$pbkdf2') or 
         created_user.password_hash.startswith('$2') or 
         created_user.password_hash.startswith('scrypt:')), "Password does not have expected hash format"
-        
+
         # Use the check_password method
         assert created_user.check_password("secure_password"), "Password hash verification failed"
         
