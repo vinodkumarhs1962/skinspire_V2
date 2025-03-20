@@ -1,11 +1,11 @@
 # app/__init__.py
 
-from __future__ import annotations  # Enable future annotations
+from __future__ import annotations
+from flask_wtf.csrf import CSRFProtect
 from flask import Flask, Blueprint, session, request, g, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, current_user
-from flask_wtf.csrf import CSRFProtect
 from .config.settings import settings
 from .security.bridge import initialize_security
 from app.views.test import test_bp
@@ -15,9 +15,10 @@ from pathlib import Path
 
 # Initialize extensions
 db = SQLAlchemy()
-# print(f"Type of db: {type(db)}")
 migrate = Migrate()
 login_manager = LoginManager()
+    # login_manager.init_app(app)
+    # login_manager.login_view = 'auth_views.login'
 csrf = CSRFProtect()
 
 def create_app() -> Flask:
@@ -32,29 +33,9 @@ def create_app() -> Flask:
         # Configure logging first to ensure proper error tracking
         app.logger.setLevel(logging.INFO)
         
-        # Check for environment type override
-        env_type_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.flask_env_type')
-        if os.path.exists(env_type_file):
-            with open(env_type_file, 'r') as f:
-                env_type = f.read().strip()
-            
-            if env_type in ['dev', 'test', 'prod']:
-                app.logger.info(f"Using {env_type.upper()} environment from .flask_env_type file")
-                # Get appropriate database URL from settings
-                if hasattr(settings, 'get_database_url_for_env'):
-                    database_url = settings.get_database_url_for_env(env_type)
-                    app.logger.info(f"Database URL set to {env_type} environment")
-                else:
-                    # Fallback if settings doesn't have the method
-                    database_url = settings.DATABASE_URL
-                    app.logger.warning(f"Could not switch to {env_type} database (method not available)")
-            else:
-                database_url = settings.DATABASE_URL
-        else:
-            database_url = settings.DATABASE_URL
-        
-        # Configure essential Flask settings
-        app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+        # Get database URL from database_service
+        from app.services.database_service import get_database_url
+        app.config['SQLALCHEMY_DATABASE_URI'] = get_database_url()
         app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         app.config['SECRET_KEY'] = settings.SECRET_KEY
         
@@ -64,23 +45,27 @@ def create_app() -> Flask:
         login_manager.init_app(app)
         csrf.init_app(app)
         
+        # Exempt API endpoints from CSRF
+        csrf.exempt(r"/api/*")
+
         # Configure login manager
         login_manager.login_view = 'auth_views.login'
         login_manager.login_message = 'Please log in to access this page.'
         login_manager.login_message_category = 'info'
         
-        # Set up user loader for Flask-Login
+        # Set up user loader for Flask-Login using database_service
         @login_manager.user_loader
         def load_user(user_id):
-            # Import here to avoid circular imports
             from app.models.transaction import User
-            return User.query.filter_by(user_id=user_id).first()
+            from app.services.database_service import get_db_session
+            with get_db_session() as session:
+                return session.query(User).filter_by(user_id=user_id).first()
         
         # Register menu context processor
         from app.services.menu_service import register_menu_context_processor
         register_menu_context_processor(app)
 
-        # Register admin_views
+        # Register admin views
         from app.views.admin_views import admin_views_bp
         app.register_blueprint(admin_views_bp)
 
@@ -130,7 +115,8 @@ def create_app() -> Flask:
     except Exception as e:
         logging.error(f"Failed to create application: {str(e)}")
         raise
-
+ 
+   
 def register_view_blueprints(app: Flask) -> None:
     """Register frontend view blueprints"""
     view_blueprints = []
@@ -205,39 +191,7 @@ def register_error_handlers(app: Flask) -> None:
 
     @app.errorhandler(500)
     def internal_error(error):
-        db.session.rollback()
         if request.path.startswith('/api/'):
             return {"error": "Internal server error"}, 500
         # For frontend routes, render an error template
         return render_template('errors/500.html'), 500
-
-def init_security_tables() -> None:
-    """Initialize security-related database tables"""
-    try:
-        from .security.models import (
-            AuditLog,
-            SecurityConfiguration,
-            PasswordHistory,
-            UserSession,
-            SecurityEvent
-        )
-        
-        app = create_app()
-        with app.app_context():
-            tables = [
-                AuditLog.__table__,
-                SecurityConfiguration.__table__,
-                PasswordHistory.__table__,
-                UserSession.__table__,
-                SecurityEvent.__table__
-            ]
-            
-            for table in tables:
-                if not table.exists(db.engine):
-                    table.create(db.engine)
-            
-    except ImportError:
-        print("Security models not found. Skipping security table initialization.")
-    except Exception as e:
-        print(f"Error initializing security tables: {str(e)}")
-        raise

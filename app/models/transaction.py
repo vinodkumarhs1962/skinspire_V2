@@ -9,9 +9,10 @@ from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from .base import Base, TimestampMixin, SoftDeleteMixin, generate_uuid
 from flask import current_app
+from flask_login import UserMixin
 
 
-class User(Base, TimestampMixin, SoftDeleteMixin):
+class User(Base, TimestampMixin, SoftDeleteMixin, UserMixin):
     """User authentication and base user information"""
     __tablename__ = 'users'
 
@@ -34,6 +35,10 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
 
 # Add the set_password method to the User class in transaction.py
 
+    def get_id(self):
+        """Return the user_id as a string"""
+        return str(self.user_id)
+
     def set_password(self, password):
         """Set password hash using werkzeug"""
         self.password_hash = generate_password_hash(password)
@@ -43,6 +48,8 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
         if not self.password_hash or not password:
             return False
         return check_password_hash(self.password_hash, password)
+
+
     # def set_password(self, password):
     #     """
     #     Explicitly hash password using werkzeug

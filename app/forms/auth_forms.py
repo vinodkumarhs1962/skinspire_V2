@@ -17,8 +17,7 @@ class RegistrationForm(FlaskForm):
         ('staff', 'Staff')
     ], validators=[DataRequired()])
     
-    approval_code = StringField('Approval Code')
-    
+  
     first_name = StringField('First Name', validators=[
         DataRequired(message="First name is required"),
         Length(min=2, max=50, message="First name must be between 2 and 50 characters")
@@ -67,12 +66,7 @@ class RegistrationForm(FlaskForm):
         if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password.data):
             raise ValidationError("Password must include at least one special character")
     
-    def validate_approval_code(self, approval_code):
-        """Validate staff approval code if user type is staff"""
-        if self.user_type.data == 'staff' and not approval_code.data:
-            raise ValidationError("Approval code is required for staff registration")
-
-# Add these new forms to your existing auth_forms.py  changes 10.3
+ # Add these new forms to your existing auth_forms.py  changes 10.3
 
 class ProfileForm(FlaskForm):
     """User profile update form"""

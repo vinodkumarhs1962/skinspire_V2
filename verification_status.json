@@ -1,16 +1,33 @@
 {
-  "last_run": "2025-03-11T05:13:34.082267",
+  "last_run": "2025-03-20T12:03:25.846457",
+  "configuration": {
+    "integration_mode": true,
+    "use_db_service": true
+  },
   "components": {
     "setup_verification": {
       "status": "PASS",
       "details": {
         "command": "pytest tests/test_security/test_setup_verification.py -v",
         "exit_code": 0,
-        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 2 items\n\ntests/test_security/test_setup_verification.py::test_verify_test_environment PASSED [ 50%]\ntests/test_security/test_setup_verification.py::test_verify_security_configuration PASSED [100%]\n\n============================== 2 passed in 0.43s ==============================\n",
+        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 2 items\n\ntests/test_security/test_setup_verification.py::test_verify_test_environment PASSED [ 50%]\ntests/test_security/test_setup_verification.py::test_verify_security_configuration PASSED [100%]\n\n============================== 2 passed in 0.80s ==============================\n",
         "error": "",
         "passed": 2,
         "failed": 0,
         "skipped": 0,
+        "execution_time": 1.682245,
+        "test_details": [
+          {
+            "name": "tests/test_security/test_setup_verification.py::test_verify_test_environment",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_setup_verification.py::test_verify_security_configuration",
+            "status": "PASSED",
+            "duration": null
+          }
+        ],
         "failed_tests": []
       }
     },
@@ -19,11 +36,49 @@
       "details": {
         "command": "pytest tests/test_db_setup.py -v",
         "exit_code": 0,
-        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 5 items\n\ntests/test_db_setup.py::test_database_connection PASSED                  [ 20%]\ntests/test_db_setup.py::test_test_hospital_exists PASSED                 [ 40%]\ntests/test_db_setup.py::test_user_table_structure PASSED                 [ 60%]\ntests/test_db_setup.py::test_create_and_query_user PASSED                [ 80%]\ntests/test_db_setup.py::test_timestamp_columns_exist PASSED              [100%]\n\n============================== 5 passed in 0.57s ==============================\n",
+        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 7 items\n\ntests/test_db_setup.py::test_database_connection PASSED                  [ 14%]\ntests/test_db_setup.py::test_test_hospital_exists PASSED                 [ 28%]\ntests/test_db_setup.py::test_user_table_structure PASSED                 [ 42%]\ntests/test_db_setup.py::test_create_and_query_user PASSED                [ 57%]\ntests/test_db_setup.py::test_timestamp_columns_exist PASSED              [ 71%]\ntests/test_db_setup.py::test_database_indexes PASSED                     [ 85%]\ntests/test_db_setup.py::test_connection_pooling PASSED                   [100%]\n\n============================== 7 passed in 0.79s ==============================\n",
         "error": "",
-        "passed": 5,
+        "passed": 7,
         "failed": 0,
         "skipped": 0,
+        "execution_time": 1.650386,
+        "test_details": [
+          {
+            "name": "tests/test_db_setup.py::test_database_connection",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_db_setup.py::test_test_hospital_exists",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_db_setup.py::test_user_table_structure",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_db_setup.py::test_create_and_query_user",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_db_setup.py::test_timestamp_columns_exist",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_db_setup.py::test_database_indexes",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_db_setup.py::test_connection_pooling",
+            "status": "PASSED",
+            "duration": null
+          }
+        ],
         "failed_tests": []
       }
     },
@@ -32,11 +87,29 @@
       "details": {
         "command": "pytest tests/test_security/test_encryption.py -v",
         "exit_code": 0,
-        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 3 items\n\ntests/test_security/test_encryption.py::TestEncryption::test_encryption_configuration PASSED [ 33%]\ntests/test_security/test_encryption.py::TestEncryption::test_patient_data_encryption PASSED [ 66%]\ntests/test_security/test_encryption.py::TestEncryption::test_encryption_key_rotation PASSED [100%]\n\n============================== 3 passed in 0.45s ==============================\n",
+        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 3 items\n\ntests/test_security/test_encryption.py::TestEncryption::test_encryption_configuration PASSED [ 33%]\ntests/test_security/test_encryption.py::TestEncryption::test_patient_data_encryption PASSED [ 66%]\ntests/test_security/test_encryption.py::TestEncryption::test_encryption_key_rotation PASSED [100%]\n\n============================== 3 passed in 0.63s ==============================\n",
         "error": "",
         "passed": 3,
         "failed": 0,
         "skipped": 0,
+        "execution_time": 1.491987,
+        "test_details": [
+          {
+            "name": "tests/test_security/test_encryption.py::TestEncryption::test_encryption_configuration",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_encryption.py::TestEncryption::test_patient_data_encryption",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_encryption.py::TestEncryption::test_encryption_key_rotation",
+            "status": "PASSED",
+            "duration": null
+          }
+        ],
         "failed_tests": []
       }
     },
@@ -45,11 +118,74 @@
       "details": {
         "command": "pytest tests/test_security/test_authentication.py -v",
         "exit_code": 0,
-        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 12 items\n\ntests/test_security/test_authentication.py::TestAuthentication::test_environment_setup PASSED [  8%]\ntests/test_security/test_authentication.py::TestAuthentication::test_basic_login PASSED [ 16%]\ntests/test_security/test_authentication.py::TestAuthentication::test_login_history PASSED [ 25%]\ntests/test_security/test_authentication.py::TestAuthentication::test_session_management PASSED [ 33%]\ntests/test_security/test_authentication.py::TestAuthentication::test_account_lockout PASSED [ 41%]\ntests/test_security/test_authentication.py::TestAuthentication::test_logout PASSED [ 50%]\ntests/test_security/test_authentication.py::TestAuthentication::test_login_validation[test_case0] PASSED [ 58%]\ntests/test_security/test_authentication.py::TestAuthentication::test_login_validation[test_case1] PASSED [ 66%]\ntests/test_security/test_authentication.py::TestAuthentication::test_login_validation[test_case2] PASSED [ 75%]\ntests/test_security/test_authentication.py::TestAuthentication::test_login_validation[test_case3] PASSED [ 83%]\ntests/test_security/test_authentication.py::TestAuthentication::test_token_validation PASSED [ 91%]\ntests/test_security/test_authentication.py::test_user_login PASSED       [100%]\n\n============================= 12 passed in 1.97s ==============================\n",
+        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 12 items\n\ntests/test_security/test_authentication.py::TestAuthentication::test_environment_setup PASSED [  8%]\ntests/test_security/test_authentication.py::TestAuthentication::test_basic_login PASSED [ 16%]\ntests/test_security/test_authentication.py::TestAuthentication::test_login_history PASSED [ 25%]\ntests/test_security/test_authentication.py::TestAuthentication::test_session_management PASSED [ 33%]\ntests/test_security/test_authentication.py::TestAuthentication::test_account_lockout PASSED [ 41%]\ntests/test_security/test_authentication.py::TestAuthentication::test_logout PASSED [ 50%]\ntests/test_security/test_authentication.py::TestAuthentication::test_login_validation[test_case0] PASSED [ 58%]\ntests/test_security/test_authentication.py::TestAuthentication::test_login_validation[test_case1] PASSED [ 66%]\ntests/test_security/test_authentication.py::TestAuthentication::test_login_validation[test_case2] PASSED [ 75%]\ntests/test_security/test_authentication.py::TestAuthentication::test_login_validation[test_case3] PASSED [ 83%]\ntests/test_security/test_authentication.py::TestAuthentication::test_token_validation PASSED [ 91%]\ntests/test_security/test_authentication.py::test_user_login PASSED       [100%]\n\n============================= 12 passed in 2.08s ==============================\n",
         "error": "",
         "passed": 12,
         "failed": 0,
         "skipped": 0,
+        "execution_time": 2.908183,
+        "test_details": [
+          {
+            "name": "tests/test_security/test_authentication.py::TestAuthentication::test_environment_setup",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_authentication.py::TestAuthentication::test_basic_login",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_authentication.py::TestAuthentication::test_login_history",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_authentication.py::TestAuthentication::test_session_management",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_authentication.py::TestAuthentication::test_account_lockout",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_authentication.py::TestAuthentication::test_logout",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_authentication.py::TestAuthentication::test_login_validation[test_case0]",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_authentication.py::TestAuthentication::test_login_validation[test_case1]",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_authentication.py::TestAuthentication::test_login_validation[test_case2]",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_authentication.py::TestAuthentication::test_login_validation[test_case3]",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_authentication.py::TestAuthentication::test_token_validation",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_authentication.py::test_user_login",
+            "status": "PASSED",
+            "duration": null
+          }
+        ],
         "failed_tests": []
       }
     },
@@ -58,12 +194,39 @@
       "details": {
         "command": "pytest tests/test_security/test_user_management.py -v",
         "exit_code": 0,
-        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 3 items\n\ntests/test_security/test_user_management.py::TestUserManagement::test_create_user PASSED [ 33%]\ntests/test_security/test_user_management.py::TestUserManagement::test_update_user PASSED [ 66%]\ntests/test_security/test_user_management.py::TestUserManagement::test_role_assignment PASSED [100%]\n\n============================== 3 passed in 1.07s ==============================\n",
+        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 4 items\n\ntests/test_security/test_user_management.py::TestUserManagement::test_create_user PASSED [ 25%]\ntests/test_security/test_user_management.py::TestUserManagement::test_update_user PASSED [ 50%]\ntests/test_security/test_user_management.py::TestUserManagement::test_role_assignment PASSED [ 75%]\ntests/test_security/test_user_management.py::TestUserManagement::test_api_user_management PASSED [100%]\n\n============================== 4 passed in 1.45s ==============================\n",
         "error": "",
-        "passed": 3,
+        "passed": 4,
         "failed": 0,
         "skipped": 0,
-        "failed_tests": []
+        "execution_time": 2.265105,
+        "test_details": [
+          {
+            "name": "tests/test_security/test_user_management.py::TestUserManagement::test_create_user",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_user_management.py::TestUserManagement::test_update_user",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_user_management.py::TestUserManagement::test_role_assignment",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_user_management.py::TestUserManagement::test_api_user_management",
+            "status": "PASSED",
+            "duration": null
+          }
+        ],
+        "failed_tests": [],
+        "performance": {
+          "total_execution_time": 2.265743,
+          "average_test_time": 0.56643575
+        }
       }
     },
     "authorization": {
@@ -71,11 +234,19 @@
       "details": {
         "command": "pytest tests/test_security/test_authorization.py -v",
         "exit_code": 0,
-        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 2 items\n\ntests/test_security/test_authorization.py::TestAuthorization::test_module_creation PASSED [ 50%]\ntests/test_security/test_authorization.py::TestAuthorization::test_role_permissions PASSED [100%]\n\n============================== 2 passed in 0.58s ==============================\n",
+        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 1 item\n\ntests/test_security/test_authorization.py::TestAuthorization::test_module_creation PASSED [100%]\n\n============================== 1 passed in 0.63s ==============================\n",
         "error": "",
-        "passed": 2,
+        "passed": 1,
         "failed": 0,
         "skipped": 0,
+        "execution_time": 1.482622,
+        "test_details": [
+          {
+            "name": "tests/test_security/test_authorization.py::TestAuthorization::test_module_creation",
+            "status": "PASSED",
+            "duration": null
+          }
+        ],
         "failed_tests": []
       }
     },
@@ -84,11 +255,39 @@
       "details": {
         "command": "pytest tests/test_security/test_auth_views.py -v",
         "exit_code": 0,
-        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 6 items\n\ntests/test_security/test_auth_views.py::TestAuthViews::test_index_redirects_to_login PASSED [ 16%]\ntests/test_security/test_auth_views.py::TestAuthViews::test_login_page_loads PASSED [ 33%]\ntests/test_security/test_auth_views.py::TestAuthViews::test_login_form_validation SKIPPED [ 50%]\ntests/test_security/test_auth_views.py::TestAuthViews::test_login_success SKIPPED [ 66%]\ntests/test_security/test_auth_views.py::TestAuthViews::test_dashboard_requires_login PASSED [ 83%]\ntests/test_security/test_auth_views.py::TestAuthViews::test_logout PASSED [100%]\n\n======================== 4 passed, 2 skipped in 4.51s =========================\n",
+        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 6 items\n\ntests/test_security/test_auth_views.py::TestAuthViews::test_index_redirects_to_login PASSED [ 16%]\ntests/test_security/test_auth_views.py::TestAuthViews::test_login_page_loads PASSED [ 33%]\ntests/test_security/test_auth_views.py::TestAuthViews::test_login_form_validation PASSED [ 50%]\ntests/test_security/test_auth_views.py::TestAuthViews::test_login_success SKIPPEDt issue) [ 66%]\ntests/test_security/test_auth_views.py::TestAuthViews::test_dashboard_requires_login PASSED [ 83%]\ntests/test_security/test_auth_views.py::TestAuthViews::test_logout PASSED [100%]\n\n======================== 5 passed, 1 skipped in 4.76s =========================\n",
         "error": "",
-        "passed": 4,
+        "passed": 5,
         "failed": 0,
-        "skipped": 2,
+        "skipped": 0,
+        "execution_time": 5.571162,
+        "test_details": [
+          {
+            "name": "tests/test_security/test_auth_views.py::TestAuthViews::test_index_redirects_to_login",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_views.py::TestAuthViews::test_login_page_loads",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_views.py::TestAuthViews::test_login_form_validation",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_views.py::TestAuthViews::test_dashboard_requires_login",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_views.py::TestAuthViews::test_logout",
+            "status": "PASSED",
+            "duration": null
+          }
+        ],
         "failed_tests": []
       }
     },
@@ -97,11 +296,24 @@
       "details": {
         "command": "pytest tests/test_security/test_auth_end_to_end.py -v",
         "exit_code": 0,
-        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 2 items\n\ntests/test_security/test_auth_end_to_end.py::TestAuthEndToEnd::test_complete_authentication_flow SKIPPED [ 50%]\ntests/test_security/test_auth_end_to_end.py::TestAuthEndToEnd::test_api_authentication_flow PASSED [100%]\n\n======================== 1 passed, 1 skipped in 0.56s =========================\n",
+        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 2 items\n\ntests/test_security/test_auth_end_to_end.py::TestAuthEndToEnd::test_complete_authentication_flow SKIPPED [ 50%]\ntests/test_security/test_auth_end_to_end.py::TestAuthEndToEnd::test_api_authentication_flow PASSED [100%]\n\n======================== 1 passed, 1 skipped in 9.10s =========================\n",
         "error": "",
         "passed": 1,
         "failed": 0,
         "skipped": 1,
+        "execution_time": 9.964586,
+        "test_details": [
+          {
+            "name": "tests/test_security/test_auth_end_to_end.py::TestAuthEndToEnd::test_complete_authentication_flow",
+            "status": "SKIPPED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_end_to_end.py::TestAuthEndToEnd::test_api_authentication_flow",
+            "status": "PASSED",
+            "duration": null
+          }
+        ],
         "failed_tests": []
       }
     },
@@ -110,11 +322,34 @@
       "details": {
         "command": "pytest tests/test_security/test_auth_ui.py -v",
         "exit_code": 0,
-        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 4 items\n\ntests/test_security/test_auth_ui.py::TestAuthUI::test_login_page_renders PASSED [ 25%]\ntests/test_security/test_auth_ui.py::TestAuthUI::test_login_validation SKIPPED [ 50%]\ntests/test_security/test_auth_ui.py::TestAuthUI::test_registration_page_renders PASSED [ 75%]\ntests/test_security/test_auth_ui.py::TestAuthUI::test_registration_validation SKIPPED [100%]\n\n======================== 2 passed, 2 skipped in 0.44s =========================\n",
+        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 4 items\n\ntests/test_security/test_auth_ui.py::TestAuthUI::test_login_page_renders PASSED [ 25%]\ntests/test_security/test_auth_ui.py::TestAuthUI::test_login_validation PASSED [ 50%]\ntests/test_security/test_auth_ui.py::TestAuthUI::test_registration_page_renders PASSED [ 75%]\ntests/test_security/test_auth_ui.py::TestAuthUI::test_registration_validation PASSED [100%]\n\n============================== 4 passed in 0.55s ==============================\n",
         "error": "",
-        "passed": 2,
+        "passed": 4,
         "failed": 0,
-        "skipped": 2,
+        "skipped": 0,
+        "execution_time": 1.403489,
+        "test_details": [
+          {
+            "name": "tests/test_security/test_auth_ui.py::TestAuthUI::test_login_page_renders",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_ui.py::TestAuthUI::test_login_validation",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_ui.py::TestAuthUI::test_registration_page_renders",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_ui.py::TestAuthUI::test_registration_validation",
+            "status": "PASSED",
+            "duration": null
+          }
+        ],
         "failed_tests": []
       }
     },
@@ -123,11 +358,34 @@
       "details": {
         "command": "pytest tests/test_security/test_auth_flow.py -v",
         "exit_code": 0,
-        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 4 items\n\ntests/test_security/test_auth_flow.py::test_login_success SKIPPED (Could\nnot get CSRF token, possibly already logged in)                          [ 25%]\ntests/test_security/test_auth_flow.py::test_login_failure SKIPPED (Could\nnot get CSRF token, possibly already logged in)                          [ 50%]\ntests/test_security/test_auth_flow.py::test_logout PASSED                [ 75%]\ntests/test_security/test_auth_flow.py::test_login_connection_error SKIPPED [100%]\n\n======================== 1 passed, 3 skipped in 4.65s =========================\n",
+        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 4 items\n\ntests/test_security/test_auth_flow.py::test_login_success PASSED         [ 25%]\ntests/test_security/test_auth_flow.py::test_login_failure PASSED         [ 50%]\ntests/test_security/test_auth_flow.py::test_logout PASSED                [ 75%]\ntests/test_security/test_auth_flow.py::test_login_connection_error SKIPPED [100%]\n\n======================== 3 passed, 1 skipped in 13.05s ========================\n",
         "error": "",
-        "passed": 1,
+        "passed": 3,
         "failed": 0,
-        "skipped": 3,
+        "skipped": 1,
+        "execution_time": 13.853116,
+        "test_details": [
+          {
+            "name": "tests/test_security/test_auth_flow.py::test_login_success",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_flow.py::test_login_failure",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_flow.py::test_logout",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_flow.py::test_login_connection_error",
+            "status": "SKIPPED",
+            "duration": null
+          }
+        ],
         "failed_tests": []
       }
     },
@@ -136,11 +394,74 @@
       "details": {
         "command": "pytest tests/test_security/test_auth_system.py -v",
         "exit_code": 0,
-        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 12 items\n\ntests/test_security/test_auth_system.py::TestAuthentication::test_login_success PASSED [  8%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_login_invalid_credentials PASSED [ 16%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_login_missing_fields PASSED [ 25%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_session_validation PASSED [ 33%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_logout PASSED [ 41%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_login_attempt_tracking PASSED [ 50%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_account_lockout PASSED [ 58%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_concurrent_sessions PASSED [ 66%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_session_expiry PASSED [ 75%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_health_check PASSED [ 83%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_login_rate_limiting PASSED [ 91%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_session_refresh PASSED [100%]\n\n============================= 12 passed in 6.60s ==============================\n",
+        "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.5.0 -- C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe\ncachedir: C:\\Users\\vinod\\.pytest_cache\nrootdir: C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\nconfigfile: pytest.ini\nplugins: mock-3.14.0\ncollecting ... collected 12 items\n\ntests/test_security/test_auth_system.py::TestAuthentication::test_login_success PASSED [  8%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_login_invalid_credentials PASSED [ 16%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_login_missing_fields PASSED [ 25%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_session_validation PASSED [ 33%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_logout PASSED [ 41%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_login_attempt_tracking PASSED [ 50%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_account_lockout PASSED [ 58%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_concurrent_sessions PASSED [ 66%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_session_expiry PASSED [ 75%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_health_check PASSED [ 83%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_login_rate_limiting PASSED [ 91%]\ntests/test_security/test_auth_system.py::TestAuthentication::test_session_refresh PASSED [100%]\n\n============================= 12 passed in 6.48s ==============================\n",
         "error": "",
         "passed": 12,
         "failed": 0,
         "skipped": 0,
+        "execution_time": 8.236368,
+        "test_details": [
+          {
+            "name": "tests/test_security/test_auth_system.py::TestAuthentication::test_login_success",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_system.py::TestAuthentication::test_login_invalid_credentials",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_system.py::TestAuthentication::test_login_missing_fields",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_system.py::TestAuthentication::test_session_validation",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_system.py::TestAuthentication::test_logout",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_system.py::TestAuthentication::test_login_attempt_tracking",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_system.py::TestAuthentication::test_account_lockout",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_system.py::TestAuthentication::test_concurrent_sessions",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_system.py::TestAuthentication::test_session_expiry",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_system.py::TestAuthentication::test_health_check",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_system.py::TestAuthentication::test_login_rate_limiting",
+            "status": "PASSED",
+            "duration": null
+          },
+          {
+            "name": "tests/test_security/test_auth_system.py::TestAuthentication::test_session_refresh",
+            "status": "PASSED",
+            "duration": null
+          }
+        ],
         "failed_tests": []
       }
     }
@@ -150,5 +471,8 @@
     "passed": 11,
     "failed": 0,
     "skipped": 0
-  }
+  },
+  "start_time": "2025-03-20T12:03:25.848338",
+  "end_time": "2025-03-20T12:04:16.501917",
+  "execution_time": 50.653579
 }

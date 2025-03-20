@@ -24,10 +24,19 @@ class SessionManager:
     def __init__(self, security_config: SecurityConfig, redis_client: redis.Redis, db_session: SQLAlchemySession = None):
         self.config = security_config
         self.redis = redis_client
-        self.db_session = db_session
+        self._db_session = db_session
         self.session_prefix = "session:"
         self.activity_prefix = "activity:"
         self.logger = logging.getLogger(__name__)
+
+    def set_db_session(self, session: SQLAlchemySession) -> None:
+        """
+        Set or update the database session used by this manager
+        
+        Args:
+            session: SQLAlchemy session to use for database operations
+        """
+        self._db_session = session
 
     def create_session(self, user_id: str, hospital_id: str, additional_data: Dict = None) -> Dict:
         """
@@ -68,7 +77,7 @@ class SessionManager:
             self._update_user_activity(user_id, session_id, timestamp)
             
             # Create database session record if db_session available
-            if self.db_session:
+            if self._db_session:
                 db_session = UserSession(
                     session_id=session_id,
                     user_id=user_id,
@@ -86,9 +95,11 @@ class SessionManager:
                     status='success'
                 )
                 
-                self.db_session.add(db_session)
-                self.db_session.add(login_history)
-                self.db_session.commit()
+                self._db_session.add(db_session)
+                self._db_session.add(login_history)
+                
+                # Note: We don't commit here - the caller is responsible for transaction management
+                # This change is key to making the SessionManager work within existing transactions
             
             # Generate authentication token
             token = self._generate_token(session_id, user_id, hospital_id)
@@ -101,8 +112,7 @@ class SessionManager:
 
         except Exception as e:
             self.logger.error(f"Error creating session: {str(e)}")
-            if self.db_session:
-                self.db_session.rollback()
+            # Don't rollback here - let the caller handle transaction management
             raise
 
     def validate_session(self, token: str) -> Optional[Dict]:
@@ -151,14 +161,14 @@ class SessionManager:
             )
             
             # Update database session if available
-            if self.db_session:
-                db_session = self.db_session.query(UserSession).filter_by(
+            if self._db_session:
+                db_session = self._db_session.query(UserSession).filter_by(
                     session_id=session_id
                 ).first()
                 
                 if db_session:
                     db_session.expires_at = current_time + self.config.session_timeout
-                    self.db_session.commit()
+                    # No commit - caller handles transaction management
             
             return session_data
 
@@ -200,21 +210,24 @@ class SessionManager:
                 self._remove_session_from_activity(user_id, session_id)
                 
                 # Update database records if available
-                if self.db_session:
+                if self._db_session:
                     # Update login history
-                    history = self.db_session.query(LoginHistory).filter_by(
+                    history = self._db_session.query(LoginHistory).filter_by(
                         session_id=session_id
                     ).first()
                     
                     if history:
                         history.logout_time = datetime.now(timezone.utc)
                     
-                    # Remove session
-                    self.db_session.query(UserSession).filter_by(
+                    # Deactivate session
+                    session_record = self._db_session.query(UserSession).filter_by(
                         session_id=session_id
-                    ).delete()
+                    ).first()
                     
-                    self.db_session.commit()
+                    if session_record:
+                        session_record.is_active = False
+                        
+                    # No commit - caller handles transaction management
                 
                 return True
                 
@@ -224,8 +237,7 @@ class SessionManager:
             return False
         except Exception as e:
             self.logger.error(f"Error ending session: {str(e)}")
-            if self.db_session:
-                self.db_session.rollback()
+            # Don't rollback - let the caller handle transaction management
             return False
 
     def _generate_token(self, session_id: str, user_id: str, hospital_id: str) -> str:

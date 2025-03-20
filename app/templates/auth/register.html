@@ -56,18 +56,6 @@
                 {% endif %}
             </div>
             
-            <div id="approval_code_section" class="hidden">
-                <label for="approval_code" class="block text-sm font-medium text-gray-700">Staff Approval Code</label>
-                {{ form.approval_code(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
-                {% if form.approval_code.errors %}
-                    <div class="text-xs text-red-600 mt-1">
-                        {% for error in form.approval_code.errors %}
-                            {{ error }}
-                        {% endfor %}
-                    </div>
-                {% endif %}
-            </div>
-            
             <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
                 <div>
                     <label for="first_name" class="block text-sm font-medium text-gray-700">First name</label>
@@ -155,29 +143,4 @@
         </form>
     </div>
 </div>
-
-<script>
-  // Toggle staff approval code field based on user type selection
-  document.addEventListener('DOMContentLoaded', function() {
-    const userTypeSelect = document.getElementById('user_type');
-    const approvalCodeSection = document.getElementById('approval_code_section');
-    const approvalCodeInput = document.getElementById('approval_code');
-    
-    function toggleApprovalCode() {
-      if (userTypeSelect.value === 'staff') {
-        approvalCodeSection.classList.remove('hidden');
-        approvalCodeInput.setAttribute('required', '');
-      } else {
-        approvalCodeSection.classList.add('hidden');
-        approvalCodeInput.removeAttribute('required');
-      }
-    }
-    
-    // Initial check
-    toggleApprovalCode();
-    
-    // Add event listener for changes
-    userTypeSelect.addEventListener('change', toggleApprovalCode);
-  });
-</script>
 {% endblock %}

@@ -21,7 +21,7 @@ class AuthManager:
     Redis-based session handling for improved performance.
     """
     
-    def __init__(self, session, redis_client=None):
+    def __init__(self, session=None, redis_client=None):
         """
         Initialize auth manager with optional Redis support
         
@@ -29,23 +29,46 @@ class AuthManager:
             session: SQLAlchemy session
             redis_client: Optional Redis client for enhanced session management
         """
-        self.session = session
+        self._session = session
         self.config = SecurityConfig()
         
         # Initialize session manager if Redis is available
         self.session_manager = SessionManager(
             security_config=self.config,
-            redis_client=redis_client
+            redis_client=redis_client,
+            db_session=session
         ) if redis_client else None
+    
+    def set_db_session(self, session):
+        """
+        Set or update the database session used by this manager
+        
+        Args:
+            session: SQLAlchemy session
+        """
+        self._session = session
+        
+        # Update session manager if it exists
+        if self.session_manager:
+            self.session_manager.set_db_session(session)
+    
+    @property
+    def session(self):
+        """Get the current database session"""
+        return self._session
     
     def authenticate_user(self, username: str, password: str) -> Dict[str, Any]:
         """
         Authenticate user and manage login attempts.
         Preserves existing role-based authentication while adding enhanced session support.
         """
+        if not self._session:
+            logger.error("No database session available for authentication")
+            return {'success': False, 'error': 'Database session unavailable'}
+            
         try:
             # Get user with active status check
-            user = self.session.query(User).filter_by(
+            user = self._session.query(User).filter_by(
                 user_id=username,
                 is_active=True
             ).first()
@@ -66,10 +89,10 @@ class AuthManager:
                 }
             
             # Verify password
-            #if not check_password_hash(user.password_hash, password):
             if not user.check_password(password):
                 user.failed_login_attempts += 1
-                self.session.commit()
+                # Don't commit - let the caller manage the transaction
+                self._session.flush()
                 
                 self._log_login_attempt(username, 'failed', 'Invalid password')
                 return {
@@ -82,7 +105,7 @@ class AuthManager:
             user.last_login = datetime.now(timezone.utc)
             
             # Get user roles (preserving existing role functionality)
-            roles = self.session.query(RoleMaster).join(
+            roles = self._session.query(RoleMaster).join(
                 UserRoleMapping
             ).filter(
                 UserRoleMapping.user_id == username
@@ -90,7 +113,8 @@ class AuthManager:
             
             role_names = [role.role_name for role in roles]
             
-            self.session.commit()
+            # Flush changes to make them visible within current transaction
+            self._session.flush()
             
             # Log successful login
             self._log_login_attempt(username, 'success')
@@ -103,44 +127,49 @@ class AuthManager:
             
         except Exception as e:
             logger.error(f"Authentication error: {str(e)}", exc_info=True)
-            self.session.rollback()
+            # Don't rollback - let the caller manage the transaction
             raise
     
     def create_session(self, user_id: str, hospital_id: str) -> str:
         """Create new user session with proper context handling"""
+        if not self._session:
+            logger.error("No database session available for session creation")
+            raise ValueError("Database session unavailable")
+            
         try:
-            with user_context(self.session, user_id):
-                # First end any existing sessions
-                self.session.query(UserSession).filter_by(
-                    user_id=user_id,
-                    is_active=True
-                ).update({
-                    'is_active': False
-                })
-                
-                # Create new session
-                session_id = str(uuid.uuid4())
-                expires_at = datetime.now(timezone.utc) + \
-                           self.config.BASE_SECURITY_SETTINGS['session_timeout']
-                token = self._generate_token(user_id, session_id)
-                
-                session = UserSession(
-                    session_id=session_id,
-                    user_id=user_id,
-                    token=token,
-                    expires_at=expires_at,
-                    is_active=True
-                )
-                
-                self.session.add(session)
-                self.session.flush()  # Ensure we catch any DB errors
-                self.session.commit()
-                
-                return token
+            # Use user_context if it doesn't manage its own transactions
+            # Otherwise use a simpler approach
+            
+            # First end any existing sessions
+            self._session.query(UserSession).filter_by(
+                user_id=user_id,
+                is_active=True
+            ).update({
+                'is_active': False
+            })
+            
+            # Create new session
+            session_id = str(uuid.uuid4())
+            expires_at = datetime.now(timezone.utc) + \
+                       self.config.BASE_SECURITY_SETTINGS['session_timeout']
+            token = self._generate_token(user_id, session_id)
+            
+            session = UserSession(
+                session_id=session_id,
+                user_id=user_id,
+                token=token,
+                expires_at=expires_at,
+                is_active=True
+            )
+            
+            self._session.add(session)
+            self._session.flush()  # Ensure we catch any DB errors but don't commit
+            
+            return token
                 
         except Exception as e:
             logger.error(f"Error creating session: {str(e)}")
-            self.session.rollback()
+            # Don't rollback - let the caller manage the transaction
             raise
     
     def validate_token(self, token: str) -> Optional[User]:
@@ -148,6 +177,10 @@ class AuthManager:
         Validate token using both database and Redis if available.
         Returns associated user if valid.
         """
+        if not self._session:
+            logger.error("No database session available for token validation")
+            raise ValueError("Database session unavailable")
+            
         try:
             # Check Redis session first if available
             if self.session_manager:
@@ -163,7 +196,7 @@ class AuthManager:
                     raise ValueError('Invalid Redis session')
             
             # Validate database session
-            session = self.session.query(UserSession).filter_by(
+            session = self._session.query(UserSession).filter_by(
                 token=token,
                 is_active=True
             ).first()
@@ -174,11 +207,12 @@ class AuthManager:
             # Check expiration
             if session.expires_at < datetime.now(timezone.utc):
                 session.is_active = False
-                self.session.commit()
+                # Flush but don't commit
+                self._session.flush()
                 raise ValueError('Session expired')
             
             # Get and validate user
-            user = self.session.query(User).filter_by(
+            user = self._session.query(User).filter_by(
                 user_id=session.user_id,
                 is_active=True
             ).first()
@@ -190,16 +224,20 @@ class AuthManager:
             
         except Exception as e:
             logger.error(f"Token validation error: {str(e)}", exc_info=True)
-            self.session.rollback()
+            # Don't rollback - let the caller manage the transaction
             raise
     
     def end_session(self, token: str) -> None:
         """
         End user session in both database and Redis if available
         """
+        if not self._session:
+            logger.error("No database session available for ending session")
+            raise ValueError("Database session unavailable")
+            
         try:
             # End database session
-            self.session.query(UserSession).filter_by(
+            self._session.query(UserSession).filter_by(
                 token=token
             ).update({
                 'is_active': False
@@ -217,16 +255,21 @@ class AuthManager:
                 except jwt.InvalidTokenError:
                     logger.warning("Invalid token during session end")
             
-            self.session.commit()
+            # Flush but don't commit
+            self._session.flush()
             
         except Exception as e:
             logger.error(f"Error ending session: {str(e)}", exc_info=True)
-            self.session.rollback()
+            # Don't rollback - let the caller manage the transaction
             raise
     
     def _log_login_attempt(self, user_id: str, status: str, 
                           failure_reason: Optional[str] = None) -> None:
         """Log login attempt with enhanced tracking"""
+        if not self._session:
+            logger.error("No database session available for logging login attempt")
+            return
+            
         try:
             log = LoginHistory(
                 user_id=user_id,
@@ -237,12 +280,13 @@ class AuthManager:
                 user_agent=str(getattr(request, 'user_agent', '')) if request else None
             )
             
-            self.session.add(log)
-            self.session.commit()
+            self._session.add(log)
+            # Flush but don't commit
+            self._session.flush()
             
         except Exception as e:
             logger.error(f"Failed to log login attempt: {str(e)}", exc_info=True)
-            self.session.rollback()
+            # Don't rollback - let the caller manage the transaction
     
     def _generate_token(self, user_id: str, session_id: str) -> str:
         """Generate JWT token with enhanced payload"""
@@ -258,3 +302,30 @@ class AuthManager:
             current_app.config['SECRET_KEY'],
             algorithm='HS256'
         )
+
+def validate_token_function(token, session=None):
+    """
+    Standalone function to validate a token and return the associated user
+    
+    Args:
+        token: Authentication token to validate
+        session: Optional database session
+        
+    Returns:
+        User object if valid, None otherwise
+    """
+    from app.services.database_service import get_db_session
+    
+    try:
+        # If session provided, use it directly
+        if session:
+            auth_manager = AuthManager(session=session)
+            return auth_manager.validate_token(token)
+        
+        # Otherwise use a new session
+        with get_db_session() as session:
+            auth_manager = AuthManager(session=session)
+            return auth_manager.validate_token(token)
+    except Exception as e:
+        logger.error(f"Token validation error: {str(e)}")
+        return None

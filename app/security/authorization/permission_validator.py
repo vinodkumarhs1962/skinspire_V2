@@ -3,7 +3,7 @@
 from typing import Optional, List, Dict, Any
 from app.models import User, UserRoleMapping, RoleMaster, RoleModuleAccess, ModuleMaster
 from sqlalchemy.orm import joinedload
-from app.database import get_db
+from app.services.database_service import get_db_session
 
 def has_permission(user, module_name: str, permission_type: str) -> bool:
     """
@@ -20,11 +20,8 @@ def has_permission(user, module_name: str, permission_type: str) -> bool:
     # Extract user_id if full user object provided
     user_id = user.user_id if hasattr(user, 'user_id') else user
     
-    # Get active status if available via user_id if it's an object
-    # Do NOT try to access any lazy-loaded attributes on a potentially detached object
-    
-    db_manager = get_db()
-    with db_manager.get_session() as session:
+    # Use database service session management
+    with get_db_session() as session:
         # First check if user is active by querying the database
         user_record = session.query(User).filter_by(user_id=user_id).first()
         if not user_record or not user_record.is_active:
@@ -79,8 +76,8 @@ def get_user_permissions(user) -> Dict[str, List[str]]:
     # Extract user_id if full user object provided
     user_id = user.user_id if hasattr(user, 'user_id') else user
     
-    db_manager = get_db()
-    with db_manager.get_session() as session:
+    # Use database service session management
+    with get_db_session() as session:
         # First check if user is active
         user_record = session.query(User).filter_by(user_id=user_id).first()
         if not user_record or not user_record.is_active:

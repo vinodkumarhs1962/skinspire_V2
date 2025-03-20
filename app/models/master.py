@@ -95,3 +95,4 @@ class Patient(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     @hybrid_property
     def full_name(self):
         return f"{self.personal_info.get('first_name', '')} {self.personal_info.get('last_name', '')}"
+

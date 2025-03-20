@@ -24,4 +24,4 @@ requests==2.32.3
 flask-wtf==1.2.2
 selenium==4.29.0
 webdriver_manager==4.0.2
-          
+email_validator==2.2.0          
