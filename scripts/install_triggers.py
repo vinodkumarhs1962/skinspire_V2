@@ -1,15 +1,26 @@
 #!/usr/bin/env python
 # scripts/install_triggers.py
-# A simplified script to install core triggers when other methods fail
-# Usage: python scripts/install_triggers.py [dev|test|prod]
+"""
+DEPRECATED: This module is deprecated and will be removed in a future version.
+The functionality has been moved to app.core.db_operations.triggers
+
+This module is kept for backward compatibility and for direct PostgreSQL trigger
+management when other methods fail. Please use:
+'python scripts/manage_db.py apply-db-triggers' instead.
+"""
 
 import os
 import sys
 import time
+import argparse
+import warnings
+import logging
 from pathlib import Path
 from sqlalchemy import create_engine, text
-import logging
-import argparse
+
+# Add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.append(str(project_root))
 
 # Setup logging
 logging.basicConfig(
@@ -19,44 +30,111 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Parse command line arguments
-parser = argparse.ArgumentParser(description='Install database triggers')
-parser.add_argument('env', nargs='?', default='test', choices=['dev', 'test', 'prod'],
-                    help='Database environment to use (default: test)')
-parser.add_argument('--verify', action='store_true', help='Verify triggers after installation')
-args = parser.parse_args()
+# Show deprecation warning
+warnings.warn(
+    "This script is deprecated. Please use 'python scripts/manage_db.py apply-db-triggers' instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
-# Try to get database URL from environment based on selected environment
+# Try to use core modules first
 try:
-    from dotenv import load_dotenv
-    load_dotenv()
+    from app.core.db_operations.triggers import (
+        apply_triggers as core_apply_triggers,
+        apply_base_triggers as core_apply_base_triggers,
+        verify_triggers as core_verify_triggers
+    )
+    from app.core.db_operations.utils import get_db_config
     
-    if args.env == 'dev':
-        database_url = os.getenv('DEV_DATABASE_URL', None)
-        logger.info("Using DEV database")
-    elif args.env == 'test':
-        database_url = os.getenv('TEST_DATABASE_URL', None)
-        logger.info("Using TEST database")
-    elif args.env == 'prod':
-        database_url = os.getenv('PROD_DATABASE_URL', None)
-        logger.info("Using PROD database")
-    else:
-        database_url = os.getenv('TEST_DATABASE_URL', None)
-        logger.info("Defaulting to TEST database")
-        
+    CORE_MODULES_AVAILABLE = True
 except ImportError:
-    database_url = None
+    CORE_MODULES_AVAILABLE = False
+    logger.warning("Core modules not available, using legacy implementation")
 
-# Default value if not found in environment
-if not database_url:
-    database_url = 'postgresql://skinspire_admin:Skinspire123$@localhost:5432/skinspire_test'
-    logger.info(f"Using default connection string: {database_url}")
+def get_database_url(env):
+    """Get database URL for the specified environment"""
+    if CORE_MODULES_AVAILABLE:
+        try:
+            db_config = get_db_config()
+            # Map short names to full names
+            env_map = {'dev': 'development', 'test': 'testing', 'prod': 'production'}
+            full_env = env_map.get(env, env)
+            return db_config.get_database_url_for_env(full_env)
+        except Exception as e:
+            logger.warning(f"Error accessing centralized configuration: {e}")
+    
+    # Fallback to environment variables
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+        
+        if env == 'dev':
+            database_url = os.getenv('DEV_DATABASE_URL', None)
+            logger.info("Using DEV database")
+        elif env == 'test':
+            database_url = os.getenv('TEST_DATABASE_URL', None)
+            logger.info("Using TEST database")
+        elif env == 'prod':
+            database_url = os.getenv('PROD_DATABASE_URL', None)
+            logger.info("Using PROD database")
+        else:
+            database_url = os.getenv('TEST_DATABASE_URL', None)
+            logger.info("Defaulting to TEST database")
+    except ImportError:
+        database_url = None
+    
+    # Default value if not found in environment
+    if not database_url:
+        database_url = 'postgresql://skinspire_admin:Skinspire123$@localhost:5432/skinspire_test'
+        logger.info(f"Using default connection string: {database_url}")
+    
+    return database_url
 
-def install_hash_password_function():
+def install_hash_password_function(database_url):
     """Install the hash_password function explicitly"""
+    if CORE_MODULES_AVAILABLE:
+        logger.info("Using core modules for hash_password function")
+        success = core_apply_base_triggers()
+        return success
+    
+    # Legacy implementation
     logger.info('Installing hash_password function...')
     
-    # Create engine
+    if CORE_MODULES_AVAILABLE:
+        logger.info("Using core modules for trigger verification")
+        results = core_verify_triggers(env)
+        
+        # Display results from core module
+        if isinstance(results, dict):
+            if 'success' in results:
+                logger.info(f"Verification result: {'SUCCESS' if results['success'] else 'FAILED'}")
+            
+            if 'functions' in results and results['functions']:
+                logger.info("Function verification:")
+                for item in results['functions']:
+                    logger.info(f"  {item}")
+            
+            if 'critical_triggers' in results and results['critical_triggers']:
+                logger.info("Critical trigger verification:")
+                for item in results['critical_triggers']:
+                    logger.info(f"  {item}")
+                    
+            if 'tables' in results and results['tables']:
+                logger.info("Table trigger verification:")
+                for item in results['tables']:
+                    logger.info(f"  {item}")
+                    
+            if 'errors' in results and results['errors']:
+                logger.warning("Verification errors:")
+                for error in results['errors']:
+                    logger.warning(f"  {error}")
+            
+            return results.get('success', False)
+        
+        return bool(results)
+    
+    # Legacy implementation
+    database_url = get_database_url(env or 'test')
     engine = create_engine(database_url)
     connection = engine.connect()
     
@@ -154,15 +232,25 @@ def install_hash_password_function():
             """))
             connection.commit()
             logger.info(f'✓ Applied hash_password trigger to {users_table} table')
+            return True
         
     except Exception as e:
         connection.rollback()
         logger.warning(f'Error installing hash_password function: {str(e)}')
+        return False
     finally:
         connection.close()
+    
+    return False
 
-def install_core_triggers():
+def install_core_triggers(database_url):
     """Install core triggers from the standalone SQL file"""
+    if CORE_MODULES_AVAILABLE:
+        logger.info("Using core modules for trigger installation")
+        success = core_apply_triggers()
+        return success
+    
+    # Legacy implementation
     logger.info('Starting core trigger installation...')
     
     # Create engine
@@ -176,120 +264,7 @@ def install_core_triggers():
         
         if not sql_path.exists():
             # Create the file if it doesn't exist
-            create_core_functions_file(sql_path)
-            logger.info(f'Created core trigger functions file at {sql_path}')
-        
-        # Read SQL file
-        with open(sql_path, 'r') as f:
-            sql = f.read()
-        
-        # Execute statements one by one for better error handling
-        statements = []
-        current_statement = []
-        
-        in_block = False
-        for line in sql.split('\n'):
-            if line.strip().startswith('--'):
-                continue
-                
-            if '$$' in line:
-                in_block = not in_block
-                
-            current_statement.append(line)
-            
-            if ';' in line and not in_block:
-                statements.append('\n'.join(current_statement))
-                current_statement = []
-        
-        # Add any remaining statement
-        if current_statement:
-            statements.append('\n'.join(current_statement))
-        
-        # Execute each statement
-        success_count = 0
-        error_count = 0
-        for i, stmt in enumerate(statements, 1):
-            if not stmt.strip():
-                continue
-                
-            try:
-                connection.execute(text(stmt))
-                connection.commit()
-                success_count += 1
-                if i % 5 == 0:  # Log progress in batches
-                    logger.info(f'Processed {i}/{len(statements)} statements')
-            except Exception as e:
-                connection.rollback()
-                logger.warning(f'Error in statement {i}: {str(e)}')
-                error_count += 1
-                # Continue with other statements
-                continue
-        
-        logger.info(f'Executed {success_count} statements successfully ({error_count} errors)')
-        
-        # Now apply triggers to all tables
-        try:
-            connection.execute(text("SELECT create_audit_triggers_all_schemas()"))
-            connection.commit()
-            logger.info('Applied audit triggers to all tables in all schemas')
-        except Exception as e:
-            connection.rollback()
-            logger.warning(f'Error applying audit triggers to schemas: {str(e)}')
-        
-        # Apply hash_password trigger to users table if it exists
-        try:
-            # Check both with and without case sensitivity
-            users_exist = connection.execute(text(
-                "SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE "
-                "table_schema = 'public' AND (table_name = 'users' OR table_name = 'Users'))"
-            )).scalar()
-            
-            if users_exist:
-                # Determine the actual table name (case sensitivity matters in PostgreSQL)
-                table_name = connection.execute(text(
-                    "SELECT table_name FROM information_schema.tables WHERE "
-                    "table_schema = 'public' AND (table_name = 'users' OR table_name = 'Users') LIMIT 1"
-                )).scalar()
-                
-                # Apply trigger using the correct case
-                connection.execute(text(f"""
-                    DROP TRIGGER IF EXISTS hash_password ON "{table_name}";
-                    CREATE TRIGGER hash_password
-                    BEFORE INSERT OR UPDATE ON "{table_name}"
-                    FOR EACH ROW
-                    EXECUTE FUNCTION hash_password();
-                """))
-                connection.commit()
-                logger.info(f'Applied hash_password trigger to {table_name} table')
-            else:
-                # List all tables to help diagnose the issue
-                tables = connection.execute(text(
-                    "SELECT table_schema, table_name FROM information_schema.tables "
-                    "WHERE table_schema = 'public'"
-                )).fetchall()
-                
-                if tables:
-                    logger.info("Tables found in public schema:")
-                    for schema, table in tables:
-                        logger.info(f"  - {schema}.{table}")
-                else:
-                    logger.warning("No tables found in public schema")
-        except Exception as e:
-            connection.rollback()
-            logger.warning(f'Error applying hash_password trigger: {str(e)}')
-        
-        logger.info('\nCore trigger installation completed successfully!')
-        
-    finally:
-        connection.close()
-
-def create_core_functions_file(file_path):
-    """Create the core trigger functions file if it doesn't exist"""
-    # Ensure the directory exists
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    
-    # Content for core_trigger_functions.sql
-    content = """-- core_trigger_functions.sql
+            core_content = """-- core_trigger_functions.sql
 -- Minimal, robust trigger functions that work regardless of database state
 -- This file is used as a fallback when the main functions.sql fails
 
@@ -495,232 +470,119 @@ EXCEPTION WHEN OTHERS THEN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;"""
-    
-    with open(file_path, 'w') as f:
-        f.write(content)
-
-def verify_triggers():
-    """Verify that key triggers are working"""
-    logger.info('Verifying installed triggers...')
-    
-    # Create engine
-    engine = create_engine(database_url)
-    connection = engine.connect()
-    
-    try:
-        # Check if core functions exist
-        functions = ['update_timestamp', 'track_user_changes', 'hash_password', 'create_audit_triggers']
-        missing_functions = []
-        
-        for func in functions:
-            result = connection.execute(text(
-                f"SELECT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid "
-                f"WHERE n.nspname = 'public' AND p.proname = '{func}')"
-            )).scalar()
             
-            if not result:
-                missing_functions.append(func)
-        
-        if missing_functions:
-            logger.warning(f"Missing functions: {', '.join(missing_functions)}")
-        else:
-            logger.info("✓ All core functions exist")
-        
-        # Let's get a list of all tables to help debug
-        all_tables = connection.execute(text(
-            "SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog', 'information_schema')"
-        )).fetchall()
-        
-        logger.info(f"Tables found in database: {len(all_tables)}")
-        if len(all_tables) < 20:  # Only show if there aren't too many
-            for schema, table in all_tables:
-                logger.info(f"  - {schema}.{table}")
-        
-        # More robust check for users table
-        users_table_name = None
-        for schema, table in all_tables:
-            if table.lower() == 'users':
-                users_table_name = table
-                break
-        
-        if users_table_name:
-            # Count triggers on users table
-            trigger_count = connection.execute(text(
-                f"SELECT COUNT(*) FROM information_schema.triggers "
-                f"WHERE trigger_schema = 'public' AND event_object_table = '{users_table_name}'"
-            )).scalar()
+            # Ensure the directory exists
+            os.makedirs(os.path.dirname(sql_path), exist_ok=True)
             
-            logger.info(f"Users table has {trigger_count} triggers")
+            # Write the file
+            with open(sql_path, 'w') as f:
+                f.write(core_content)
             
-            # Check for specific triggers
-            triggers = ['update_timestamp', 'track_user_changes', 'hash_password']
-            for trigger in triggers:
-                trigger_exists = connection.execute(text(
-                    f"SELECT EXISTS(SELECT 1 FROM information_schema.triggers "
-                    f"WHERE trigger_schema = 'public' AND event_object_table = '{users_table_name}' "
-                    f"AND trigger_name = '{trigger}')"
-                )).scalar()
+            logger.info(f'Created core trigger functions file at {sql_path}')
+        
+        # Read SQL file
+        with open(sql_path, 'r') as f:
+            sql = f.read()
+        
+        # Execute statements one by one for better error handling
+        statements = []
+        current_statement = []
+        
+        in_block = False
+        for line in sql.split('\n'):
+            if line.strip().startswith('--'):
+                continue
                 
-                if trigger_exists:
-                    logger.info(f"✓ {trigger} trigger exists on users table")
-                else:
-                    logger.warning(f"⚠️ {trigger} trigger missing from users table")
+            if '$' in line:
+                in_block = not in_block
+                
+            current_statement.append(line)
             
-            # Try to check trigger functionality by creating a test user
+            if ';' in line and not in_block:
+                statements.append('\n'.join(current_statement))
+                current_statement = []
+        
+        # Add any remaining statement
+        if current_statement:
+            statements.append('\n'.join(current_statement))
+        
+        # Execute each statement
+        success_count = 0
+        error_count = 0
+        for i, stmt in enumerate(statements, 1):
+            if not stmt.strip():
+                continue
+                
             try:
-                # Get the column info to determine length constraints
-                columns_info = connection.execute(text(
-                    f"SELECT column_name, data_type, character_maximum_length, is_nullable "
-                    f"FROM information_schema.columns "
-                    f"WHERE table_schema = 'public' AND table_name = '{users_table_name}'"
-                )).fetchall()
-                
-                # Find user_id and password columns and their constraints
-                user_id_col = None
-                password_col = None
-                user_id_length = 15  # Default if not specified
-                
-                for col_name, data_type, max_length, nullable in columns_info:
-                    if col_name.lower() == 'user_id':
-                        user_id_col = col_name
-                        if max_length is not None:
-                            user_id_length = max_length
-                    elif col_name.lower() in ('password', 'password_hash'):
-                        password_col = col_name
-                
-                # Create test user ID that fits within the length constraint
-                test_user_id = f"test{str(int(time.time()))[-8:]}"
-                if len(test_user_id) > user_id_length:
-                    test_user_id = test_user_id[:user_id_length]
-                
-                logger.info(f"Using test user ID: {test_user_id} (max length: {user_id_length})")
-                
-                # Check if test user exists and delete it
-                test_user_exists = connection.execute(text(
-                    f"SELECT EXISTS(SELECT 1 FROM {users_table_name} WHERE user_id = '{test_user_id}')"
-                )).scalar()
-                
-                if test_user_exists:
-                    connection.execute(text(f"DELETE FROM {users_table_name} WHERE user_id = '{test_user_id}'"))
-                    connection.commit()
-                
-                # Find required columns by checking for NOT NULL constraints
-                required_cols = []
-                for col_name, data_type, max_length, nullable in columns_info:
-                    if nullable == 'NO' and col_name not in ('created_at', 'updated_at', 'created_by', 'updated_by'):
-                        required_cols.append((col_name, data_type, max_length))
-                
-                # Build insert statement with required columns
-                insert_cols = []
-                insert_vals = []
-                
-                for col_name, data_type, max_length in required_cols:
-                    insert_cols.append(col_name)
-                    
-                    # Set appropriate values based on column name and type
-                    if col_name.lower() == 'user_id':
-                        insert_vals.append(f"'{test_user_id}'")
-                    elif col_name.lower() in ('password', 'password_hash'):
-                        insert_vals.append("'test_pwd'")
-                    elif 'char' in data_type.lower():
-                        # For string columns, use a value that fits
-                        if max_length:
-                            val = 'test'
-                            if len(val) > max_length:
-                                val = val[:max_length]
-                            insert_vals.append(f"'{val}'")
-                        else:
-                            insert_vals.append("'test'")
-                    elif 'int' in data_type.lower():
-                        insert_vals.append('0')
-                    elif data_type.lower() == 'boolean':
-                        insert_vals.append('FALSE')
-                    else:
-                        # Default fallback
-                        insert_vals.append("'test'")
-                
-                # Ensure user_id and password are included
-                if user_id_col and user_id_col not in insert_cols:
-                    insert_cols.append(user_id_col)
-                    insert_vals.append(f"'{test_user_id}'")
-                
-                if password_col and password_col not in insert_cols:
-                    insert_cols.append(password_col)
-                    insert_vals.append("'test_pwd'")
-                
-                # Try the insert
-                insert_sql = f"""
-                    INSERT INTO {users_table_name} ({', '.join(insert_cols)}) 
-                    VALUES ({', '.join(insert_vals)})
-                """
-                
-                logger.info(f"Attempting insert: {insert_sql}")
-                connection.execute(text(insert_sql))
+                connection.execute(text(stmt))
                 connection.commit()
-                
-                # Check if the password was hashed
-                if password_col:
-                    hashed_password = connection.execute(text(
-                        f"SELECT {password_col} FROM {users_table_name} WHERE user_id = '{test_user_id}'"
-                    )).scalar()
-                    
-                    # Clean up
-                    connection.execute(text(f"DELETE FROM {users_table_name} WHERE user_id = '{test_user_id}'"))
-                    connection.commit()
-                    
-                    # Check if password was hashed
-                    if hashed_password != 'test_pwd' and (
-                        hashed_password and (hashed_password.startswith('$2') or len(hashed_password) > 30)
-                    ):
-                        logger.info("✓ Password hashing trigger is working!")
-                        logger.info(f"Original: \"test_pwd\"")
-                        logger.info(f"Hashed: \"{hashed_password}\"")
-                    else:
-                        logger.warning("⚠️ Password hashing trigger is NOT working")
-                        logger.info(f"Password value: \"{hashed_password}\"")
-                else:
-                    logger.warning("No password column found in users table")
-                    
+                success_count += 1
+                if i % 5 == 0:  # Log progress in batches
+                    logger.info(f'Processed {i}/{len(statements)} statements')
             except Exception as e:
                 connection.rollback()
-                logger.warning(f"Error testing trigger functionality: {str(e)}")
-                import traceback
-                logger.debug(traceback.format_exc())
-        else:
-            logger.info("Users table does not exist - skipping user trigger checks")
+                logger.warning(f'Error in statement {i}: {str(e)}')
+                error_count += 1
+                # Continue with other statements
+                continue
         
-        logger.info('\nTrigger verification completed')
+        logger.info(f'Executed {success_count} statements successfully ({error_count} errors)')
+        
+        # Now apply triggers to all tables
+        try:
+            connection.execute(text("SELECT create_audit_triggers_all_schemas()"))
+            connection.commit()
+            logger.info('Applied audit triggers to all tables in all schemas')
+        except Exception as e:
+            connection.rollback()
+            logger.warning(f'Error applying audit triggers to schemas: {str(e)}')
+        
+        # Apply hash_password trigger to users table if it exists
+        try:
+            # Check both with and without case sensitivity
+            users_exist = connection.execute(text(
+                "SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE "
+                "table_schema = 'public' AND (table_name = 'users' OR table_name = 'Users'))"
+            )).scalar()
+            
+            if users_exist:
+                # Determine the actual table name (case sensitivity matters in PostgreSQL)
+                table_name = connection.execute(text(
+                    "SELECT table_name FROM information_schema.tables WHERE "
+                    "table_schema = 'public' AND (table_name = 'users' OR table_name = 'Users') LIMIT 1"
+                )).scalar()
+                
+                # Apply trigger using the correct case
+                connection.execute(text(f"""
+                    DROP TRIGGER IF EXISTS hash_password ON "{table_name}";
+                    CREATE TRIGGER hash_password
+                    BEFORE INSERT OR UPDATE ON "{table_name}"
+                    FOR EACH ROW
+                    EXECUTE FUNCTION hash_password();
+                """))
+                connection.commit()
+                logger.info(f'Applied hash_password trigger to {table_name} table')
+                return True
+            else:
+                # List all tables to help diagnose the issue
+                tables = connection.execute(text(
+                    "SELECT table_schema, table_name FROM information_schema.tables "
+                    "WHERE table_schema = 'public'"
+                )).fetchall()
+                
+                if tables:
+                    logger.info("Tables found in public schema:")
+                    for schema, table in tables:
+                        logger.info(f"  - {schema}.{table}")
+                else:
+                    logger.warning("No tables found in public schema")
+        except Exception as e:
+            connection.rollback()
+            logger.warning(f'Error applying hash_password trigger: {str(e)}')
+        
+        logger.info('\nCore trigger installation completed successfully!')
         
     finally:
         connection.close()
-
-if __name__ == '__main__':
-    # If hash_password function is missing, first create it
-    if '--verify' in sys.argv or args.verify:
-        verify_triggers()
-    else:
-        # Check if hash_password function needs to be created first
-        engine = create_engine(database_url)
-        connection = engine.connect()
-        
-        try:
-            # Check if hash_password function exists
-            function_exists = connection.execute(text(
-                "SELECT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid "
-                "WHERE n.nspname = 'public' AND p.proname = 'hash_password')"
-            )).scalar()
-            
-            if not function_exists:
-                logger.info("hash_password function doesn't exist - creating it first")
-                install_hash_password_function()
-        except Exception as e:
-            logger.warning(f"Error checking for hash_password function: {str(e)}")
-        finally:
-            connection.close()
-        
-        # Continue with core triggers installation
-        install_core_triggers()
-        
-        # Verify at the end if requested
-        if args.verify:
-            verify_triggers()   
+    
+    return True

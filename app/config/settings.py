@@ -1,11 +1,24 @@
 # app/config/settings.py
+"""
+Application Settings Module
+
+This module provides application-wide settings with environment-specific
+configurations based on the centralized environment system.
+"""
 
 import os
+import logging
 from datetime import timedelta
 from typing import Dict, Any
+import secrets  # For secure key generation
 from dotenv import load_dotenv
 from pathlib import Path
-import secrets  # Add this for secure key generation
+
+# Import Environment for centralized environment handling
+from app.core.environment import Environment, current_env
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Load environment variables from .env file
 load_dotenv()
@@ -13,20 +26,17 @@ load_dotenv()
 class Settings:
     """Application settings with environment-specific configurations"""
     
-    # Environment
-    FLASK_ENV = os.getenv('FLASK_ENV', 'development')
-    DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
+    # Environment (using centralized system)
+    FLASK_ENV = current_env
+    DEBUG = current_env != 'production'
     
     # Flask Core Settings
     SECRET_KEY = os.getenv('SECRET_KEY') or secrets.token_hex(32)
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
-    # Database URLs
-    DATABASE_URLS = {
-        'development': os.getenv('DEV_DATABASE_URL'),
-        'testing': os.getenv('TEST_DATABASE_URL'),
-        'production': os.getenv('PROD_DATABASE_URL')
-    }
+    # Database URLs (use DatabaseConfig)
+    # DATABASE_URL will be set during initialization
+    SQLALCHEMY_DATABASE_URI = None
     
     # Redis configuration for session management
     REDIS_URLS = {
@@ -107,32 +117,49 @@ class Settings:
     }
     
     def __init__(self):
-        # Validate database URL
-        if not self.DATABASE_URL:
-            raise ValueError(f"Database URL not set for environment: {self.FLASK_ENV}")
+        # Import here to avoid circular imports
+        from app.config.db_config import DatabaseConfig
         
-        # Validate Redis URL in production
-        if self.FLASK_ENV == 'production' and not self.REDIS_URL:
-            raise ValueError("Redis URL must be set in production")
+        try:
+            # Get database URL for current environment
+            self.DATABASE_URL = DatabaseConfig.get_database_url()
+            self.SQLALCHEMY_DATABASE_URI = self.DATABASE_URL
+            
+            if not self.DATABASE_URL:
+                logger.warning(f"Database URL not set for environment: {current_env}")
+                
+                # Try to set default values based on environment
+                if current_env == 'development':
+                    self.DATABASE_URL = os.getenv('DEV_DATABASE_URL', 'postgresql://skinspire_admin:Skinspire123$@localhost:5432/skinspire_dev')
+                elif current_env == 'testing':
+                    self.DATABASE_URL = os.getenv('TEST_DATABASE_URL', 'postgresql://skinspire_admin:Skinspire123$@localhost:5432/skinspire_test')
+                elif current_env == 'production':
+                    self.DATABASE_URL = os.getenv('PROD_DATABASE_URL')
+                
+                # Update SQLAlchemy URI if we now have a URL
+                if self.DATABASE_URL:
+                    self.SQLALCHEMY_DATABASE_URI = self.DATABASE_URL
+            
+            # Validate Redis URL in production
+            if current_env == 'production' and not self.REDIS_URL:
+                logger.warning("Redis URL must be set in production")
+            
+            # Validate encryption key if encryption is enabled
+            if self.ENCRYPTION_ENABLED and not self.MASTER_ENCRYPTION_KEY:
+                logger.warning("Master encryption key must be set when encryption is enabled")
         
-        # Validate encryption key if encryption is enabled
-        if self.ENCRYPTION_ENABLED and not self.MASTER_ENCRYPTION_KEY:
-            raise ValueError("Master encryption key must be set when encryption is enabled")
-    
-    @property
-    def DATABASE_URL(self) -> str:
-        """Get database URL for current environment"""
-        return self.DATABASE_URLS.get(self.FLASK_ENV)
+        except Exception as e:
+            logger.warning(f"Settings initialization encountered an error: {e}")
     
     @property
     def REDIS_URL(self) -> str:
         """Get Redis URL for current environment"""
-        return self.REDIS_URLS.get(self.FLASK_ENV)
+        return self.REDIS_URLS.get(current_env)
     
     @property
     def SECURITY_SETTINGS(self) -> Dict[str, Any]:
         """Get merged security settings for current environment"""
-        env_settings = self.ENVIRONMENT_SECURITY_SETTINGS.get(self.FLASK_ENV, {})
+        env_settings = self.ENVIRONMENT_SECURITY_SETTINGS.get(current_env, {})
         return {
             **self.BASE_SECURITY_SETTINGS,
             **env_settings,
@@ -145,23 +172,20 @@ class Settings:
         # from the database if needed
         return self.SECURITY_SETTINGS
     
-    @property
-    def SQLALCHEMY_DATABASE_URI(self) -> str:
-        """Alias for DATABASE_URL to support Flask-SQLAlchemy"""
-        return self.DATABASE_URL
-    
     def get_database_url_for_env(self, env: str) -> str:
         """
         Get database URL for a specific environment without changing the current environment.
         This method allows accessing different environment URLs without affecting the main DATABASE_URL property.
         
         Args:
-            env: The environment to get the URL for ('development', 'testing', 'production')
+            env: The environment to get the URL for (any format)
             
         Returns:
             The database URL for the specified environment
         """
-        return self.DATABASE_URLS.get(env)
+        # Import here to avoid circular imports
+        from app.config.db_config import DatabaseConfig
+        return DatabaseConfig.get_database_url_for_env(env)
 
     def validate_database_url(self, env: str) -> bool:
         """
@@ -177,5 +201,12 @@ class Settings:
         url = self.get_database_url_for_env(env)
         return bool(url)
 
-# Create settings instance
-settings = Settings()   
+# Create settings instance with more resilient initialization
+try:
+    settings = Settings()
+except Exception as e:
+    logger.error(f"Settings initialization failed: {e}")
+    # Create a minimal settings instance to prevent crashes
+    settings = object.__new__(Settings)
+    settings.FLASK_ENV = current_env
+    settings.DEBUG = current_env != 'production'

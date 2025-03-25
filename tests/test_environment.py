@@ -7,6 +7,9 @@ import pytest
 import logging
 from unittest.mock import MagicMock
 
+# Import the centralized environment handling
+from app.core.environment import Environment, current_env
+
 # Set up logging for tests
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,14 +21,13 @@ def setup_test_environment():
     This function should be called before any application imports
     """
     # Log initial environment state
-    logger.debug(f"Initial FLASK_ENV: {os.environ.get('FLASK_ENV', 'Not set')}")
-    logger.debug(f"Initial INTEGRATION_TEST: {os.environ.get('INTEGRATION_TEST', 'Not set')}")
+    logger.debug(f"Initial environment: {current_env}")
+    
+    # Use the centralized environment system to set testing environment
+    Environment.set_environment('testing')
+    logger.info(f"Environment set to: {current_env}")
     
     # Set critical environment variables for testing if not already set
-    if os.environ.get('FLASK_ENV') != 'testing':
-        os.environ['FLASK_ENV'] = 'testing'
-        logger.info("Set FLASK_ENV=testing")
-        
     if not os.environ.get('TEST_DATABASE_URL'):
         os.environ['TEST_DATABASE_URL'] = 'postgresql://skinspire_admin:Skinspire123$@localhost:5432/skinspire_test'
         logger.info("Set TEST_DATABASE_URL for testing database")
@@ -44,7 +46,7 @@ def setup_test_environment():
     logger.info(f"CSRF Bypass configured: {os.environ['BYPASS_CSRF']}")
     
     # Log final state after setup
-    logger.debug(f"Final FLASK_ENV: {os.environ.get('FLASK_ENV')}")
+    logger.debug(f"Final environment: {current_env}")
     logger.debug(f"Final INTEGRATION_TEST: {os.environ.get('INTEGRATION_TEST')}")
     logger.debug(f"Final BYPASS_CSRF: {os.environ.get('BYPASS_CSRF')}")
     
@@ -98,11 +100,11 @@ def verify_database_connection():
     """
     try:
         from sqlalchemy import text
-        from app.services.database_service import get_db_session, get_active_env
+        from app.services.database_service import get_db_session
         
-        env = get_active_env()
-        if env != 'testing':
-            logger.warning(f"Wrong environment: {env} (should be 'testing')")
+        # Check environment
+        if not Environment.is_testing():
+            logger.warning(f"Wrong environment: {current_env} (should be 'testing')")
             return False
         
         try:
@@ -276,12 +278,34 @@ def diagnose_environment():
     """Print diagnostic information about the test environment"""
     logger.info("=== Test Environment Diagnostic ===")
     logger.info(f"Python Version: {sys.version}")
+    logger.info(f"Application Environment: {current_env}")
     logger.info(f"Integration Mode: {integration_flag()}")
     logger.info(f"CSRF Bypass: {get_csrf_bypass_flag()}")
     logger.info(f"Environment Variables:")
-    for key in sorted(['FLASK_ENV', 'FLASK_APP', 'PYTHONPATH', 'INTEGRATION_TEST', 'BYPASS_CSRF']):
+    for key in sorted(['FLASK_ENV', 'FLASK_APP', 'PYTHONPATH', 'INTEGRATION_TEST', 'BYPASS_CSRF', 'SKINSPIRE_ENV']):
         logger.info(f"  {key}: {os.environ.get(key, 'Not set')}")
     logger.info("=================================")
+
+# Add a new test for the centralized environment
+def test_environment_system():
+    """Test the centralized environment system"""
+    # Test that we're in testing mode
+    assert current_env == 'testing', f"Current environment should be 'testing', found '{current_env}'"
+    
+    # Test environment normalization
+    assert Environment.normalize_env('test') == 'testing'
+    assert Environment.normalize_env('dev') == 'development'
+    assert Environment.normalize_env('prod') == 'production'
+    
+    # Test short name conversion
+    assert Environment.get_short_name('testing') == 'test'
+    assert Environment.get_short_name('development') == 'dev'
+    assert Environment.get_short_name('production') == 'prod'
+    
+    # Test environment checks
+    assert Environment.is_testing() == True
+    assert Environment.is_development() == False
+    assert Environment.is_production() == False
 
 # Existing tests remain the same
 def test_integration_mode_detection():

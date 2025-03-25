@@ -125,19 +125,19 @@ def verify_functions():
         if missing_core:
             click.echo("  Missing core functions: " + ", ".join(missing_core))
         else:
-            click.echo("  ✓ All core functions exist")
+            click.echo("  + All core functions exist")
         
         click.echo(f"\nAuthentication Functions: {len(auth_functions) - len(missing_auth)}/{len(auth_functions)} exist")
         if missing_auth:
             click.echo("  Missing auth functions: " + ", ".join(missing_auth))
         else:
-            click.echo("  ✓ All authentication functions exist")
+            click.echo("  + All authentication functions exist")
         
         click.echo(f"\nSpecialized Functions: {len(specialized_functions) - len(missing_specialized)}/{len(specialized_functions)} exist")
         if missing_specialized:
             click.echo("  Missing specialized functions: " + ", ".join(missing_specialized))
         else:
-            click.echo("  ✓ All specialized functions exist")
+            click.echo("  + All specialized functions exist")
         
         # Overall assessment
         total_missing = len(missing_core) + len(missing_auth) + len(missing_specialized)
@@ -149,7 +149,7 @@ def verify_functions():
             click.echo("\nTo fix missing functions, run:")
             click.echo("  python scripts/manage_db.py apply-triggers")
         else:
-            click.echo("\n✓ All required trigger functions exist!")
+            click.echo("\n+ All required trigger functions exist!")
 
 @cli.command()
 @with_appcontext
@@ -267,4 +267,32 @@ def verify_critical_triggers():
             """)).fetchall()
             
             actual_trigger_names = [t[0] for t in actual_triggers]
-            missing = [t for t in expected_triggers
+            missing = [t for t in expected_triggers if t not in actual_trigger_names]
+            
+            # Add to results
+            status = "+ All triggers present" if not missing else f"Missing {len(missing)} triggers"
+            missing_str = ", ".join(missing) if missing else "None"
+            results.append([
+                table, 
+                status, 
+                f"{len(actual_trigger_names)}/{len(expected_triggers)}", 
+                missing_str
+            ])
+        
+        # Display results
+        headers = ["Table", "Status", "Triggers", "Missing"]
+        click.echo("\nCritical Table Trigger Status:")
+        click.echo(tabulate(results, headers=headers, tablefmt="grid"))
+        
+        # Summary
+        all_ok = all(row[1].startswith("+") for row in results)
+        if all_ok:
+            click.echo("\n+ All critical tables have required triggers!")
+        else:
+            click.echo("\n! Some critical tables are missing required triggers.")
+            click.echo("Run the following command to fix:")
+            click.echo("  python scripts/manage_db.py apply-triggers")
+
+if __name__ == '__main__':
+    cli()
+    sys.exit(0)

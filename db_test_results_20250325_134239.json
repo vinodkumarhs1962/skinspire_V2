@@ -1,0 +1,176 @@
+{
+  "timestamp": "2025-03-25T13:42:39.937612",
+  "summary": {
+    "passed": 45,
+    "failed": 0,
+    "skipped": 0,
+    "total": 45
+  },
+  "test_details": {
+    "Configuration - Dev Database Connection": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:20.968743"
+    },
+    "Configuration - Test Database Connection": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:21.003944"
+    },
+    "Backup - Create Test Table": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:21.081467"
+    },
+    "Backup - Insert Test Data": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:21.083050"
+    },
+    "Backup - Verify Test Data": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:21.083959"
+    },
+    "Backup test Database": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:32.752555"
+    },
+    "Backup - Modify Table": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:21.884215"
+    },
+    "Backup - Verify Column Added": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:21.889280"
+    },
+    "Restore test Database": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:34.395212"
+    },
+    "Backup - Verify Restore": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:23.456861"
+    },
+    "Backup dev Database": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:24.323308"
+    },
+    "DB Copy - Create Dev Test Table": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:25.109970"
+    },
+    "DB Copy - Insert Dev Test Data": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:25.110871"
+    },
+    "DB Copy - Verify Dev Test Data": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:25.111592"
+    },
+    "DB Copy - Copy Dev to Test": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:26.903184"
+    },
+    "DB Copy - Verify Test Data": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:26.938201"
+    },
+    "DB Copy - Modify Test Data": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:26.939026"
+    },
+    "DB Copy - Modify Dev Schema": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:26.943425"
+    },
+    "DB Copy - Schema-Only Copy": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:28.529665"
+    },
+    "DB Copy - Verify Schema Update": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:28.530015"
+    },
+    "DB Copy - Verify Data Preserved": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:28.531251"
+    },
+    "Restore dev Database": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:30.271660"
+    },
+    "Triggers - Create Test Table": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:32.791437"
+    },
+    "Triggers - Use/Create Trigger Function": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:32.792752"
+    },
+    "Triggers - Create Trigger": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:32.793588"
+    },
+    "Triggers - Insert Test Data": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:32.795318"
+    },
+    "Triggers - Verify Created Timestamp": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:32.796159"
+    },
+    "Triggers - Update Test Data": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:32.796676"
+    },
+    "Triggers - Verify Updated Timestamp": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:32.797229"
+    },
+    "Switch Env - Status Check": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:35.011963"
+    },
+    "Switch Env - Switch to Test": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:35.609411"
+    },
+    "Switch Env - Verify File Update": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:35.610103"
+    },
+    "Switch Env - Switch to Dev": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:36.217049"
+    },
+    "Switch Env - Verify Second File Update": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:36.217825"
+    },
+    "DB Inspect - Create Test Table": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:36.295728"
+    },
+    "DB Inspect - General Overview": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:37.054489"
+    },
+    "DB Inspect - Tables Listing": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:37.799940"
+    },
+    "DB Inspect - Table Detail": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:38.528661"
+    },
+    "DB Inspect - Index Information": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:38.528790"
+    },
+    "DB Inspect - Functions Listing": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:39.223169"
+    },
+    "DB Inspect - Triggers Listing": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T13:42:39.929353"
+    }
+  },
+  "failures": []
+}

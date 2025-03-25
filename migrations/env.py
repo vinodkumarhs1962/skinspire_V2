@@ -1,3 +1,9 @@
+# migrations/env.py
+"""
+Alembic migration environment configuration.
+This module configures the Alembic environment for database migrations.
+"""
+
 import logging
 from logging.config import fileConfig
 
@@ -5,7 +11,14 @@ from flask import current_app
 
 from alembic import context
 
-# this is the Alembic Config object, which provides
+# Add reference to db_config for consistency
+try:
+    from app.config.db_config import DatabaseConfig
+except ImportError:
+    # Skip if not available, will use Flask-SQLAlchemy's config
+    pass
+
+# This is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
@@ -16,15 +29,28 @@ logger = logging.getLogger('alembic.env')
 
 
 def get_engine():
+    """Get the SQLAlchemy engine from Flask-SQLAlchemy"""
     try:
-        # this works with Flask-SQLAlchemy<3 and Alchemical
+        # This works with Flask-SQLAlchemy<3 and Alchemical
         return current_app.extensions['migrate'].db.get_engine()
     except (TypeError, AttributeError):
-        # this works with Flask-SQLAlchemy>=3
+        # This works with Flask-SQLAlchemy>=3
         return current_app.extensions['migrate'].db.engine
 
 
 def get_engine_url():
+    """Get the database URL for Alembic configuration"""
+    try:
+        # Try to get from the centralized db_config first for consistency
+        if 'DatabaseConfig' in globals():
+            env = DatabaseConfig.get_active_env()
+            url = DatabaseConfig.get_database_url_for_env(env)
+            # Replace % with %% for Alembic config
+            return url.replace('%', '%%')
+    except (AttributeError, NameError):
+        # Fall back to Flask-SQLAlchemy's engine URL
+        pass
+        
     try:
         return get_engine().url.render_as_string(hide_password=False).replace(
             '%', '%%')
@@ -32,20 +58,21 @@ def get_engine_url():
         return str(get_engine().url).replace('%', '%%')
 
 
-# add your model's MetaData object here
+# Add your model's MetaData object here
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 config.set_main_option('sqlalchemy.url', get_engine_url())
 target_db = current_app.extensions['migrate'].db
 
-# other values from the config, defined by the needs of env.py,
+# Other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 
 
 def get_metadata():
+    """Get the SQLAlchemy metadata for migration generation"""
     if hasattr(target_db, 'metadatas'):
         return target_db.metadatas[None]
     return target_db.metadata
@@ -61,7 +88,6 @@ def run_migrations_offline():
 
     Calls to context.execute() here emit the given string to the
     script output.
-
     """
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -77,10 +103,9 @@ def run_migrations_online():
 
     In this scenario we need to create an Engine
     and associate a connection with the context.
-
     """
 
-    # this callback is used to prevent an auto-migration from being generated
+    # This callback is used to prevent an auto-migration from being generated
     # when there are no changes to the schema
     # reference: http://alembic.zzzcomputing.com/en/latest/cookbook.html
     def process_revision_directives(context, revision, directives):

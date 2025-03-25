@@ -22,6 +22,7 @@ from sqlalchemy import create_engine, Engine, text
 from sqlalchemy.orm import sessionmaker, scoped_session, Session
 from sqlalchemy.exc import SQLAlchemyError
 from flask import current_app, has_app_context
+from app.config.db_config import DatabaseConfig
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -333,18 +334,22 @@ class DatabaseService:
         Returns:
             String representing the environment ('development', 'testing', or 'production')
         """
-        env = os.environ.get('FLASK_ENV', 'development')
         
-        # Check for environment override file
-        env_type_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
-                                   '.flask_env_type')
-        if os.path.exists(env_type_file):
-            with open(env_type_file, 'r') as f:
-                env_override = f.read().strip()
-                if env_override in ['dev', 'test', 'prod']:
-                    env = env_override
+        # Use centralized configuration
+        return DatabaseConfig.get_active_env()
+
+        # env = os.environ.get('FLASK_ENV', 'development')
         
-        return env
+        # # Check for environment override file
+        # env_type_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
+        #                            '.flask_env_type')
+        # if os.path.exists(env_type_file):
+        #     with open(env_type_file, 'r') as f:
+        #         env_override = f.read().strip()
+        #         if env_override in ['dev', 'test', 'prod']:
+        #             env = env_override
+        
+        # return env
     
     @classmethod
     def get_database_url_for_env(cls, env: str) -> str:
@@ -357,12 +362,15 @@ class DatabaseService:
         Returns:
             Database URL string
         """
-        if env == 'production' or env == 'prod':
-            return os.environ.get('PROD_DATABASE_URL')
-        elif env == 'testing' or env == 'test':
-            return os.environ.get('TEST_DATABASE_URL')
-        else:
-            return os.environ.get('DEV_DATABASE_URL')
+        # Use centralized configuration
+        return DatabaseConfig.get_database_url_for_env(env)
+
+        # if env == 'production' or env == 'prod':
+        #     return os.environ.get('PROD_DATABASE_URL')
+        # elif env == 'testing' or env == 'test':
+        #     return os.environ.get('TEST_DATABASE_URL')
+        # else:
+        #     return os.environ.get('DEV_DATABASE_URL')
     
     @classmethod
     def get_database_url(cls) -> str:

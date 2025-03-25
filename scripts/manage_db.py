@@ -1,16 +1,43 @@
 #!/usr/bin/env python
 # skinspire_v2/scripts/manage_db.py
-# python scripts/manage_db.py apply-triggers
-# python scripts/manage_db.py apply-all-schema-triggers
-# python scripts/manage_db.py verify-triggers
+# python scripts/manage_db.py --help
 
+#  INDIVIDUAL COMMANDS
+# python scripts/manage_db.py apply-all-db-schema-triggers
+# python scripts/manage_db.py apply-base-db-triggers
+# python scripts/manage_db.py apply-db-triggers
+# python scripts/manage_db.py check-database
+# python scripts/manage_db.py copy-db
+# python scripts/manage_db.py create-backup
+# python scripts/manage_db.py create-backup --env dev
+# python scripts/manage_db.py create-db-migration
+# python scripts/manage_db.py drop-all-db-tables
+# python scripts/manage_db.py initialize-db
+# python scripts/manage_db.py inspect-db
+# python scripts/manage_db.py list-all-backups
+# python scripts/manage_db.py reset-and-initialize
+# python scripts/manage_db.py reset-database
+# python scripts/manage_db.py restore-backup
+# python scripts/manage_db.py rollback-db-migration
+# python scripts/manage_db.py show-all-migrations
+# python scripts/manage_db.py show-db-config
+# python scripts/manage_db.py switch-env
+# python scripts/manage_db.py test-db-triggers
+# python scripts/manage_db.py verify-db-triggers
+
+# Setup imports for manage_db.py
 import os
 import sys
 import click
-from flask.cli import with_appcontext
-from sqlalchemy import text
 from pathlib import Path
 import subprocess
+from datetime import datetime
+from functools import wraps
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # Add project root to Python path - using absolute paths
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -18,696 +45,408 @@ project_root = os.path.dirname(current_dir)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# Debug imports
-print(f"Python path: {sys.path}")
-print(f"Looking for app module in: {project_root}")
-print(f"Files in directory: {os.listdir(project_root)}")
-
-# Optional: Check if app directory exists
-app_dir = os.path.join(project_root, 'app')
-if os.path.exists(app_dir):
-    print(f"app directory exists at: {app_dir}")
-    print(f"Files in app directory: {os.listdir(app_dir)}")
-else:
-    print(f"app directory does not exist at expected location: {app_dir}")
-    sys.exit(1)
-
+# Try to import centralized environment module first
 try:
-    from app import create_app, db
-    print("Successfully imported app module")
-except ImportError as e:
-    print(f"Error importing app module: {e}")
-    sys.exit(1)
+    from app.core.environment import Environment, current_env
+    ENVIRONMENT_MODULE_AVAILABLE = True
+    
+    # Set up environment using centralized approach
+    def setup_environment():
+        """Set up environment variables for database operations using centralized Environment"""
+        logger.debug(f"Setting up environment for: {current_env}")
+        
+        # Set database URLs if not already set
+        if current_env == 'testing' and not os.environ.get('TEST_DATABASE_URL'):
+            os.environ['TEST_DATABASE_URL'] = 'postgresql://skinspire_admin:Skinspire123$@localhost:5432/skinspire_test'
+        elif current_env == 'development' and not os.environ.get('DEV_DATABASE_URL'):
+            os.environ['DEV_DATABASE_URL'] = 'postgresql://skinspire_admin:Skinspire123$@localhost:5432/skinspire_dev'
+        elif current_env == 'production' and not os.environ.get('PROD_DATABASE_URL'):
+            os.environ['PROD_DATABASE_URL'] = 'postgresql://skinspire_admin:Skinspire123$@localhost:5432/skinspire_prod'
+        
+        logger.debug(f"Environment variables set for {current_env}")
+except ImportError:
+    ENVIRONMENT_MODULE_AVAILABLE = False
+    
+    # Fall back to legacy environment setup
+    def setup_environment():
+        """Set up environment variables for database operations"""
+        if os.environ.get('FLASK_ENV') == 'testing' and not os.environ.get('TEST_DATABASE_URL'):
+            os.environ['TEST_DATABASE_URL'] = 'postgresql://skinspire_admin:Skinspire123$@localhost:5432/skinspire_test'
+        elif os.environ.get('FLASK_ENV') == 'development' and not os.environ.get('DEV_DATABASE_URL'):
+            os.environ['DEV_DATABASE_URL'] = 'postgresql://skinspire_admin:Skinspire123$@localhost:5432/skinspire_dev'
+        elif os.environ.get('FLASK_ENV') == 'production' and not os.environ.get('PROD_DATABASE_URL'):
+            os.environ['PROD_DATABASE_URL'] = 'postgresql://skinspire_admin:Skinspire123$@localhost:5432/skinspire_prod'
 
-# Global app instance
+# Set up environment before imports
+setup_environment()
+
+# Import core database operations
+try:
+    from app.core.db_operations import (
+        # Utility functions
+        normalize_env_name,
+        get_db_config,
+        
+        # Backup operations
+        backup_database,
+        list_backups,
+        
+        # Restore operations
+        restore_database,
+        
+        # Migration operations
+        create_migration,
+        apply_migration,
+        rollback_migration,
+        show_migrations,
+        
+        # Copy operations
+        copy_database,
+        
+        # Trigger operations
+        apply_base_triggers, 
+        apply_triggers,
+        apply_all_schema_triggers,
+        verify_triggers,
+        
+        # Maintenance operations
+        check_db,
+        reset_db,
+        init_db,
+        drop_all_tables
+    )
+    CORE_MODULES_AVAILABLE = True
+except ImportError as e:
+    # This fallback allows the file to be run even before core modules are set up
+    click.echo(f"Warning: Could not import core modules: {e}")
+    click.echo("Some commands may not work. Ensure app/core/db_operations is set up correctly.")
+    # Set up placeholders to prevent errors
+    backup_database = apply_base_triggers = apply_triggers = apply_all_schema_triggers = None
+    verify_triggers = check_db = reset_db = init_db = drop_all_tables = None
+    list_backups = restore_database = create_migration = apply_migration = None
+    rollback_migration = show_migrations = copy_database = None
+    normalize_env_name = lambda x: x
+    get_db_config = None
+    CORE_MODULES_AVAILABLE = False
+
+# Global variables for lazy loading
 _app = None
+_db = None
+_db_config = None
 
 def get_app():
+    """Get Flask app instance, initializing it only when needed"""
     global _app
     if _app is None:
-        _app = create_app()
+        try:
+            from app import create_app
+            _app = create_app()
+        except Exception as e:
+            click.echo(f"Error initializing Flask app: {str(e)}")
+            click.echo("If this command requires database connectivity, ensure your environment is set correctly.")
+            click.echo("You may need to run: set FLASK_ENV=testing")
+            sys.exit(1)
     return _app
 
 def get_db():
-    return db
+    """Get database instance, initializing it only when needed"""
+    global _db
+    if _db is None:
+        try:
+            from app import db
+            _db = db
+        except Exception as e:
+            click.echo(f"Error accessing database module: {str(e)}")
+            sys.exit(1)
+    return _db
+
+def get_database_config():
+    """Get DatabaseConfig, initializing it only when needed"""
+    global _db_config
+    if _db_config is None:
+        try:
+            from app.config.db_config import DatabaseConfig
+            _db_config = DatabaseConfig
+        except Exception as e:
+            click.echo(f"Error accessing database configuration: {str(e)}")
+            sys.exit(1)
+    return _db_config
+
+def safe_with_appcontext(f):
+    """Safely provide app context, with better error handling than Flask's version"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        app = get_app()
+        try:
+            with app.app_context():
+                return f(*args, **kwargs)
+        except Exception as e:
+            click.echo(f"Error in app context: {str(e)}")
+            sys.exit(1)
+    return decorated
+
+def mask_db_url(url):
+    """Mask password in database URL for display"""
+    if url and '://' in url and '@' in url:
+        parts = url.split('@')
+        credentials = parts[0].split('://')
+        if len(credentials) > 1 and ':' in credentials[1]:
+            user_pass = credentials[1].split(':')
+            return f"{credentials[0]}://{user_pass[0]}:****@{parts[1]}"
+    return url
 
 @click.group()
 def cli():
     """Database management commands"""
     pass
 
+
+# Trigger Operations Commands
+
 @cli.command()
-@with_appcontext
-def apply_base_triggers():
+def apply_base_db_triggers():
     """Apply only base database trigger functionality (without table-specific triggers)"""
-    app = get_app()
-    click.echo('Starting to apply base trigger functions...')
-    
-    with app.app_context():
-        try:
-            # Get db from the app context
-            db = get_db()
-            
-            # Read functions.sql
-            sql_path = Path(__file__).parent.parent / 'app' / 'database' / 'functions.sql'
-            if not sql_path.exists():
-                # Try fallback location
-                sql_path = Path(__file__).parent.parent / 'app' / 'db' / 'functions.sql'
-                if not sql_path.exists():
-                    raise click.ClickException(f'functions.sql not found')
-                
-            click.echo(f'✓ Found functions.sql at {sql_path}')
-            with open(sql_path, 'r') as f:
-                sql_content = f.read()
-            
-            # Extract only base functions (before Authentication Triggers section)
-            base_sections = []
-            current_section = []
-            for line in sql_content.split('\n'):
-                if "Authentication Triggers" in line:
-                    break
-                current_section.append(line)
-            
-            base_sql = '\n'.join(current_section)
-            
-            # Apply only base functions
-            click.echo('Creating base database functions...')
-            db.session.execute(text(base_sql))
-            db.session.commit()
-            
-            # Apply basic trigger functions to all tables
-            click.echo('Applying triggers to existing tables...')
-            db.session.execute(text("SELECT create_audit_triggers('public')"))
-            db.session.commit()
-            
-            click.echo('✓ Base trigger functions applied successfully')
-            
-        except Exception as e:
-            db.session.rollback()
-            click.echo(f'✗ Error applying base database functions: {str(e)}')
-            raise
-
-@cli.command()
-@with_appcontext
-def apply_triggers():
-    """Apply all database triggers and functions with progressive fallbacks"""
-    app = get_app()
-    click.echo('Starting to apply database triggers and functions...')
-    
-    with app.app_context():
-        try:
-            # Get db from the app context
-            db = get_db()
-            
-            # Step 1: Try to find functions.sql (original approach)
-            sql_path = Path(__file__).parent.parent / 'app' / 'database' / 'functions.sql'
-            if not sql_path.exists():
-                # Try fallback location
-                sql_path = Path(__file__).parent.parent / 'app' / 'db' / 'functions.sql'
-                if not sql_path.exists():
-                    raise click.ClickException(f'functions.sql not found')
-            
-            click.echo(f'✓ Found functions.sql at {sql_path}')
-            with open(sql_path, 'r') as f:
-                sql = f.read()
-            
-            # Step 2: Try applying full SQL script (original approach)
-            click.echo('Attempting to apply full functions.sql...')
-            success = False
-            try:
-                # Split SQL into statements and execute each separately
-                statements = []
-                current_statement = []
-                
-                # Simple SQL parser to split on semicolons that aren't in functions
-                in_function = False
-                in_do_block = False
-                nesting_level = 0
-                
-                for line in sql.split('\n'):
-                    # Track function and DO block boundaries
-                    if 'DO $$' in line:
-                        in_do_block = True
-                        nesting_level += 1
-                    elif '$$' in line and not in_function:
-                        if in_do_block:
-                            nesting_level -= 1
-                            if nesting_level == 0:
-                                in_do_block = False
-                        else:
-                            in_function = not in_function
-                    
-                    # Add line to current statement
-                    current_statement.append(line)
-                    
-                    # If semicolon outside function/block, end statement
-                    if ';' in line and not in_function and not in_do_block:
-                        statements.append('\n'.join(current_statement))
-                        current_statement = []
-                
-                # Add any remaining statement
-                if current_statement:
-                    statements.append('\n'.join(current_statement))
-                
-                # Execute each statement separately
-                error_count = 0
-                for i, stmt in enumerate(statements):
-                    if not stmt.strip():
-                        continue
-                    
-                    try:
-                        db.session.execute(text(stmt))
-                        db.session.commit()
-                    except Exception as e:
-                        db.session.rollback()
-                        click.echo(f"⚠️ Error in statement {i+1}: {str(e)}")
-                        error_count += 1
-                
-                if error_count == 0:
-                    click.echo('✓ Applied all database functions and triggers successfully')
-                    success = True
-                else:
-                    click.echo(f'⚠️ Applied with {error_count} errors - may need fallback approach')
-            except Exception as e:
-                db.session.rollback()
-                click.echo(f'⚠️ Error applying full SQL: {str(e)}')
-            
-            # Step 3: If full script failed, try just the base functions from functions.sql
-            if not success:
-                click.echo('Attempting to apply only base trigger functions from functions.sql...')
-                try:
-                    # Extract only base functions (before Authentication Triggers section)
-                    base_sections = []
-                    current_section = []
-                    for line in sql.split('\n'):
-                        if "Authentication Triggers" in line:
-                            break
-                        current_section.append(line)
-                    
-                    base_sql = '\n'.join(current_section)
-                    
-                    # Apply only base functions
-                    db.session.execute(text(base_sql))
-                    db.session.commit()
-                    
-                    # Apply basic trigger functions to all tables
-                    db.session.execute(text("SELECT create_audit_triggers('public')"))
-                    db.session.commit()
-                    
-                    click.echo('✓ Base trigger functions applied successfully')
-                    success = True
-                except Exception as e:
-                    db.session.rollback()
-                    click.echo(f'⚠️ Error applying base functions: {str(e)}')
-            
-            # Step 4: Final fallback - try core_trigger_functions.sql if it exists
-            if not success:
-                click.echo('Attempting to use core_trigger_functions.sql as fallback...')
-                core_sql_path = Path(__file__).parent.parent / 'app' / 'database' / 'core_trigger_functions.sql'
-                
-                if core_sql_path.exists():
-                    try:
-                        with open(core_sql_path, 'r') as f:
-                            core_sql = f.read()
-                        
-                        # Split and execute each statement separately for better error handling
-                        statements = []
-                        current_statement = []
-                        in_block = False
-                        
-                        for line in core_sql.split('\n'):
-                            if line.strip().startswith('--'):
-                                continue
-                                
-                            if '$$' in line:
-                                in_block = not in_block
-                                
-                            current_statement.append(line)
-                            
-                            if ';' in line and not in_block:
-                                statements.append('\n'.join(current_statement))
-                                current_statement = []
-                        
-                        # Execute each statement
-                        for stmt in statements:
-                            if not stmt.strip():
-                                continue
-                                
-                            try:
-                                db.session.execute(text(stmt))
-                                db.session.commit()
-                            except Exception as e:
-                                db.session.rollback()
-                                click.echo(f'⚠️ Error in core function: {str(e)}')
-                        
-                        # Apply core triggers to all tables
-                        try:
-                            db.session.execute(text("SELECT create_audit_triggers_all_schemas()"))
-                            db.session.commit()
-                            click.echo('✓ Applied core audit triggers to all tables')
-                        except Exception as e:
-                            db.session.rollback()
-                            click.echo(f'⚠️ Error applying core audit triggers: {str(e)}')
-                        
-                        click.echo('✓ Core trigger functions applied successfully')
-                        success = True
-                    except Exception as e:
-                        db.session.rollback()
-                        click.echo(f'⚠️ Error applying core trigger functions: {str(e)}')
-                else:
-                    click.echo('⚠️ core_trigger_functions.sql not found - cannot use fallback')
-            
-            # Step 5: Apply hash_password trigger to users table specifically if needed
-            try:
-                # Check if users table exists
-                users_exist = db.session.execute(text(
-                    "SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users')"
-                )).scalar()
-                
-                if users_exist:
-                    # Check if hash_password function exists
-                    hash_func_exists = db.session.execute(text(
-                        "SELECT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid "
-                        "WHERE n.nspname = 'public' AND p.proname = 'hash_password')"
-                    )).scalar()
-                    
-                    if hash_func_exists:
-                        # Check if trigger already exists
-                        trigger_exists = db.session.execute(text(
-                            "SELECT EXISTS(SELECT 1 FROM information_schema.triggers "
-                            "WHERE trigger_schema = 'public' AND event_object_table = 'users' AND trigger_name = 'hash_password')"
-                        )).scalar()
-                        
-                        if not trigger_exists:
-                            click.echo('Applying hash_password trigger to users table...')
-                            db.session.execute(text("""
-                                DROP TRIGGER IF EXISTS hash_password ON users;
-                                CREATE TRIGGER hash_password
-                                BEFORE INSERT OR UPDATE ON users
-                                FOR EACH ROW
-                                EXECUTE FUNCTION hash_password();
-                            """))
-                            db.session.commit()
-                            click.echo('✓ Applied hash_password trigger to users table')
-            except Exception as e:
-                db.session.rollback()
-                click.echo(f'⚠️ Error applying hash_password trigger: {str(e)}')
-            
-            # Final status report
-            if success:
-                click.echo('\n✓ Database triggers applied successfully via one of the available methods')
-            else:
-                click.echo('\n⚠️ All methods to apply triggers failed')
-                click.echo('  Try running: python scripts/install_triggers.py')
-                
-        except Exception as e:
-            click.echo(f'✗ Error applying database functions: {str(e)}')
-            raise
-
-@cli.command()
-@with_appcontext
-def apply_all_schema_triggers():
-    """Apply base database trigger functionality to all schemas"""
-    app = get_app()
-    click.echo('Starting to apply triggers to all schemas...')
-    
-    with app.app_context():
-        try:
-            # Get db from the app context
-            db = get_db()
-            
-            # First, make sure the base trigger functions are created
-            click.echo('Ensuring base trigger functions exist...')
-            
-            # Read functions.sql to ensure functions exist
-            sql_path = Path(__file__).parent.parent / 'app' / 'database' / 'functions.sql'
-            if not sql_path.exists():
-                # Try fallback location
-                sql_path = Path(__file__).parent.parent / 'app' / 'db' / 'functions.sql'
-                if not sql_path.exists():
-                    raise click.ClickException(f'functions.sql not found')
-                
-            click.echo(f'✓ Found functions.sql at {sql_path}')
-            
-            # Read the file and extract just the base functions
-            with open(sql_path, 'r') as f:
-                sql_content = f.read()
-            
-            # Extract only base functions (before Authentication Triggers section)
-            base_sections = []
-            current_section = []
-            for line in sql_content.split('\n'):
-                if "Authentication Triggers" in line:
-                    break
-                current_section.append(line)
-            
-            base_sql = '\n'.join(current_section)
-            
-            # Apply base functions first
-            click.echo('Creating base database functions...')
-            db.session.execute(text(base_sql))
-            db.session.commit()
-            
-            # Then define the multi-schema function
-            click.echo('Creating multi-schema function...')
-            
-            multi_schema_function = """
-            -- Function to apply triggers to all schemas
-            CREATE OR REPLACE FUNCTION create_audit_triggers_all_schemas()
-            RETURNS void AS $$
-            DECLARE
-                schema_record RECORD;
-                schema_count INTEGER := 0;
-                table_count INTEGER := 0;
-                trigger_count INTEGER := 0;
-            BEGIN
-                -- Loop through all schemas (excluding system schemas)
-                FOR schema_record IN 
-                    SELECT nspname AS schema_name
-                    FROM pg_namespace
-                    WHERE nspname NOT LIKE 'pg_%' 
-                      AND nspname != 'information_schema'
-                LOOP
-                    -- Log which schema we're processing
-                    RAISE NOTICE 'Processing schema: %', schema_record.schema_name;
-                    schema_count := schema_count + 1;
-                    
-                    -- Count tables in this schema before processing
-                    SELECT COUNT(*) INTO table_count 
-                    FROM pg_tables 
-                    WHERE schemaname = schema_record.schema_name;
-                    
-                    RAISE NOTICE 'Found % tables in schema %', table_count, schema_record.schema_name;
-                    
-                    -- Apply triggers to all tables in this schema
-                    PERFORM create_audit_triggers(schema_record.schema_name);
-                    
-                    -- Count triggers created (just the base audit triggers)
-                    SELECT COUNT(*) INTO trigger_count
-                    FROM information_schema.triggers
-                    WHERE trigger_schema = schema_record.schema_name
-                      AND (trigger_name = 'update_timestamp' OR trigger_name = 'track_user_changes');
-                    
-                    RAISE NOTICE 'Created/verified % triggers in schema %', trigger_count, schema_record.schema_name;
-                END LOOP;
-                
-                RAISE NOTICE 'Processed % schemas in total', schema_count;
-            END;
-            $$ LANGUAGE plpgsql;
-            """
-            
-            # Setting message level to NOTICE to see the detailed logs
-            db.session.execute(text("SET client_min_messages TO NOTICE"))
-            
-            # Create the function in the database
-            db.session.execute(text(multi_schema_function))
-            db.session.commit()
-            
-            click.echo('Function created successfully')
-            
-            # Now call the function to apply triggers to all schemas
-            click.echo('Applying triggers to all schemas...')
-            db.session.execute(text("SELECT create_audit_triggers_all_schemas()"))
-            db.session.commit()
-            
-            click.echo('✓ Applied triggers to all schemas successfully')
-            
-        except Exception as e:
-            db.session.rollback()
-            click.echo(f'✗ Error applying triggers to all schemas: {str(e)}')
-            raise
-
-@cli.command()
-@with_appcontext
-def verify_triggers():
-    """Verify trigger installation"""
-    verify_script = Path(__file__).parent / 'verify_triggers.py'
-    
-    if verify_script.exists():
-        # Use dedicated verification script if available
-        click.echo("Using dedicated verification script...")
-        try:
-            # Check functions first
-            result = subprocess.run(
-                ["python", str(verify_script), "verify-functions"],
-                check=True,
-                capture_output=True,
-                text=True
-            )
-            for line in result.stdout.splitlines():
-                click.echo(line)
-            
-            # Check critical triggers
-            result = subprocess.run(
-                ["python", str(verify_script), "verify-critical-triggers"],
-                check=True,
-                capture_output=True,
-                text=True
-            )
-            for line in result.stdout.splitlines():
-                click.echo(line)
-                
-        except subprocess.CalledProcessError as e:
-            click.echo(f'Error in verification: {e.stderr}')
-    else:
-        # Legacy verification if verify_triggers.py is not available
-        app = get_app()
-        click.echo('Verifying trigger installation (legacy method)...')
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
         
-        with app.app_context():
-            db = get_db()
-            
-            # Check for core trigger functions
-            core_functions = ['update_timestamp', 'track_user_changes', 'hash_password']
-            for func in core_functions:
-                result = db.session.execute(text(
-                    f"SELECT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid "
-                    f"WHERE n.nspname = 'public' AND p.proname = '{func}')"
-                )).scalar()
-                
-                if result:
-                    click.echo(f"✓ Function '{func}' exists")
-                else:
-                    click.echo(f"⚠️ Function '{func}' is missing")
-            
-            # Check triggers on key tables
-            tables = ['users', 'login_history', 'user_sessions']
-            for table in tables:
-                # First check if table exists
-                table_exists = db.session.execute(text(
-                    f"SELECT EXISTS(SELECT 1 FROM information_schema.tables "
-                    f"WHERE table_schema = 'public' AND table_name = '{table}')"
-                )).scalar()
-                
-                if not table_exists:
-                    click.echo(f"⚠️ Table '{table}' does not exist - skipping trigger check")
-                    continue
-                
-                # Count triggers on this table
-                trigger_count = db.session.execute(text(
-                    f"SELECT COUNT(*) FROM information_schema.triggers "
-                    f"WHERE trigger_schema = 'public' AND event_object_table = '{table}'"
-                )).scalar()
-                
-                click.echo(f"Table '{table}' has {trigger_count} triggers")
+    click.echo('Starting to apply base trigger functions...')
+    success = apply_base_triggers()
+    
+    if success:
+        click.echo('SUCCESS: Base trigger functions applied successfully')
+    else:
+        click.echo('FAILED: Failed to apply base trigger functions')
+        sys.exit(1)
 
 @cli.command()
-@with_appcontext
-def drop_all_tables():
+def apply_db_triggers():
+    """Apply all database triggers and functions with progressive fallbacks"""
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
+        
+    click.echo('Starting to apply database triggers and functions...')
+    success = apply_triggers()
+    
+    if success:
+        click.echo('SUCCESS: Database triggers applied successfully')
+    else:
+        click.echo('FAILED: Failed to apply database triggers')
+        sys.exit(1)
+
+@cli.command()
+def apply_all_db_schema_triggers():
+    """Apply base database trigger functionality to all schemas"""
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
+        
+    click.echo('Starting to apply triggers to all schemas...')
+    success = apply_all_schema_triggers()
+    
+    if success:
+        click.echo('SUCCESS: Applied triggers to all schemas successfully')
+    else:
+        click.echo('FAILED: Failed to apply triggers to all schemas')
+        sys.exit(1)
+
+@cli.command()
+def verify_db_triggers():
+    """Verify trigger installation"""
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
+        
+    click.echo('Verifying trigger installation...')
+    results = verify_triggers()
+    
+    # Display results
+    if 'functions' in results:
+        for line in results['functions']:
+            click.echo(line)
+    
+    if 'critical_triggers' in results and results['critical_triggers']:
+        for line in results['critical_triggers']:
+            click.echo(line)
+            
+    if 'tables' in results and results['tables']:
+        for line in results['tables']:
+            click.echo(line)
+    
+    if not results.get('success', False):
+        if 'errors' in results and results['errors']:
+            for error in results['errors']:
+                click.echo(f"Error: {error}")
+        click.echo('FAILED: Trigger verification failed')
+        sys.exit(1)
+
+
+# Maintenance Commands
+
+@cli.command()
+def drop_all_db_tables():
     """Drop all tables in correct order"""
-    app = get_app()
-    with app.app_context():
-        try:
-            # Get db from the app context
-            db = get_db()
-            
-            # Drop tables in correct order
-            sql = """
-            DO $$ 
-            BEGIN
-                -- Disable triggers temporarily
-                SET CONSTRAINTS ALL DEFERRED;
-                
-                -- Drop tables in order
-                DROP TABLE IF EXISTS staff CASCADE;
-                DROP TABLE IF EXISTS branches CASCADE;
-                DROP TABLE IF EXISTS login_history CASCADE;
-                DROP TABLE IF EXISTS user_sessions CASCADE;
-                DROP TABLE IF EXISTS user_role_mapping CASCADE;
-                DROP TABLE IF EXISTS users CASCADE;
-                DROP TABLE IF EXISTS hospitals CASCADE;
-                DROP TABLE IF EXISTS role_master CASCADE;
-                DROP TABLE IF EXISTS module_master CASCADE;
-                DROP TABLE IF EXISTS parameter_settings CASCADE;
-                DROP TABLE IF EXISTS role_module_access CASCADE;
-                DROP TABLE IF EXISTS patients CASCADE;
-                
-                -- Add any other tables that need to be dropped
-                
-                -- Re-enable triggers
-                SET CONSTRAINTS ALL IMMEDIATE;
-            END $$;
-            """
-            db.session.execute(text(sql))
-            db.session.commit()
-            click.echo('✓ All tables dropped successfully')
-        except Exception as e:
-            db.session.rollback()
-            click.echo(f'✗ Error dropping tables: {str(e)}')
-            raise
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
+        
+    if not click.confirm('Warning! This will DROP ALL TABLES. Are you sure?', default=False):
+        click.echo('Operation cancelled')
+        return
+        
+    click.echo('Dropping all tables...')
+    success = drop_all_tables()
+    
+    if success:
+        click.echo('SUCCESS: All tables dropped successfully')
+    else:
+        click.echo('FAILED: Failed to drop all tables')
+        sys.exit(1)
 
 @cli.command()
-@with_appcontext
-def check_db():
+def check_database():
     """Comprehensive database connection check"""
-    app = get_app()
-    click.echo('Starting database checks...')
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
+        
+    click.echo('Checking database connection...')
+    results = check_db()
     
-    # 1. Check database URL
-    click.echo(f'\nDatabase URL: {app.config["SQLALCHEMY_DATABASE_URI"]}')
+    click.echo(f'\nActive environment: {results.get("environment")}')
+    click.echo(f'Database URL: {results.get("database_url")}')
     
-    # 2. Test connection
-    with app.app_context():
-        try:
-            # Get db from the app context
-            db = get_db()
-            
-            conn = db.engine.connect()
-            click.echo('✓ Database connection successful!')
-            
-            # 3. Test query
-            result = db.session.execute(text('SELECT 1'))
-            value = result.scalar()
-            click.echo(f'✓ Test query successful (result: {value})')
-            
-            # 4. Check if we can create a test table
-            db.session.execute(text('''
-                CREATE TABLE IF NOT EXISTS _test_table (
-                    id SERIAL PRIMARY KEY,
-                    test_column VARCHAR(50)
-                )
-            '''))
-            click.echo('✓ Table creation test successful')
-            
-            # 5. Clean up test table
-            db.session.execute(text('DROP TABLE IF EXISTS _test_table'))
-            db.session.commit()
-            click.echo('✓ Clean-up successful')
-            
-            conn.close()
-            click.echo('\nAll database checks passed successfully!')
-            
-        except Exception as e:
-            click.echo(f'\n✗ Database check failed: {str(e)}')
-            db.session.rollback()
-            raise click.ClickException('Database checks failed')
-
-@cli.command()
-@with_appcontext
-def reset_db():
-    """Remove existing migrations and reinitialize"""
-    click.echo('Starting database reset...')
-    
-    # First check database connection
-    ctx = click.get_current_context()
-    ctx.invoke(check_db)
-    
-    # Drop all tables first
-    ctx.invoke(drop_all_tables)
-    
-    # Remove existing migrations
-    if os.path.exists('migrations'):
-        import shutil
-        shutil.rmtree('migrations')
-        click.echo('✓ Removed existing migrations directory')
-    
-    # Initialize migrations
-    if os.system('flask db init') == 0:
-        click.echo('✓ Initialized new migrations directory')
-    else:
-        raise click.ClickException('Failed to initialize migrations')
-    
-    # Create migration
-    if os.system('flask db migrate -m "initial migration"') == 0:
-        click.echo('✓ Created initial migration')
-    else:
-        raise click.ClickException('Failed to create migration')
-    
-    # Apply migration
-    if os.system('flask db upgrade') == 0:
-        click.echo('✓ Applied migrations to database')
-    else:
-        raise click.ClickException('Failed to apply migrations')
-    
-    click.echo('\nDatabase reset completed successfully!')
-
-@cli.command()
-@with_appcontext
-def init_db():
-    """Initialize database tables without migrations"""
-    click.echo('Starting database initialization...')
-    
-    # First check database connection
-    ctx = click.get_current_context()
-    ctx.invoke(check_db)
-    
-    app = get_app()
-    with app.app_context():
-        try:
-            # Get db from the app context
-            db = get_db()
-            
-            db.create_all()
-            click.echo('✓ Created all database tables')
-            click.echo('\nDatabase initialization completed successfully!')
-        except Exception as e:
-            click.echo(f'\n✗ Database initialization failed: {str(e)}')
-            raise click.ClickException('Failed to initialize database')
-
-@cli.command()
-@with_appcontext
-def show_config():
-    """Show current database configuration"""
-    app = get_app()
-    click.echo('\nDatabase Configuration:')
-    click.echo('-' * 50)
-    for key, value in app.config.items():
-        if 'DATABASE' in key or 'SQL' in key:
+    if results.get('flask_config'):
+        click.echo('\nFlask App Configuration:')
+        click.echo('-' * 50)
+        for key, value in results.get('flask_config', {}).items():
             click.echo(f'{key}: {value}')
+    
+    click.echo('\nConnection Tests:')
     click.echo('-' * 50)
+    click.echo(f'Database connection: {"SUCCESS" if results.get("connection_test") else "FAILED"}')
+    click.echo(f'Test query: {"SUCCESS" if results.get("query_test") else "FAILED"}')
+    click.echo(f'Table creation: {"SUCCESS" if results.get("table_creation_test") else "FAILED"}')
+    
+    if results.get('errors'):
+        click.echo('\nErrors:')
+        click.echo('-' * 50)
+        for error in results.get('errors', []):
+            click.echo(f'- {error}')
+    
+    if results.get('success'):
+        click.echo('\nAll database checks passed successfully!')
+    else:
+        click.echo('\nFAILED: Database checks failed')
+        sys.exit(1)
 
 @cli.command()
-@with_appcontext
-def reset_and_init():
-    """Reset database (drop all tables) and reinitialize with create_database.py"""
-    import subprocess
+def reset_database():
+    """Remove existing migrations and reinitialize"""
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
+        
+    if not click.confirm('Warning! This will reset the database and migrations. Are you sure?', default=False):
+        click.echo('Operation cancelled')
+        return
+        
+    click.echo('Starting database reset...')
+    success = reset_db()
     
+    if success:
+        click.echo('SUCCESS: Database reset completed successfully')
+    else:
+        click.echo('FAILED: Database reset failed')
+        sys.exit(1)
+
+@cli.command()
+def initialize_db():
+    """Initialize database tables without migrations"""
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
+        
+    click.echo('Starting database initialization...')
+    success = init_db()
+    
+    if success:
+        click.echo('SUCCESS: Database initialization completed successfully')
+    else:
+        click.echo('FAILED: Database initialization failed')
+        sys.exit(1)
+
+@cli.command()
+def show_db_config():
+    """Show current database configuration"""
+    try:
+        from app.config.db_config import DatabaseConfig
+        
+        env = DatabaseConfig.get_active_env()
+        config = DatabaseConfig.get_config(env)
+        
+        # Mask password in URL
+        db_url = config.get('url', '')
+        if db_url and '://' in db_url and '@' in db_url:
+            parts = db_url.split('@')
+            credentials = parts[0].split('://')
+            if len(credentials) > 1 and ':' in credentials[1]:
+                user_pass = credentials[1].split(':')
+                masked_url = f"{credentials[0]}://{user_pass[0]}:****@{parts[1]}"
+                config['url'] = masked_url
+        
+        click.echo('\nDatabase Configuration:')
+        click.echo('-' * 50)
+        click.echo(f'Active Environment: {env}')
+        
+        for key, value in config.items():
+            click.echo(f'{key}: {value}')
+            
+        click.echo('-' * 50)
+    except Exception as e:
+        click.echo(f"Error accessing configuration: {str(e)}")
+        sys.exit(1)
+
+@cli.command()
+def reset_and_initialize():
+    """Reset database (drop all tables) and reinitialize with create_database.py"""
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
+        
+    if not click.confirm('Warning! This will reset the database and reinitialize it. Are you sure?', default=False):
+        click.echo('Operation cancelled')
+        return
+        
     click.echo('Starting database reset and initialization...')
     
-    # First check database connection
-    ctx = click.get_current_context()
-    ctx.invoke(check_db)
+    # First drop all tables
+    drop_success = drop_all_tables()
+    if not drop_success:
+        click.echo('FAILED: Failed to drop all tables')
+        sys.exit(1)
     
-    # Drop all tables first
-    click.echo('\nDropping all existing tables...')
-    ctx.invoke(drop_all_tables)
-    
-    # Initialize empty tables using SQLAlchemy models
-    click.echo('\nCreating empty tables from models...')
-    ctx.invoke(init_db)
+    # Then initialize database
+    init_success = init_db()
+    if not init_success:
+        click.echo('FAILED: Failed to initialize database')
+        sys.exit(1)
     
     # Apply triggers
-    click.echo('\nApplying database triggers...')
-    ctx.invoke(apply_triggers)
+    click.echo('Applying database triggers...')
+    trigger_success = apply_triggers()
+    if not trigger_success:
+        click.echo('Warning: Failed to apply triggers, but continuing')
     
     # Run create_database.py script to initialize data
-    click.echo('\nInitializing database with data...')
-    create_db_script = Path(__file__).parent.parent / "scripts" / "create_database.py"
+    click.echo('Initializing database with data...')
+    create_db_script = Path(__file__).parent / "create_database.py"
     
     try:
         # Use subprocess to run the create_database.py script
         result = subprocess.run(
-            ["python", str(create_db_script)],
+            [sys.executable, str(create_db_script)],
             check=True,
             capture_output=True,
             text=True
@@ -718,15 +457,14 @@ def reset_and_init():
         for line in result.stdout.splitlines():
             click.echo(f"  {line}")
         
-        click.echo('\nDatabase reset and initialization completed successfully!')
+        click.echo('SUCCESS: Database reset and initialization completed successfully!')
         
     except subprocess.CalledProcessError as e:
-        click.echo(f'\n✗ Error running create_database.py: {e.stderr}')
-        raise click.ClickException('Failed to initialize database with data')
+        click.echo(f'FAILED: Error running create_database.py: {e.stderr}')
+        sys.exit(1)
 
 @cli.command()
-@with_appcontext
-def test_triggers():
+def test_db_triggers():
     """Run trigger tests to verify functionality"""
     try:
         # Check if the test script exists
@@ -735,7 +473,7 @@ def test_triggers():
             # Try in tests directory
             test_script = Path(__file__).parent.parent / 'tests' / 'test_security' / 'test_database_triggers.py'
             if not test_script.exists():
-                click.echo("⚠️ Could not find trigger test script")
+                click.echo("Warning: Could not find trigger test script")
                 return
         
         click.echo("Running trigger functionality tests...")
@@ -753,12 +491,902 @@ def test_triggers():
             click.echo(line)
         
         if result.returncode == 0:
-            click.echo("✓ All trigger tests passed!")
+            click.echo("SUCCESS: All trigger tests passed!")
         else:
-            click.echo("⚠️ Some trigger tests failed. Please check the output for details.")
+            click.echo("Warning: Some trigger tests failed. Please check the output for details.")
             
     except Exception as e:
         click.echo(f"Error running trigger tests: {e}")
+
+
+# Backup Operations Commands
+
+@cli.command()
+@click.option('--env', default=None, help='Environment to backup (default: current environment)')
+@click.option('--output', help='Output filename')
+def create_backup(env, output):
+    """Create database backup"""
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
+    
+    # If env not specified, use current environment
+    if env is None:
+        try:
+            from app.config.db_config import DatabaseConfig
+            env = DatabaseConfig.get_active_env()
+            # Convert to short form
+            env_map = {'development': 'dev', 'testing': 'test', 'production': 'prod'}
+            env = env_map.get(env, env)
+        except Exception as e:
+            click.echo(f"Failed to determine environment: {e}")
+            sys.exit(1)
+    
+    click.echo(f"Creating backup of {env} database...")
+    success, backup_path = backup_database(env, output)
+    
+    if success:
+        click.echo(f"SUCCESS: Backup created successfully: {backup_path}")
+    else:
+        click.echo("FAILED: Backup failed")
+        sys.exit(1)
+
+@cli.command()
+def list_all_backups():
+    """List available database backups"""
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
         
+    backups = list_backups()
+    
+    if not backups:
+        click.echo("No database backups found")
+        return
+    
+    click.echo("\nAvailable Database Backups:")
+    click.echo("===========================")
+    click.echo(f"{'#':<3} {'Filename':<50} {'Size':<10} {'Date':<20}")
+    click.echo("-" * 85)
+    
+    for backup in backups:
+        click.echo(f"{backup['id']:<3} {backup['name']:<50} {backup['size_kb']:<10} KB {backup['modified']:<20}")
+
+@cli.command()
+@click.argument('file', required=False)
+def restore_backup(file):
+    """Restore database from backup"""
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
+    
+    # If no file specified, list backups and ask user to choose
+    if not file:
+        backups = list_backups()
+        if not backups:
+            click.echo("No database backups found")
+            return
+        
+        click.echo("\nAvailable Backups:")
+        for backup in backups:
+            click.echo(f"{backup['id']}. {backup['name']} ({backup['size_kb']} KB, {backup['modified']})")
+        
+        # Ask user to select a backup
+        backup_num = click.prompt("Enter backup number to restore", type=int, default=1)
+        if backup_num < 1 or backup_num > len(backups):
+            click.echo(f"Invalid backup number. Please choose 1-{len(backups)}")
+            return
+        
+        file = backups[backup_num-1]['path']
+    
+    # Import Environment module
+    try:
+        from app.core.environment import Environment, current_env
+        
+        # Get short name for the current environment
+        env = Environment.get_short_name(current_env)
+        click.echo(f"Using environment from centralized configuration: {env} ({current_env})")
+    except ImportError:
+        # Fall back to old method if Environment module is not available
+        try:
+            from app.config.db_config import DatabaseConfig
+            db_env = DatabaseConfig.get_active_env()
+            # Convert to short form
+            env_map = {'development': 'dev', 'testing': 'test', 'production': 'prod'}
+            env = env_map.get(db_env, 'dev')
+        except Exception as e:
+            click.echo(f"Failed to determine environment: {e}")
+            # Check FLASK_ENV as last resort
+            if 'FLASK_ENV' in os.environ:
+                flask_env = os.environ['FLASK_ENV']
+                if flask_env == 'development':
+                    env = 'dev'
+                elif flask_env == 'testing':
+                    env = 'test'
+                elif flask_env == 'production':
+                    env = 'prod'
+                else:
+                    env = 'dev'
+            else:
+                env = 'dev'  # Default as last resort
+    
+    if not click.confirm(f'Warning! This will restore the {env} database from {file}. Are you sure?', default=False):
+        click.echo('Operation cancelled')
+        return
+    
+    click.echo(f"Restoring {env} database from {file}...")
+    success = restore_database(env, file)
+    
+    if success:
+        click.echo("SUCCESS: Database restored successfully")
+    else:
+        click.echo("FAILED: Database restore failed")
+        sys.exit(1)
+
+# Migration Operations Commands
+
+@cli.command()
+@click.option('--message', '-m', required=True, help='Migration message')
+@click.option('--backup/--no-backup', default=True, help='Create backup before migration')
+@click.option('--apply', is_flag=True, help='Automatically apply migration')
+def create_db_migration(message, backup, apply):
+    """Create database migration"""
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
+    
+    try:
+        from app.config.db_config import DatabaseConfig
+        env = DatabaseConfig.get_active_env()
+        # Convert to short form
+        env_map = {'development': 'dev', 'testing': 'test', 'production': 'prod'}
+        env = env_map.get(env, env)
+    except Exception as e:
+        click.echo(f"Failed to determine environment: {e}")
+        sys.exit(1)
+    
+    # Create migration
+    click.echo(f"Creating migration: {message}")
+    success, migration_file = create_migration(message, env, backup)
+    
+    if not success:
+        click.echo("FAILED: Failed to create migration")
+        sys.exit(1)
+    
+    # Ask to review migration if not auto-applying
+    if migration_file and not apply:
+        if click.confirm("Would you like to review the migration file?", default=True):
+            # Open file with default program
+            try:
+                os.startfile(migration_file)
+            except AttributeError:
+                # On non-Windows platforms
+                if sys.platform.startswith('darwin'):
+                    import subprocess
+                    subprocess.run(['open', migration_file])
+                else:
+                    import subprocess
+                    subprocess.run(['xdg-open', migration_file])
+        
+        # Apply migration if requested
+        if click.confirm("Apply migration now?", default=False):
+            apply = True
+    
+    # Apply migration if requested
+    if apply:
+        click.echo("Applying migration...")
+        apply_success = apply_migration(env)
+        
+        if apply_success:
+            click.echo("SUCCESS: Migration applied successfully")
+        else:
+            click.echo("FAILED: Failed to apply migration")
+            sys.exit(1)
+    else:
+        click.echo("Migration created but not applied")
+
+@cli.command()
+@click.option('--steps', type=int, default=1, help='Number of migrations to roll back')
+@click.option('--backup/--no-backup', default=True, help='Create backup before rollback')
+def rollback_db_migration(steps, backup):
+    """Roll back migrations"""
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
+    
+    try:
+        from app.config.db_config import DatabaseConfig
+        env = DatabaseConfig.get_active_env()
+        # Convert to short form
+        env_map = {'development': 'dev', 'testing': 'test', 'production': 'prod'}
+        env = env_map.get(env, env)
+    except Exception as e:
+        click.echo(f"Failed to determine environment: {e}")
+        sys.exit(1)
+    
+    # Get current migration history to confirm
+    migrations = show_migrations()
+    
+    if len(migrations) < steps:
+        click.echo(f"Cannot roll back {steps} migrations - only {len(migrations)} migrations exist")
+        return
+    
+    # Show migrations to be rolled back
+    target_migrations = migrations[:steps] if steps > 0 else []
+    click.echo(f"Will roll back the following {steps} migration(s):")
+    for migration in target_migrations:
+        click.echo(f"{migration['id']}. {migration['description']} ({migration['filename']})")
+    
+    # Confirm rollback
+    if not click.confirm(f"Roll back {steps} migration(s)?", default=False):
+        click.echo("Rollback cancelled")
+        return
+    
+    # Roll back migrations
+    click.echo(f"Rolling back {steps} migration(s)")
+    success = rollback_migration(env, steps)
+    
+    if success:
+        click.echo("SUCCESS: Migration rollback completed successfully")
+    else:
+        click.echo("FAILED: Migration rollback failed")
+        sys.exit(1)
+
+@cli.command()
+def show_all_migrations():
+    """Show migration history"""
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
+    
+    migrations = show_migrations()
+    
+    if not migrations:
+        click.echo("No migrations found")
+        return
+    
+    click.echo("\nMigration History:")
+    click.echo("=====================================")
+    click.echo(f"{'#':<3} {'Revision':<10} {'Description':<40} {'Created At':<20}")
+    click.echo("-" * 80)
+    
+    for migration in migrations:
+        click.echo(f"{migration['id']:<3} {migration['short_revision']:<10} {migration['description']:<40} {migration['created_at']:<20}")
+
+
+# Database Copy Command
+
+@cli.command()
+@click.argument('source', type=click.Choice(['dev', 'test', 'prod']))
+@click.argument('target', type=click.Choice(['dev', 'test', 'prod']))
+@click.option('--schema-only', is_flag=True, help='Copy only schema (no data)')
+@click.option('--data-only', is_flag=True, help='Copy only data (preserve schema)')
+def copy_db(source, target, schema_only, data_only):
+    """Copy database between environments"""
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
+    
+    if source == target:
+        click.echo("Source and target environments cannot be the same")
+        return
+    
+    if schema_only and data_only:
+        click.echo("Cannot use both --schema-only and --data-only")
+        return
+    
+    if not click.confirm(f'Warning! This will copy database from {source} to {target}. Are you sure?', default=False):
+        click.echo('Operation cancelled')
+        return
+    
+    click.echo(f'Starting database copy from {source} to {target}...')
+    
+    copy_options = []
+    if schema_only:
+        copy_options.append('schema only')
+    elif data_only:
+        copy_options.append('data only')
+    
+    if copy_options:
+        click.echo(f'Copy options: {", ".join(copy_options)}')
+    
+    success = copy_database(source, target, schema_only, data_only)
+    
+    if success:
+        click.echo(f"SUCCESS: Database copied successfully from {source} to {target}")
+    else:
+        click.echo(f"FAILED: Database copy from {source} to {target} failed")
+        sys.exit(1)
+
+
+# New Commands: switch-env and inspect-db
+# These commands provide functionality from the deprecated switch_env.py and db_inspector.py modules
+
+@cli.command()
+@click.argument('env', type=click.Choice(['dev', 'test', 'prod']), required=False)
+@click.option('--status', is_flag=True, help='Show current environment status')
+def switch_env(env, status):
+    """
+    Switch application environment or show status
+    
+    This command replaces the functionality in the deprecated switch_env.py module.
+    """
+    # Try to import Environment module
+    try:
+        from app.core.environment import Environment, current_env
+        
+        # If --status flag is set, show current status
+        if status:
+            click.echo(f"Current environment: {current_env}")
+            click.echo(f"Short name: {Environment.get_short_name(current_env)}")
+            
+            # Check environment file
+            env_type_file = os.path.join(project_root, '.flask_env_type')
+            if os.path.exists(env_type_file):
+                with open(env_type_file, 'r') as f:
+                    env_type = f.read().strip()
+                click.echo(f"Environment type file (.flask_env_type): {env_type}")
+            else:
+                click.echo("Environment type file (.flask_env_type) not found")
+            
+            # Check .env file
+            env_file = os.path.join(project_root, '.env')
+            if os.path.exists(env_file):
+                flask_env = None
+                with open(env_file, 'r') as f:
+                    for line in f:
+                        if line.startswith('FLASK_ENV='):
+                            flask_env = line.strip().split('=', 1)[1]
+                            break
+                if flask_env:
+                    click.echo(f"FLASK_ENV in .env file: {flask_env}")
+                else:
+                    click.echo("FLASK_ENV not found in .env file")
+            else:
+                click.echo(".env file not found")
+            
+            # Check environment variables
+            click.echo(f"FLASK_ENV environment variable: {os.environ.get('FLASK_ENV', 'Not set')}")
+            click.echo(f"SKINSPIRE_ENV environment variable: {os.environ.get('SKINSPIRE_ENV', 'Not set')}")
+            
+            # Display database URLs
+            click.echo("\nDatabase URLs:")
+            for env_name in ['development', 'testing', 'production']:
+                try:
+                    url = Environment.get_database_url_for_env(env_name)
+                    # Mask password
+                    url = mask_db_url(url)
+                    click.echo(f"  {env_name}: {url}")
+                except:
+                    # Fall back to direct method if get_database_url_for_env is not available
+                    try:
+                        from app.config.db_config import DatabaseConfig
+                        url = DatabaseConfig.get_database_url_for_env(env_name)
+                        # Mask password
+                        url = mask_db_url(url)
+                        click.echo(f"  {env_name}: {url}")
+                    except Exception as e:
+                        click.echo(f"  {env_name}: Error accessing database URL: {e}")
+                        
+            return
+            
+        # Require env argument if not in status mode
+        if not env:
+            click.echo("Error: Missing required argument 'ENV'")
+            click.echo("Usage: python scripts/manage_db.py switch-env [dev|test|prod]")
+            click.echo("       python scripts/manage_db.py switch-env --status")
+            sys.exit(1)
+        
+        # Switch environment using centralized Environment class
+        new_env = Environment.set_environment(env)
+        click.echo(f"Environment switched to: {new_env}")
+        
+        # Display database URL for new environment
+        try:
+            url = Environment.get_database_url()
+            # Mask password
+            url = mask_db_url(url)
+            click.echo(f"Database URL: {url}")
+        except:
+            # Fall back to direct method if get_database_url is not available
+            try:
+                from app.config.db_config import DatabaseConfig
+                url = DatabaseConfig.get_database_url()
+                # Mask password
+                url = mask_db_url(url)
+                click.echo(f"Database URL: {url}")
+            except Exception as e:
+                click.echo(f"Error accessing database URL: {e}")
+                
+    except ImportError:
+        # Fall back to old implementation if Environment module is not available
+        # Map short environment names to full names
+        env_map = {
+            'dev': 'development',
+            'test': 'testing',
+            'prod': 'production'
+        }
+        
+        # If --status flag is set, show current status
+        if status:
+            # Show current environment status
+            logger.info("Current environment status:")
+            
+            # Check environment type file
+            env_type_file = os.path.join(project_root, '.flask_env_type')
+            if os.path.exists(env_type_file):
+                with open(env_type_file, 'r') as f:
+                    env_type = f.read().strip()
+                click.echo(f"Environment type file (.flask_env_type): {env_type}")
+            else:
+                click.echo("Environment type file (.flask_env_type) not found")
+            
+            # Check FLASK_ENV in .env file
+            env_file = os.path.join(project_root, '.env')
+            if os.path.exists(env_file):
+                flask_env = None
+                with open(env_file, 'r') as f:
+                    for line in f:
+                        if line.startswith('FLASK_ENV='):
+                            flask_env = line.strip().split('=', 1)[1]
+                            break
+                if flask_env:
+                    click.echo(f"FLASK_ENV in .env file: {flask_env}")
+                else:
+                    click.echo("FLASK_ENV not found in .env file")
+            else:
+                click.echo(".env file not found")
+            
+            # Check environment variables
+            click.echo(f"FLASK_ENV environment variable: {os.environ.get('FLASK_ENV', 'Not set')}")
+            
+            # Check centralized configuration if available
+            try:
+                from app.config.db_config import DatabaseConfig
+                click.echo(f"Centralized configuration active environment: {DatabaseConfig.get_active_env()}")
+                
+                # Display database URLs
+                click.echo("Database URLs:")
+                for env_name in ['development', 'testing', 'production']:
+                    url = DatabaseConfig.get_database_url_for_env(env_name)
+                    # Mask password
+                    url = mask_db_url(url)
+                    click.echo(f"  {env_name}: {url}")
+            except Exception as e:
+                click.echo(f"Warning: Could not access centralized configuration: {e}")
+            
+            # Return without requiring env argument
+            return
+        
+        # Require env argument if not in status mode
+        if not env:
+            click.echo("Error: Missing required argument 'ENV'")
+            click.echo("Usage: python scripts/manage_db.py switch-env [dev|test|prod]")
+            click.echo("       python scripts/manage_db.py switch-env --status")
+            sys.exit(1)
+        
+        # Switch environment logic
+        click.echo(f"Switching environment to: {env}")
+        
+        # Get the full environment name
+        full_env = env_map.get(env, env)
+
+        # Create or update the environment type file
+        env_type_file = os.path.join(project_root, '.flask_env_type')
+        with open(env_type_file, 'w') as f:
+            f.write(env)
+        
+        click.echo(f"Environment switched to: {env}")
+        
+        # Update .env file to match - this is optional
+        env_file = os.path.join(project_root, '.env')
+        if os.path.exists(env_file):
+            with open(env_file, 'r') as f:
+                lines = f.readlines()
+            
+            updated_lines = []
+            for line in lines:
+                if line.startswith('FLASK_ENV='):
+                    updated_lines.append(f'FLASK_ENV={full_env}\n')
+                else:
+                    updated_lines.append(line)
+            
+            with open(env_file, 'w') as f:
+                f.writelines(updated_lines)
+            
+            click.echo(f".env file updated with FLASK_ENV={full_env}")
+        
+        # Also set environment variable (for current process)
+        os.environ['FLASK_ENV'] = full_env
+        
+        # Notify about the change to the centralized configuration
+        try:
+            from app.config.db_config import DatabaseConfig
+            click.echo(f"Using centralized database configuration from db_config.py")
+            click.echo(f"Active environment: {DatabaseConfig.get_active_env()}")
+            db_url = DatabaseConfig.get_database_url()
+            masked_url = mask_db_url(db_url)
+            click.echo(f"Database URL: {masked_url}")
+        except Exception as e:
+            click.echo(f"Warning: Could not access database configuration: {e}")
+
+@cli.command()
+@click.argument('env', type=click.Choice(['dev', 'test', 'prod']), required=False)
+@click.option('--tables', is_flag=True, help='List all tables')
+@click.option('--schema', help='Filter by schema')
+@click.option('--table', help='Show details for specific table')
+@click.option('--triggers', is_flag=True, help='List all triggers')
+@click.option('--functions', is_flag=True, help='List all functions')
+def inspect_db(env, tables, schema, table, triggers, functions):
+    """
+    Inspect database structure in detail
+    
+    This command replaces the functionality in the deprecated db_inspector.py module.
+    It provides comprehensive database inspection capabilities.
+    """
+    from sqlalchemy import create_engine, text, inspect
+    import traceback
+    
+    # Determine environment
+    if not env:
+        try:
+            from app.config.db_config import DatabaseConfig
+            active_env = DatabaseConfig.get_active_env()
+            # Convert to short form
+            env_map = {'development': 'dev', 'testing': 'test', 'production': 'prod'}
+            for short_env, full_env in env_map.items():
+                if full_env == active_env:
+                    env = short_env
+                    break
+            if not env:
+                env = 'test'  # Default to test if mapping failed
+        except Exception as e:
+            click.echo(f"Failed to determine environment: {e}")
+            env = 'test'  # Default to test environment
+    
+    # Get database URL
+    try:
+        # Try to use core functions first
+        if get_db_config:
+            db_config = get_db_config()
+            full_env = {'dev': 'development', 'test': 'testing', 'prod': 'production'}.get(env, env)
+            database_url = db_config.get_database_url_for_env(full_env)
+        else:
+            # Try to use DatabaseConfig directly
+            try:
+                from app.config.db_config import DatabaseConfig
+                full_env = {'dev': 'development', 'test': 'testing', 'prod': 'production'}.get(env, env)
+                database_url = DatabaseConfig.get_database_url_for_env(full_env)
+            except Exception:
+                # Fallback to environment variables
+                if env == 'dev':
+                    database_url = os.environ.get('DEV_DATABASE_URL')
+                elif env == 'test':
+                    database_url = os.environ.get('TEST_DATABASE_URL')
+                elif env == 'prod':
+                    database_url = os.environ.get('PROD_DATABASE_URL')
+                else:
+                    database_url = os.environ.get('DATABASE_URL')
+                
+                if not database_url:
+                    click.echo(f"Error: Could not determine database URL for {env} environment")
+                    sys.exit(1)
+    except Exception as e:
+        click.echo(f"Error getting database URL: {e}")
+        sys.exit(1)
+    
+    # Mask password for display
+    masked_url = mask_db_url(database_url)
+    click.echo(f"Connecting to database: {masked_url}")
+    
+    try:
+        click.echo("\n=== CONNECTING TO DATABASE ===")
+        # Create engine and connect
+        engine = create_engine(database_url)
+        connection = engine.connect()
+        inspector = inspect(engine)
+        
+        # General database overview
+        if not any([tables, table, triggers, functions]):
+            click.echo("\n=== DATABASE OVERVIEW ===")
+            
+            # Get schema information
+            schemas = connection.execute(text(
+                "SELECT nspname FROM pg_namespace WHERE nspname NOT LIKE 'pg_%' AND nspname != 'information_schema'"
+            )).fetchall()
+            
+            click.echo(f"Found {len(schemas)} user-defined schemas:")
+            for schema_row in schemas:
+                schema_name = schema_row[0]
+                # Get tables in this schema
+                tables_in_schema = inspector.get_table_names(schema=schema_name)
+                click.echo(f"  - {schema_name}: {len(tables_in_schema)} tables")
+            
+            # Get database version and size
+            try:
+                version = connection.execute(text("SELECT version()")).scalar()
+                db_name = connection.execute(text("SELECT current_database()")).scalar()
+                size_query = text("""
+                    SELECT pg_size_pretty(pg_database_size(current_database())) as size,
+                           pg_database_size(current_database()) as raw_size
+                """)
+                size_result = connection.execute(size_query).fetchone()
+                
+                click.echo(f"\nDatabase: {db_name}")
+                click.echo(f"Version: {version}")
+                click.echo(f"Size: {size_result.size} ({size_result.raw_size} bytes)")
+                
+                # Get table count
+                table_count = connection.execute(text("""
+                    SELECT count(*) FROM pg_tables 
+                    WHERE schemaname NOT LIKE 'pg_%' AND schemaname != 'information_schema'
+                """)).scalar()
+                
+                click.echo(f"Total tables: {table_count}")
+                
+                # Get function count
+                func_count = connection.execute(text("""
+                    SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid
+                    WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname != 'information_schema'
+                """)).scalar()
+                
+                click.echo(f"Total functions: {func_count}")
+                
+                # Get trigger count
+                trigger_count = connection.execute(text("""
+                    SELECT count(*) FROM pg_trigger t JOIN pg_class c ON t.tgrelid = c.oid
+                    JOIN pg_namespace n ON c.relnamespace = n.oid
+                    WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname != 'information_schema'
+                """)).scalar()
+                
+                click.echo(f"Total triggers: {trigger_count}")
+                
+            except Exception as e:
+                click.echo(f"Error getting database details: {e}")
+        
+        # List all tables
+        if tables:
+            click.echo("\n=== TABLES ===")
+            
+            # If schema specified, limit to that schema
+            if schema:
+                schemas_to_check = [schema]
+            else:
+                # Get all user-defined schemas
+                schemas_to_check = [row[0] for row in connection.execute(text(
+                    "SELECT nspname FROM pg_namespace WHERE nspname NOT LIKE 'pg_%' AND nspname != 'information_schema'"
+                )).fetchall()]
+            
+            # Iterate through schemas
+            for schema_name in schemas_to_check:
+                tables_in_schema = inspector.get_table_names(schema=schema_name)
+                if tables_in_schema:
+                    click.echo(f"\nSchema '{schema_name}' contains {len(tables_in_schema)} tables:")
+                    
+                    # Get approximate row counts for each table
+                    for table_name in sorted(tables_in_schema):
+                        try:
+                            row_count = connection.execute(text(
+                                f"SELECT count(*) FROM {schema_name}.{table_name}"
+                            )).scalar()
+                            
+                            # Get table size
+                            size_query = text(f"""
+                                SELECT pg_size_pretty(pg_total_relation_size('{schema_name}.{table_name}')) as size
+                            """)
+                            size = connection.execute(size_query).scalar()
+                            
+                            click.echo(f"  - {table_name} ({row_count} rows, {size})")
+                        except Exception:
+                            click.echo(f"  - {table_name} (row count unavailable)")
+        
+        # Show detailed table information
+        if table:
+            table_to_find = table
+            
+            # If schema not specified, search for table in all schemas
+            if not schema:
+                # Find schema for the table
+                schema_query = text("""
+                    SELECT table_schema FROM information_schema.tables 
+                    WHERE table_name = :table_name
+                """)
+                schema_result = connection.execute(schema_query, {"table_name": table_to_find}).fetchone()
+                
+                if schema_result:
+                    schema = schema_result[0]
+                else:
+                    # Try case-insensitive search
+                    schema_query = text("""
+                        SELECT table_schema FROM information_schema.tables 
+                        WHERE LOWER(table_name) = LOWER(:table_name)
+                    """)
+                    schema_result = connection.execute(schema_query, {"table_name": table_to_find}).fetchone()
+                    
+                    if schema_result:
+                        schema = schema_result[0]
+                        # Get the exact table name with correct case
+                        table_name_query = text("""
+                            SELECT table_name FROM information_schema.tables 
+                            WHERE LOWER(table_name) = LOWER(:table_name) AND table_schema = :schema
+                        """)
+                        table_name_result = connection.execute(
+                            table_name_query, 
+                            {"table_name": table_to_find, "schema": schema}
+                        ).fetchone()
+                        table_to_find = table_name_result[0]
+                    else:
+                        click.echo(f"Error: Table '{table_to_find}' not found in any schema")
+                        sys.exit(1)
+            
+            click.echo(f"\n=== TABLE DETAILS: {schema}.{table_to_find} ===")
+            
+            # Get column information
+            columns = inspector.get_columns(table_to_find, schema=schema)
+            click.echo(f"\nColumns ({len(columns)}):")
+            for col in columns:
+                nullable = "NULL" if col.get('nullable', True) else "NOT NULL"
+                default = f" DEFAULT {col.get('default')}" if col.get('default') is not None else ""
+                click.echo(f"  {col['name']} {col['type']} {nullable}{default}")
+            
+            # Get primary key
+            pk = inspector.get_pk_constraint(table_to_find, schema=schema)
+            if pk and pk.get('constrained_columns'):
+                click.echo(f"\nPrimary Key: {', '.join(pk['constrained_columns'])}")
+            
+            # Get indexes
+            indexes = inspector.get_indexes(table_to_find, schema=schema)
+            if indexes:
+                click.echo(f"\nIndexes ({len(indexes)}):")
+                for idx in indexes:
+                    unique = "UNIQUE " if idx.get('unique', False) else ""
+                    click.echo(f"  {idx['name']}: {unique}({', '.join(idx['column_names'])})")
+            
+            # Get foreign keys
+            fks = inspector.get_foreign_keys(table_to_find, schema=schema)
+            if fks:
+                click.echo(f"\nForeign Keys ({len(fks)}):")
+                for fk in fks:
+                    click.echo(f"  {fk.get('name')}: ({', '.join(fk['constrained_columns'])}) -> "
+                             f"{fk.get('referred_schema', schema)}.{fk['referred_table']}({', '.join(fk['referred_columns'])})")
+            
+            # Get triggers
+            triggers_query = text("""
+                SELECT trigger_name, action_statement, event_manipulation, action_timing
+                FROM information_schema.triggers
+                WHERE event_object_schema = :schema AND event_object_table = :table
+                ORDER BY action_timing, event_manipulation
+            """)
+            triggers = connection.execute(triggers_query, {"schema": schema, "table": table_to_find}).fetchall()
+            
+            if triggers:
+                click.echo(f"\nTriggers ({len(triggers)}):")
+                for trigger in triggers:
+                    click.echo(f"  {trigger.trigger_name}: {trigger.action_timing} {trigger.event_manipulation}")
+            
+            # Get approximate row count
+            try:
+                row_count = connection.execute(text(
+                    f"SELECT count(*) FROM {schema}.{table_to_find}"
+                )).scalar()
+                
+                # Get table size
+                size_query = text(f"""
+                    SELECT 
+                        pg_size_pretty(pg_total_relation_size('{schema}.{table_to_find}')) as total_size,
+                        pg_size_pretty(pg_relation_size('{schema}.{table_to_find}')) as table_size,
+                        pg_size_pretty(pg_indexes_size('{schema}.{table_to_find}')) as index_size
+                """)
+                size_result = connection.execute(size_query).fetchone()
+                
+                click.echo(f"\nStatistics:")
+                click.echo(f"  Row count: {row_count}")
+                click.echo(f"  Total size: {size_result.total_size}")
+                click.echo(f"  Table size: {size_result.table_size}")
+                click.echo(f"  Index size: {size_result.index_size}")
+                
+            except Exception as e:
+                click.echo(f"Error getting table statistics: {e}")
+        
+        # List all triggers
+        if triggers:
+            click.echo("\n=== TRIGGERS ===")
+            trigger_query = text("""
+                SELECT 
+                    trigger_schema, 
+                    event_object_table, 
+                    trigger_name,
+                    event_manipulation,
+                    action_timing
+                FROM information_schema.triggers
+                ORDER BY trigger_schema, event_object_table, trigger_name
+            """)
+            
+            # Apply schema filter if specified
+            if schema:
+                trigger_query = text("""
+                    SELECT 
+                        trigger_schema, 
+                        event_object_table, 
+                        trigger_name,
+                        event_manipulation,
+                        action_timing
+                    FROM information_schema.triggers
+                    WHERE trigger_schema = :schema
+                    ORDER BY trigger_schema, event_object_table, trigger_name
+                """)
+                trigger_results = connection.execute(trigger_query, {"schema": schema}).fetchall()
+            else:
+                trigger_results = connection.execute(trigger_query).fetchall()
+            
+            if not trigger_results:
+                click.echo("No triggers found")
+            else:
+                click.echo(f"Found {len(trigger_results)} triggers:")
+                
+                # Group by schema.table
+                table_triggers = {}
+                for trigger_schema, table, trigger, event, timing in trigger_results:
+                    key = f"{trigger_schema}.{table}"
+                    if key not in table_triggers:
+                        table_triggers[key] = []
+                    table_triggers[key].append((trigger, event, timing))
+                
+                for table, trigger_list in sorted(table_triggers.items()):
+                    click.echo(f"\n  {table} has {len(trigger_list)} triggers:")
+                    for trigger, event, timing in sorted(trigger_list):
+                        click.echo(f"    - {trigger} ({timing} {event})")
+        
+        # List all functions
+        if functions:
+            click.echo("\n=== FUNCTIONS ===")
+            function_query = text("""
+                SELECT n.nspname AS schema, p.proname AS function_name, 
+                       pg_get_function_result(p.oid) AS result_type,
+                       pg_get_function_arguments(p.oid) AS argument_types
+                FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid
+                WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname != 'information_schema'
+                ORDER BY n.nspname, p.proname
+            """)
+            
+            # Apply schema filter if specified
+            if schema:
+                function_query = text("""
+                    SELECT n.nspname AS schema, p.proname AS function_name, 
+                           pg_get_function_result(p.oid) AS result_type,
+                           pg_get_function_arguments(p.oid) AS argument_types
+                    FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid
+                    WHERE n.nspname = :schema
+                    ORDER BY n.nspname, p.proname
+                """)
+                function_results = connection.execute(function_query, {"schema": schema}).fetchall()
+            else:
+                function_results = connection.execute(function_query).fetchall()
+            
+            if not function_results:
+                click.echo("No functions found")
+            else:
+                click.echo(f"Found {len(function_results)} functions:")
+                
+                # Group by schema
+                schema_funcs = {}
+                for schema_name, func_name, result_type, arg_types in function_results:
+                    if schema_name not in schema_funcs:
+                        schema_funcs[schema_name] = []
+                    schema_funcs[schema_name].append((func_name, result_type, arg_types))
+                
+                for schema_name, funcs in sorted(schema_funcs.items()):
+                    click.echo(f"\nSchema '{schema_name}' contains {len(funcs)} functions:")
+                    for func_name, result_type, arg_types in sorted(funcs):
+                        click.echo(f"  - {func_name}({arg_types}) RETURNS {result_type}")
+    
+    except Exception as e:
+        click.echo(f"Error inspecting database: {e}")
+        traceback.print_exc()
+        sys.exit(1)
+    finally:
+        if 'connection' in locals():
+            connection.close()
+
 if __name__ == '__main__':
     cli()

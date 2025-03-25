@@ -1,24 +1,77 @@
 # app/__init__.py
 
 from __future__ import annotations
+
+# At the very top of app/__init__.py, before other imports
+import os
+import logging
+# Set up logging early
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Import centralized environment module first
+try:
+    from app.core.environment import Environment, current_env
+    logger.info(f"Using centralized environment: {current_env}")
+    
+    # Set up environment variables using centralized Environment
+    def setup_environment():
+        """Set up environment variables for database operations"""
+        if current_env == 'testing' and not os.environ.get('TEST_DATABASE_URL'):
+            os.environ['TEST_DATABASE_URL'] = 'postgresql://skinspire_admin:Skinspire123$@localhost:5432/skinspire_test'
+        elif current_env == 'development' and not os.environ.get('DEV_DATABASE_URL'):
+            os.environ['DEV_DATABASE_URL'] = 'postgresql://skinspire_admin:Skinspire123$@localhost:5432/skinspire_dev'
+        elif current_env == 'production' and not os.environ.get('PROD_DATABASE_URL'):
+            os.environ['PROD_DATABASE_URL'] = 'postgresql://skinspire_admin:Skinspire123$@localhost:5432/skinspire_prod'
+        
+        return True
+    
+    # Execute environment setup
+    setup_environment()
+    ENVIRONMENT_MODULE_AVAILABLE = True
+except ImportError:
+    # Fall back to legacy environment setup if Environment module not available
+    ENVIRONMENT_MODULE_AVAILABLE = False
+    logger.warning("Centralized Environment module not available, falling back to legacy approach")
+    
+    # Set up environment variables for database operations
+    def setup_environment():
+        """Set up environment variables for database operations"""
+        if os.environ.get('FLASK_ENV') == 'testing' and not os.environ.get('TEST_DATABASE_URL'):
+            os.environ['TEST_DATABASE_URL'] = 'postgresql://skinspire_admin:Skinspire123$@localhost:5432/skinspire_test'
+        elif os.environ.get('FLASK_ENV') == 'development' and not os.environ.get('DEV_DATABASE_URL'):
+            os.environ['DEV_DATABASE_URL'] = 'postgresql://skinspire_admin:Skinspire123$@localhost:5432/skinspire_dev'
+        elif os.environ.get('FLASK_ENV') == 'production' and not os.environ.get('PROD_DATABASE_URL'):
+            os.environ['PROD_DATABASE_URL'] = 'postgresql://skinspire_admin:Skinspire123$@localhost:5432/skinspire_prod'
+    
+    # Set up environment before other imports
+    setup_environment()
+
 from flask_wtf.csrf import CSRFProtect
 from flask import Flask, Blueprint, session, request, g, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, current_user
-from .config.settings import settings
 from .security.bridge import initialize_security
 from app.views.test import test_bp
-import logging
-import os
 from pathlib import Path
+
+# Try to load settings, with improved error handling
+try:
+    from .config.settings import settings
+except Exception as e:
+    logger.warning(f"Settings initialization failed: {e}")
+    # Create a fallback minimal settings object
+    from types import SimpleNamespace
+    settings = SimpleNamespace()
+    settings.SECRET_KEY = os.environ.get('SECRET_KEY', 'fallback-dev-key')
+    settings.SQLALCHEMY_DATABASE_URI = None
+
 
 # Initialize extensions
 db = SQLAlchemy()
 migrate = Migrate()
 login_manager = LoginManager()
-    # login_manager.init_app(app)
-    # login_manager.login_view = 'auth_views.login'
 csrf = CSRFProtect()
 
 def create_app() -> Flask:
@@ -33,9 +86,25 @@ def create_app() -> Flask:
         # Configure logging first to ensure proper error tracking
         app.logger.setLevel(logging.INFO)
         
-        # Get database URL from database_service
-        from app.services.database_service import get_database_url
-        app.config['SQLALCHEMY_DATABASE_URI'] = get_database_url()
+        # Get database URL - use centralized Environment if available
+        if ENVIRONMENT_MODULE_AVAILABLE:
+            try:
+                from app.config.db_config import DatabaseConfig
+                db_url = DatabaseConfig.get_database_url()
+                app.logger.info(f"Using database URL from centralized configuration for environment: {current_env}")
+            except ImportError:
+                # Fall back to database_service if db_config not available
+                from app.services.database_service import get_database_url
+                db_url = get_database_url()
+                app.logger.info("Using database URL from database_service")
+        else:
+            # Traditional approach
+            from app.services.database_service import get_database_url
+            db_url = get_database_url()
+            app.logger.info("Using database URL from database_service")
+        
+        # Configure database and other settings
+        app.config['SQLALCHEMY_DATABASE_URI'] = db_url
         app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         app.config['SECRET_KEY'] = settings.SECRET_KEY
         
@@ -194,4 +263,4 @@ def register_error_handlers(app: Flask) -> None:
         if request.path.startswith('/api/'):
             return {"error": "Internal server error"}, 500
         # For frontend routes, render an error template
-        return render_template('errors/500.html'), 500
+        return render_template('errors/500.html'), 500  
