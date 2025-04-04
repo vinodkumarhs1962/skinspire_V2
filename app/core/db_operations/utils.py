@@ -7,7 +7,7 @@ import os
 import sys
 import logging
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Tuple, Union
+from typing import Optional, Dict, Any, List, Tuple, Union, Callable
 
 # Add project root to path to ensure imports work consistently
 project_root = Path(__file__).parent.parent.parent.parent
@@ -152,3 +152,29 @@ def ensure_backup_dir() -> Path:
         backup_dir.mkdir(parents=True)
         logger.info(f"Created backups directory at {backup_dir}")
     return backup_dir
+
+def _with_app_context(func: Callable) -> Any:
+    """
+    Execute a function within Flask app context.
+    
+    Args:
+        func: Function to execute
+        
+    Returns:
+        Result of the function
+    """
+    try:
+        # Try to get app and db
+        from app import create_app, db
+        app = create_app()
+        
+        if not app:
+            logger.error("Failed to create Flask app")
+            return False
+        
+        # Execute function within app context
+        with app.app_context():
+            return func(db)
+    except Exception as e:
+        logger.error(f"Error in app context: {str(e)}")
+        return False

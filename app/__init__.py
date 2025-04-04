@@ -114,6 +114,9 @@ def create_app() -> Flask:
         login_manager.init_app(app)
         csrf.init_app(app)
         
+        # Add hasattr to Jinja globals
+        app.jinja_env.globals['hasattr'] = hasattr
+
         # Exempt API endpoints from CSRF
         csrf.exempt(r"/api/*")
 
@@ -179,6 +182,31 @@ def create_app() -> Flask:
                     request.environ['HTTP_AUTHORIZATION'] = f'Bearer {auth_token}'
         
         app.logger.info("Application initialization completed successfully")
+        def optional_database_cleanup():
+            """
+            Explicit method to clean up database connections.
+            
+            Design principles:
+            - Completely optional
+            - Safe to call multiple times
+            - Minimal side effects
+            """
+            try:
+                from app.services.database_service import close_db_connections
+                
+                # Log the cleanup attempt
+                app.logger.info("Initiating optional database connection cleanup")
+                
+                # Close database connections
+                close_db_connections()
+                
+                app.logger.info("Database connection cleanup completed")
+            except Exception as e:
+                # Log any issues without disrupting application flow
+                app.logger.warning(f"Database connection cleanup encountered an issue: {e}")
+        
+        # Can be called explicitly if needed
+        app.optional_database_cleanup = optional_database_cleanup
         return app
         
     except Exception as e:

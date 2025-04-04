@@ -1,0 +1,207 @@
+{
+  "timestamp": "2025-03-25T15:32:09.926675",
+  "summary": {
+    "passed": 50,
+    "failed": 2,
+    "skipped": 0,
+    "total": 52
+  },
+  "test_details": {
+    "Configuration - Dev Database Connection": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:40.767334"
+    },
+    "Configuration - Test Database Connection": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:40.801723"
+    },
+    "Backup - Create Test Table": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:40.873951"
+    },
+    "Backup - Insert Test Data": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:40.875178"
+    },
+    "Backup - Verify Test Data": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:40.876450"
+    },
+    "Backup test Database": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:52.857963"
+    },
+    "Backup - Modify Table": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:41.663175"
+    },
+    "Backup - Verify Column Added": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:41.667984"
+    },
+    "Restore test Database": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:54.614648"
+    },
+    "Backup - Verify Restore": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:43.261491"
+    },
+    "Backup dev Database": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:32:02.607876"
+    },
+    "DB Copy - Create Dev Test Table": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:45.045035"
+    },
+    "DB Copy - Insert Dev Test Data": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:45.046705"
+    },
+    "DB Copy - Verify Dev Test Data": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:45.047743"
+    },
+    "DB Copy - Copy Dev to Test": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:46.727925"
+    },
+    "DB Copy - Verify Test Data": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:46.760944"
+    },
+    "DB Copy - Modify Test Data": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:46.761530"
+    },
+    "DB Copy - Modify Dev Schema": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:46.765365"
+    },
+    "DB Copy - Schema-Only Copy": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:48.508231"
+    },
+    "DB Copy - Verify Schema Update": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:48.508985"
+    },
+    "DB Copy - Verify Data Preserved": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:48.510545"
+    },
+    "Restore dev Database": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:32:09.925674"
+    },
+    "Triggers - Create Test Table": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:53.005783"
+    },
+    "Triggers - Use/Create Trigger Function": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:53.006973"
+    },
+    "Triggers - Create Trigger": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:53.007725"
+    },
+    "Triggers - Insert Test Data": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:53.009354"
+    },
+    "Triggers - Verify Created Timestamp": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:53.010700"
+    },
+    "Triggers - Update Test Data": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:53.011344"
+    },
+    "Triggers - Verify Updated Timestamp": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:53.012035"
+    },
+    "Switch Env - Status Check": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:55.238937"
+    },
+    "Switch Env - Switch to Test": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:55.912556"
+    },
+    "Switch Env - Verify File Update": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:55.913281"
+    },
+    "Switch Env - Switch to Dev": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:56.540819"
+    },
+    "Switch Env - Verify Second File Update": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:56.542036"
+    },
+    "DB Inspect - Create Test Table": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:56.620893"
+    },
+    "DB Inspect - General Overview": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:58.681882"
+    },
+    "DB Inspect - Tables Listing": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:31:59.425806"
+    },
+    "DB Inspect - Table Detail": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:32:00.178955"
+    },
+    "DB Inspect - Index Information": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:32:00.179047"
+    },
+    "DB Inspect - Functions Listing": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:32:00.912450"
+    },
+    "DB Inspect - Triggers Listing": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:32:01.662778"
+    },
+    "Schema Mgmt - Create Initial Table": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:32:02.649788"
+    },
+    "Schema Mgmt - Add Column": {
+      "status": "FAIL",
+      "error": "Column was not added",
+      "timestamp": "2025-03-25T15:32:02.715611"
+    },
+    "Schema Mgmt - Detect Schema Changes": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:32:03.857850"
+    },
+    "Schema Mgmt - Prepare Migration": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:32:07.702446"
+    },
+    "Schema Mgmt - Sync Schema": {
+      "status": "FAIL",
+      "error": "Process error: Command '['C:\\\\Users\\\\vinod\\\\AppData\\\\Local\\\\Programs\\\\Skinspire Repository\\\\skinspire_v2\\\\skinspire_v2_env\\\\Scripts\\\\python.exe', 'scripts/manage_db.py', 'sync-dev-schema']' returned non-zero exit status 1.",
+      "timestamp": "2025-03-25T15:32:08.307661"
+    }
+  },
+  "failures": [
+    {
+      "test": "Schema Mgmt - Add Column",
+      "error": "Column was not added"
+    },
+    {
+      "test": "Schema Mgmt - Sync Schema",
+      "error": "Process error: Command '['C:\\\\Users\\\\vinod\\\\AppData\\\\Local\\\\Programs\\\\Skinspire Repository\\\\skinspire_v2\\\\skinspire_v2_env\\\\Scripts\\\\python.exe', 'scripts/manage_db.py', 'sync-dev-schema']' returned non-zero exit status 1."
+    }
+  ]
+}

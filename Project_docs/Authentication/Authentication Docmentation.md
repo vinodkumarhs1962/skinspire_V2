@@ -111,6 +111,33 @@ sequenceDiagram
     Database-->>-API: Confirmed
     API-->>-Client: 200 OK
 ```
+### 3.4 Web Authentication Flow
+
+The SkinSpire Clinic system implements a specialized authentication flow for web-based login and registration that offers enhanced security and performance while maintaining all protection mechanisms:
+
+```mermaid
+sequenceDiagram
+    Client->>+Web Route: POST /login or /register with CSRF token
+    Web Route->>+Web Route: Validate CSRF token (WTForms)
+    Note right of Web Route: Direct database authentication
+    Web Route->>+Database Service: Database session request
+    Database Service->>+Database: Query/update user data
+    Database-->>-Database Service: User data
+    Database Service-->>-Web Route: User object
+    Web Route->>Web Route: Generate JWT token
+    Web Route->>Web Route: Initialize Flask-Login session
+    Web Route-->>-Client: Redirect to dashboard
+...
+
+This direct database access pattern for authentication routes:
+
+Maintains CSRF protection through WTForms validation
+Eliminates redundant API calls within the same application
+Preserves all security controls and audit logging
+Improves performance by reducing request overhead
+
+The pattern is specifically optimized for the critical authentication operations while maintaining centralized database access through the database service.
+...
 
 ## 4. API Endpoints
 

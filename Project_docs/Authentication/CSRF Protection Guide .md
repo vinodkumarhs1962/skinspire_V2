@@ -123,7 +123,24 @@ class SecurityConfig:
   BYPASS_CSRF=True  # Disable CSRF for easier testing
   ```
 
-## 5. Security Best Practices
+## 5. CSRF Protection in Authentication Flows
+
+### Web Route Authentication
+
+For web-based authentication (login and registration), the system uses a direct database access pattern while maintaining CSRF protection:
+
+```python
+@auth_views_bp.route('/login', methods=['GET', 'POST'])
+def login():
+    form = LoginForm()
+
+    if form.validate_on_submit():  # This validates CSRF token
+        # Direct database authentication with CSRF protection intact
+        with get_db_session() as db_session:
+            # Authentication logic...
+```
+
+## 6. Security Best Practices
 
 ### Implementation Guidelines
 1. Always validate CSRF tokens for state-changing requests
@@ -143,7 +160,7 @@ class AuthManager:
         # Validates requests through the CSRF protection system
 ```
 
-## 6. Compliance and Standards
+## 7. Compliance and Standards
 
 ### Alignment with Security Standards
 Our CSRF protection approach adheres to:
@@ -151,13 +168,13 @@ Our CSRF protection approach adheres to:
 - Web application security best practices
 - Healthcare data protection regulations
 
-## 7. Potential Future Enhancements
+## 8. Potential Future Enhancements
 - More granular API endpoint CSRF configuration
 - Advanced token generation and rotation strategies
 - Comprehensive CSRF event logging
 - Enhanced protection for complex API interaction scenarios
 
-## 8. Troubleshooting and Common Challenges
+## 9. Troubleshooting and Common Challenges
 
 ### Handling CSRF Validation Errors
 - Provide clear, user-friendly error messages

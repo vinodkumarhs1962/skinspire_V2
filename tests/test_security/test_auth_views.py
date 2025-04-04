@@ -114,6 +114,8 @@ class TestAuthViews:
         assert b'Sign in' in response.data or b'Login' in response.data
         logger.info("Login form validation works as expected")
     
+    # Changes for test_auth_views.py
+
     def test_login_success(self, mocker, client, app, admin_user, db_session):
         """
         Test successful login
@@ -125,24 +127,15 @@ class TestAuthViews:
         """
         logger.info("Testing successful login")
         
-        # Create mock for requests.post to avoid actual API calls
-        # This is important regardless of integration flag because the real API might not be running
-        mock_post = mocker.patch('requests.post')
-        mock_post.return_value = create_mock_response(
-            status_code=200,
-            json_data={'token': 'test_token_123', 'user': {'id': admin_user.user_id}}
-        )
-        
-        # Also patch any direct auth_views module's requests usage
-        try:
-            from app.views import auth_views
-            mocker.patch('app.views.auth_views.requests.post', return_value=mock_post.return_value)
-        except ImportError:
-            logger.warning("Could not import auth_views to mock requests.post")
+        # Create a copy of user attributes to use in the test
+        # Use get_detached_copy to safely work with the user outside the session
+        from app.services.database_service import get_detached_copy
+        detached_user = get_detached_copy(admin_user)
+        user_id = detached_user.user_id
         
         with app.test_request_context():
             login_url = url_for('auth_views.login')
-            
+                
         # Check if CSRF is bypassed for tests
         csrf_bypassed = get_csrf_bypass_flag()
         logger.info(f"CSRF bypass flag: {csrf_bypassed}")
@@ -158,33 +151,35 @@ class TestAuthViews:
             if not csrf_match:
                 logger.warning("Could not find CSRF token in login page")
                 pytest.skip("Could not find CSRF token in login page")
-                
+                    
             csrf_token = csrf_match.group(1)
         
         # Prepare login data
         login_data = {
-            'username': admin_user.user_id,
+            'username': user_id,
             'password': 'admin123',
         }
         
         if csrf_token:
             login_data['csrf_token'] = csrf_token
         
-        # Set session token manually to simulate successful API login
-        # This is a workaround for cases where the login API call might fail
-        with client.session_transaction() as sess:
-            sess['auth_token'] = 'test_token_123'
-            sess['user_id'] = admin_user.user_id
-            logger.info("Manually set auth_token in session")
+        # Submit login form
+        response = client.post(
+            login_url,
+            data=login_data,
+            follow_redirects=True
+        )
         
-        # Now try to access the dashboard directly
+        # Check if login succeeded
+        assert response.status_code == 200
+        
+        # Now try to access the dashboard
         with app.test_request_context():
             dashboard_url = url_for('auth_views.dashboard')
         
         logger.info("Testing dashboard access")
         dashboard_response = client.get(
             dashboard_url,
-            headers={'Authorization': f'Bearer test_token_123'},
             follow_redirects=True
         )
         
@@ -197,14 +192,47 @@ class TestAuthViews:
             logger.warning(f"Could not access dashboard (status: {status_code})")
             logger.warning(f"Response content: {content[:200]}...")
             pytest.skip("Could not access dashboard with valid session - might be an environment issue")
-        
-        # Verify session contains token
-        with client.session_transaction() as sess:
-            assert 'auth_token' in sess
-            assert sess['auth_token'] == 'test_token_123'
-            
+                
         logger.info("Login success test passed")
-    
+
+    def test_logout(self, client, app, db_session, mocker):
+        """
+        Test logout functionality
+        
+        Verifies:
+        - Logout endpoint works correctly
+        - User is redirected to login page
+        """
+        logger.info("Testing logout functionality")
+        
+        # Get the URLs we'll use
+        with app.test_request_context():
+            logout_url = url_for('auth_views.logout')
+        
+        # Create a mock for current_user that doesn't use the database
+        from flask_login import AnonymousUserMixin
+        
+        class MockUser(AnonymousUserMixin):
+            is_authenticated = True
+            is_active = True
+            user_id = "mock_user"
+            
+        # Patch Flask-Login's current_user
+        mock_current_user = mocker.patch('flask_login.utils._get_user')
+        mock_current_user.return_value = MockUser()
+        
+        # The logout view requires login_required, which checks current_user
+        # Our mock will allow us to bypass the database query
+        
+        # Test logout - don't follow redirects to see the redirect location
+        response = client.get(logout_url)
+        
+        # We expect a redirect to login
+        assert response.status_code == 302
+        assert 'login' in response.location.lower()
+        
+        logger.info("Logout test passed")
+
     def test_dashboard_requires_login(self, client, app, db_session):
         """
         Test that dashboard requires login
@@ -214,52 +242,21 @@ class TestAuthViews:
         - User is redirected to login page
         """
         logger.info("Testing dashboard login requirement")
+        
+        # Explicitly clear the session to ensure we're not logged in
+        with client.session_transaction() as sess:
+            sess.clear()
+        
+        # Get the dashboard URL with app context
         with app.test_request_context():
             dashboard_url = url_for('auth_views.dashboard')
-            
+        
+        # Now try to access the dashboard
         response = client.get(dashboard_url)
+        
         # Could be either 302 (redirect) or 401 (unauthorized) depending on implementation
         assert response.status_code in (302, 401)
         if response.status_code == 302:
             assert 'login' in response.location
         logger.info("Dashboard correctly requires login")
     
-    def test_logout(self, mocker, client, app, db_session):
-        """
-        Test logout functionality
-        
-        Verifies:
-        - Logout endpoint works correctly
-        - Session is cleared after logout
-        - User is redirected to login page
-        """
-        logger.info("Testing logout functionality")
-        # Create mock only in unit test mode
-        mock_post = mock_if_needed(mocker, 'requests.post')
-        if mock_post:  # Only configure if we're in unit test mode
-            mock_post.return_value = create_mock_response(
-                status_code=200,
-                json_data={'message': 'Successfully logged out'}
-            )
-        
-        with app.test_request_context():
-            logout_url = url_for('auth_views.logout')
-            
-        # Setup session with auth token
-        with client.session_transaction() as sess:
-            sess['auth_token'] = 'test_token_123'
-        
-        # Test logout
-        response = client.get(
-            logout_url,
-            follow_redirects=True
-        )
-        assert response.status_code == 200
-        # Check for either "logged out" or "sign in" text
-        page_text = response.data.lower()
-        assert b'logged out' in page_text or b'sign in' in page_text or b'login' in page_text
-        
-        # Verify token is removed from session
-        with client.session_transaction() as sess:
-            assert 'auth_token' not in sess
-        logger.info("Logout test passed")

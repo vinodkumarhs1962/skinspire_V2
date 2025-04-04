@@ -33,6 +33,90 @@ class User(Base, TimestampMixin, SoftDeleteMixin, UserMixin):
     # def set_password(self, password): # can remove this method as using trigger to set password
     #     self.password_hash = generate_password_hash(password)
 
+    # Add these properties to the User class in app/models/transaction.py
+    @property
+    def entity_data(self):
+        """Get the related Staff or Patient entity"""
+        if hasattr(self, '_entity_data'):
+            return self._entity_data
+            
+        try:
+            from app.services.database_service import get_db_session
+            with get_db_session(read_only=True) as session:
+                if self.entity_type == 'staff':
+                    from app.models.master import Staff
+                    entity = session.query(Staff).filter_by(staff_id=self.entity_id).first()
+                elif self.entity_type == 'patient':
+                    from app.models.master import Patient
+                    entity = session.query(Patient).filter_by(patient_id=self.entity_id).first()
+                else:
+                    entity = None
+                    
+                self._entity_data = entity
+                return entity
+        except Exception as e:
+            current_app.logger.error(f"Error loading entity data: {str(e)}")
+            return None
+
+    @property
+    def personal_info_dict(self):
+        """Get personal_info as dictionary"""
+        entity = self.entity_data
+        if not entity or not hasattr(entity, 'personal_info'):
+            return {}
+            
+        try:
+            if isinstance(entity.personal_info, str):
+                import json
+                return json.loads(entity.personal_info)
+            return entity.personal_info
+        except Exception as e:
+            current_app.logger.error(f"Error parsing personal_info: {str(e)}")
+            return {}
+
+    @property
+    def contact_info_dict(self):
+        """Get contact_info as dictionary"""
+        entity = self.entity_data
+        if not entity or not hasattr(entity, 'contact_info'):
+            return {}
+            
+        try:
+            if isinstance(entity.contact_info, str):
+                import json
+                return json.loads(entity.contact_info)
+            return entity.contact_info
+        except Exception as e:
+            current_app.logger.error(f"Error parsing contact_info: {str(e)}")
+            return {}
+
+    @property
+    def first_name(self):
+        """Get first name from personal info"""
+        return self.personal_info_dict.get('first_name', '')
+
+    @property
+    def last_name(self):
+        """Get last name from personal info"""
+        return self.personal_info_dict.get('last_name', '')
+
+    @property
+    def email(self):
+        """Get email from contact info"""
+        return self.contact_info_dict.get('email', '')
+
+    @property
+    def phone(self):
+        """Get phone from contact info or user_id"""
+        return self.contact_info_dict.get('phone', self.user_id)
+
+    @property
+    def full_name(self):
+        """Get full name"""
+        return f"{self.first_name} {self.last_name}".strip()
+
+
+
 # Add the set_password method to the User class in transaction.py
 
     def get_id(self):

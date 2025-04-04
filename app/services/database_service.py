@@ -457,6 +457,92 @@ class DatabaseService:
             key: value for key, value in entity.__dict__.items()
             if not key.startswith('_')
         }
+    @classmethod
+    def close_db_connections(cls, force: bool = False) -> bool:
+        """
+        Comprehensively close database connections
+        
+        Args:
+            force (bool): Force close connections, even if in use
+        
+        Returns:
+            bool: Whether connection closure was successful
+        """
+        global _standalone_engine, _standalone_session_factory, _initialized
+        
+        try:
+            logger.info("Attempting to close all database connections comprehensively")
+            
+            # 1. Close standalone session factory
+            if _standalone_session_factory is not None:
+                try:
+                    # Remove all sessions
+                    _standalone_session_factory.remove()
+                    logger.debug("Standalone session factory sessions removed")
+                except Exception as e:
+                    logger.warning(f"Error removing standalone session factory: {e}")
+            
+            # 2. Dispose of standalone engine
+            if _standalone_engine is not None:
+                try:
+                    # Force dispose of the engine
+                    _standalone_engine.dispose(close=True)
+                    logger.debug("Standalone database engine disposed")
+                except Exception as e:
+                    logger.warning(f"Error disposing standalone engine: {e}")
+            
+            # 3. Handle Flask-SQLAlchemy context if available
+            try:
+                from flask import current_app
+                from app import db
+                
+                if current_app:
+                    # Remove all sessions
+                    db.session.remove()
+                    
+                    # Dispose of the engine
+                    db.engine.dispose(close=True)
+                    logger.debug("Flask-SQLAlchemy sessions and engine closed")
+            except ImportError:
+                logger.debug("Flask-SQLAlchemy not available")
+            except Exception as e:
+                logger.warning(f"Error closing Flask-SQLAlchemy connections: {e}")
+            
+            # 4. Additional PostgreSQL-specific connection closure
+            try:
+                import psycopg2
+                from sqlalchemy import create_engine
+                
+                # Create a direct connection to terminate backend connections
+                db_url = cls.get_database_url()
+                engine = create_engine(db_url)
+                
+                with engine.connect() as connection:
+                    # Terminate all backend connections for this database
+                    connection.execute(text("""
+                        SELECT pg_terminate_backend(pid)
+                        FROM pg_stat_activity
+                        WHERE datname = current_database()
+                        AND pid <> pg_backend_pid()
+                    """))
+                    logger.debug("Terminated all backend database connections")
+                
+                # Dispose of temporary engine
+                engine.dispose(close=True)
+            except ImportError:
+                logger.debug("Psycopg2 not available for additional connection termination")
+            except Exception as e:
+                logger.warning(f"Error terminating backend connections: {e}")
+            
+            # Reset initialization flag
+            _initialized = False
+            
+            logger.info("Database connections closed successfully")
+            return True
+        
+        except Exception as e:
+            logger.error(f"Unexpected error during database connection closure: {e}")
+            return False
 
 # Convenience functions - public API
 
@@ -594,6 +680,50 @@ def get_entity_dict(entity) -> Dict[str, Any]:
         print(user_dict['name'])
     """
     return DatabaseService.get_entity_dict(entity)
+
+def close_db_connections(force: bool = False) -> bool:
+    """
+    Public function to close database connections.
+    
+    Args:
+        force (bool): Force close connections
+    
+    Returns:
+        bool: Whether connection closure was successful
+    """
+    return DatabaseService.close_db_connections(force)
+
+def manage_database_connections(action: str = 'close', force: bool = False) -> bool:
+    """
+    Explicit database connection management utility.
+    
+    Args:
+        action (str): Action to perform on database connections
+            - 'close': Close existing connections
+            - 'reinitialize': Close and reinitialize connections
+        force (bool): Force close connections
+    
+    Returns:
+        bool: Whether the operation was successful
+    """
+    try:
+        logger.info(f"Managing database connections: {action}")
+        
+        if action == 'close':
+            return close_db_connections(force)
+        
+        elif action == 'reinitialize':
+            # Close connections first
+            close_db_connections(force)
+            # Then reinitialize
+            return DatabaseService.initialize_database(force=True)
+        
+        logger.warning(f"Invalid action: {action}")
+        return False
+    
+    except Exception as e:
+        logger.error(f"Database connection management failed: {e}")
+        return False
 
 # Auto-initialize the database when the module is imported
 initialize_database()

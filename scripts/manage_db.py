@@ -1388,5 +1388,127 @@ def inspect_db(env, tables, schema, table, triggers, functions):
         if 'connection' in locals():
             connection.close()
 
+# Add the new commands
+
+@cli.command()
+@click.option('--force', is_flag=True, help='Force sync without confirmation')
+def sync_dev_schema(force):
+    """
+    Sync models directly to database schema (DEVELOPMENT ONLY)
+    
+    WARNING: This command is for development use only and may result in data loss.
+    """
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
+    
+    # Ensure we're in development environment
+    try:
+        from app.core.environment import Environment
+        # Use the imported current_env variable directly instead of trying to call a method
+        if current_env != 'development':
+            click.echo(f"Current environment is {current_env}. Schema sync only allowed in development.")
+            if not click.confirm("Do you want to switch to development environment?"):
+                click.echo("Operation cancelled")
+                return
+            Environment.set_environment('dev')
+    except ImportError:
+        # Fallback check
+        if os.environ.get('FLASK_ENV') not in (None, 'development'):
+            click.echo("ERROR: Cannot use sync-dev-schema outside development environment")
+            sys.exit(1)
+    
+    if not force and not click.confirm('Warning! This will modify your database schema to match models. Continue?', default=False):
+        click.echo('Operation cancelled')
+        return
+    
+    click.echo('Syncing database schema with models...')
+    from app.core.db_operations import sync_models_to_schema
+    success = sync_models_to_schema('dev')
+    
+    if success:
+        click.echo('SUCCESS: Database schema synced with models')
+    else:
+        click.echo('FAILED: Database schema sync failed')
+        sys.exit(1)
+
+@cli.command()
+def detect_schema_changes():
+    """
+    Detect changes between models and database schema
+    """
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
+    
+    click.echo('Detecting schema changes...')
+    from app.core.db_operations import detect_model_changes
+    changes = detect_model_changes()
+    
+    if changes['has_changes']:
+        click.echo(f"\nDetected {len(changes['changes'])} changes:")
+        for change in changes['changes']:
+            click.echo(f"- {change}")
+        
+        click.echo("\nTo create a migration with these changes:")
+        click.echo("  python scripts/manage_db.py prepare-migration -m \"Your migration message\"")
+    else:
+        click.echo("No schema changes detected")
+
+@cli.command()
+@click.option('--message', '-m', required=True, help='Migration message')
+def prepare_migration(message):
+    """
+    Prepare migration files from development model changes
+    
+    This command detects changes made to models during development
+    and creates proper migration files.
+    """
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
+    
+    # Detect model changes first
+    click.echo("Detecting model changes...")
+    from app.core.db_operations import detect_model_changes
+    changes = detect_model_changes()
+    
+    if not changes['has_changes']:
+        click.echo("No model changes detected")
+        return
+    
+    # Show detected changes
+    click.echo("\nDetected changes:")
+    for change in changes['changes']:
+        click.echo(f"- {change}")
+    
+    # Create migration
+    if click.confirm("Create migration file with these changes?"):
+        try:
+            from app.core.db_operations import create_migration
+            success, migration_file = create_migration(message, 'dev', backup=True)
+            
+            if success:
+                click.echo(f"SUCCESS: Migration created at {migration_file}")
+                
+                if click.confirm("Apply migration to development database?"):
+                    from app.core.db_operations import apply_migration
+                    apply_success = apply_migration('dev')
+                    if apply_success:
+                        click.echo("SUCCESS: Migration applied to development database")
+                    else:
+                        click.echo("FAILED: Migration application failed")
+            else:
+                click.echo("FAILED: Migration creation failed")
+                sys.exit(1)
+        except Exception as e:
+            if "Target database is not up to date" in str(e):
+                click.echo("ERROR: Target database is not up to date. You need to apply existing migrations first.")
+                click.echo("Run: python scripts/manage_db.py apply-db-migration")
+            else:
+                click.echo(f"ERROR: {str(e)}")
+            sys.exit(1)
+
+
 if __name__ == '__main__':
     cli()

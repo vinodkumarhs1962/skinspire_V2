@@ -1,0 +1,147 @@
+{
+  "timestamp": "2025-03-25T15:22:16.102404",
+  "summary": {
+    "passed": 17,
+    "failed": 9,
+    "skipped": 0,
+    "total": 26
+  },
+  "test_details": {
+    "Configuration - Dev Database Connection": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:22:04.806924"
+    },
+    "Configuration - Test Database Connection": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:22:04.842716"
+    },
+    "Backup - Create Test Table": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:22:04.935067"
+    },
+    "Backup - Insert Test Data": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:22:04.936052"
+    },
+    "Backup - Verify Test Data": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:22:04.937094"
+    },
+    "Backup test Database": {
+      "status": "FAIL",
+      "error": "Process error: Command '['C:\\\\Users\\\\vinod\\\\AppData\\\\Local\\\\Programs\\\\Skinspire Repository\\\\skinspire_v2\\\\skinspire_v2_env\\\\Scripts\\\\python.exe', 'scripts/manage_db.py', 'create-backup', '--env', 'test', '--output', 'test_backup_20250325_152207.sql']' returned non-zero exit status 1.",
+      "timestamp": "2025-03-25T15:22:07.919013"
+    },
+    "Backup - Create Backup": {
+      "status": "FAIL",
+      "error": "Failed to create backup",
+      "timestamp": "2025-03-25T15:22:05.612479"
+    },
+    "Backup dev Database": {
+      "status": "FAIL",
+      "error": "Process error: Command '['C:\\\\Users\\\\vinod\\\\AppData\\\\Local\\\\Programs\\\\Skinspire Repository\\\\skinspire_v2\\\\skinspire_v2_env\\\\Scripts\\\\python.exe', 'scripts/manage_db.py', 'create-backup', '--env', 'dev', '--output', 'dev_backup_20250325_152215.sql']' returned non-zero exit status 1.",
+      "timestamp": "2025-03-25T15:22:16.101530"
+    },
+    "DB Copy - Create Backups": {
+      "status": "FAIL",
+      "error": "Failed to create backups of dev or test database",
+      "timestamp": "2025-03-25T15:22:07.123074"
+    },
+    "Triggers - Create Backup": {
+      "status": "FAIL",
+      "error": "Failed to create backup of test database",
+      "timestamp": "2025-03-25T15:22:07.919420"
+    },
+    "Switch Env - Status Check": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:22:08.565518"
+    },
+    "Switch Env - Switch to Test": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:22:09.196529"
+    },
+    "Switch Env - Verify File Update": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:22:09.197168"
+    },
+    "Switch Env - Switch to Dev": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:22:09.828252"
+    },
+    "Switch Env - Verify Second File Update": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:22:09.829096"
+    },
+    "DB Inspect - Create Test Table": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:22:10.022911"
+    },
+    "DB Inspect - General Overview": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:22:10.790137"
+    },
+    "DB Inspect - Tables Listing": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:22:11.586919"
+    },
+    "DB Inspect - Table Detail": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:22:13.700752"
+    },
+    "DB Inspect - Index Information": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:22:13.700843"
+    },
+    "DB Inspect - Functions Listing": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:22:14.456214"
+    },
+    "DB Inspect - Triggers Listing": {
+      "status": "PASS",
+      "timestamp": "2025-03-25T15:22:15.255315"
+    },
+    "Schema Mgmt - Create Backup": {
+      "status": "FAIL",
+      "error": "Failed to create backup of dev database",
+      "timestamp": "2025-03-25T15:22:16.101839"
+    }
+  },
+  "failures": [
+    {
+      "test": "Backup test Database",
+      "error": "Process error: Command '['C:\\\\Users\\\\vinod\\\\AppData\\\\Local\\\\Programs\\\\Skinspire Repository\\\\skinspire_v2\\\\skinspire_v2_env\\\\Scripts\\\\python.exe', 'scripts/manage_db.py', 'create-backup', '--env', 'test', '--output', 'test_backup_20250325_152204.sql']' returned non-zero exit status 1."
+    },
+    {
+      "test": "Backup - Create Backup",
+      "error": "Failed to create backup"
+    },
+    {
+      "test": "Backup dev Database",
+      "error": "Process error: Command '['C:\\\\Users\\\\vinod\\\\AppData\\\\Local\\\\Programs\\\\Skinspire Repository\\\\skinspire_v2\\\\skinspire_v2_env\\\\Scripts\\\\python.exe', 'scripts/manage_db.py', 'create-backup', '--env', 'dev', '--output', 'dev_backup_20250325_152205.sql']' returned non-zero exit status 1."
+    },
+    {
+      "test": "Backup test Database",
+      "error": "Process error: Command '['C:\\\\Users\\\\vinod\\\\AppData\\\\Local\\\\Programs\\\\Skinspire Repository\\\\skinspire_v2\\\\skinspire_v2_env\\\\Scripts\\\\python.exe', 'scripts/manage_db.py', 'create-backup', '--env', 'test', '--output', 'test_backup_20250325_152206.sql']' returned non-zero exit status 1."
+    },
+    {
+      "test": "DB Copy - Create Backups",
+      "error": "Failed to create backups of dev or test database"
+    },
+    {
+      "test": "Backup test Database",
+      "error": "Process error: Command '['C:\\\\Users\\\\vinod\\\\AppData\\\\Local\\\\Programs\\\\Skinspire Repository\\\\skinspire_v2\\\\skinspire_v2_env\\\\Scripts\\\\python.exe', 'scripts/manage_db.py', 'create-backup', '--env', 'test', '--output', 'test_backup_20250325_152207.sql']' returned non-zero exit status 1."
+    },
+    {
+      "test": "Triggers - Create Backup",
+      "error": "Failed to create backup of test database"
+    },
+    {
+      "test": "Backup dev Database",
+      "error": "Process error: Command '['C:\\\\Users\\\\vinod\\\\AppData\\\\Local\\\\Programs\\\\Skinspire Repository\\\\skinspire_v2\\\\skinspire_v2_env\\\\Scripts\\\\python.exe', 'scripts/manage_db.py', 'create-backup', '--env', 'dev', '--output', 'dev_backup_20250325_152215.sql']' returned non-zero exit status 1."
+    },
+    {
+      "test": "Schema Mgmt - Create Backup",
+      "error": "Failed to create backup of dev database"
+    }
+  ]
+}

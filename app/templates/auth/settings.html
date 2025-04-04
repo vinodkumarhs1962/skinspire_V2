@@ -33,7 +33,7 @@
 
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <!-- Profile Settings -->
-        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+        <div class="bg-white shadow overflow-hidden sm:rounded-lg lg:col-span-2">
             <div class="px-4 py-5 sm:px-6 border-b">
                 <h3 class="text-lg font-medium text-gray-900">Profile Information</h3>
                 <p class="mt-1 text-sm text-gray-500">Update your personal information</p>
@@ -42,28 +42,207 @@
                 <form action="{{ url_for('auth_views.update_profile') }}" method="POST">
                     {{ profile_form.hidden_tag() }}
                     
-                    <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
-                        <div>
-                            <label for="first_name" class="block text-sm font-medium text-gray-700">First name</label>
-                            {{ profile_form.first_name(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm", value=current_user.first_name if hasattr(current_user, 'first_name') else '') }}
-                        </div>
-                        
-                        <div>
-                            <label for="last_name" class="block text-sm font-medium text-gray-700">Last name</label>
-                            {{ profile_form.last_name(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm", value=current_user.last_name if hasattr(current_user, 'last_name') else '') }}
+                    <!-- Personal Information Section -->
+                    <div class="border-b pb-5 mb-5">
+                        <h4 class="text-base font-medium text-gray-900 mb-4">Personal Information</h4>
+                        <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2 lg:grid-cols-3">
+                            {% if hasattr(profile_form, 'title') %}
+                            <div>
+                                <label for="title" class="block text-sm font-medium text-gray-700">Title</label>
+                                {{ profile_form.title(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            {% endif %}
+                            
+                            <div>
+                                <label for="first_name" class="block text-sm font-medium text-gray-700">First name</label>
+                                {{ profile_form.first_name(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            
+                            <div>
+                                <label for="last_name" class="block text-sm font-medium text-gray-700">Last name</label>
+                                {{ profile_form.last_name(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            
+                            {% if hasattr(profile_form, 'date_of_birth') %}
+                            <div>
+                                <label for="date_of_birth" class="block text-sm font-medium text-gray-700">Date of Birth</label>
+                                {{ profile_form.date_of_birth(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            {% endif %}
+                            
+                            {% if hasattr(profile_form, 'gender') %}
+                            <div>
+                                <label for="gender" class="block text-sm font-medium text-gray-700">Gender</label>
+                                {{ profile_form.gender(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            {% endif %}
+                            
+                            {% if hasattr(profile_form, 'marital_status') %}
+                            <div>
+                                <label for="marital_status" class="block text-sm font-medium text-gray-700">Marital Status</label>
+                                {{ profile_form.marital_status(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                     
-                    <div class="mt-6">
-                        <label for="email" class="block text-sm font-medium text-gray-700">Email address</label>
-                        {{ profile_form.email(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm", value=current_user.email if hasattr(current_user, 'email') else '') }}
+                    <!-- Contact Information Section -->
+                    <div class="border-b pb-5 mb-5">
+                        <h4 class="text-base font-medium text-gray-900 mb-4">Contact Information</h4>
+                        <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
+                            <div>
+                                <label for="email" class="block text-sm font-medium text-gray-700">Email address</label>
+                                {{ profile_form.email(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            
+                            <div>
+                                <label for="phone_display" class="block text-sm font-medium text-gray-700">Phone number</label>
+                                <input type="text" id="phone_display" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" value="{{ current_user.user_id }}" disabled>
+                                <!-- Hidden field for phone number -->
+                                <input type="hidden" name="phone" value="{{ current_user.user_id }}">
+                                <p class="mt-1 text-xs text-gray-500">Phone number cannot be changed as it's used for login</p>
+                            </div>
+                            
+                            {% if hasattr(profile_form, 'address') %}
+                            <div class="sm:col-span-2">
+                                <label for="address" class="block text-sm font-medium text-gray-700">Address</label>
+                                {{ profile_form.address(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            {% endif %}
+                        </div>
                     </div>
                     
-                    <div class="mt-6">
-                        <label for="phone" class="block text-sm font-medium text-gray-700">Phone number</label>
-                        <input type="text" id="phone" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" value="{{ current_user.user_id }}" disabled>
-                        <p class="mt-1 text-xs text-gray-500">Phone number cannot be changed as it's used for login</p>
+                    <!-- Professional Information (Staff Only) -->
+                    {% if hasattr(profile_form, 'specialization') or hasattr(profile_form, 'employee_code') or hasattr(profile_form, 'qualifications') or hasattr(profile_form, 'certifications') %}
+                    <div class="border-b pb-5 mb-5">
+                        <h4 class="text-base font-medium text-gray-900 mb-4">Professional Information</h4>
+                        <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2 lg:grid-cols-3">
+                            {% if hasattr(profile_form, 'specialization') %}
+                            <div>
+                                <label for="specialization" class="block text-sm font-medium text-gray-700">Specialization</label>
+                                {{ profile_form.specialization(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            {% endif %}
+                            
+                            {% if hasattr(profile_form, 'employee_code') %}
+                            <div>
+                                <label for="employee_code" class="block text-sm font-medium text-gray-700">Employee Code</label>
+                                {{ profile_form.employee_code(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            {% endif %}
+                            
+                            {% if hasattr(profile_form, 'qualifications') %}
+                            <div>
+                                <label for="qualifications" class="block text-sm font-medium text-gray-700">Qualifications</label>
+                                {{ profile_form.qualifications(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            {% endif %}
+                            
+                            {% if hasattr(profile_form, 'certifications') %}
+                            <div>
+                                <label for="certifications" class="block text-sm font-medium text-gray-700">Certifications</label>
+                                {{ profile_form.certifications(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            {% endif %}
+                        </div>
                     </div>
+                    {% endif %}
+                    
+                    <!-- Employment Information (Staff Only) -->
+                    {% if hasattr(profile_form, 'join_date') or hasattr(profile_form, 'designation') or hasattr(profile_form, 'department') %}
+                    <div class="border-b pb-5 mb-5">
+                        <h4 class="text-base font-medium text-gray-900 mb-4">Employment Information</h4>
+                        <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2 lg:grid-cols-3">
+                            {% if hasattr(profile_form, 'join_date') %}
+                            <div>
+                                <label for="join_date" class="block text-sm font-medium text-gray-700">Join Date</label>
+                                {{ profile_form.join_date(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            {% endif %}
+                            
+                            {% if hasattr(profile_form, 'designation') %}
+                            <div>
+                                <label for="designation" class="block text-sm font-medium text-gray-700">Designation</label>
+                                {{ profile_form.designation(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            {% endif %}
+                            
+                            {% if hasattr(profile_form, 'department') %}
+                            <div>
+                                <label for="department" class="block text-sm font-medium text-gray-700">Department</label>
+                                {{ profile_form.department(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Medical Information (Patient Only) -->
+                    {% if hasattr(profile_form, 'blood_group') or hasattr(profile_form, 'allergies') %}
+                    <div class="border-b pb-5 mb-5">
+                        <h4 class="text-base font-medium text-gray-900 mb-4">Medical Information</h4>
+                        <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
+                            {% if hasattr(profile_form, 'blood_group') %}
+                            <div>
+                                <label for="blood_group" class="block text-sm font-medium text-gray-700">Blood Group</label>
+                                {{ profile_form.blood_group(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            {% endif %}
+                            
+                            {% if hasattr(profile_form, 'allergies') %}
+                            <div>
+                                <label for="allergies" class="block text-sm font-medium text-gray-700">Allergies</label>
+                                {{ profile_form.allergies(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Emergency Contact (Patient Only) -->
+                    {% if hasattr(profile_form, 'emergency_contact_name') %}
+                    <div class="border-b pb-5 mb-5">
+                        <h4 class="text-base font-medium text-gray-900 mb-4">Emergency Contact</h4>
+                        <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2 lg:grid-cols-3">
+                            <div>
+                                <label for="emergency_contact_name" class="block text-sm font-medium text-gray-700">Name</label>
+                                {{ profile_form.emergency_contact_name(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            
+                            <div>
+                                <label for="emergency_contact_relation" class="block text-sm font-medium text-gray-700">Relation</label>
+                                {{ profile_form.emergency_contact_relation(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            
+                            <div>
+                                <label for="emergency_contact_phone" class="block text-sm font-medium text-gray-700">Phone</label>
+                                {{ profile_form.emergency_contact_phone(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Preferences (Patient Only) -->
+                    {% if hasattr(profile_form, 'preferred_language') or hasattr(profile_form, 'communication_preference') %}
+                    <div class="border-b pb-5 mb-5">
+                        <h4 class="text-base font-medium text-gray-900 mb-4">Preferences</h4>
+                        <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
+                            {% if hasattr(profile_form, 'preferred_language') %}
+                            <div>
+                                <label for="preferred_language" class="block text-sm font-medium text-gray-700">Preferred Language</label>
+                                {{ profile_form.preferred_language(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            {% endif %}
+                            
+                            {% if hasattr(profile_form, 'communication_preference') %}
+                            <div>
+                                <label for="communication_preference" class="block text-sm font-medium text-gray-700">Communication Preference</label>
+                                {{ profile_form.communication_preference(class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm") }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
                     
                     <div class="mt-6">
                         <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
@@ -110,7 +289,7 @@
         </div>
         
         <!-- Account Security -->
-        <div class="bg-white shadow overflow-hidden sm:rounded-lg lg:col-span-2">
+        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
             <div class="px-4 py-5 sm:px-6 border-b">
                 <h3 class="text-lg font-medium text-gray-900">Account Security</h3>
                 <p class="mt-1 text-sm text-gray-500">Recent account activity</p>

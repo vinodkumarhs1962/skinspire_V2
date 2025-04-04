@@ -1,18 +1,38 @@
 # app/views/auth_views.py
-from flask import current_app 
-from app.utils.menu_utils import generate_menu_for_role
-from flask import Blueprint, render_template, redirect, url_for, request, flash, session, jsonify, g
+from flask import (
+    Blueprint, render_template, redirect, url_for, request, 
+    flash, current_app, session
+)
 from flask_login import login_user, current_user, logout_user, login_required
-from app.forms.auth_forms import LoginForm, RegistrationForm
-from app.models.transaction import User, UserSession
-import requests
-import json
 import datetime
+import json
 
+# Import necessary forms
+from app.forms.auth_forms import (
+    LoginForm, RegistrationForm, ProfileForm, 
+    StaffProfileForm, PatientProfileForm,
+    PasswordChangeForm, ForgotPasswordForm, ResetPasswordForm
+)
+
+# Import services
+from app.services.profile_service import ProfileService
+from app.services.forgot_password_service import ForgotPasswordService
+
+# Import database service
+from app.services.database_service import get_db_session, get_detached_copy, get_entity_dict
+
+# Import models
+from app.models.transaction import User, UserSession
+
+# Import utilities
+from app.utils.menu_utils import generate_menu_for_role
+
+# Create blueprint
 auth_views_bp = Blueprint('auth_views', __name__)
 
 @auth_views_bp.context_processor
 def inject_current_year():
+    """Inject current year into all templates"""
     return {'current_year': datetime.datetime.now().year}
 
 @auth_views_bp.route('/')
@@ -22,450 +42,267 @@ def index():
 
 @auth_views_bp.route('/login', methods=['GET', 'POST'])
 def login():
+    """Login view with enhanced error handling"""
     if current_user.is_authenticated:
         return redirect(url_for('auth_views.dashboard'))
 
     form = LoginForm()
 
     if form.validate_on_submit():
-        username = form.username.data
-        password = form.password.data
-
-        # Call your existing API endpoint
         try:
-            response = requests.post(
-                url_for('auth.login', _external=True),
-                json={'username': username, 'password': password},
-                headers={'Content-Type': 'application/json'}
-            )
-
-            if response.status_code == 200:
-                data = response.json()
-                # Store token in session
-                session['auth_token'] = data['token']
-
-                # Use your database service instead of direct query
-                from app.services.database_service import get_db_session
+            with get_db_session() as session:
+                # Find user
+                user = session.query(User).filter_by(user_id=form.username.data).first()
                 
-                with get_db_session() as db_session:
-                    user = db_session.query(User).filter_by(user_id=username).first()
-                    
-                    if user:
-                        login_user(user)
-                        flash('Login successful', 'success')
-                        return redirect(url_for('auth_views.dashboard'))
-                    else:
-                        flash('User not found', 'error')
-            else:
-                flash('Login failed: Invalid credentials', 'error')
-        except requests.RequestException as e:
-            flash(f'Connection error: {str(e)}', 'error')
+                if not user or not user.check_password(form.password.data):
+                    flash('Invalid username or password', 'error')
+                    return render_template('auth/login.html', form=form)
+                
+                # Update login statistics
+                user.last_login = datetime.datetime.now()
+                user.failed_login_attempts = 0
+                
+                # Create a detached copy of user for use after session closes
+                detached_user = get_detached_copy(user)
+                
+                # Commit changes
+                session.commit()
             
-    # If GET request or form validation failed or login failed
+            # Use the detached user outside of the session context
+            login_user(detached_user, remember=form.remember_me.data)
+            
+            flash('Login successful', 'success')
+            return redirect(url_for('auth_views.dashboard'))
+        
+        except Exception as e:
+            current_app.logger.error(f"Login error: {str(e)}", exc_info=True)
+            flash('An error occurred. Please try again.', 'error')
+    
     return render_template('auth/login.html', form=form)
-
-# app/views/auth_views.py - Only the register function is updated here
 
 @auth_views_bp.route('/register', methods=['GET', 'POST'])
 def register():
-    """User registration view"""
+    """User registration view with validation"""
     if current_user.is_authenticated:
         return redirect(url_for('auth_views.dashboard'))
-    
+        
     form = RegistrationForm()
     
-    if request.method == 'POST':
-        print(f"Form submitted: {request.form}")
-        print(f"Form validation: {form.validate()}")
-    
     if form.validate_on_submit():
-        # Extract form data
-        user_type = form.user_type.data
-        first_name = form.first_name.data
-        last_name = form.last_name.data
-        phone = form.phone.data
-        email = form.email.data
-        password = form.password.data
-        
         try:
-            # Import the database service and models
             from app.services.database_service import get_db_session
-            from app.models.transaction import User
             from app.models.master import Staff, Patient, Hospital, Branch
             import uuid
             
-            # Use database service session
             with get_db_session() as session:
                 # Check if user already exists
-                existing_user = session.query(User).filter_by(user_id=phone).first()
+                existing_user = session.query(User).filter_by(user_id=form.phone.data).first()
+                
                 if existing_user:
-                    flash('User already exists', 'error')
+                    flash('User with this phone number already exists', 'error')
                     return render_template('auth/register.html', form=form)
                 
-                # Get default hospital or create one if needed
-                hospital = session.query(Hospital).first()
-                if not hospital:
-                    # Create a default hospital for development/testing
-                    hospital = Hospital(
-                        name="SkinSpire Clinic",
-                        license_no="DEFAULT001",
-                        address={"street": "123 Main St", "city": "Bangalore"},
-                        contact_details={"phone": "1234567890", "email": "info@skinspire.com"}
-                    )
-                    session.add(hospital)
-                    session.flush()  # Get the ID without committing
-            
-                # Get default branch or create one if needed
-                branch = session.query(Branch).filter_by(hospital_id=hospital.hospital_id).first()
-                if not branch:
-                    # Create a default branch for development/testing
-                    branch = Branch(
-                        hospital_id=hospital.hospital_id,
-                        name="Main Branch",
-                        address={"street": "123 Main St", "city": "Bangalore"},
-                        contact_details={"phone": "1234567890", "email": "main@skinspire.com"}
-                    )
-                    session.add(branch)
-                    session.flush()  # Get the ID without committing
+                # Get the default hospital and branch
+                # In a production system, this might be determined by user selection
+                # or based on the registration context
+                default_hospital = session.query(Hospital).first()
+                if not default_hospital:
+                    flash('No hospital configured in the system', 'error')
+                    return render_template('auth/register.html', form=form)
                 
-                # Create the entity (Staff or Patient)
-                entity_type = user_type  # 'staff' or 'patient'
+                default_branch = session.query(Branch).filter_by(hospital_id=default_hospital.hospital_id).first()
                 
-                if entity_type == 'staff':
+                # Create entity based on user type
+                entity_id = uuid.uuid4()
+                
+                # Prepare common personal and contact info
+                personal_info = json.dumps({
+                    'title': form.title.data,
+                    'first_name': form.first_name.data,
+                    'last_name': form.last_name.data
+                })
+                
+                contact_info = json.dumps({
+                    'phone': form.phone.data,
+                    'email': form.email.data
+                })
+                
+                if form.user_type.data == 'staff':
+                    # Create staff entity
                     staff = Staff(
-                        hospital_id=hospital.hospital_id,
-                        branch_id=branch.branch_id if branch else None,
-                        employee_code=f"EMP{phone[-4:]}",
-                        personal_info={
-                            "first_name": first_name,
-                            "last_name": last_name,
-                            "gender": "unspecified"
-                        },
-                        contact_info={
-                            "phone": phone,
-                            "email": email,
-                            "address": {}
-                        },
-                        professional_info={}
+                        staff_id=entity_id,
+                        hospital_id=default_hospital.hospital_id,
+                        branch_id=default_branch.branch_id if default_branch else None,
+                        personal_info=personal_info,
+                        contact_info=contact_info,
+                        professional_info=json.dumps({}),
+                        employment_info=json.dumps({})
                     )
                     session.add(staff)
-                    session.flush()  # Get the ID without committing
-                    entity_id = staff.staff_id
-                else:  # patient
+                    
+                elif form.user_type.data == 'patient':
+                    # Create patient entity
                     patient = Patient(
-                        hospital_id=hospital.hospital_id,
-                        branch_id=branch.branch_id if branch else None,
-                        mrn=f"PAT{phone[-4:]}",
-                        personal_info={
-                            "first_name": first_name,
-                            "last_name": last_name,
-                            "gender": "unspecified"
-                        },
-                        contact_info={
-                            "phone": phone,
-                            "email": email,
-                            "address": {}
-                        }
+                        patient_id=entity_id,
+                        hospital_id=default_hospital.hospital_id,
+                        branch_id=default_branch.branch_id if default_branch else None,
+                        personal_info=personal_info,
+                        contact_info=contact_info,
+                        emergency_contact=json.dumps({}),
+                        preferences=json.dumps({})
                     )
                     session.add(patient)
-                    session.flush()  # Get the ID without committing
-                    entity_id = patient.patient_id
                 
-                # Create the user account
+                # Create new user with reference to entity
                 new_user = User(
-                    user_id=phone,
-                    hospital_id=hospital.hospital_id,
-                    entity_type=entity_type,
+                    user_id=form.phone.data,
+                    entity_type=form.user_type.data,
                     entity_id=entity_id,
-                    is_active=True,
-                    failed_login_attempts=0
+                    hospital_id=default_hospital.hospital_id
                 )
                 
-                # Set password using the model's password hashing method
-                new_user.set_password(password)
+                # Set password
+                new_user.set_password(form.password.data)
                 
-                # Add to database
+                # Add user to session
                 session.add(new_user)
                 
-                # Log success
-                current_app.logger.info(f"User registered successfully: {phone}")
+                # Log the user creation
+                current_app.logger.info(f"Created user account for {form.phone.data}")
                 
-                # Redirect to login page with success message
-                flash('Registration successful! You can now log in.', 'success')
+                # Attempt to commit
+                current_app.logger.info("Attempting to commit changes to database...")
+                session.commit()
+                current_app.logger.info("Database changes committed successfully")
+                
+                # Log the success
+                current_app.logger.info(f"User registered successfully: {form.phone.data}")
+                
+                flash('Registration successful! Please log in.', 'success')
                 return redirect(url_for('auth_views.login'))
                 
         except Exception as e:
-            # Log error and show message to user
             current_app.logger.error(f"Registration error: {str(e)}", exc_info=True)
-            flash(f'Registration failed: {str(e)}', 'error')
-            print(f"Exception during registration: {str(e)}")
+            flash('An error occurred during registration. Please try again.', 'error')
+    else:
+        # Log form validation errors
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f'{getattr(form, field).label.text}: {error}', 'error')
     
     return render_template('auth/register.html', form=form)
-
-# @auth_views_bp.route('/register', methods=['GET', 'POST'])
-# def register():
-#     """User registration view"""
-#     if current_user.is_authenticated:
-#         return redirect(url_for('auth_views.dashboard'))
-    
-#     form = RegistrationForm()
-    
-#     # Debug logging
-#     if request.method == 'POST':
-#         print(f"Form submitted: {request.form}")
-#         print(f"Form validation: {form.validate()}")
-    
-#     if form.validate_on_submit():
-#         # Extract form data
-#         user_type = form.user_type.data
-#         first_name = form.first_name.data
-#         last_name = form.last_name.data
-#         phone = form.phone.data
-#         email = form.email.data
-#         password = form.password.data
-        
-#         try:
-#             # Generate a placeholder entity ID
-#             import uuid
-#             entity_id = str(uuid.uuid4())
-            
-#             # Create user data
-#             user_data = {
-#                 'username': phone,
-#                 'password': password,
-#                 'user_type': user_type,
-#                 'hospital_id': '4ef72e18-e65d-4766-b9eb-0308c42485ca',
-#                 'entity_id': entity_id,
-#                 'personal_info': {
-#                     'first_name': first_name,
-#                     'last_name': last_name,
-#                     'email': email,
-#                     'phone': phone
-#                 }
-#             }
-            
-#             print(f"Sending to API: {user_data}")
-            
-#             # Import the registration function directly
-#             from app.security.routes.auth import register as auth_register_function
-            
-#             # Use Flask's test_request_context to bypass HTTP and CSRF
-#             from flask import current_app
-#             with current_app.test_request_context(
-#                 path='/api/auth/register',
-#                 method='POST',
-#                 json=user_data
-#             ):
-#                 # Call the function directly
-#                 response = auth_register_function()
-                
-#                 # Extract response data and status code
-#                 if isinstance(response, tuple):
-#                     response_data, status_code = response
-#                 else:
-#                     response_data = response
-#                     status_code = 200
-                
-#                 print(f"Direct API response: {status_code}")
-#                 print(f"Response data: {response_data}")
-                
-#                 # Process the response
-#                 if status_code == 201:
-#                     flash('Registration successful! You can now log in.', 'success')
-#                     return redirect(url_for('auth_views.login'))
-#                 else:
-#                     if isinstance(response_data, dict):
-#                         error_msg = response_data.get('error', 'Registration failed')
-#                     else:
-#                         error_msg = 'Registration failed'
-#                     flash(error_msg, 'error')
-#                     print(f"Registration error: {error_msg}")
-                
-#         except Exception as e:
-#             flash(f'Registration error: {str(e)}', 'error')
-#             print(f"Exception during registration: {str(e)}")
-    
-#     return render_template('auth/register.html', form=form)
 
 @auth_views_bp.route('/dashboard')
 @login_required
 def dashboard():
-    """Dashboard view after successful login"""
-    
-    import logging
-    
-    # Use root logger to ensure visibility
-    logger = logging.getLogger
+    """Dashboard view with dynamic menu generation"""
+    # Log dashboard access
     current_app.logger.info("Dashboard route accessed")
+    
+    # Log user details for debugging
     current_app.logger.info(f"Current User: {current_user}")
     current_app.logger.info(f"Is Authenticated: {current_user.is_authenticated}")
-    current_app.logger.info(f"User ID: {current_user.get_id()}")
+    current_app.logger.info(f"User ID: {current_user.user_id}")
     current_app.logger.info(f"Session User ID: {session.get('user_id')}")
-    current_app.logger.info(f"Session Contents: {dict(session)}")
+    current_app.logger.info(f"Session Contents: {session}")
     
-    # Get user menu items based on role
+    # Determine user role
     user_role = current_user.entity_type if hasattr(current_user, 'entity_type') else 'patient'
     
-    # This is a placeholder. In a real implementation, you would fetch
-    # menu items from a database based on user role
+    # Generate menu based on user role
     menu_items = generate_menu_for_role(user_role)
     
     return render_template('dashboard/index.html', menu_items=menu_items)
 
-@auth_views_bp.route('/logout')
-def logout():
-    if 'auth_token' in session:
-        # Call your API to invalidate the token
-        try:
-            response = requests.post(
-                url_for('auth.logout', _external=True),
-                headers={'Authorization': f'Bearer {session["auth_token"]}'}
-            )
-            
-            # Clear session regardless of response
-            session.pop('auth_token', None)
-        except requests.exceptions.RequestException:
-            # Still proceed with local logout even if API call fails
-            session.pop('auth_token', None)
-    
-    logout_user()  # For Flask-Login
-    flash('You have been logged out', 'info')
-    return redirect(url_for('auth_views.login'))
-
-def generate_menu_for_role(role):
-    """Generate menu items based on user role"""
-    # Basic menu items available to all users
-    menu = [
-        {
-            'name': 'Dashboard',
-            'url': url_for('auth_views.dashboard'),
-            'icon': 'home'
-        }
-    ]
-    
-    # Add role-specific menu items
-    if role == 'staff':
-        menu.extend([
-            {
-                'name': 'Patients',
-                'url': '#',
-                'icon': 'users',
-                'children': [
-                    {'name': 'Patient List', 'url': '#', 'icon': 'list'},
-                    {'name': 'New Patient', 'url': '#', 'icon': 'user-plus'}
-                ]
-            },
-            {
-                'name': 'Appointments',
-                'url': '#',
-                'icon': 'calendar',
-                'children': [
-                    {'name': 'View Schedule', 'url': '#', 'icon': 'clock'},
-                    {'name': 'New Appointment', 'url': '#', 'icon': 'plus'}
-                ]
-            }
-        ])
-    elif role == 'patient':
-        menu.extend([
-            {
-                'name': 'My Appointments',
-                'url': '#',
-                'icon': 'calendar'
-            },
-            {
-                'name': 'My Records',
-                'url': '#',
-                'icon': 'clipboard'
-            }
-        ])
-    
-    return menu
-
-# Add to app/views/auth_views.py if not already present
-
 @auth_views_bp.route('/settings', methods=['GET'])
 @login_required
 def settings():
-    """User settings view"""
-    # Initialize forms
-    from app.forms.auth_forms import ProfileForm, PasswordChangeForm
-    
-    profile_form = ProfileForm()
-    password_form = PasswordChangeForm()
-    
-    # Populate profile form with current user data
-    if hasattr(current_user, 'first_name'):
-        profile_form.first_name.data = current_user.first_name
-    if hasattr(current_user, 'last_name'):
-        profile_form.last_name.data = current_user.last_name
-    if hasattr(current_user, 'email'):
-        profile_form.email.data = current_user.email
-    
-    # Get menu items for navigation
-    user_role = current_user.entity_type if hasattr(current_user, 'entity_type') else 'patient'
-    menu_items = generate_menu_for_role(user_role)
-    
-    # Get login history if available
-    login_history = []
+    """Comprehensive user settings view"""
     try:
-        # This would be an API call to get login history
-        # For now, just show the most recent login
-        if hasattr(current_user, 'last_login') and current_user.last_login:
-            login_history = [{
-                'date': current_user.last_login,
-                'status': 'Successful',
-                'ip_address': 'Not available'
-            }]
+        # Get user profile using service
+        user_profile = ProfileService.get_profile(current_user.user_id)
+        
+        # Determine appropriate form based on entity type
+        if user_profile and user_profile.get('entity_type') == 'staff':
+            profile_form = StaffProfileForm()
+        elif user_profile and user_profile.get('entity_type') == 'patient':
+            profile_form = PatientProfileForm()
+        else:
+            profile_form = ProfileForm()
+        
+        # Populate form with current profile data
+        if user_profile:
+            for field, value in user_profile.items():
+                if hasattr(profile_form, field):
+                    # Special handling for date fields
+                    if field in ['date_of_birth', 'join_date']:
+                        try:
+                            # Use datetime module's parsing method
+                            if value:
+                                # Remove any quotes from the string
+                                value = value.strip('"')
+                                # Explicitly use datetime.datetime.strptime
+                                date_value = datetime.datetime.strptime(value, '%Y-%m-%d').date()
+                                getattr(profile_form, field).data = date_value
+                            else:
+                                getattr(profile_form, field).data = None
+                        except (ValueError, TypeError) as e:
+                            current_app.logger.warning(f"Invalid date format for {field}: {value}. Error: {e}")
+                            getattr(profile_form, field).data = None
+                    else:
+                        getattr(profile_form, field).data = value
+        
+        # Password change form
+        password_form = PasswordChangeForm()
+        
+        # Get menu items for navigation
+        user_role = user_profile.get('entity_type', 'patient') if user_profile else 'patient'
+        menu_items = generate_menu_for_role(user_role)
+        
+        return render_template(
+            'auth/settings.html',
+            profile_form=profile_form,
+            password_form=password_form,
+            menu_items=menu_items
+        )
     except Exception as e:
-        current_app.logger.error(f"Error fetching login history: {str(e)}")
-    
-    return render_template(
-        'auth/settings.html',
-        profile_form=profile_form,
-        password_form=password_form,
-        menu_items=menu_items,
-        login_history=login_history
-    )
-
+        current_app.logger.error(f"Settings page error: {str(e)}", exc_info=True)
+        flash('An error occurred while loading settings. Please try again.', 'error')
+        return redirect(url_for('auth_views.dashboard'))
+        
 @auth_views_bp.route('/update-profile', methods=['POST'])
 @login_required
 def update_profile():
-    """Handle profile update form submission"""
-    from app.forms.auth_forms import ProfileForm
-    
-    form = ProfileForm()
-    
-    if form.validate_on_submit():
-        try:
-            # Call API to update user profile
-            response = requests.put(
-                url_for('auth.update_profile', _external=True),
-                json={
-                    'user_id': current_user.user_id,
-                    'first_name': form.first_name.data,
-                    'last_name': form.last_name.data,
-                    'email': form.email.data
-                },
-                headers={
-                    'Content-Type': 'application/json',
-                    'Authorization': f'Bearer {session.get("auth_token")}'
-                }
+    try:
+        # Determine appropriate form based on current user type
+        user_profile = ProfileService.get_profile(current_user.user_id)
+        
+        if user_profile and user_profile.get('entity_type') == 'staff':
+            form = StaffProfileForm()
+        elif user_profile and user_profile.get('entity_type') == 'patient':
+            form = PatientProfileForm()
+        else:
+            form = ProfileForm()
+        
+        if form.validate_on_submit():
+            # Prepare update data from form
+            update_data = {field.name: field.data for field in form if field.name not in ['csrf_token']}
+            
+            # Use ProfileService to update profile
+            result = ProfileService.update_profile(
+                user_id=current_user.user_id, 
+                update_data=update_data
             )
             
-            if response.status_code == 200:
-                flash('Profile updated successfully', 'success')
-            else:
-                try:
-                    error_data = response.json()
-                    flash(error_data.get('error', 'Failed to update profile'), 'error')
-                except:
-                    flash('Failed to update profile', 'error')
-        except requests.exceptions.RequestException as e:
-            flash(f'Connection error: {str(e)}', 'error')
-    else:
-        for field, errors in form.errors.items():
-            for error in errors:
-                flash(f'{getattr(form, field).label.text}: {error}', 'error')
+            flash('Profile updated successfully', 'success')
+        else:
+            # Log form validation errors
+            for field, errors in form.errors.items():
+                for error in errors:
+                    flash(f'{getattr(form, field).label.text}: {error}', 'error')
+    except Exception as e:
+        current_app.logger.error(f"Error updating profile: {str(e)}", exc_info=True)
+        flash(f'Failed to update profile. Please try again.', 'error')
     
     return redirect(url_for('auth_views.settings'))
 
@@ -473,39 +310,154 @@ def update_profile():
 @login_required
 def change_password():
     """Handle password change form submission"""
-    from app.forms.auth_forms import PasswordChangeForm
-    
     form = PasswordChangeForm()
     
     if form.validate_on_submit():
         try:
-            # Call API to change password
-            response = requests.put(
-                url_for('auth.change_password', _external=True),
-                json={
-                    'user_id': current_user.user_id,
-                    'current_password': form.current_password.data,
-                    'new_password': form.new_password.data
-                },
-                headers={
-                    'Content-Type': 'application/json',
-                    'Authorization': f'Bearer {session.get("auth_token")}'
-                }
-            )
-            
-            if response.status_code == 200:
+            with get_db_session() as session:
+                # Find the user
+                user = session.query(User).filter_by(user_id=current_user.user_id).first()
+                
+                if not user:
+                    flash('User not found', 'error')
+                    return redirect(url_for('auth_views.settings'))
+                
+                # Verify current password
+                if not user.check_password(form.current_password.data):
+                    flash('Current password is incorrect', 'error')
+                    return redirect(url_for('auth_views.settings'))
+                
+                # Set new password
+                user.set_password(form.new_password.data)
+                
+                # Commit changes
+                session.commit()
+                
                 flash('Password changed successfully', 'success')
-            else:
-                try:
-                    error_data = response.json()
-                    flash(error_data.get('error', 'Failed to change password'), 'error')
-                except:
-                    flash('Failed to change password', 'error')
-        except requests.exceptions.RequestException as e:
-            flash(f'Connection error: {str(e)}', 'error')
+        
+        except Exception as e:
+            current_app.logger.error(f"Password change error: {str(e)}", exc_info=True)
+            flash('Failed to change password. Please try again.', 'error')
     else:
+        # Log form validation errors
         for field, errors in form.errors.items():
             for error in errors:
                 flash(f'{getattr(form, field).label.text}: {error}', 'error')
     
     return redirect(url_for('auth_views.settings'))
+
+@auth_views_bp.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    """Forgot password request handler"""
+    # Create the form instance
+    form = ForgotPasswordForm()
+    
+    if form.validate_on_submit():
+        try:
+            # Initiate password reset process
+            reset_result = ForgotPasswordService.initiate_password_reset(
+                form.username_or_email.data
+            )
+            
+            # In a real system, you'd send an email/SMS here
+            # For demonstration, we're just logging the reset token
+            current_app.logger.info(f"Password reset token: {reset_result.get('reset_token')}")
+            
+            flash('Password reset instructions have been sent to your email or phone if the account exists.', 'success')
+            return redirect(url_for('auth_views.login'))
+        
+        except ValueError as ve:
+            # Handle specific value errors (like user not found)
+            current_app.logger.warning(f"Password reset value error: {str(ve)}")
+            # Don't expose whether user exists or not for security
+            flash('Password reset instructions have been sent if the account exists.', 'info')
+            return redirect(url_for('auth_views.login'))
+        except Exception as e:
+            # Handle general errors
+            current_app.logger.error(f"Forgot password error: {str(e)}", exc_info=True)
+            flash('An error occurred. Please try again later.', 'error')
+    
+    # Make sure to pass the form to the template
+    return render_template('auth/forgot_password.html', form=form)
+
+@auth_views_bp.route('/reset-password', methods=['GET', 'POST'])
+def reset_password():
+    """Password reset handler"""
+    # Get token from query parameters
+    reset_token = request.args.get('token')
+    user_id = request.args.get('user_id')
+    
+    # Create form instance
+    form = ResetPasswordForm()
+    
+    # For GET requests, validate the token
+    if request.method == 'GET':
+        if not reset_token or not user_id:
+            flash('Invalid or missing reset information', 'error')
+            return redirect(url_for('auth_views.login'))
+        
+        try:
+            # Validate token
+            is_valid_token = ForgotPasswordService.validate_reset_token(
+                user_id=user_id, 
+                reset_token=reset_token
+            )
+            
+            if not is_valid_token:
+                flash('Invalid or expired reset token', 'error')
+                return redirect(url_for('auth_views.login'))
+                
+            # Set the user_id in the form for POST submission
+            form.user_id.data = user_id
+            
+        except Exception as e:
+            current_app.logger.error(f"Token validation error: {str(e)}", exc_info=True)
+            flash('An error occurred. Please request a new reset link.', 'error')
+            return redirect(url_for('auth_views.login'))
+    
+    # For POST requests, process the form
+    if form.validate_on_submit():
+        try:
+            # Reset password using the service
+            reset_result = ForgotPasswordService.reset_password(
+                user_id=form.user_id.data,
+                reset_token=reset_token,
+                new_password=form.new_password.data
+            )
+            
+            flash('Password reset successful. Please log in with your new password.', 'success')
+            return redirect(url_for('auth_views.login'))
+        
+        except ValueError as ve:
+            flash(str(ve), 'error')
+        except Exception as e:
+            current_app.logger.error(f"Password reset error: {str(e)}", exc_info=True)
+            flash('An error occurred. Please try again.', 'error')
+    
+    # Render the reset password form
+    return render_template('auth/reset_password.html', form=form, token=reset_token, user_id=user_id)
+
+@auth_views_bp.route('/logout')
+@login_required
+def logout():
+    """Logout the current user"""
+    try:
+        with get_db_session() as session:
+            # Find and invalidate active user sessions
+            session.query(UserSession).filter_by(
+                user_id=current_user.user_id, 
+                is_active=True
+            ).update({'is_active': False})
+            
+            session.commit()
+        
+        # Log out the user
+        logout_user()
+        
+        flash('You have been logged out', 'info')
+        return redirect(url_for('auth_views.login'))
+    
+    except Exception as e:
+        current_app.logger.error(f"Logout error: {str(e)}", exc_info=True)
+        flash('An error occurred during logout', 'error')
+        return redirect(url_for('auth_views.login'))

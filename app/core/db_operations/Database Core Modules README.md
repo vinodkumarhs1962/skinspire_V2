@@ -10,6 +10,7 @@ This CLI serves as a unified interface for all database management tasks, includ
 - Database copying between environments
 - Migration management
 - Database schema and trigger management
+- Schema management with developer-friendly workflow
 - General database maintenance tasks
 - Environment switching
 - Database inspection and analysis
@@ -30,6 +31,19 @@ python scripts/manage_db.py [COMMAND] [OPTIONS]
 ```
 
 ### Available Commands
+
+#### Schema Management
+
+```bash
+# Directly sync models to database schema (DEVELOPMENT ONLY)
+python scripts/manage_db.py sync-dev-schema
+
+# Detect changes between models and database schema
+python scripts/manage_db.py detect-schema-changes
+
+# Prepare migration files from model changes
+python scripts/manage_db.py prepare-migration -m "Description of changes"
+```
 
 #### Environment Management
 
@@ -151,6 +165,24 @@ python scripts/manage_db.py drop-all-db-tables
 python scripts/manage_db.py reset-and-initialize
 ```
 
+## Schema Management Workflow
+
+The database management system now supports a hybrid approach to schema management:
+
+1. **Development Phase**:
+   - Modify model definitions in `app/models/`
+   - Use `sync-dev-schema` for immediate database updates
+   - Rapidly iterate on schema changes
+
+2. **Preparing for Testing/Production**:
+   - Run `detect-schema-changes` to see what's changed
+   - Use `prepare-migration` to create proper migration files
+   - Review migration files before committing
+
+3. **Testing and Production**:
+   - Apply migrations using existing migration commands
+   - Never use `sync-dev-schema` outside development
+
 ## Core Module Integration
 
 This CLI script integrates with the core database operation modules located in `app/core/db_operations/`. These modules implement the actual functionality, while the CLI script provides the user interface.
@@ -188,30 +220,49 @@ The `inspect-db` command provides comprehensive database inspection capabilities
    python scripts/manage_db.py create-backup
    ```
 
-2. Verify database triggers after application upgrades:
+2. Use `sync-dev-schema` for development only:
+   ```bash
+   # Development only!
+   python scripts/manage_db.py sync-dev-schema
+   ```
+
+3. Generate proper migrations for changes:
+   ```bash
+   python scripts/manage_db.py prepare-migration -m "Added user preferences"
+   ```
+
+4. Always include migration files in code reviews
+
+5. Never use direct schema sync in testing or production:
+   ```bash
+   # For testing and production, always use migrations
+   python scripts/manage_db.py apply-migrations --env test
+   ```
+
+6. Verify database triggers after application upgrades:
    ```bash
    python scripts/manage_db.py verify-db-triggers
    ```
 
-3. Before restoring a database, ensure you have a backup of the current state:
+7. Before restoring a database, ensure you have a backup of the current state:
    ```bash
    python scripts/manage_db.py create-backup
    python scripts/manage_db.py restore-backup path/to/backup.sql
    ```
 
-4. When copying databases, be aware of potential data loss in the target environment:
+8. When copying databases, be aware of potential data loss in the target environment:
    ```bash
    # Safer approach - create a backup first
    python scripts/manage_db.py create-backup --env test
    python scripts/manage_db.py copy-db dev test
    ```
 
-5. When switching environments, verify the current status:
+9. When switching environments, verify the current status:
    ```bash
    python scripts/manage_db.py switch-env --status
    ```
 
-6. Use database inspection before making schema changes:
+10. Use database inspection before making schema changes:
    ```bash
    python scripts/manage_db.py inspect-db --table users
    ```
