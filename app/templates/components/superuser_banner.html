@@ -1,0 +1,9 @@
+<!-- Superuser Banner (shows at top for admin users) -->
+{% set superuser_ids = ['7777777777', 'admin', 'superuser'] %}
+{% if current_user.user_id in superuser_ids %}
+<div class="bg-gradient-to-r from-purple-600 to-purple-700 text-white px-4 py-2 text-sm text-center">
+    <i class="fas fa-crown mr-2"></i>
+    Administrator Mode - User: {{ current_user.user_id }} - Unrestricted Access
+    <i class="fas fa-shield-alt ml-2"></i>
+</div>
+{% endif %}

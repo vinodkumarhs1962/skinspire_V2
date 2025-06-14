@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block title %}Expiring Stock Report{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <div class="flex flex-col md:flex-row justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold dark:text-gray-100">Expiring Stock Report</h1>
+        <div class="flex space-x-2 mt-4 md:mt-0">
+            <a href="{{ url_for('inventory_views.stock_list') }}" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-md text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+                <i class="fas fa-arrow-left mr-2"></i> Back to Stock
+            </a>
+            <button id="print-report" class="px-4 py-2 bg-blue-600 dark:bg-blue-700 rounded-md text-white hover:bg-blue-700 dark:hover:bg-blue-800 transition">
+                <i class="fas fa-print mr-2"></i> Print Report
+            </button>
+            <button id="export-csv" class="px-4 py-2 bg-green-600 dark:bg-green-700 rounded-md text-white hover:bg-green-700 dark:hover:bg-green-800 transition">
+                <i class="fas fa-file-csv mr-2"></i> Export CSV
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter form -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+        <form method="GET" action="{{ url_for('inventory_views.expiring_stock') }}" id="filter-form">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label for="category" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
+                    <select id="category" name="category" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50">
+                        <option value="">All Categories</option>
+                        {% for category in categories %}
+                        <option value="{{ category.category_id }}" {% if request.args.get('category') == category.category_id|string %}selected{% endif %}>{{ category.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="days" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expiring Within (Days)</label>
+                    <select id="days" name="days" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50">
+                        <option value="30" {% if request.args.get('days') == '30' or not request.args.get('days') %}selected{% endif %}>30 Days</option>
+                        <option value="60" {% if request.args.get('days') == '60' %}selected{% endif %}>60 Days</option>
+                        <option value="90" {% if request.args.get('days') == '90' %}selected{% endif %}>90 Days</option>
+                        <option value="180" {% if request.args.get('days') == '180' %}selected{% endif %}>180 Days</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="location" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Location</label>
+                    <select id="location" name="location" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50">
+                        <option value="">All Locations</option>
+                        {% for location in locations %}
+                        <option value="{{ location }}" {% if request.args.get('location') == location %}selected{% endif %}>{{ location }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="self-end">
+                    <button type="submit" class="w-full px-4 py-2 bg-blue-600 dark:bg-blue-700 rounded-md text-white hover:bg-blue-700 dark:hover:bg-blue-800 transition">
+                        <i class="fas fa-filter mr-2"></i> Apply Filters
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Stock Summary -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow mb-6">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Expiring Stock Summary</h2>
+        </div>
+        <div class="p-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-red-100 dark:bg-red-900 p-4 rounded-lg">
+                    <h3 class="text-sm font-medium text-red-800 dark:text-red-200">Critical (< 30 days)</h3>
+                    <p class="text-2xl font-bold text-red-800 dark:text-red-200">{{ critical_count }}</p>
+                </div>
+                <div class="bg-yellow-100 dark:bg-yellow-900 p-4 rounded-lg">
+                    <h3 class="text-sm font-medium text-yellow-800 dark:text-yellow-200">Warning (30-60 days)</h3>
+                    <p class="text-2xl font-bold text-yellow-800 dark:text-yellow-200">{{ warning_count }}</p>
+                </div>
+                <div class="bg-blue-100 dark:bg-blue-900 p-4 rounded-lg">
+                    <h3 class="text-sm font-medium text-blue-800 dark:text-blue-200">Upcoming (60-90 days)</h3>
+                    <p class="text-2xl font-bold text-blue-800 dark:text-blue-200">{{ upcoming_count }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Expiring Stock Table -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Medicine</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Batch</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Expiry Date</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Days Left</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Current Stock</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">MRP</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Location</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {% if stocks %}
+                        {% for stock in stocks %}
+                        <tr class="{% if stock.days_left <= 30 %}bg-red-50 dark:bg-red-900/20{% elif stock.days_left <= 60 %}bg-yellow-50 dark:bg-yellow-900/20{% elif stock.days_left <= 90 %}bg-blue-50 dark:bg-blue-900/20{% endif %}">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                                {{ stock.medicine_name }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                {{ stock.batch }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                {{ stock.expiry.strftime('%Y-%m-%d') }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                                {% if stock.days_left <= 30 %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                                {% elif stock.days_left <= 60 %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
+                                {% elif stock.days_left <= 90 %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
+                                {% else %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200{% endif %}">
+                                {{ stock.days_left }} days
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                {{ stock.current_stock }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                 Rs.{{ stock.pack_mrp }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                {{ stock.location }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <a href="{{ url_for('inventory_views.adjust_stock', stock_id=stock.stock_id) }}" class="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300">Adjust</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="8" class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500 dark:text-gray-400">
+                                No expiring stock found with the current filters.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if pagination and pagination.pages > 1 %}
+        <div class="px-6 py-4 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
+            <div class="flex items-center justify-between">
+                <div class="flex-1 flex justify-between">
+                    {% if pagination.has_prev %}
+                    <a href="{{ url_for('inventory_views.expiring_stock', page=pagination.prev_num, **request.args) }}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
+                        Previous
+                    </a>
+                    {% else %}
+                    <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-300 dark:text-gray-600 bg-white dark:bg-gray-800 cursor-not-allowed">
+                        Previous
+                    </span>
+                    {% endif %}
+                    
+                    <span class="text-sm text-gray-700 dark:text-gray-300">
+                        Page {{ pagination.page }} of {{ pagination.pages }}
+                    </span>
+                    
+                    {% if pagination.has_next %}
+                    <a href="{{ url_for('inventory_views.expiring_stock', page=pagination.next_num, **request.args) }}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
+                        Next
+                    </a>
+                    {% else %}
+                    <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-300 dark:text-gray-600 bg-white dark:bg-gray-800 cursor-not-allowed">
+                        Next
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Handle print button
+        document.getElementById('print-report').addEventListener('click', function() {
+            window.print();
+        });
+        
+        // Handle export CSV button
+        document.getElementById('export-csv').addEventListener('click', function() {
+            window.location.href = "{{ url_for('inventory_views.export_expiring_stock_csv', **request.args) }}";
+        });
+        
+        // Auto-submit form when selections change
+        document.querySelectorAll('#filter-form select').forEach(select => {
+            select.addEventListener('change', function() {
+                document.getElementById('filter-form').submit();
+            });
+        });
+    });
+</script>
+{% endblock %}

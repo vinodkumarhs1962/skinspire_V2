@@ -1,0 +1,135 @@
+<!-- Create file app/templates/admin/hospital_settings.html -->
+
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Hospital Settings{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+        <div class="px-4 py-5 sm:px-6 bg-gray-50 border-b">
+            <h2 class="text-lg leading-6 font-medium text-gray-900">Hospital Settings</h2>
+            <p class="mt-1 max-w-2xl text-sm text-gray-500">Configure verification requirements and other settings</p>
+        </div>
+        
+        <form method="POST" action="{{ url_for('admin_views.hospital_settings') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Verification Settings</h3>
+                
+                <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                    <!-- Phone Verification Setting -->
+                    <div class="flex items-start">
+                        <div class="flex items-center h-5">
+                            <input id="require_phone_verification" name="require_phone_verification" type="checkbox"
+                                {% if verification_settings.require_phone_verification %}checked{% endif %}
+                                class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+                        </div>
+                        <div class="ml-3 text-sm">
+                            <label for="require_phone_verification" class="font-medium text-gray-700">Require Phone Verification</label>
+                            <p class="text-gray-500">Users will be required to verify their phone number</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Email Verification Setting -->
+                    <div class="flex items-start">
+                        <div class="flex items-center h-5">
+                            <input id="require_email_verification" name="require_email_verification" type="checkbox"
+                                {% if verification_settings.require_email_verification %}checked{% endif %}
+                                class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+                        </div>
+                        <div class="ml-3 text-sm">
+                            <label for="require_email_verification" class="font-medium text-gray-700">Require Email Verification</label>
+                            <p class="text-gray-500">Users will be required to verify their email address</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Login Requirement -->
+                    <div class="flex items-start">
+                        <div class="flex items-center h-5">
+                            <input id="verification_required_for_login" name="verification_required_for_login" type="checkbox"
+                                {% if verification_settings.verification_required_for_login %}checked{% endif %}
+                                class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+                        </div>
+                        <div class="ml-3 text-sm">
+                            <label for="verification_required_for_login" class="font-medium text-gray-700">Required for Login</label>
+                            <p class="text-gray-500">Users must complete verification before they can log in</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Staff Verification -->
+                    <div class="flex items-start">
+                        <div class="flex items-center h-5">
+                            <input id="verification_required_for_staff" name="verification_required_for_staff" type="checkbox"
+                                {% if verification_settings.verification_required_for_staff %}checked{% endif %}
+                                class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+                        </div>
+                        <div class="ml-3 text-sm">
+                            <label for="verification_required_for_staff" class="font-medium text-gray-700">Required for Staff</label>
+                            <p class="text-gray-500">Staff members must complete verification</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Patient Verification -->
+                    <div class="flex items-start">
+                        <div class="flex items-center h-5">
+                            <input id="verification_required_for_patients" name="verification_required_for_patients" type="checkbox"
+                                {% if verification_settings.verification_required_for_patients %}checked{% endif %}
+                                class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+                        </div>
+                        <div class="ml-3 text-sm">
+                            <label for="verification_required_for_patients" class="font-medium text-gray-700">Required for Patients</label>
+                            <p class="text-gray-500">Patients must complete verification</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6 grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-3">
+                    <!-- Grace Period -->
+                    <div>
+                        <label for="verification_grace_period_days" class="block text-sm font-medium text-gray-700">Grace Period (Days)</label>
+                        <input type="number" min="0" max="30" name="verification_grace_period_days" id="verification_grace_period_days"
+                            value="{{ verification_settings.verification_grace_period_days }}"
+                            class="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
+                        <p class="mt-1 text-xs text-gray-500">Days users have to complete verification after registration</p>
+                    </div>
+                    
+                    <!-- OTP Length -->
+                    <div>
+                        <label for="otp_length" class="block text-sm font-medium text-gray-700">OTP Length</label>
+                        <input type="number" min="4" max="8" name="otp_length" id="otp_length"
+                            value="{{ verification_settings.otp_length }}"
+                            class="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
+                        <p class="mt-1 text-xs text-gray-500">Number of digits in verification codes</p>
+                    </div>
+                    
+                    <!-- OTP Expiry -->
+                    <div>
+                        <label for="otp_expiry_minutes" class="block text-sm font-medium text-gray-700">OTP Expiry (Minutes)</label>
+                        <input type="number" min="1" max="60" name="otp_expiry_minutes" id="otp_expiry_minutes"
+                            value="{{ verification_settings.otp_expiry_minutes }}"
+                            class="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
+                        <p class="mt-1 text-xs text-gray-500">How long verification codes remain valid</p>
+                    </div>
+                    
+                    <!-- Max OTP Attempts -->
+                    <div>
+                        <label for="max_otp_attempts" class="block text-sm font-medium text-gray-700">Max OTP Attempts</label>
+                        <input type="number" min="1" max="10" name="max_otp_attempts" id="max_otp_attempts"
+                            value="{{ verification_settings.max_otp_attempts }}"
+                            class="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
+                        <p class="mt-1 text-xs text-gray-500">Maximum invalid attempts before code is invalidated</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="px-4 py-3 bg-gray-50 text-right sm:px-6">
+                <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    Save Settings
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

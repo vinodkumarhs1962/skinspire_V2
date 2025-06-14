@@ -1,0 +1,11 @@
+<!-- Branch Information Display for forms/views -->
+{% if branch_context and branch_context.get('is_multi_branch_user', False) and branch_name %}
+<div class="mt-2 p-3 bg-blue-50 dark:bg-blue-900 rounded">
+    <div class="flex items-center">
+        <i class="fas fa-map-marker-alt text-blue-600 dark:text-blue-300 mr-2"></i>
+        <span class="text-sm font-medium text-blue-800 dark:text-blue-200">
+            {{ label or 'Branch' }}: {{ branch_name }}
+        </span>
+    </div>
+</div>
+{% endif %}

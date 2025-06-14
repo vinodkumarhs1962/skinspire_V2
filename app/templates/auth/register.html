@@ -1,3 +1,4 @@
+<!-- register.html -->
 {% extends "layouts/public.html" %}
 
 {% block title %}Register - SkinSpire Clinic{% endblock %}
@@ -7,12 +8,22 @@
     <div class="max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
         <div class="px-6 py-8">
             <div class="text-center">
-                <div class="mx-auto h-16 w-16 bg-blue-600 rounded-full flex items-center justify-center text-white text-xl font-bold mb-4">
-                    SK
-                </div>
+                <!-- Logo Rendering with Backward Compatibility -->
+                {% if hospital and hospital.logo and hospital.logo.variants %}
+                    <img 
+                        src="{{ url_for('static', filename='uploads/hospital_logos/' + hospital.hospital_id|string + '/' + hospital.logo.variants.medium.filename) }}" 
+                        alt="{{ hospital.name }} Logo" 
+                        class="mx-auto h-36 w-60 md:h-48 md:w-48 mb-4 object-contain"
+                    >
+                {% else %}
+                    <div class="mx-auto h-16 w-16 md:h-24 md:w-24 bg-blue-600 rounded-full flex items-center justify-center text-white text-xl font-bold mb-4">
+                        SK
+                    </div>
+                {% endif %}
+                Welcome to Skinspire Clinic
                 <h2 class="text-center text-3xl font-extrabold text-gray-900 dark:text-white">Create an account</h2>
                 <p class="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-                    Join SkinSpire Clinic System
+                    Register for SkinSpire Hospital Management System
                 </p>
             </div>
             

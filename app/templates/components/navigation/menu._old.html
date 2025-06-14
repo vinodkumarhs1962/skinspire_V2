@@ -1,0 +1,42 @@
+{% macro render_menu(menu_items, current_path, collapsed=false, hovered=false) %}
+<nav class="relative py-2">
+    {% for item in menu_items %}
+        <a 
+            href="{{ item.url }}" 
+            class="group flex items-center px-4 py-2 text-white hover:bg-blue-700 transition-all duration-300 relative mb-1"
+            :class="{
+                'w-16': collapsed && !hovered,
+                'w-full': !collapsed || hovered
+            }"
+        >
+            <div class="flex items-center w-full">
+                <span class="w-8 flex justify-center items-center transition-opacity duration-300">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M{{ item.icon_path }}"></path>
+                    </svg>
+                </span>
+                <span 
+                    class="ml-3 text-sm whitespace-nowrap overflow-hidden transition-all duration-300"
+                    :class="{
+                        'opacity-0 w-0': collapsed && !hovered,
+                        'opacity-100 w-full': !collapsed || hovered
+                    }"
+                >
+                    {{ item.name }}
+                </span>
+            </div>
+            
+            <!-- Tooltip for collapsed state -->
+            <span 
+                class="absolute left-full ml-2 bg-gray-800 text-white text-xs px-2 py-1 rounded shadow-lg z-50 transition-opacity duration-300"
+                :class="{
+                    'opacity-0 invisible': hovered || !collapsed,
+                    'opacity-100 visible': collapsed && !hovered
+                }"
+            >
+                {{ item.name }}
+            </span>
+        </a>
+    {% endfor %}
+</nav>
+{% endmacro %}

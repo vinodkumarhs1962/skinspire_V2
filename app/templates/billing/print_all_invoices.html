@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="csrf-token" content="{{ csrf_token() }}">
+        <title>Invoice Group #{{ group_id }} - {{ hospital.name }}</title>
+        <!-- Use existing CSS -->
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/components/invoice.css') }}">
+        <style>
+            /* Same pagination styles as in print_invoice.html */
+            @page {
+                size: A4;
+                margin: 15mm;
+                orphans: 4;
+                widows: 2;
+            }
+            
+            html, body {
+                width: 210mm;
+                min-height: 297mm;
+                margin: 0 auto !important;
+                padding: 0 !important;
+                overflow: visible !important;
+            }
+            
+            .print-container {
+                width: 180mm !important;
+                margin: 0 auto !important;
+                padding: 0 !important;
+                box-sizing: border-box !important;
+                overflow: visible !important;
+                page-break-inside: auto;
+            }
+            
+            table {
+                page-break-inside: auto;
+            }
+            
+            tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }
+            
+            thead {
+                display: table-header-group;
+            }
+            
+            tfoot {
+                display: table-footer-group;
+            }
+            
+            .page-break {
+                page-break-before: always;
+            }
+            
+            /* Additional style for invoice group */
+            .invoice-separator {
+                margin: 30px 0;
+                border-top: 1px dashed #888;
+                page-break-before: always;
+            }
+        </style>
+    </head>
+<body>
+    <div class="no-print" style="padding: 10px; background-color: #f8f9fa; text-align: center; margin: 0;">
+        <button onclick="window.print()" style="padding: 5px 10px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">
+            Print All Invoices
+        </button>
+        <button onclick="window.close()" style="padding: 5px 10px; background-color: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">
+            Close
+        </button>
+    </div>
+    
+    <div class="print-container">
+        <!-- Group Summary -->
+        <div style="text-align: center; margin-bottom: 20px;">
+            <h1 style="font-size: 24px; font-weight: bold;">Invoice Group #{{ group_id }}</h1>
+            <p style="font-size: 16px;">{{ patient.name }} ({{ patient.mrn }})</p>
+            <p style="font-size: 14px;">{{ invoices|length }} invoice(s)</p>
+        </div>
+        
+        {% for invoice in invoices %}
+            {% if not loop.first %}
+            <div class="invoice-separator"></div>
+            {% endif %}
+            
+            <!-- This is a simplified version for each invoice -->
+            <!-- Header -->
+            <div class="header">
+                <div class="logo">
+                    {% if logo_url %}
+                        <img src="{{ logo_url }}" alt="{{ hospital.name }}" style="max-height: 80px; max-width: 200px;">
+                    {% else %}
+                        {{ hospital.name }}
+                    {% endif %}
+                </div>
+                <div class="hospital-info">
+                    <div>{{ hospital.name }}</div>
+                    <div>{{ hospital.address }}</div>
+                    <div>Phone: {{ hospital.phone }}</div>
+                    <div>Email: {{ hospital.email }}</div>
+                    {% if invoice.is_gst_invoice %}
+                    <div>GSTIN: {{ invoice.gst_registration_number or hospital.gst_registration_number }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Invoice Title -->
+            <div class="invoice-title">
+                {{ "TAX INVOICE" if invoice.is_gst_invoice else "INVOICE" }}
+            </div>
+            
+            <!-- Invoice Metadata -->
+            <div class="invoice-meta">
+                <div class="meta-section">
+                    <div class="meta-title">Patient Details:</div>
+                    {% if patient %}
+                    <div>Name: {{ patient.name }}</div>
+                    <div>MRN: {{ patient.mrn }}</div>
+                    {% if patient.contact_info and patient.contact_info.phone %}
+                    <div>Phone: {{ patient.contact_info.phone }}</div>
+                    {% endif %}
+                    {% else %}
+                    <div>Patient information not available</div>
+                    {% endif %}
+                </div>
+                
+                <div class="meta-section">
+                    <div class="meta-title">Invoice Details:</div>
+                    <div>Invoice #: {{ invoice.invoice_number }}</div>
+                    <div>Date: {{ invoice.invoice_date.strftime('%d-%b-%Y') }}</div>
+                    <div>Type: {{ invoice.invoice_type }}</div>
+                </div>
+            </div>
+            
+            <!-- Currency Note -->
+            <div class="currency-note">
+                Amounts are in {{ invoice.currency_code }}
+            </div>
+            
+            <!-- Basic invoice summary for brevity -->
+            <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                <tr>
+                    <td style="text-align: right; padding: 5px; width: 70%;">Subtotal:</td>
+                    <td style="text-align: right; padding: 5px; width: 30%;">{{ "%.2f"|format(invoice.total_amount|float) }}</td>
+                </tr>
+                
+                {% if invoice.total_discount > 0 %}
+                <tr>
+                    <td style="text-align: right; padding: 5px; width: 70%;">Total Discount:</td>
+                    <td style="text-align: right; padding: 5px; width: 30%;">{{ "%.2f"|format(invoice.total_discount|float) }}</td>
+                </tr>
+                {% endif %}
+                
+                <tr style="font-weight: bold; border-top: 1px solid #333;">
+                    <td style="text-align: right; padding: 5px; width: 70%;">GRAND TOTAL:</td>
+                    <td style="text-align: right; padding: 5px; width: 30%;">{{ "%.2f"|format(invoice.grand_total|float) }}</td>
+                </tr>
+                
+                {% if invoice.paid_amount > 0 %}
+                <tr>
+                    <td style="text-align: right; padding: 5px; width: 70%;">Paid Amount:</td>
+                    <td style="text-align: right; padding: 5px; width: 30%;">{{ "%.2f"|format(invoice.paid_amount|float) }}</td>
+                </tr>
+                {% endif %}
+                <tr class="balance-due-row" {% if invoice.balance_due > 0 %}style="font-weight: bold; color: #d32f2f;"{% else %}style="font-weight: bold;"{% endif %}>
+                    <td style="text-align: right; padding: 5px; width: 70%;">Balance Due:</td>
+                    <td style="text-align: right; padding: 5px; width: 30%;">{{ "%.2f"|format(invoice.balance_due|float) }}</td>
+                </tr>
+            </table>
+            
+            <!-- Footer per invoice -->
+            <div style="text-align: right; margin-top: 30px;">
+                <div style="margin-bottom: 30px;">
+                    For {{ hospital.name }}
+                </div>
+                <div>
+                    Authorized Signatory
+                </div>
+            </div>
+        {% endfor %}
+        
+        <!-- Overall Summary at the end -->
+        <div class="page-break"></div>
+        <div style="margin-top: 40px; border-top: 2px solid #333; padding-top: 20px;">
+            <h2 style="font-size: 18px; font-weight: bold; text-align: center; margin-bottom: 20px;">Invoice Group Summary</h2>
+            
+            <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                <thead>
+                    <tr style="background-color: #f3f4f6;">
+                        <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Invoice #</th>
+                        <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Date</th>
+                        <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Type</th>
+                        <th style="padding: 8px; text-align: right; border: 1px solid #ddd;">Amount</th>
+                        <th style="padding: 8px; text-align: right; border: 1px solid #ddd;">Balance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set total_amount = 0 %}
+                    {% set total_balance = 0 %}
+                    
+                    {% for invoice in invoices %}
+                        <tr>
+                            <td style="padding: 8px; text-align: left; border: 1px solid #ddd;">{{ invoice.invoice_number }}</td>
+                            <td style="padding: 8px; text-align: left; border: 1px solid #ddd;">{{ invoice.invoice_date.strftime('%d-%b-%Y') }}</td>
+                            <td style="padding: 8px; text-align: left; border: 1px solid #ddd;">
+                                {{ invoice.invoice_type }}
+                                {% if invoice.is_gst_invoice %}(GST){% endif %}
+                            </td>
+                            <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">{{ "%.2f"|format(invoice.grand_total|float) }}</td>
+                            <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">{{ "%.2f"|format(invoice.balance_due|float) }}</td>
+                        </tr>
+                        {% set total_amount = total_amount + invoice.grand_total|float %}
+                        {% set total_balance = total_balance + invoice.balance_due|float %}
+                    {% endfor %}
+                    
+                    <tr style="font-weight: bold; background-color: #f9fafb;">
+                        <td colspan="3" style="padding: 8px; text-align: right; border: 1px solid #ddd;">TOTAL</td>
+                        <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">{{ "%.2f"|format(total_amount) }}</td>
+                        <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">{{ "%.2f"|format(total_balance) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer no-print">
+            <div style="text-align: center;">
+                {{ hospital.name }}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,344 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">{{ title }}</h1>
+        <div>
+            <a href="{{ url_for('supplier_views.supplier_list') }}" class="btn-secondary">
+                Back to Suppliers
+            </a>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+        <form method="POST">
+            {{ form.csrf_token }}
+            
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-white">Basic Information</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="supplier_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Supplier Name <span class="text-red-600">*</span>
+                        </label>
+                        {{ form.supplier_name(class="form-input w-full", required="required") }}
+                        {% if form.supplier_name.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.supplier_name.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="supplier_category" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Supplier Category
+                        </label>
+                        {{ form.supplier_category(class="form-select w-full") }}
+                        {% if form.supplier_category.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.supplier_category.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- CLEAN: Simple Branch Selector Component Include -->
+                <div class="mt-4">
+                    {% include 'components/branch/branch_selector.html' %}
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-white">Address</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="address_line1" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Address Line 1 <span class="text-red-600">*</span>
+                        </label>
+                        {{ form.address_line1(class="form-input w-full", required="required") }}
+                        {% if form.address_line1.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.address_line1.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="address_line2" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Address Line 2
+                        </label>
+                        {{ form.address_line2(class="form-input w-full") }}
+                        {% if form.address_line2.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.address_line2.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="city" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            City <span class="text-red-600">*</span>
+                        </label>
+                        {{ form.city(class="form-input w-full", required="required") }}
+                        {% if form.city.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.city.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="state" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            State <span class="text-red-600">*</span>
+                        </label>
+                        {{ form.state(class="form-input w-full", required="required") }}
+                        {% if form.state.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.state.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="country" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Country <span class="text-red-600">*</span>
+                        </label>
+                        {{ form.country(class="form-input w-full", required="required") }}
+                        {% if form.country.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.country.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="pincode" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            PIN Code <span class="text-red-600">*</span>
+                        </label>
+                        {{ form.pincode(class="form-input w-full", required="required") }}
+                        {% if form.pincode.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.pincode.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-white">Contact Information</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="contact_person_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Contact Person
+                        </label>
+                        {{ form.contact_person_name(class="form-input w-full") }}
+                        {% if form.contact_person_name.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.contact_person_name.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="phone" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Phone
+                        </label>
+                        {{ form.phone(class="form-input w-full") }}
+                        {% if form.phone.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.phone.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="mobile" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Mobile <span class="text-red-600">*</span>
+                        </label>
+                        {{ form.mobile(class="form-input w-full", required="required") }}
+                        {% if form.mobile.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.mobile.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Email
+                        </label>
+                        {{ form.email(class="form-input w-full", type="email") }}
+                        {% if form.email.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.email.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-white">Manager Information</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="manager_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Manager Name
+                        </label>
+                        {{ form.manager_name(class="form-input w-full") }}
+                        {% if form.manager_name.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.manager_name.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="manager_phone" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Manager Phone
+                        </label>
+                        {{ form.manager_phone(class="form-input w-full") }}
+                        {% if form.manager_phone.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.manager_phone.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="manager_mobile" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Manager Mobile
+                        </label>
+                        {{ form.manager_mobile(class="form-input w-full") }}
+                        {% if form.manager_mobile.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.manager_mobile.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="manager_email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Manager Email
+                        </label>
+                        {{ form.manager_email(class="form-input w-full", type="email") }}
+                        {% if form.manager_email.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.manager_email.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-white">GST Information</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="gst_registration_number" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            GST Registration Number
+                        </label>
+                        {{ form.gst_registration_number(class="form-input w-full") }}
+                        {% if form.gst_registration_number.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.gst_registration_number.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="pan_number" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            PAN
+                        </label>
+                        {{ form.pan_number(class="form-input w-full") }}
+                        {% if form.pan_number.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.pan_number.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="tax_type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Tax Type
+                        </label>
+                        {{ form.tax_type(class="form-select w-full") }}
+                        {% if form.tax_type.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.tax_type.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="state_code" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            State Code
+                        </label>
+                        {{ form.state_code(class="form-input w-full") }}
+                        {% if form.state_code.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.state_code.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-white">Bank Details</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="bank_account_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Account Name
+                        </label>
+                        {{ form.bank_account_name(class="form-input w-full") }}
+                        {% if form.bank_account_name.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.bank_account_name.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="bank_account_number" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Account Number
+                        </label>
+                        {{ form.bank_account_number(class="form-input w-full") }}
+                        {% if form.bank_account_number.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.bank_account_number.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="bank_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Bank Name
+                        </label>
+                        {{ form.bank_name(class="form-input w-full") }}
+                        {% if form.bank_name.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.bank_name.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="ifsc_code" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            IFSC Code
+                        </label>
+                        {{ form.ifsc_code(class="form-input w-full") }}
+                        {% if form.ifsc_code.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.ifsc_code.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="bank_branch" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Branch
+                        </label>
+                        {{ form.bank_branch(class="form-input w-full") }}
+                        {% if form.bank_branch.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.bank_branch.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-white">Business Rules</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="payment_terms" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Payment Terms
+                        </label>
+                        {{ form.payment_terms(class="form-input w-full") }}
+                        {% if form.payment_terms.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.payment_terms.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-white">Additional Information</h2>
+                <div>
+                    <label for="remarks" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Remarks
+                    </label>
+                    {{ form.remarks(class="form-textarea w-full", rows=3) }}
+                    {% if form.remarks.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ form.remarks.errors[0] }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="flex justify-end space-x-4">
+                <a href="{{ url_for('supplier_views.supplier_list') }}" class="btn-secondary">
+                    Cancel
+                </a>
+                <button type="submit" class="btn-primary">
+                    Save
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

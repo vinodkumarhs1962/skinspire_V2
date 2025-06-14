@@ -1,0 +1,73 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}Cancel Supplier Invoice{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <div class="max-w-lg mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+        <h1 class="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4">
+            Cancel Invoice: {{ invoice.supplier_invoice_number }}
+        </h1>
+        
+        <div class="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded">
+            <p class="text-red-600 dark:text-red-400">
+                <i class="fas fa-exclamation-triangle mr-2"></i>
+                Warning: This action cannot be undone. Cancelling this invoice will permanently mark it as cancelled.
+            </p>
+        </div>
+        
+        <form method="POST" action="{{ url_for('supplier_views.cancel_supplier_invoice', invoice_id=invoice.invoice_id, return_to=return_to) }}">
+            <!-- CSRF Token -->
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <!-- Rest of the form remains the same -->
+            <div class="mb-4">
+                <label for="cancellation_reason" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Reason for Cancellation
+                </label>
+                <textarea id="cancellation_reason" name="cancellation_reason" rows="3" required
+                        class="form-textarea w-full rounded-md shadow-sm"></textarea>
+            </div>
+            
+            <div class="flex justify-end space-x-3">
+                <a href="{% if return_to == 'view' %}{{ url_for('supplier_views.view_supplier_invoice', invoice_id=invoice.invoice_id) }}{% else %}{{ url_for('supplier_views.supplier_invoice_list') }}{% endif %}" 
+                class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-md">
+                    Cancel
+                </a>
+                <button type="submit" 
+                        style="background-color: #dc2626; color: white;"
+                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md">
+                    Confirm Cancellation
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Get the form and submit button
+    const form = document.querySelector('form');
+    const submitButton = document.querySelector('input[type="submit"]');
+    
+    if (form && submitButton) {
+        // Add click event to the submit button
+        submitButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Validate that a reason is provided
+            const reasonField = document.getElementById('cancellation_reason');
+            if (!reasonField || !reasonField.value.trim()) {
+                alert('Please provide a reason for cancellation');
+                return;
+            }
+            
+            // Submit the form
+            form.submit();
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -1,8 +1,9 @@
 # app/security/authorization/decorators.py
 
 from functools import wraps
-from flask import jsonify, request
+from flask import jsonify, request, g
 from .permission_validator import has_permission
+from flask_login import current_user
 import logging
 
 # Set up logging
@@ -104,6 +105,217 @@ def require_permission(module, action):
             except Exception as e:
                 logger.error(f"Permission check error: {str(e)}")
                 return jsonify({'error': 'Permission check failed'}), 500
+                
+        return decorated_function
+    return decorator
+
+def require_branch_permission(module, action, branch_source='auto'):
+    """
+    NEW: Branch-aware permission decorator
+    Clean decorator that delegates to service functions
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(user_id, session, *args, **kwargs):
+            try:
+                from app.models.transaction import User
+                from app.services.branch_service import (
+                    check_superuser_status,
+                    determine_branch_context_from_request,
+                    get_branch_context_for_decorator
+                )
+                from app.services.permission_service import (
+                    has_branch_permission,
+                    is_branch_role_enabled_for_module,
+                    has_permission as service_has_permission
+                )
+                
+                # Get user object
+                user = session.query(User).filter_by(user_id=user_id).first()
+                
+                if not user:
+                    return jsonify({'error': 'User not found'}), 404
+                
+                # Check for superuser roles
+                if check_superuser_status(user_id, session):
+                    logger.info(f"Superuser branch access granted: {user_id} for {action} on {module}")
+                    return f(user_id, session, *args, **kwargs)
+                
+                # Check if branch validation is enabled for this module
+                if not is_branch_role_enabled_for_module(module):
+                    # Fall back to legacy permission system
+                    if not service_has_permission(user, module, action):
+                        logger.warning(f"Legacy permission denied: {user_id} attempted {action} on {module}")
+                        return jsonify({'error': 'Permission denied'}), 403
+                    return f(user_id, session, *args, **kwargs)
+                
+                # Determine branch context using branch_service
+                branch_id = determine_branch_context_from_request(user, request, branch_source, session)
+                
+                # Check branch-specific permission
+                if not has_branch_permission(user, module, action, branch_id):
+                    logger.warning(f"Branch permission denied: {user_id} attempted {action} on {module} in branch {branch_id}")
+                    return jsonify({'error': 'Branch permission denied'}), 403
+                
+                # Set branch context for view function using branch_service
+                g.branch_context = get_branch_context_for_decorator(
+                    user_id, user.hospital_id, branch_id, module, action
+                )
+                
+                return f(user_id, session, *args, **kwargs)
+                
+            except Exception as e:
+                logger.error(f"Branch permission check error: {str(e)}")
+                return jsonify({'error': 'Permission check failed'}), 500
+                
+        return decorated_function
+    return decorator
+
+def require_cross_branch_permission(module, action='view'):
+    """
+    NEW: Decorator for cross-branch permissions (executives)
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(user_id, session, *args, **kwargs):
+            try:
+                from app.models.transaction import User
+                from app.services.permission_service import has_cross_branch_permission
+                from app.services.branch_service import get_branch_context_for_decorator
+                
+                user = session.query(User).filter_by(user_id=user_id).first()
+                
+                if not user:
+                    return jsonify({'error': 'User not found'}), 404
+                
+                # Testing bypass
+                if user_id == '7777777777':
+                    logger.info(f"Testing bypass: cross-branch access granted for {user_id}")
+                    g.branch_context = get_branch_context_for_decorator(
+                        user_id, user.hospital_id, 'all', module, action
+                    )
+                    return f(user_id, session, *args, **kwargs)
+                
+                # Check cross-branch permission
+                if not has_cross_branch_permission(user, module, action):
+                    logger.warning(f"Cross-branch permission denied: {user_id} attempted {action} on {module}")
+                    return jsonify({'error': 'Cross-branch permission denied'}), 403
+                
+                # Set cross-branch context
+                g.branch_context = get_branch_context_for_decorator(
+                    user_id, user.hospital_id, 'all', module, action
+                )
+                g.branch_context['is_cross_branch'] = True
+                
+                return f(user_id, session, *args, **kwargs)
+                
+            except Exception as e:
+                logger.error(f"Cross-branch permission check error: {str(e)}")
+                return jsonify({'error': 'Permission check failed'}), 500
+                
+        return decorated_function
+    return decorator
+
+def require_web_branch_permission(module_name, permission_type, branch_source='auto'):
+    """
+    Decorator for Flask-Login based web views with branch awareness
+    Compatible with existing @login_required pattern
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            try:
+                from flask import g, flash, redirect, url_for
+                from app.services.permission_service import (
+                    has_branch_permission, 
+                    is_branch_role_enabled_for_module,
+                    has_permission as service_has_permission
+                )
+                from app.services.branch_service import (
+                    determine_branch_context_from_request,
+                    get_branch_context_for_decorator
+                )
+                
+                if not current_user.is_authenticated:
+                    flash('Please log in to access this page.', 'warning')
+                    return redirect(url_for('auth.login'))
+                
+                # Testing bypass (preserve existing pattern)
+                if current_user.user_id == '7777777777':
+                    return f(*args, **kwargs)
+                
+                # Check if branch validation is enabled for this module
+                if not is_branch_role_enabled_for_module(module_name):
+                    # Fall back to legacy permission system (current pattern)
+                    if not service_has_permission(current_user, module_name, permission_type):
+                        flash(f'You do not have permission to {permission_type} {module_name}', 'danger')
+                        return redirect(url_for('auth_views.dashboard'))
+                    return f(*args, **kwargs)
+                
+                # Determine branch context (NEW)
+                branch_id = determine_branch_context_from_request(
+                    current_user, request, branch_source
+                )
+                
+                # Check branch-specific permission (NEW)
+                if not has_branch_permission(current_user, module_name, permission_type, branch_id):
+                    flash(f'You do not have permission to {permission_type} {module_name} in this branch', 'danger')
+                    return redirect(url_for('auth_views.dashboard'))
+                
+                # Set branch context for view function (NEW)
+                g.branch_context = get_branch_context_for_decorator(
+                    current_user.user_id, current_user.hospital_id, 
+                    branch_id, module_name, permission_type
+                )
+                
+                return f(*args, **kwargs)
+                
+            except Exception as e:
+                logger.error(f"Web branch permission check error: {str(e)}")
+                flash('Permission check failed', 'error')
+                return redirect(url_for('auth_views.dashboard'))
+                
+        return decorated_function
+    return decorator
+
+def require_web_cross_branch_permission(module_name, action='view'):
+    """
+    Decorator for cross-branch permissions (executives) - Flask-Login compatible
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            try:
+                from flask import g, flash, redirect, url_for
+                from app.services.permission_service import has_cross_branch_permission
+                from app.services.branch_service import get_branch_context_for_decorator
+                
+                if not current_user.is_authenticated:
+                    flash('Please log in to access this page.', 'warning')
+                    return redirect(url_for('auth.login'))
+                
+                # Testing bypass
+                if current_user.user_id == '7777777777':
+                    return f(*args, **kwargs)
+                
+                # Check cross-branch permission
+                if not has_cross_branch_permission(current_user, module_name, action):
+                    flash(f'You do not have permission for cross-branch {action} on {module_name}', 'danger')
+                    return redirect(url_for('auth_views.dashboard'))
+                
+                # Set cross-branch context
+                g.branch_context = get_branch_context_for_decorator(
+                    current_user.user_id, current_user.hospital_id, 
+                    'all', module_name, action
+                )
+                g.branch_context['is_cross_branch'] = True
+                
+                return f(*args, **kwargs)
+                
+            except Exception as e:
+                logger.error(f"Cross-branch permission check error: {str(e)}")
+                flash('Permission check failed', 'error')
+                return redirect(url_for('auth_views.dashboard'))
                 
         return decorated_function
     return decorator

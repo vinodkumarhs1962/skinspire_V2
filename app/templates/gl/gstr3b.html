@@ -1,0 +1,505 @@
+{% extends "layouts/dashboard.html" %}
+{% from 'components/forms/macros.html' import input_field, select_field, date_field, submit_button %}
+
+{% block title %}GSTR-3B Report (Summary Return){% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <!-- Header section with title and filters -->
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold mb-4 dark:text-gray-200">GSTR-3B Report (Summary Return)</h1>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+            <form id="gstr3bForm" method="GET" action="{{ url_for('gl_views.gstr3b_report') }}" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {{ select_field(form.month, class="w-full", label_class="dark:text-gray-300") }}
+                {{ select_field(form.year, class="w-full", label_class="dark:text-gray-300") }}
+                {{ select_field(form.branch_id, class="w-full", label_class="dark:text-gray-300") }}
+                {{ select_field(form.format_type, class="w-full", label_class="dark:text-gray-300") }}
+                <div class="md:col-span-4 flex justify-end space-x-2 mt-4">
+                    <button type="button" id="printReportBtn" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md">
+                        <i class="fas fa-print mr-2"></i>Print
+                    </button>
+                    <button type="button" id="exportJsonBtn" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md">
+                        <i class="fas fa-file-code mr-2"></i>Export JSON
+                    </button>
+                    <button type="button" id="exportExcelBtn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md">
+                        <i class="fas fa-file-excel mr-2"></i>Export Excel
+                    </button>
+                    {{ submit_button('Generate', class="bg-blue-600 hover:bg-blue-700 text-white") }}
+                </div>
+        
+        <!-- 6.2 TDS/TCS Credits -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-bold mb-4 dark:text-gray-200">6.2 TDS/TCS Credits</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-700">
+                    <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-700">
+                            <th class="p-3 text-left dark:text-gray-300">Description</th>
+                            <th class="p-3 text-right dark:text-gray-300">Integrated Tax</th>
+                            <th class="p-3 text-right dark:text-gray-300">Central Tax</th>
+                            <th class="p-3 text-right dark:text-gray-300">State/UT Tax</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">TDS</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tds_tcs_credits.tds.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tds_tcs_credits.tds.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tds_tcs_credits.tds.sgst|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">TCS</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tds_tcs_credits.tcs.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tds_tcs_credits.tcs.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tds_tcs_credits.tcs.sgst|format_currency }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- 7. Tax Payment Details -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-bold mb-4 dark:text-gray-200">7. Tax Payment Details</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-700">
+                    <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-700">
+                            <th class="p-3 text-left dark:text-gray-300">Description</th>
+                            <th class="p-3 text-right dark:text-gray-300">Integrated Tax</th>
+                            <th class="p-3 text-right dark:text-gray-300">Central Tax</th>
+                            <th class="p-3 text-right dark:text-gray-300">State/UT Tax</th>
+                            <th class="p-3 text-right dark:text-gray-300">Cess</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">Tax Payable</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_payable.total.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_payable.total.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_payable.total.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_payable.total.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">Tax Paid through ITC</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_paid.through_itc.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_paid.through_itc.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_paid.through_itc.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_paid.through_itc.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">Tax Paid in Cash</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_paid.in_cash.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_paid.in_cash.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_paid.in_cash.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_paid.in_cash.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">Interest Paid</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_paid.interest.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_paid.interest.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_paid.interest.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_paid.interest.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">Late Fee Paid</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_paid.late_fee.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_paid.late_fee.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_paid.late_fee.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_paid.late_fee.cess|format_currency }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Notes section -->
+        <div class="p-6 border-t border-gray-200 dark:border-gray-700">
+            <h4 class="font-bold mb-2 dark:text-gray-300">Notes:</h4>
+            <ol class="list-decimal list-inside text-sm dark:text-gray-400">
+                <li>This report is generated based on the financial data for {{ report_period }}.</li>
+                <li>GSTR-3B is a summary return that needs to be filed monthly/quarterly based on your filing frequency.</li>
+                <li>This report includes both outward and inward supplies along with ITC details.</li>
+                <li>All amounts are displayed in {{ hospital.default_currency|default('INR') }}.</li>
+                <li>Please verify all data before official filing with the GST portal.</li>
+            </ol>
+        </div>
+        
+        <!-- Footer with report generation info -->
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-400 flex justify-between">
+            <span>Generated on: {{ now.strftime('%d %b, %Y %H:%M') }}</span>
+            <span>Generated by: {{ current_user.name }}</span>
+        </div>
+    </div>
+    {% else %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
+        <p class="text-gray-600 dark:text-gray-400">Select a period and generate the report to view the GSTR-3B data.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Print report functionality
+    const printReportBtn = document.getElementById('printReportBtn');
+    if (printReportBtn) {
+        printReportBtn.addEventListener('click', function() {
+            window.print();
+        });
+    }
+    
+    // Export JSON functionality
+    const exportJsonBtn = document.getElementById('exportJsonBtn');
+    if (exportJsonBtn) {
+        exportJsonBtn.addEventListener('click', function() {
+            const formData = new FormData(document.getElementById('gstr3bForm'));
+            formData.append('export_format', 'json');
+            
+            window.location.href = "{{ url_for('gl_views.export_gstr3b') }}?" + new URLSearchParams(formData).toString();
+        });
+    }
+    
+    // Export Excel functionality
+    const exportExcelBtn = document.getElementById('exportExcelBtn');
+    if (exportExcelBtn) {
+        exportExcelBtn.addEventListener('click', function() {
+            const formData = new FormData(document.getElementById('gstr3bForm'));
+            formData.append('export_format', 'excel');
+            
+            window.location.href = "{{ url_for('gl_views.export_gstr3b') }}?" + new URLSearchParams(formData).toString();
+        });
+    }
+});
+</script>
+
+<style>
+@media print {
+    body * {
+        visibility: hidden;
+    }
+    
+    #reportContent, #reportContent * {
+        visibility: visible;
+    }
+    
+    #reportContent {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+    }
+    
+    /* Hide buttons when printing */
+    button {
+        display: none !important;
+    }
+}
+</style>
+{% endblock %}
+            </form>
+        </div>
+    </div>
+
+    <!-- Report content -->
+    {% if report_data %}
+    <div id="reportContent" class="bg-white dark:bg-gray-800 rounded-lg shadow">
+        <!-- Hospital details header -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700 text-center">
+            <h2 class="text-xl font-bold mb-1 dark:text-gray-200">{{ hospital.name }}</h2>
+            <p class="text-gray-600 dark:text-gray-400">{{ hospital.address }}</p>
+            <p class="text-gray-600 dark:text-gray-400">GSTIN: {{ hospital.gst_registration_number }}</p>
+            <h3 class="text-lg font-bold mt-4 mb-1 dark:text-gray-200">GSTR-3B Report (Summary Return)</h3>
+            <p class="text-gray-600 dark:text-gray-400">Period: {{ report_period }}</p>
+            {% if branch %}
+            <p class="text-gray-600 dark:text-gray-400">Branch: {{ branch.name }}</p>
+            {% endif %}
+        </div>
+
+        <!-- 3.1 Details of Outward Supplies and Inward Supplies Liable to Reverse Charge -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-bold mb-4 dark:text-gray-200">3.1 Details of Outward Supplies and Inward Supplies Liable to Reverse Charge</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-700">
+                    <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-700">
+                            <th class="p-3 text-left dark:text-gray-300">Nature of Supplies</th>
+                            <th class="p-3 text-right dark:text-gray-300">Total Taxable Value</th>
+                            <th class="p-3 text-right dark:text-gray-300">Integrated Tax</th>
+                            <th class="p-3 text-right dark:text-gray-300">Central Tax</th>
+                            <th class="p-3 text-right dark:text-gray-300">State/UT Tax</th>
+                            <th class="p-3 text-right dark:text-gray-300">Cess</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">a) Outward taxable supplies (other than zero rated, nil rated and exempted)</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.outward_supplies.taxable.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.outward_supplies.taxable.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.outward_supplies.taxable.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.outward_supplies.taxable.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.outward_supplies.taxable.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">b) Outward taxable supplies (zero rated)</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.outward_supplies.zero_rated.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.outward_supplies.zero_rated.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.outward_supplies.zero_rated.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.outward_supplies.zero_rated.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.outward_supplies.zero_rated.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">c) Other outward supplies (Nil rated, exempted)</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.outward_supplies.exempted.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">0.00</td>
+                            <td class="p-3 text-right dark:text-gray-300">0.00</td>
+                            <td class="p-3 text-right dark:text-gray-300">0.00</td>
+                            <td class="p-3 text-right dark:text-gray-300">0.00</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">d) Inward supplies (liable to reverse charge)</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.inward_reverse_charge.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.inward_reverse_charge.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.inward_reverse_charge.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.inward_reverse_charge.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.inward_reverse_charge.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">e) Non-GST outward supplies</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.non_gst_outward.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">0.00</td>
+                            <td class="p-3 text-right dark:text-gray-300">0.00</td>
+                            <td class="p-3 text-right dark:text-gray-300">0.00</td>
+                            <td class="p-3 text-right dark:text-gray-300">0.00</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- 3.2 Interstate supplies -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-bold mb-4 dark:text-gray-200">3.2 Interstate supplies to unregistered persons, composition taxable persons and UIN holders</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-700">
+                    <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-700">
+                            <th class="p-3 text-left dark:text-gray-300">Type</th>
+                            <th class="p-3 text-left dark:text-gray-300">Place of Supply (State/UT)</th>
+                            <th class="p-3 text-right dark:text-gray-300">Total Taxable Value</th>
+                            <th class="p-3 text-right dark:text-gray-300">Amount of Integrated Tax</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
+                            <td class="p-3 font-bold dark:text-gray-300" colspan="4">Supplies made to Unregistered Persons</td>
+                        </tr>
+                        {% for supply in report_data.interstate_supplies.unregistered %}
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">Unregistered</td>
+                            <td class="p-3 dark:text-gray-300">{{ supply.place_of_supply }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ supply.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ supply.igst|format_currency }}</td>
+                        </tr>
+                        {% endfor %}
+                        
+                        <tr class="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
+                            <td class="p-3 font-bold dark:text-gray-300" colspan="4">Supplies made to Composition Taxable Persons</td>
+                        </tr>
+                        {% for supply in report_data.interstate_supplies.composition %}
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">Composition</td>
+                            <td class="p-3 dark:text-gray-300">{{ supply.place_of_supply }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ supply.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ supply.igst|format_currency }}</td>
+                        </tr>
+                        {% endfor %}
+                        
+                        <tr class="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
+                            <td class="p-3 font-bold dark:text-gray-300" colspan="4">Supplies made to UIN Holders</td>
+                        </tr>
+                        {% for supply in report_data.interstate_supplies.uin_holders %}
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">UIN Holder</td>
+                            <td class="p-3 dark:text-gray-300">{{ supply.place_of_supply }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ supply.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ supply.igst|format_currency }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- 4. Input Tax Credit -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-bold mb-4 dark:text-gray-200">4. Input Tax Credit (ITC)</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-700">
+                    <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-700">
+                            <th class="p-3 text-left dark:text-gray-300">Details</th>
+                            <th class="p-3 text-right dark:text-gray-300">Integrated Tax</th>
+                            <th class="p-3 text-right dark:text-gray-300">Central Tax</th>
+                            <th class="p-3 text-right dark:text-gray-300">State/UT Tax</th>
+                            <th class="p-3 text-right dark:text-gray-300">Cess</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
+                            <td class="p-3 font-bold dark:text-gray-300" colspan="5">(A) ITC Available (whether in full or part)</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">(1) Import of goods</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.itc_available.import_goods.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">0.00</td>
+                            <td class="p-3 text-right dark:text-gray-300">0.00</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.itc_available.import_goods.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">(2) Import of services</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.itc_available.import_services.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">0.00</td>
+                            <td class="p-3 text-right dark:text-gray-300">0.00</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.itc_available.import_services.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">(3) Inward supplies liable to reverse charge (other than 1 & 2 above)</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.itc_available.inward_reverse_charge.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.itc_available.inward_reverse_charge.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.itc_available.inward_reverse_charge.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.itc_available.inward_reverse_charge.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">(4) Inward supplies from ISD</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.itc_available.inward_isd.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.itc_available.inward_isd.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.itc_available.inward_isd.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.itc_available.inward_isd.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">(5) All other ITC</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.itc_available.all_other_itc.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.itc_available.all_other_itc.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.itc_available.all_other_itc.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.itc_available.all_other_itc.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700 font-bold bg-gray-50 dark:bg-gray-700">
+                            <td class="p-3 dark:text-gray-300">(B) ITC Reversed</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.itc_reversed.total.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.itc_reversed.total.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.itc_reversed.total.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.itc_reversed.total.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700 font-bold bg-gray-50 dark:bg-gray-700">
+                            <td class="p-3 dark:text-gray-300">(C) Net ITC Available (A) - (B)</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.net_itc.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.net_itc.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.net_itc.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.net_itc.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">(D) Ineligible ITC</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.ineligible_itc.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.ineligible_itc.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.ineligible_itc.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.ineligible_itc.cess|format_currency }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- 5. Values of exempt, nil-rated and non-GST inward supplies -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-bold mb-4 dark:text-gray-200">5. Values of exempt, nil-rated and non-GST inward supplies</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-700">
+                    <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-700">
+                            <th class="p-3 text-left dark:text-gray-300">Nature of Supplies</th>
+                            <th class="p-3 text-right dark:text-gray-300">Inter-State Supplies</th>
+                            <th class="p-3 text-right dark:text-gray-300">Intra-State Supplies</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">From Composition Taxable Persons</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.exempt_supplies.composition.interstate|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.exempt_supplies.composition.intrastate|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">Exempt Supplies</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.exempt_supplies.exempt.interstate|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.exempt_supplies.exempt.intrastate|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">Nil Rated Supplies</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.exempt_supplies.nil_rated.interstate|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.exempt_supplies.nil_rated.intrastate|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">Non-GST Supplies</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.exempt_supplies.non_gst.interstate|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.exempt_supplies.non_gst.intrastate|format_currency }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- 6.1 Tax Payable -->
+<div class="p-6 border-b border-gray-200 dark:border-gray-700">
+    <h3 class="text-lg font-bold mb-4 dark:text-gray-200">6.1 Tax Payable</h3>
+    <div class="overflow-x-auto">
+        <table class="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-700">
+            <thead>
+                <tr class="bg-gray-100 dark:bg-gray-700">
+                    <th class="p-3 text-left dark:text-gray-300">Description</th>
+                    <th class="p-3 text-right dark:text-gray-300">Integrated Tax</th>
+                    <th class="p-3 text-right dark:text-gray-300">Central Tax</th>
+                    <th class="p-3 text-right dark:text-gray-300">State/UT Tax</th>
+                    <th class="p-3 text-right dark:text-gray-300">Cess</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="border-b dark:border-gray-700">
+                    <td class="p-3 dark:text-gray-300">Outward supplies (including advances/net of credit notes/debit notes)</td>
+                    <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_payable.outward_supplies.igst|format_currency }}</td>
+                    <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_payable.outward_supplies.cgst|format_currency }}</td>
+                    <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_payable.outward_supplies.sgst|format_currency }}</td>
+                    <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_payable.outward_supplies.cess|format_currency }}</td>
+                </tr>
+                <tr class="border-b dark:border-gray-700">
+                    <td class="p-3 dark:text-gray-300">Inward supplies attracting reverse charge</td>
+                    <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_payable.inward_reverse_charge.igst|format_currency }}</td>
+                    <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_payable.inward_reverse_charge.cgst|format_currency }}</td>
+                    <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_payable.inward_reverse_charge.sgst|format_currency }}</td>
+                    <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_payable.inward_reverse_charge.cess|format_currency }}</td>
+                </tr>
+                <tr class="border-b dark:border-gray-700">
+                    <td class="p-3 dark:text-gray-300">Other outward supplies (Nil rated, exempted)</td>
+                    <td class="p-3 text-right dark:text-gray-300">0.00</td>
+                    <td class="p-3 text-right dark:text-gray-300">0.00</td>
+                    <td class="p-3 text-right dark:text-gray-300">0.00</td>
+                    <td class="p-3 text-right dark:text-gray-300">0.00</td>
+                </tr>
+                <tr class="border-b dark:border-gray-700">
+                    <td class="p-3 dark:text-gray-300">Interest & Late Fee</td>
+                    <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_payable.interest_late_fee.igst|format_currency }}</td>
+                    <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_payable.interest_late_fee.cgst|format_currency }}</td>
+                    <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_payable.interest_late_fee.sgst|format_currency }}</td>
+                    <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_payable.interest_late_fee.cess|format_currency }}</td>
+                </tr>
+                <tr class="border-b dark:border-gray-700 font-bold bg-gray-50 dark:bg-gray-700">
+                    <td class="p-3 dark:text-gray-300">Total Tax Payable</td>
+                    <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_payable.total.igst|format_currency }}</td>
+                    <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_payable.total.cgst|format_currency }}</td>
+                    <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_payable.total.sgst|format_currency }}</td>
+                    <td class="p-3 text-right dark:text-gray-300">{{ report_data.tax_payable.total.cess|format_currency }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>

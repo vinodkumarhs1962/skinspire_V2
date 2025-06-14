@@ -1,0 +1,718 @@
+{% extends "layouts/dashboard.html" %}
+{% from 'components/forms/macros.html' import input_field, select_field, date_field, submit_button %}
+
+{% block title %}Account Reconciliation{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <!-- Header section with title and filters -->
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold mb-4 dark:text-gray-200">Account Reconciliation</h1>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+            <form id="reconciliationForm" method="GET" action="{{ url_for('gl_views.account_reconciliation') }}" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {{ select_field(form.account_id, class="w-full", label_class="dark:text-gray-300") }}
+                {{ date_field(form.from_date, class="w-full", label_class="dark:text-gray-300") }}
+                {{ date_field(form.to_date, class="w-full", label_class="dark:text-gray-300") }}
+                <div class="md:col-span-3 flex justify-end space-x-2 mt-4">
+                    {{ submit_button('Get Transactions', class="bg-blue-600 hover:bg-blue-700 text-white") }}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if account_data %}
+    <div id="reconciliationContent" class="bg-white dark:bg-gray-800 rounded-lg shadow mb-6">
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <div class="grid grid-cols-1 md:grid-cols-2 mb-4">
+                <div>
+                    <h2 class="text-xl font-bold dark:text-gray-200">{{ account_data.name }}</h2>
+                    <p class="text-gray-600 dark:text-gray-400">Account Number: {{ account_data.gl_account_no }}</p>
+                    <p class="text-gray-600 dark:text-gray-400">Account Type: {{ account_data.account_group }}</p>
+                </div>
+                <div class="mt-4 md:mt-0 md:text-right">
+                    <p class="dark:text-gray-300">
+                        <span class="font-semibold">Opening Balance:</span> 
+                        <span class="{{ 'text-green-600 dark:text-green-400' if account_data.opening_balance >= 0 else 'text-red-600 dark:text-red-400' }}">
+                            {{ account_data.opening_balance|format_currency }}
+                        </span>
+                    </p>
+                    <p class="dark:text-gray-300">
+                        <span class="font-semibold">Closing Balance:</span> 
+                        <span class="{{ 'text-green-600 dark:text-green-400' if account_data.closing_balance >= 0 else 'text-red-600 dark:text-red-400' }}">
+                            {{ account_data.closing_balance|format_currency }}
+                        </span>
+                    </p>
+                    <p class="dark:text-gray-300">
+                        <span class="font-semibold">Reconciliation Period:</span> {{ from_date.strftime('%d %b, %Y') }} - {{ to_date.strftime('%d %b, %Y') }}
+                    </p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 text-center">
+                    <p class="text-gray-500 dark:text-gray-400 text-sm">Total Entries</p>
+                    <p class="text-2xl font-bold dark:text-gray-200">{{ account_data.stats.total_entries }}</p>
+                </div>
+                <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 text-center">
+                    <p class="text-gray-500 dark:text-gray-400 text-sm">Reconciled</p>
+                    <p class="text-2xl font-bold text-green-600 dark:text-green-400">{{ account_data.stats.reconciled }}</p>
+                </div>
+                <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 text-center">
+                    <p class="text-gray-500 dark:text-gray-400 text-sm">Unreconciled</p>
+                    <p class="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{{ account_data.stats.unreconciled }}</p>
+                </div>
+                <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 text-center">
+                    <p class="text-gray-500 dark:text-gray-400 text-sm">Disputed</p>
+                    <p class="text-2xl font-bold text-red-600 dark:text-red-400">{{ account_data.stats.disputed }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Transaction Tabs -->
+        <div>
+            <div class="border-b border-gray-200 dark:border-gray-700">
+                <nav class="flex -mb-px">
+                    <button 
+                        id="tab-all" 
+                        class="px-4 py-2 border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 font-medium text-sm"
+                        data-tab="all">
+                        All Transactions
+                    </button>
+                    <button 
+                        id="tab-unreconciled" 
+                        class="px-4 py-2 border-b-2 border-transparent hover:border-gray-300 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 font-medium text-sm"
+                        data-tab="unreconciled">
+                        Unreconciled
+                    </button>
+                    <button 
+                        id="tab-reconciled" 
+                        class="px-4 py-2 border-b-2 border-transparent hover:border-gray-300 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 font-medium text-sm"
+                        data-tab="reconciled">
+                        Reconciled
+                    </button>
+                    <button 
+                        id="tab-disputed" 
+                        class="px-4 py-2 border-b-2 border-transparent hover:border-gray-300 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 font-medium text-sm"
+                        data-tab="disputed">
+                        Disputed
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Transaction List -->
+            <div class="p-6">
+                <div class="mb-4 flex justify-between items-center">
+                    <div>
+                        <input type="text" id="transactionSearch" placeholder="Search transactions..." class="px-3 py-2 border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400">
+                    </div>
+                    <div>
+                        <button id="reconcileSelectedBtn" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i class="fas fa-check-circle mr-2"></i>Reconcile Selected
+                        </button>
+                        <button id="disputeSelectedBtn" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md ml-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i class="fas fa-exclamation-circle mr-2"></i>Mark as Disputed
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <form id="bulkActionForm" method="POST" action="{{ url_for('gl_views.update_reconciliation_status') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="account_id" value="{{ account_data.account_id }}">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <input type="checkbox" id="selectAll" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600">
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Date
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Reference
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Description
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Debit
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Credit
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Balance
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Status
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Actions
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700" id="transactionTableBody">
+                                {% for transaction in account_data.transactions %}
+                                <tr class="transaction-row" data-status="{{ transaction.reconciliation_status }}" data-date="{{ transaction.entry_date }}" data-reference="{{ transaction.reference_id }}" data-description="{{ transaction.description }}">
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <input type="checkbox" name="transaction_ids[]" value="{{ transaction.entry_id }}" class="transaction-checkbox h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600" {{ 'disabled' if transaction.reconciliation_status == 'reconciled' }}>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                        {{ transaction.entry_date.strftime('%d %b, %Y') }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                        {{ transaction.reference_id }}
+                                    </td>
+                                    <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-300">
+                                        {{ transaction.description }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500 dark:text-gray-300">
+                                        {{ transaction.debit_amount|format_currency if transaction.debit_amount > 0 else '' }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500 dark:text-gray-300">
+                                        {{ transaction.credit_amount|format_currency if transaction.credit_amount > 0 else '' }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right {{ 'text-green-600 dark:text-green-400' if transaction.running_balance >= 0 else 'text-red-600 dark:text-red-400' }}">
+                                        {{ transaction.running_balance|format_currency }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-center">
+                                        {% if transaction.reconciliation_status == 'reconciled' %}
+                                        <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                            Reconciled
+                                        </span>
+                                        {% elif transaction.reconciliation_status == 'disputed' %}
+                                        <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                                            Disputed
+                                        </span>
+                                        {% else %}
+                                        <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                                            Pending
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-center">
+                                        {% if transaction.reconciliation_status != 'reconciled' %}
+                                        <button type="button" class="reconcile-btn text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 mr-2" data-entry-id="{{ transaction.entry_id }}">
+                                            <i class="fas fa-check-circle"></i>
+                                        </button>
+                                        {% endif %}
+                                        {% if transaction.reconciliation_status != 'disputed' %}
+                                        <button type="button" class="dispute-btn text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300" data-entry-id="{{ transaction.entry_id }}">
+                                            <i class="fas fa-exclamation-circle"></i>
+                                        </button>
+                                        {% endif %}
+                                        <button type="button" class="view-details-btn text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 ml-2" data-entry-id="{{ transaction.entry_id }}">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Section -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h3 class="text-lg font-bold mb-4 dark:text-gray-200">Reconciliation Summary</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <h4 class="font-bold mb-2 dark:text-gray-300">System Balance</h4>
+                <table class="min-w-full">
+                    <tbody>
+                        <tr class="border-b border-gray-200 dark:border-gray-700">
+                            <td class="py-2 dark:text-gray-300">Opening Balance</td>
+                            <td class="py-2 text-right dark:text-gray-300">{{ account_data.opening_balance|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b border-gray-200 dark:border-gray-700">
+                            <td class="py-2 dark:text-gray-300">+ Total Debits</td>
+                            <td class="py-2 text-right dark:text-gray-300">{{ account_data.summary.total_debits|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b border-gray-200 dark:border-gray-700">
+                            <td class="py-2 dark:text-gray-300">- Total Credits</td>
+                            <td class="py-2 text-right dark:text-gray-300">{{ account_data.summary.total_credits|format_currency }}</td>
+                        </tr>
+                        <tr class="font-bold">
+                            <td class="py-2 dark:text-gray-300">= Closing Balance</td>
+                            <td class="py-2 text-right dark:text-gray-300">{{ account_data.closing_balance|format_currency }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div>
+                <h4 class="font-bold mb-2 dark:text-gray-300">Reconciliation Status</h4>
+                <table class="min-w-full">
+                    <tbody>
+                        <tr class="border-b border-gray-200 dark:border-gray-700">
+                            <td class="py-2 dark:text-gray-300">System Balance</td>
+                            <td class="py-2 text-right dark:text-gray-300">{{ account_data.closing_balance|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b border-gray-200 dark:border-gray-700">
+                            <td class="py-2 dark:text-gray-300">Statement Balance</td>
+                            <td class="py-2 text-right dark:text-gray-300">{{ account_data.statement_balance|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b border-gray-200 dark:border-gray-700">
+                            <td class="py-2 dark:text-gray-300">Unreconciled Transactions</td>
+                            <td class="py-2 text-right dark:text-gray-300">{{ account_data.summary.unreconciled_total|format_currency }}</td>
+                        </tr>
+                        <tr class="font-bold {{ 'text-green-600 dark:text-green-400' if account_data.summary.difference == 0 else 'text-red-600 dark:text-red-400' }}">
+                            <td class="py-2">Difference</td>
+                            <td class="py-2 text-right">{{ account_data.summary.difference|format_currency }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transaction Detail Modal -->
+    <div id="transactionDetailModal" class="hidden fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-20 mx-auto p-5 border w-full max-w-3xl shadow-lg rounded-md bg-white dark:bg-gray-800">
+            <div class="mt-3">
+                <div class="flex justify-between items-center pb-3 border-b dark:border-gray-700">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-200" id="modalTransactionTitle">Transaction Details</h3>
+                    <button type="button" id="closeModal" class="text-gray-400 hover:text-gray-500 focus:outline-none">
+                        <span class="sr-only">Close</span>
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <div id="transactionDetailContent" class="p-3">
+                    <!-- Transaction details will be loaded here -->
+                </div>
+                <div class="mt-4 flex justify-end">
+                    <button type="button" id="closeModalBtn" class="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update Statement Balance Modal -->
+    <div class="fixed bottom-5 right-5">
+        <button id="updateStatementBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md shadow-lg">
+            <i class="fas fa-sync-alt mr-2"></i>Update Statement Balance
+        </button>
+    </div>
+    <div id="statementBalanceModal" class="hidden fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white dark:bg-gray-800">
+            <div class="mt-3">
+                <div class="flex justify-between items-center pb-3 border-b dark:border-gray-700">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-200">Update Statement Balance</h3>
+                    <button type="button" id="closeStatementModal" class="text-gray-400 hover:text-gray-500 focus:outline-none">
+                        <span class="sr-only">Close</span>
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="p-3">
+                    <form id="updateStatementForm" method="POST" action="{{ url_for('gl_views.update_statement_balance') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="account_id" value="{{ account_data.account_id }}">
+                        <div class="mb-4">
+                            <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="statementBalance">
+                                Statement Balance
+                            </label>
+                            <input type="number" step="0.01" name="statement_balance" id="statementBalance" value="{{ account_data.statement_balance }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 dark:border-gray-600 leading-tight focus:outline-none focus:shadow-outline">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="statementDate">
+                                Statement Date
+                            </label>
+                            <input type="date" name="statement_date" id="statementDate" value="{{ account_data.statement_date }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 dark:border-gray-600 leading-tight focus:outline-none focus:shadow-outline">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="statementNotes">
+                                Notes
+                            </label>
+                            <textarea name="notes" id="statementNotes" rows="3" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 dark:border-gray-600 leading-tight focus:outline-none focus:shadow-outline">{{ account_data.reconciliation_notes }}</textarea>
+                        </div>
+                        <div class="flex justify-end">
+                            <button type="button" id="cancelStatementUpdate" class="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 mr-2">
+                                Cancel
+                            </button>
+                            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                                Update
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
+        <p class="text-gray-600 dark:text-gray-400">Select an account and date range to view reconciliation data.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Tab functionality
+    const tabs = document.querySelectorAll('[data-tab]');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            // Update active tab style
+            tabs.forEach(t => {
+                t.classList.remove('border-blue-500', 'text-blue-600', 'dark:text-blue-400');
+                t.classList.add('border-transparent', 'text-gray-500', 'dark:text-gray-400');
+            });
+</script>
+
+<style>
+@media print {
+    body * {
+        visibility: hidden;
+    }
+    
+    #reconciliationContent, #reconciliationContent * {
+        visibility: visible;
+    }
+    
+    #reconciliationContent {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+    }
+    
+    .no-print, .no-print * {
+        display: none !important;
+    }
+    
+    button, input[type="checkbox"] {
+        display: none !important;
+    }
+}
+</style>
+{% endblock %}
+            this.classList.remove('border-transparent', 'text-gray-500', 'dark:text-gray-400');
+            this.classList.add('border-blue-500', 'text-blue-600', 'dark:text-blue-400');
+            
+            // Filter table rows
+            const status = this.getAttribute('data-tab');
+            const rows = document.querySelectorAll('#transactionTableBody tr');
+            rows.forEach(row => {
+                if (status === 'all' || row.getAttribute('data-status') === status) {
+                    row.classList.remove('hidden');
+                } else {
+                    row.classList.add('hidden');
+                }
+            });
+            
+            // Update button states
+            updateButtonStates();
+        });
+    });
+    
+    // Search functionality
+    const searchInput = document.getElementById('transactionSearch');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            const rows = document.querySelectorAll('#transactionTableBody tr:not(.hidden)');
+            
+            rows.forEach(row => {
+                const date = row.getAttribute('data-date').toLowerCase();
+                const reference = row.getAttribute('data-reference').toLowerCase();
+                const description = row.getAttribute('data-description').toLowerCase();
+                
+                if (date.includes(searchTerm) || reference.includes(searchTerm) || description.includes(searchTerm)) {
+                    row.classList.remove('hidden');
+                } else {
+                    row.classList.add('hidden');
+                }
+            });
+        });
+    }
+    
+    // Select all checkbox
+    const selectAllCheckbox = document.getElementById('selectAll');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.transaction-checkbox:not(:disabled)');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            
+            // Update button states
+            updateButtonStates();
+        });
+    }
+    
+    // Individual checkboxes
+    const checkboxes = document.querySelectorAll('.transaction-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            // Update select all checkbox
+            const allCheckboxes = document.querySelectorAll('.transaction-checkbox:not(:disabled)');
+            const checkedCheckboxes = document.querySelectorAll('.transaction-checkbox:checked');
+            
+            if (allCheckboxes.length === checkedCheckboxes.length) {
+                selectAllCheckbox.checked = true;
+                selectAllCheckbox.indeterminate = false;
+            } else if (checkedCheckboxes.length === 0) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+            } else {
+                selectAllCheckbox.indeterminate = true;
+            }
+            
+            // Update button states
+            updateButtonStates();
+        });
+    });
+    
+    // Individual reconcile buttons
+    const reconcileButtons = document.querySelectorAll('.reconcile-btn');
+    reconcileButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const entryId = this.getAttribute('data-entry-id');
+            updateReconciliationStatus([entryId], 'reconciled');
+        });
+    });
+    
+    // Individual dispute buttons
+    const disputeButtons = document.querySelectorAll('.dispute-btn');
+    disputeButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const entryId = this.getAttribute('data-entry-id');
+            updateReconciliationStatus([entryId], 'disputed');
+        });
+    });
+    
+    // View transaction details buttons
+    const viewDetailsButtons = document.querySelectorAll('.view-details-btn');
+    viewDetailsButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const entryId = this.getAttribute('data-entry-id');
+            showTransactionDetails(entryId);
+        });
+    });
+    
+    // Bulk action buttons
+    const reconcileSelectedBtn = document.getElementById('reconcileSelectedBtn');
+    const disputeSelectedBtn = document.getElementById('disputeSelectedBtn');
+    
+    if (reconcileSelectedBtn) {
+        reconcileSelectedBtn.addEventListener('click', function() {
+            const selectedIds = getSelectedTransactionIds();
+            if (selectedIds.length > 0) {
+                updateReconciliationStatus(selectedIds, 'reconciled');
+            }
+        });
+    }
+    
+    if (disputeSelectedBtn) {
+        disputeSelectedBtn.addEventListener('click', function() {
+            const selectedIds = getSelectedTransactionIds();
+            if (selectedIds.length > 0) {
+                updateReconciliationStatus(selectedIds, 'disputed');
+            }
+        });
+    }
+    
+    // Modal controls
+    const transactionDetailModal = document.getElementById('transactionDetailModal');
+    const closeModal = document.getElementById('closeModal');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    
+    if (closeModal) {
+        closeModal.addEventListener('click', function() {
+            transactionDetailModal.classList.add('hidden');
+        });
+    }
+    
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', function() {
+            transactionDetailModal.classList.add('hidden');
+        });
+    }
+    
+    // Statement balance modal controls
+    const updateStatementBtn = document.getElementById('updateStatementBtn');
+    const statementBalanceModal = document.getElementById('statementBalanceModal');
+    const closeStatementModal = document.getElementById('closeStatementModal');
+    const cancelStatementUpdate = document.getElementById('cancelStatementUpdate');
+    
+    if (updateStatementBtn) {
+        updateStatementBtn.addEventListener('click', function() {
+            statementBalanceModal.classList.remove('hidden');
+        });
+    }
+    
+    if (closeStatementModal) {
+        closeStatementModal.addEventListener('click', function() {
+            statementBalanceModal.classList.add('hidden');
+        });
+    }
+    
+    if (cancelStatementUpdate) {
+        cancelStatementUpdate.addEventListener('click', function() {
+            statementBalanceModal.classList.add('hidden');
+        });
+    }
+    
+    // Helper functions
+    function getSelectedTransactionIds() {
+        const checkedBoxes = document.querySelectorAll('.transaction-checkbox:checked');
+        return Array.from(checkedBoxes).map(checkbox => checkbox.value);
+    }
+    
+    function updateButtonStates() {
+        const hasSelection = document.querySelectorAll('.transaction-checkbox:checked').length > 0;
+        
+        if (reconcileSelectedBtn) {
+            reconcileSelectedBtn.disabled = !hasSelection;
+        }
+        
+        if (disputeSelectedBtn) {
+            disputeSelectedBtn.disabled = !hasSelection;
+        }
+    }
+    
+    function updateReconciliationStatus(entryIds, status) {
+        // Create a form to submit the status update
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = "{{ url_for('gl_views.update_reconciliation_status') }}";
+        
+        // Add CSRF token
+        const csrfToken = document.createElement('input');
+        csrfToken.type = 'hidden';
+        csrfToken.name = 'csrf_token';
+        csrfToken.value = "{{ csrf_token() }}";
+        form.appendChild(csrfToken);
+        
+        // Add account ID
+        const accountId = document.createElement('input');
+        accountId.type = 'hidden';
+        accountId.name = 'account_id';
+        accountId.value = "{{ account_data.account_id }}";
+        form.appendChild(accountId);
+        
+        // Add status
+        const statusInput = document.createElement('input');
+        statusInput.type = 'hidden';
+        statusInput.name = 'status';
+        statusInput.value = status;
+        form.appendChild(statusInput);
+        
+        // Add entry IDs
+        entryIds.forEach(id => {
+            const entryIdInput = document.createElement('input');
+            entryIdInput.type = 'hidden';
+            entryIdInput.name = 'entry_ids[]';
+            entryIdInput.value = id;
+            form.appendChild(entryIdInput);
+        });
+        
+        // Submit the form
+        document.body.appendChild(form);
+        form.submit();
+    }
+    
+    function showTransactionDetails(entryId) {
+        // In a real implementation, this would fetch the details via AJAX
+        // For now, we'll just show a placeholder
+        const modal = document.getElementById('transactionDetailModal');
+        const content = document.getElementById('transactionDetailContent');
+        
+        content.innerHTML = `
+            <div class="text-center py-6">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                <p class="mt-3 text-gray-600 dark:text-gray-400">Loading transaction details...</p>
+            </div>
+        `;
+        
+        modal.classList.remove('hidden');
+        
+        // Simulate an AJAX call
+        setTimeout(() => {
+            fetch("{{ url_for('gl_views.get_transaction_details') }}?entry_id=" + entryId)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        content.innerHTML = `
+                            <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                                <div class="py-3 grid grid-cols-2">
+                                    <span class="font-semibold text-gray-500 dark:text-gray-400">Transaction Date:</span>
+                                    <span class="text-gray-900 dark:text-gray-200">${data.transaction.date}</span>
+                                </div>
+                                <div class="py-3 grid grid-cols-2">
+                                    <span class="font-semibold text-gray-500 dark:text-gray-400">Reference:</span>
+                                    <span class="text-gray-900 dark:text-gray-200">${data.transaction.reference_id}</span>
+                                </div>
+                                <div class="py-3 grid grid-cols-2">
+                                    <span class="font-semibold text-gray-500 dark:text-gray-400">Description:</span>
+                                    <span class="text-gray-900 dark:text-gray-200">${data.transaction.description}</span>
+                                </div>
+                                <div class="py-3 grid grid-cols-2">
+                                    <span class="font-semibold text-gray-500 dark:text-gray-400">Amount:</span>
+                                    <span class="text-gray-900 dark:text-gray-200">${data.transaction.amount}</span>
+                                </div>
+                                <div class="py-3 grid grid-cols-2">
+                                    <span class="font-semibold text-gray-500 dark:text-gray-400">Status:</span>
+                                    <span class="text-gray-900 dark:text-gray-200">${data.transaction.status}</span>
+                                </div>
+                                <div class="py-3 grid grid-cols-2">
+                                    <span class="font-semibold text-gray-500 dark:text-gray-400">Last Updated:</span>
+                                    <span class="text-gray-900 dark:text-gray-200">${data.transaction.updated_at}</span>
+                                </div>
+                                <div class="py-3">
+                                    <span class="font-semibold text-gray-500 dark:text-gray-400">Notes:</span>
+                                    <p class="mt-2 text-gray-900 dark:text-gray-200">${data.transaction.notes || 'No notes available'}</p>
+                                </div>
+                            </div>
+                            ${data.transaction.related_documents ? `
+                            <div class="mt-4">
+                                <h4 class="font-semibold text-gray-900 dark:text-gray-200 mb-2">Related Documents</h4>
+                                <ul class="list-disc pl-5 text-gray-600 dark:text-gray-400">
+                                    ${data.transaction.related_documents.map(doc => `
+                                        <li><a href="${doc.url}" class="text-blue-600 dark:text-blue-400 hover:underline" target="_blank">${doc.name}</a></li>
+                                    `).join('')}
+                                </ul>
+                            </div>
+                            ` : ''}
+                        `;
+                    } else {
+                        content.innerHTML = `
+                            <div class="text-center py-6">
+                                <div class="rounded-full h-12 w-12 flex items-center justify-center bg-red-100 mx-auto">
+                                    <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </div>
+                                <p class="mt-3 text-gray-600 dark:text-gray-400">Failed to load transaction details.</p>
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    content.innerHTML = `
+                        <div class="text-center py-6">
+                            <div class="rounded-full h-12 w-12 flex items-center justify-center bg-red-100 mx-auto">
+                                <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-400">An error occurred while loading transaction details.</p>
+                        </div>
+                    `;
+                });
+        }, 500);
+    }
+    
+    // Initialize button states
+    updateButtonStates();
+});

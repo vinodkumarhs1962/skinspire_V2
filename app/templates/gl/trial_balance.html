@@ -1,0 +1,379 @@
+{% extends "layouts/dashboard.html" %}
+{% from "components/forms.html" import input_field, select_field, date_field, checkbox_field %}
+{% from "components/alerts.html" import alert %}
+
+{% block title %}Trial Balance{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <!-- Header Section -->
+    <div class="flex flex-col md:flex-row items-start justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Trial Balance</h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">
+                View and generate trial balance reports for a specified period
+            </p>
+        </div>
+        <div class="mt-4 md:mt-0 space-x-2">
+            <a href="{{ url_for('gl_views.financial_reports') }}" class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i> Back to Reports
+            </a>
+            <div class="relative inline-block text-left">
+                <button type="button" id="dropdown-toggle" class="btn-primary">
+                    <i class="fas fa-cog mr-2"></i> Actions <i class="fas fa-chevron-down ml-2"></i>
+                </button>
+                <div id="dropdown-menu" class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 hidden z-10">
+                    <div class="py-1" role="menu" aria-orientation="vertical">
+                        <button type="button" id="print-report" class="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600">
+                            <i class="fas fa-print mr-2"></i> Print Report
+                        </button>
+                        <button type="button" id="export-excel" class="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600">
+                            <i class="fas fa-file-excel mr-2"></i> Export to Excel
+                        </button>
+                        <button type="button" id="export-pdf" class="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600">
+                            <i class="fas fa-file-pdf mr-2"></i> Export to PDF
+                        </button>
+                        <button type="button" id="export-csv" class="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600">
+                            <i class="fas fa-file-csv mr-2"></i> Export to CSV
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Success or Error Alerts -->
+    {% if success_message %}
+    <div class="mb-6">
+        {{ alert(success_message, "success") }}
+    </div>
+    {% endif %}
+    
+    {% if error_message %}
+    <div class="mb-6">
+        {{ alert(error_message, "error") }}
+    </div>
+    {% endif %}
+    
+    <!-- Filter/Settings Section -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+        <form method="GET" action="{{ url_for('gl_views.trial_balance') }}" id="trial-balance-form">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- As of Date -->
+                <div>
+                    <label for="as_of_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">As of Date</label>
+                    <input type="date" id="as_of_date" name="as_of_date" class="form-input" value="{{ request.args.get('as_of_date', today_date) }}" required>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Trial balance will be generated as of this date
+                    </p>
+                </div>
+                
+                <!-- Branch Selection -->
+                <div>
+                    <label for="branch_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Branch</label>
+                    <select id="branch_id" name="branch_id" class="form-select">
+                        <option value="">All Branches</option>
+                        {% for branch in branches %}
+                        <option value="{{ branch.branch_id }}" {% if request.args.get('branch_id') == branch.branch_id %}selected{% endif %}>
+                            {{ branch.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Select a branch or leave blank for all branches
+                    </p>
+                </div>
+                
+                <!-- Include Zero Balances -->
+                <div class="flex items-start mt-6">
+                    <div class="flex items-center h-5">
+                        <input id="include_zero_balances" name="include_zero_balances" type="checkbox" class="form-checkbox" {% if request.args.get('include_zero_balances') == 'on' %}checked{% endif %}>
+                    </div>
+                    <div class="ml-3 text-sm">
+                        <label for="include_zero_balances" class="font-medium text-gray-700 dark:text-gray-300">Include Zero Balances</label>
+                        <p class="text-gray-500 dark:text-gray-400">Show accounts with zero balance</p>
+                    </div>
+                </div>
+                
+                <!-- Show Detailed Transactions -->
+                <div class="flex items-start mt-6">
+                    <div class="flex items-center h-5">
+                        <input id="show_details" name="show_details" type="checkbox" class="form-checkbox" {% if request.args.get('show_details') == 'on' %}checked{% endif %}>
+                    </div>
+                    <div class="ml-3 text-sm">
+                        <label for="show_details" class="font-medium text-gray-700 dark:text-gray-300">Show Transaction Details</label>
+                        <p class="text-gray-500 dark:text-gray-400">Display detailed transactions</p>
+                    </div>
+                </div>
+                
+                <!-- Apply Filters Button -->
+                <div class="lg:col-span-4 flex justify-end items-center mt-2">
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-sync-alt mr-2"></i> Generate Trial Balance
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Report Header -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+        <div class="text-center">
+            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">{{ hospital.name }}</h2>
+            <p class="text-gray-600 dark:text-gray-400">
+                Trial Balance
+                {% if branch %}
+                - {{ branch.name }}
+                {% endif %}
+            </p>
+            <p class="text-gray-600 dark:text-gray-400">
+                As of {{ as_of_date|dateformat }}
+            </p>
+        </div>
+        
+        <!-- Summary Cards -->
+        <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <p class="text-sm text-gray-500 dark:text-gray-400">Total Debit</p>
+                <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100">{{ total_debit|currencyformat }}</h3>
+            </div>
+            
+            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <p class="text-sm text-gray-500 dark:text-gray-400">Total Credit</p>
+                <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100">{{ total_credit|currencyformat }}</h3>
+            </div>
+            
+            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 {{ 'bg-red-50 dark:bg-red-900/20' if total_difference != 0 else '' }}">
+                <p class="text-sm text-gray-500 dark:text-gray-400">Difference</p>
+                <h3 class="text-xl font-bold {{ 'text-red-600 dark:text-red-400' if total_difference != 0 else 'text-gray-800 dark:text-gray-100' }}">
+                    {{ total_difference|currencyformat }}
+                </h3>
+                {% if total_difference != 0 %}
+                <p class="text-xs text-red-600 dark:text-red-400 mt-1">
+                    Trial balance is not balanced!
+                </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Trial Balance Table -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Account Balances</h2>
+        </div>
+        
+        <div class="p-6">
+            {% if accounts %}
+            <div class="overflow-x-auto">
+                <table class="min-w-full table-auto" id="trial-balance-table">
+                    <thead>
+                        <tr class="bg-gray-50 dark:bg-gray-700">
+                            <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300 font-medium text-xs uppercase tracking-wider">Account Code</th>
+                            <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300 font-medium text-xs uppercase tracking-wider">Account Name</th>
+                            <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300 font-medium text-xs uppercase tracking-wider">Debit</th>
+                            <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300 font-medium text-xs uppercase tracking-wider">Credit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% set current_group = '' %}
+                        
+                        {% for account in accounts %}
+                            {% if account.account_group != current_group %}
+                                {% set current_group = account.account_group %}
+                                <tr class="bg-gray-100 dark:bg-gray-600">
+                                    <td colspan="4" class="px-4 py-2 font-semibold text-gray-700 dark:text-gray-200">
+                                        {{ account.account_group }}
+                                    </td>
+                                </tr>
+                            {% endif %}
+                            
+                            <tr class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 {{ 'font-semibold' if account.is_parent else '' }}">
+                                <td class="px-4 py-3 text-gray-800 dark:text-gray-200">
+                                    {{ account.gl_account_no }}
+                                </td>
+                                <td class="px-4 py-3 text-gray-800 dark:text-gray-200">
+                                    <div class="{{ 'pl-4' if account.indent_level > 0 else '' }}">
+                                        {% if account.indent_level > 0 %}
+                                        <span class="text-gray-400 dark:text-gray-500">
+                                            {% for i in range(account.indent_level) %}│&nbsp;&nbsp;{% endfor %}
+                                        </span>
+                                        {% endif %}
+                                        {% if account.is_parent %}
+                                        <span class="text-gray-400 dark:text-gray-500">└─</span>
+                                        {% endif %}
+                                        {{ account.account_name }}
+                                    </div>
+                                </td>
+                                <td class="px-4 py-3 text-right {{ 'text-gray-800 dark:text-gray-200 font-medium' if account.debit_amount > 0 else 'text-gray-500 dark:text-gray-400' }}">
+                                    {% if account.debit_amount > 0 %}
+                                    {{ account.debit_amount|currencyformat }}
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-right {{ 'text-gray-800 dark:text-gray-200 font-medium' if account.credit_amount > 0 else 'text-gray-500 dark:text-gray-400' }}">
+                                    {% if account.credit_amount > 0 %}
+                                    {{ account.credit_amount|currencyformat }}
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            
+                            <!-- Transaction Details (if show_details is enabled) -->
+                            {% if request.args.get('show_details') == 'on' and account.transactions %}
+                                {% for transaction in account.transactions %}
+                                <tr class="bg-gray-50 dark:bg-gray-750 text-sm border-b dark:border-gray-700">
+                                    <td class="px-4 py-2 text-gray-500 dark:text-gray-400">
+                                        {{ transaction.transaction_date|dateformat }}
+                                    </td>
+                                    <td class="px-4 py-2 text-gray-500 dark:text-gray-400">
+                                        <div class="pl-8">
+                                            {{ transaction.description }}
+                                            <div class="text-xs">
+                                                Ref: {{ transaction.reference_id }}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-2 text-right text-gray-500 dark:text-gray-400">
+                                        {% if transaction.debit_amount > 0 %}
+                                        {{ transaction.debit_amount|currencyformat }}
+                                        {% else %}
+                                        -
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-4 py-2 text-right text-gray-500 dark:text-gray-400">
+                                        {% if transaction.credit_amount > 0 %}
+                                        {{ transaction.credit_amount|currencyformat }}
+                                        {% else %}
+                                        -
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% endif %}
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="bg-gray-100 dark:bg-gray-600 font-bold">
+                            <td colspan="2" class="px-4 py-3 text-gray-800 dark:text-gray-200">Total</td>
+                            <td class="px-4 py-3 text-right text-gray-800 dark:text-gray-200">{{ total_debit|currencyformat }}</td>
+                            <td class="px-4 py-3 text-right text-gray-800 dark:text-gray-200">{{ total_credit|currencyformat }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-8">
+                <i class="fas fa-file-alt text-gray-400 text-5xl mb-4"></i>
+                <p class="text-gray-600 dark:text-gray-400">No accounts found for the selected criteria</p>
+                <p class="text-sm text-gray-500 dark:text-gray-500 mt-2">Try adjusting your filters or check your chart of accounts</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Notes Section -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Notes</h2>
+        </div>
+        
+        <div class="p-6">
+            <div class="text-gray-600 dark:text-gray-400 space-y-2">
+                <p>
+                    <i class="fas fa-info-circle mr-2 text-blue-500"></i>
+                    The trial balance shows the closing balances of all accounts at the end of the selected date.
+                </p>
+                
+                <p>
+                    <i class="fas fa-lightbulb mr-2 text-yellow-500"></i>
+                    A balanced trial balance should have equal debit and credit totals.
+                </p>
+                
+                {% if total_difference != 0 %}
+                <p class="text-red-600 dark:text-red-400">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    <strong>Warning:</strong> The trial balance is not balanced. Please review your transactions for the period.
+                </p>
+                {% endif %}
+                
+                <p>
+                    <i class="fas fa-calendar-alt mr-2 text-green-500"></i>
+                    This report includes all transactions posted on or before {{ as_of_date|dateformat }}.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Dropdown toggle functionality
+    const dropdownToggle = document.getElementById('dropdown-toggle');
+    const dropdownMenu = document.getElementById('dropdown-menu');
+    
+    if (dropdownToggle && dropdownMenu) {
+        dropdownToggle.addEventListener('click', function() {
+            dropdownMenu.classList.toggle('hidden');
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!dropdownToggle.contains(event.target) && !dropdownMenu.contains(event.target)) {
+                dropdownMenu.classList.add('hidden');
+            }
+        });
+    }
+    
+    // Print functionality
+    const printReportBtn = document.getElementById('print-report');
+    if (printReportBtn) {
+        printReportBtn.addEventListener('click', function() {
+            window.print();
+        });
+    }
+    
+    // Export to Excel functionality
+    const exportExcelBtn = document.getElementById('export-excel');
+    if (exportExcelBtn) {
+        exportExcelBtn.addEventListener('click', function() {
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('export', 'excel');
+            window.location.href = currentUrl.toString();
+        });
+    }
+    
+    // Export to PDF functionality
+    const exportPdfBtn = document.getElementById('export-pdf');
+    if (exportPdfBtn) {
+        exportPdfBtn.addEventListener('click', function() {
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('export', 'pdf');
+            window.location.href = currentUrl.toString();
+        });
+    }
+    
+    // Export to CSV functionality
+    const exportCsvBtn = document.getElementById('export-csv');
+    if (exportCsvBtn) {
+        exportCsvBtn.addEventListener('click', function() {
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('export', 'csv');
+            window.location.href = currentUrl.toString();
+        });
+    }
+    
+    // Add alternating row colors to improve readability
+    const rows = document.querySelectorAll('#trial-balance-table tbody tr:not(.bg-gray-100):not(.bg-gray-50)');
+    rows.forEach((row, index) => {
+        if (index % 2 === 1) {
+            row.classList.add('bg-gray-50', 'dark:bg-gray-750');
+        }
+    });
+});
+</script>
+{% endblock %}

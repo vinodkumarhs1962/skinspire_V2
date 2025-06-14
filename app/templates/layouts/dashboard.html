@@ -1,32 +1,65 @@
 <!-- app/templates/layouts/dashboard.html -->
 {% extends "layouts/base.html" %}
-{% from "components/navigation/menu.html" import render_menu %}
 
 {% block body %}
 <!-- Page Container -->
 <div class="flex h-screen overflow-hidden bg-gray-100">
-    
     <!-- Sidebar Navigation -->
-    <aside id="sidebar" class="fixed inset-y-0 left-0 z-30 w-64 transition-transform duration-300 transform bg-blue-800 text-white md:translate-x-0 -translate-x-full lg:static lg:inset-0">
+    <aside 
+        id="sidebar" 
+        class="w-64 bg-blue-800 text-white overflow-y-auto h-full md:static z-40"
+        style="transition: width 0.3s ease-in-out;"
+    >
         <!-- Sidebar header with logo -->
         <div class="flex items-center justify-between p-4 border-b border-blue-700">
-            <div class="flex items-center">
-                <span class="text-lg font-semibold">SkinSpire Clinic</span>
+            <div class="flex items-center overflow-hidden">
+                {% if hospital is defined and hospital and hospital.logo and hospital.logo.variants %}
+                <img 
+                    src="{{ url_for('static', filename='uploads/hospital_logos/' + hospital.hospital_id|string + '/' + hospital.logo.variants.icon.filename) }}" 
+                    alt="Hospital Logo" 
+                    class="h-6 w-auto mr-2"
+                >
+                {% endif %}
+                <span id="sidebar-title" class="text-lg font-semibold">
+                    {% if hospital %}
+                        {{ hospital.name|default('SkinSpire Clinic') }}
+                    {% else %}
+                        SkinSpire Clinic
+                    {% endif %}
+                </span>
             </div>
-            <button id="close-sidebar" class="p-1 md:hidden focus:outline-none">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            <button 
+                id="toggle-sidebar-btn"
+                class="p-1 focus:outline-none text-white"
+            >
+                <svg 
+                    id="toggle-sidebar-icon"
+                    class="w-6 h-6 transition-transform duration-300" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                    style="transition: transform 0.3s ease;"
+                >
+                    <path 
+                        stroke-linecap="round" 
+                        stroke-linejoin="round" 
+                        stroke-width="2" 
+                        d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
+                    />
                 </svg>
             </button>
         </div>
         
-        <!-- User profile section -->
+        <!-- User profile section with improved alignment -->
         <div class="p-2 border-b border-blue-700">
             <div class="flex items-center p-2">
-                <div class="w-10 h-10 mr-3 rounded-full bg-blue-600 flex items-center justify-center text-lg font-semibold">
-                    {{ current_user.first_name[:1] | upper if hasattr(current_user, 'first_name') else current_user.user_id[:1] | upper }}
+                <div class="w-10 h-10 mr-3 rounded-full bg-blue-600 flex items-center justify-center">
+                    <!-- Improved vertical alignment with transform -->
+                    <span class="text-lg font-semibold flex items-center justify-center" style="line-height: 1; transform: translateY(-1px);">
+                        {{ current_user.first_name[:1] | upper if hasattr(current_user, 'first_name') else current_user.user_id[:1] | upper }}
+                    </span>
                 </div>
-                <div>
+                <div id="user-info">
                     <p class="font-medium">
                         {{ current_user.first_name + ' ' + current_user.last_name if hasattr(current_user, 'first_name') and hasattr(current_user, 'last_name') else current_user.user_id }}
                     </p>
@@ -35,35 +68,88 @@
             </div>
         </div>
         
-        <!-- Dynamic menu -->
-        {{ render_menu(menu_items, request.path) }}
+        <!-- Dynamic menu with simpler tooltips -->
+        <div class="px-4">
+            {% for item in menu_items %}
+                <div class="mb-2">
+                    <a 
+                        href="{{ item.url }}" 
+                        class="group flex items-center px-4 py-2 text-white hover:bg-blue-700 transition-all duration-300 relative menu-item"
+                    >
+                        <div class="flex items-center w-full">
+                            <span class="w-8 flex justify-center items-center">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M{{ item.icon_path }}"></path>
+                                </svg>
+                            </span>
+                            <span class="ml-3 text-sm whitespace-nowrap overflow-hidden menu-text">
+                                {{ item.name }}
+                            </span>
+                        </div>
+                    </a>
+                    
+                    {% if item.children %}
+                        <div class="pl-8 mt-1 menu-children">
+                            {% for child in item.children %}
+                                <a href="{{ child.url }}" class="block py-1 text-sm text-blue-200 hover:text-white pl-2">
+                                    {{ child.name }}
+                                </a>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
     </aside>
 
     <!-- Main Content -->
-    <div class="flex-1 flex flex-col overflow-hidden">
+    <div 
+        id="main-content" 
+        class="flex-1 flex flex-col overflow-hidden w-full"
+    >
         <!-- Top Header -->
         <header class="bg-white shadow-sm">
             <!-- Mobile Header -->
             <div class="md:hidden flex items-center justify-between p-4">
-                <button id="open-sidebar" class="p-1 focus:outline-none">
+                <button id="toggle-mobile-sidebar" class="p-1 focus:outline-none">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
                     </svg>
                 </button>
-                <h1 class="text-lg font-semibold">{% block mobile_title %}SkinSpire{% endblock %}</h1>
+                <div class="flex items-center">
+                    {% if hospital and hospital.logo and hospital.logo.variants %}
+                    <img 
+                        src="{{ url_for('static', filename='uploads/hospital_logos/' + hospital.hospital_id|string + '/' + hospital.logo.variants.icon.filename) }}" 
+                        alt="Hospital Logo" 
+                        class="h-6 w-auto mr-2"
+                    >
+                    {% endif %}
+                    <h1 class="text-lg font-semibold">{% block mobile_title %}SkinSpire{% endblock %}</h1>
+                </div>
                 <div class="w-6"></div> <!-- Placeholder for balance -->
             </div>
             
             <!-- Desktop Header -->
             <div class="hidden md:flex items-center justify-between px-6 py-3">
-                <h1 class="text-xl font-semibold">{% block page_title %}Dashboard{% endblock %}</h1>
+                <div class="flex items-center">
+                    {% if hospital and hospital.logo and hospital.logo.variants %}
+                    <img 
+                        src="{{ url_for('static', filename='uploads/hospital_logos/' + hospital.hospital_id|string + '/' + hospital.logo.variants.icon.filename) }}" 
+                        alt="Hospital Logo" 
+                        class="h-6 w-auto mr-2"
+                    >
+                    {% endif %}
+                    <h1 class="text-xl font-semibold">{% block page_title %}Dashboard{% endblock %}</h1>
+                </div>
                 
                 <!-- User Menu (Desktop) -->
                 <div class="flex items-center space-x-4">
                     <div class="relative">
                         <button id="user-menu-button" class="flex items-center space-x-2 focus:outline-none">
                             <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white">
-                                {{ current_user.first_name[:1] | upper if hasattr(current_user, 'first_name') else current_user.user_id[:1] | upper }}
+                                <span style="line-height: 1; transform: translateY(-1px);">
+                                    {{ current_user.first_name[:1] | upper if hasattr(current_user, 'first_name') else current_user.user_id[:1] | upper }}
+                                </span>
                             </div>
                             <span class="hidden lg:inline-block">
                                 {{ current_user.first_name + ' ' + current_user.last_name if hasattr(current_user, 'first_name') and hasattr(current_user, 'last_name') else current_user.user_id }}
@@ -90,6 +176,11 @@
             {% block content %}{% endblock %}
         </main>
     </div>
+</div>
+
+<!-- Tooltip container with light background and dark text -->
+<div id="menu-tooltip" class="fixed bg-white text-gray-800 px-3 py-2 rounded-md shadow-lg z-50 hidden pointer-events-none border border-gray-300">
+    Tooltip text
 </div>
 
 <!-- Mobile Bottom Navigation -->
@@ -125,39 +216,175 @@
 
 {% block dashboard_scripts %}
 <script>
-    // Toggle user dropdown
-    const userMenuButton = document.getElementById('user-menu-button');
-    const userDropdown = document.getElementById('user-dropdown');
-    
-    if (userMenuButton && userDropdown) {
-        userMenuButton.addEventListener('click', () => {
-            userDropdown.classList.toggle('hidden');
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log("DOM loaded - improved icon rotation and centering");
+        
+        // Get sidebar elements
+        const sidebar = document.getElementById('sidebar');
+        const toggleBtn = document.getElementById('toggle-sidebar-btn');
+        const toggleIcon = document.getElementById('toggle-sidebar-icon');
+        const sidebarTitle = document.getElementById('sidebar-title');
+        const userInfo = document.getElementById('user-info');
+        const menuTexts = document.querySelectorAll('.menu-text');
+        const menuChildren = document.querySelectorAll('.menu-children');
+        const menuTooltip = document.getElementById('menu-tooltip');
+        
+        // Track sidebar state
+        let sidebarCollapsed = false;
+        
+        // Sidebar toggle functionality with improved icon rotation
+        if (toggleBtn && sidebar) {
+            toggleBtn.addEventListener('click', function() {
+                console.log("Toggle button clicked");
+                sidebarCollapsed = !sidebarCollapsed;
+                
+                if (sidebarCollapsed) {
+                    // Collapse sidebar
+                    sidebar.style.width = '5rem'; // 80px / 5rem
+                    
+                    // Rotate toggle icon - explicitly set transform
+                    toggleIcon.style.transform = 'rotate(180deg)';
+                    
+                    // Hide text elements
+                    sidebarTitle.style.display = 'none';
+                    userInfo.style.display = 'none';
+                    menuTexts.forEach(item => {
+                        item.style.display = 'none';
+                    });
+                    menuChildren.forEach(item => {
+                        item.style.display = 'none';
+                    });
+                } else {
+                    // Expand sidebar
+                    sidebar.style.width = '16rem'; // 256px / 16rem
+                    
+                    // Reset toggle icon rotation
+                    toggleIcon.style.transform = '';
+                    
+                    // Show text elements
+                    sidebarTitle.style.display = '';
+                    userInfo.style.display = '';
+                    menuTexts.forEach(item => {
+                        item.style.display = '';
+                    });
+                    menuChildren.forEach(item => {
+                        item.style.display = '';
+                    });
+                }
+            });
+        }
+        
+        // Setup tooltip for menu items using a single tooltip element
+        const menuItems = document.querySelectorAll('.menu-item');
+        
+        menuItems.forEach((item) => {
+            const menuText = item.querySelector('.menu-text').textContent.trim();
+            
+            item.addEventListener('mouseenter', function(e) {
+                if (sidebarCollapsed && menuTooltip) {
+                    const sidebarRect = sidebar.getBoundingClientRect();
+                    const itemRect = item.getBoundingClientRect();
+                    
+                    // Update tooltip text
+                    menuTooltip.textContent = menuText;
+                    
+                    // Position tooltip
+                    menuTooltip.style.top = (itemRect.top + (itemRect.height / 2) - 15) + 'px';
+                    menuTooltip.style.left = (sidebarRect.right + 10) + 'px';
+                    
+                    // Show tooltip
+                    menuTooltip.classList.remove('hidden');
+                }
+            });
+            
+            item.addEventListener('mouseleave', function() {
+                if (menuTooltip) {
+                    menuTooltip.classList.add('hidden');
+                }
+            });
         });
         
-        // Close when clicking outside
-        document.addEventListener('click', (event) => {
-            if (!userMenuButton.contains(event.target) && !userDropdown.contains(event.target)) {
-                userDropdown.classList.add('hidden');
+        // Mobile menu toggle
+        const toggleMobileBtn = document.getElementById('toggle-mobile-sidebar');
+        
+        if (toggleMobileBtn && sidebar) {
+            // Create mobile close button if it doesn't exist
+            let mobileCloseBtn = document.getElementById('close-mobile-sidebar');
+            if (!mobileCloseBtn) {
+                mobileCloseBtn = document.createElement('button');
+                mobileCloseBtn.id = 'close-mobile-sidebar';
+                mobileCloseBtn.innerHTML = `
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                `;
+                mobileCloseBtn.className = 'p-2 text-white absolute top-4 right-4 md:hidden focus:outline-none';
+                sidebar.appendChild(mobileCloseBtn);
             }
-        });
-    }
-    
-    // Mobile sidebar toggle
-    const openSidebarBtn = document.getElementById('open-sidebar');
-    const closeSidebarBtn = document.getElementById('close-sidebar');
-    const sidebar = document.getElementById('sidebar');
-    
-    if (openSidebarBtn && sidebar) {
-        openSidebarBtn.addEventListener('click', () => {
-            sidebar.classList.remove('-translate-x-full');
-        });
-    }
-    
-    if (closeSidebarBtn && sidebar) {
-        closeSidebarBtn.addEventListener('click', () => {
-            sidebar.classList.add('-translate-x-full');
-        });
-    }
+            
+            // Toggle sidebar visibility on mobile
+            toggleMobileBtn.addEventListener('click', function() {
+                // Make sidebar fixed and full height on mobile
+                sidebar.classList.add('fixed', 'inset-y-0', 'left-0');
+                sidebar.classList.remove('hidden');
+            });
+            
+            // Close sidebar on mobile
+            mobileCloseBtn.addEventListener('click', function() {
+                sidebar.classList.add('hidden');
+            });
+        }
+        
+        // Handle mobile visibility on page load and resize
+        function handleMobileView() {
+            if (window.innerWidth < 768) { // md breakpoint
+                sidebar.classList.add('hidden', 'fixed', 'inset-y-0', 'left-0');
+                sidebar.classList.remove('static');
+                
+                // Reset collapsed state on mobile
+                if (sidebarCollapsed) {
+                    sidebarCollapsed = false;
+                    sidebar.style.width = '16rem';
+                    toggleIcon.style.transform = ''; // Reset icon rotation
+                    sidebarTitle.style.display = '';
+                    userInfo.style.display = '';
+                    menuTexts.forEach(item => {
+                        item.style.display = '';
+                    });
+                    menuChildren.forEach(item => {
+                        item.style.display = '';
+                    });
+                }
+            } else {
+                sidebar.classList.remove('hidden');
+                sidebar.classList.add('static');
+                sidebar.classList.remove('fixed', 'inset-y-0', 'left-0');
+            }
+        }
+        
+        // Initialize mobile view
+        handleMobileView();
+        
+        // Handle window resize
+        window.addEventListener('resize', handleMobileView);
+        
+        // User dropdown functionality
+        const userMenuBtn = document.getElementById('user-menu-button');
+        const userDropdown = document.getElementById('user-dropdown');
+        
+        if (userMenuBtn && userDropdown) {
+            userMenuBtn.addEventListener('click', function() {
+                userDropdown.classList.toggle('hidden');
+            });
+            
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(event) {
+                if (!userMenuBtn.contains(event.target) && !userDropdown.contains(event.target)) {
+                    userDropdown.classList.add('hidden');
+                }
+            });
+        }
+    });
 </script>
 {% endblock %}
 {% endblock %}

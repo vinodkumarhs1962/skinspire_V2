@@ -363,9 +363,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ Environment setup verification passed")
+            logger.info("[OK] Environment setup verification passed")
         else:
-            logger.error("❌ Environment setup verification failed")
+            logger.error("[NO] Environment setup verification failed")
             
         return results
 
@@ -399,9 +399,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ Database verification passed")
+            logger.info("[OK] Database verification passed")
         else:
-            logger.error("❌ Database verification failed")
+            logger.error("[NO] Database verification failed")
             
         return results
 
@@ -421,9 +421,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ Encryption verification passed")
+            logger.info("[OK] Encryption verification passed")
         else:
-            logger.error("❌ Encryption verification failed")
+            logger.error("[NO] Encryption verification failed")
             # Log the error summary from the test output
             if "output" in results and "Traceback" in results["output"]:
                 error_parts = results["output"].split("Traceback (most recent call last):")
@@ -449,9 +449,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ Authentication verification passed")
+            logger.info("[OK] Authentication verification passed")
         else:
-            logger.error("❌ Authentication verification failed")
+            logger.error("[NO] Authentication verification failed")
             # Log the failed test names
             if "failed_tests" in results and results["failed_tests"]:
                 logger.error("Failed tests:")
@@ -486,9 +486,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info(f"✅ User management verification passed in {execution_time:.2f}s")
+            logger.info(f"[OK] User management verification passed in {execution_time:.2f}s")
         else:
-            logger.error(f"❌ User management verification failed after {execution_time:.2f}s")
+            logger.error(f"[NO] User management verification failed after {execution_time:.2f}s")
             # Log any error output
             if results["error"]:
                 logger.error(f"Error output:\n{results['error']}")
@@ -537,9 +537,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ Authorization verification passed")
+            logger.info("[OK] Authorization verification passed")
         else:
-            logger.error("❌ Authorization verification failed")
+            logger.error("[NO] Authorization verification failed")
             
             # Try to get more diagnostic information
             if self.integration_mode:
@@ -583,9 +583,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ Authentication views verification passed")
+            logger.info("[OK] Authentication views verification passed")
         else:
-            logger.error("❌ Authentication views verification failed")
+            logger.error("[NO] Authentication views verification failed")
             
             # Log specific view-related errors
             output = results.get("output", "")
@@ -614,9 +614,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ End-to-end authentication verification passed")
+            logger.info("[OK] End-to-end authentication verification passed")
         else:
-            logger.error("❌ End-to-end authentication verification failed")
+            logger.error("[NO] End-to-end authentication verification failed")
             logger.error(f"Error details: {results['error']}")
             
             # Check for specific end-to-end issues
@@ -644,9 +644,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ Authentication UI verification passed")
+            logger.info("[OK] Authentication UI verification passed")
         else:
-            logger.error("❌ Authentication UI verification failed")
+            logger.error("[NO] Authentication UI verification failed")
             
             # Look for selenium or web driver errors
             output = results.get("output", "")
@@ -675,9 +675,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ Authentication flow verification passed")
+            logger.info("[OK] Authentication flow verification passed")
         else:
-            logger.error("❌ Authentication flow verification failed")
+            logger.error("[NO] Authentication flow verification failed")
             
             # Look for specific auth flow issues
             output = results.get("output", "")
@@ -708,9 +708,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ Complete authentication system verification passed")
+            logger.info("[OK] Complete authentication system verification passed")
         else:
-            logger.error("❌ Complete authentication system verification failed")
+            logger.error("[NO] Complete authentication system verification failed")
             
             # Detailed error analysis
             output = results.get("output", "")
@@ -843,7 +843,7 @@ class SystemVerifier:
         
         print("\nComponent Status:")
         for component, result in self.results["components"].items():
-            status_icon = "✅" if result["status"] == "PASS" else "❌"
+            status_icon = "[OK]" if result["status"] == "PASS" else "[NO]"
             component_name = component.replace("_", " ").title()
             passed = result["details"]["passed"]
             failed = result["details"]["failed"]

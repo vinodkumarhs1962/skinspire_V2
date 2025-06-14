@@ -1,0 +1,48 @@
+<!-- Smart Branch Filter for List Pages -->
+{% set superuser_ids = ['7777777777', 'admin', 'superuser'] %}
+{% set is_superuser = current_user.user_id in superuser_ids %}
+{% set is_multi_branch = branch_context and branch_context.get('is_multi_branch_user', False) %}
+{% set show_filter = is_superuser or is_multi_branch %}
+
+{% if show_filter %}
+<div class="{{ container_class or 'w-48' }}">
+    <label for="branch_filter" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+        Filter by Branch
+        {% if is_superuser %}
+            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 ml-1">
+                <i class="fas fa-crown mr-1"></i>Admin
+            </span>
+        {% endif %}
+    </label>
+    
+    <select name="branch_id" 
+            id="branch_filter"
+            class="form-select w-full {{ 'border-purple-300' if is_superuser else '' }}"
+            onchange="this.form.submit()">
+        
+        {% if is_superuser %}
+            <!-- Superuser options -->
+            <option value="">All Branches (Admin View)</option>
+            {% if branches %}
+                {% for branch in branches %}
+                <option value="{{ branch.branch_id }}" 
+                        {% if request.args.get('branch_id') == branch.branch_id %}selected{% endif %}>
+                    {{ branch.name }}
+                </option>
+                {% endfor %}
+            {% endif %}
+            
+        {% elif is_multi_branch %}
+            <!-- Multi-branch user options -->
+            <option value="">All Accessible Branches</option>
+            {% for branch in branch_context.accessible_branches %}
+            <option value="{{ branch.branch_id }}" 
+                    {% if request.args.get('branch_id') == branch.branch_id %}selected{% endif %}>
+                {{ branch.name }}
+                {% if branch.branch_id == branch_context.assigned_branch_id %} (My Branch){% endif %}
+            </option>
+            {% endfor %}
+        {% endif %}
+    </select>
+</div>
+{% endif %}

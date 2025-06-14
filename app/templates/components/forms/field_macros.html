@@ -1,0 +1,70 @@
+{# templates/components/forms/field_macros.html #}
+
+{% macro form_field(field, label_class="", input_class="", container_class="mb-4") %}
+<div class="{{ container_class }}">
+    <label class="{{ label_class if label_class else 'block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2' }}" for="{{ field.id }}">
+        {{ field.label.text }}
+    </label>
+    {{ field(class=input_class if input_class else "shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+    <div class="text-red-500 text-xs mt-1 hidden" data-error-for="{{ field.id }}"></div>
+    {% if field.errors %}
+        <div class="text-red-500 text-xs mt-1">{{ field.errors[0] }}</div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro patient_search_field(form, field_name="patient_id", label_class="", container_class="mb-8") %}
+<div class="{{ container_class }}">
+    <label class="{{ label_class if label_class else 'block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2' }}">
+        Patient
+    </label>
+    <div class="relative">
+        <input type="text" id="patient-search" 
+            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
+            placeholder="Search patient..."
+            autocomplete="off">
+
+        <!-- Hidden field for patient ID -->
+        {{ form[field_name](id="patient_id") }}
+    </div>
+    <div id="patient-search-results" class="absolute z-10 bg-white dark:bg-gray-700 shadow-md rounded w-full overflow-y-auto hidden" 
+         style="max-width: 400px; max-height: 300px !important; border: 1px solid #ddd; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"></div>
+    
+    <div id="selected-patient-info" class="patient-info mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg hidden">
+        <h3 class="font-semibold text-gray-800 dark:text-white" id="patient-name-display"></h3>
+        <p class="text-sm text-gray-600 dark:text-gray-300" id="patient-mrn-display"></p>
+        <p class="text-sm text-gray-600 dark:text-gray-300" id="patient-contact-display"></p>
+    </div>
+    
+    <div class="text-red-500 text-xs mt-1 hidden" data-error-for="{{ field_name }}"></div>
+    {% if form[field_name].errors %}
+        <div class="text-red-500 text-xs mt-1">{{ form[field_name].errors[0] }}</div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro amount_field(field, label_class="", input_class="", container_class="") %}
+<div class="{{ container_class }}">
+    <label class="{{ label_class if label_class else 'block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2' }}" for="{{ field.id }}">
+        {{ field.label.text }}
+    </label>
+    {{ field(class=input_class if input_class else "shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline payment-amount") }}
+    <div class="text-red-500 text-xs mt-1 hidden" data-error-for="{{ field.id }}"></div>
+    {% if field.errors %}
+        <div class="text-red-500 text-xs mt-1">{{ field.errors[0] }}</div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro submit_button(text="Submit", cancel_url=None, container_class="flex justify-end") %}
+<div class="{{ container_class }}">
+    {% if cancel_url %}
+    <a href="{{ cancel_url }}" class="bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-2 px-4 rounded mr-2">
+        Cancel
+    </a>
+    {% endif %}
+    <button type="submit" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+        {{ text }}
+    </button>
+</div>
+{% endmacro %}

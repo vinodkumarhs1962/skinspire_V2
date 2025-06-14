@@ -1,0 +1,576 @@
+{% extends "layouts/dashboard.html" %}
+{% from "components/alerts.html" import alert %}
+{% from "components/badges.html" import payment_status_badge %}
+
+{% block title %}{{ title or "Payment Details" }}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <!-- Header Section -->
+    <div class="flex flex-col md:flex-row items-start justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">{{ title or "Payment Details" }}</h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">
+                Payment Reference: {{ payment.reference_no or payment.payment_id[:8] }}
+            </p>
+        </div>
+        <div class="mt-4 md:mt-0 space-x-2">
+            <a href="{{ url_for('supplier_views.payment_list') }}" class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i> Back to Payments
+            </a>
+            
+            {% if payment.workflow_status == 'pending_approval' and can_approve %}
+            <a href="{{ url_for('supplier_views.approve_payment', payment_id=payment.payment_id) }}" class="btn-success">
+                <i class="fas fa-check mr-2"></i> Approve Payment
+            </a>
+            {% endif %}
+            
+            {% if payment.workflow_status not in ['approved', 'rejected'] %}
+            <a href="{{ url_for('supplier_views.edit_payment', payment_id=payment.payment_id) }}" class="btn-primary">
+                <i class="fas fa-edit mr-2"></i> Edit Payment
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left Column (Payment Details) -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Payment Overview -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Payment Overview</h2>
+                </div>
+                
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">Payment Information</h3>
+                            <dl class="space-y-2">
+                                <div class="flex justify-between">
+                                    <dt class="text-sm text-gray-500">Payment Date:</dt>
+                                    <dd class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.payment_date.strftime('%d %B %Y') if payment.payment_date else '-' }}
+                                    </dd>
+                                </div>
+                                <div class="flex justify-between">
+                                    <dt class="text-sm text-gray-500">Reference Number:</dt>
+                                    <dd class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.reference_no or '-' }}
+                                    </dd>
+                                </div>
+                                <div class="flex justify-between">
+                                    <dt class="text-sm text-gray-500">Currency:</dt>
+                                    <dd class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.currency_code or 'INR' }}
+                                        {% if payment.exchange_rate and payment.exchange_rate != 1 %}
+                                        (Rate: {{ payment.exchange_rate }})
+                                        {% endif %}
+                                    </dd>
+                                </div>
+                                <div class="flex justify-between">
+                                    <dt class="text-sm text-gray-500">Status:</dt>
+                                    <dd class="text-sm">
+                                        {% if payment.workflow_status == 'approved' %}
+                                        <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                                            Approved
+                                        </span>
+                                        {% elif payment.workflow_status == 'pending_approval' %}
+                                        <span class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">
+                                            Pending Approval
+                                        </span>
+                                        {% elif payment.workflow_status == 'rejected' %}
+                                        <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300">
+                                            Rejected
+                                        </span>
+                                        {% else %}
+                                        <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300">
+                                            {{ payment.workflow_status|title }}
+                                        </span>
+                                        {% endif %}
+                                    </dd>
+                                </div>
+                            </dl>
+                        </div>
+                        
+                        <div>
+                            <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">Supplier Information</h3>
+                            <dl class="space-y-2">
+                                <div class="flex justify-between">
+                                    <dt class="text-sm text-gray-500">Supplier:</dt>
+                                    <dd class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.supplier_name or 'Unknown Supplier' }}
+                                    </dd>
+                                </div>
+                                <div class="flex justify-between">
+                                    <dt class="text-sm text-gray-500">Branch:</dt>
+                                    <dd class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.branch_name or '-' }}
+                                    </dd>
+                                </div>
+                                {% if payment.invoice_number %}
+                                <div class="flex justify-between">
+                                    <dt class="text-sm text-gray-500">Invoice:</dt>
+                                    <dd class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {% if payment.invoice_id %}
+                                        <a href="{{ url_for('supplier_views.view_supplier_invoice', invoice_id=payment.invoice_id) }}" 
+                                           class="text-indigo-600 dark:text-indigo-400 hover:underline">
+                                            {{ payment.invoice_number }}
+                                        </a>
+                                        {% else %}
+                                        {{ payment.invoice_number }}
+                                        {% endif %}
+                                    </dd>
+                                </div>
+                                {% endif %}
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Payment Method Breakdown -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Payment Method Breakdown</h2>
+                </div>
+                
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        {% if payment.cash_amount and payment.cash_amount > 0 %}
+                        <div class="bg-green-50 dark:bg-green-900 rounded-lg p-4">
+                            <div class="flex items-center">
+                                <i class="fas fa-money-bill-wave text-green-600 dark:text-green-400 text-xl mr-3"></i>
+                                <div>
+                                    <p class="text-sm text-green-600 dark:text-green-400">Cash</p>
+                                    <p class="text-lg font-bold text-green-800 dark:text-green-200"> Rs.{{ "{:,.2f}".format(payment.cash_amount) }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if payment.cheque_amount and payment.cheque_amount > 0 %}
+                        <div class="bg-purple-50 dark:bg-purple-900 rounded-lg p-4">
+                            <div class="flex items-center">
+                                <i class="fas fa-money-check text-purple-600 dark:text-purple-400 text-xl mr-3"></i>
+                                <div>
+                                    <p class="text-sm text-purple-600 dark:text-purple-400">Cheque</p>
+                                    <p class="text-lg font-bold text-purple-800 dark:text-purple-200"> Rs.{{ "{:,.2f}".format(payment.cheque_amount) }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if payment.bank_transfer_amount and payment.bank_transfer_amount > 0 %}
+                        <div class="bg-blue-50 dark:bg-blue-900 rounded-lg p-4">
+                            <div class="flex items-center">
+                                <i class="fas fa-university text-blue-600 dark:text-blue-400 text-xl mr-3"></i>
+                                <div>
+                                    <p class="text-sm text-blue-600 dark:text-blue-400">Bank Transfer</p>
+                                    <p class="text-lg font-bold text-blue-800 dark:text-blue-200"> Rs.{{ "{:,.2f}".format(payment.bank_transfer_amount) }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if payment.upi_amount and payment.upi_amount > 0 %}
+                        <div class="bg-pink-50 dark:bg-pink-900 rounded-lg p-4">
+                            <div class="flex items-center">
+                                <i class="fas fa-mobile-alt text-pink-600 dark:text-pink-400 text-xl mr-3"></i>
+                                <div>
+                                    <p class="text-sm text-pink-600 dark:text-pink-400">UPI</p>
+                                    <p class="text-lg font-bold text-pink-800 dark:text-pink-200"> Rs.{{ "{:,.2f}".format(payment.upi_amount) }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Method-Specific Details -->
+                    {% if payment.cheque_amount and payment.cheque_amount > 0 %}
+                    <div class="border-t pt-4 mb-4">
+                        <h4 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-3">Cheque Details</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <p class="text-sm text-gray-500">Cheque Number</p>
+                                <p class="font-medium">{{ payment.cheque_number or '-' }}</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Cheque Date</p>
+                                <p class="font-medium">{{ payment.cheque_date.strftime('%d/%m/%Y') if payment.cheque_date else '-' }}</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Bank</p>
+                                <p class="font-medium">{{ payment.cheque_bank or '-' }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if payment.bank_transfer_amount and payment.bank_transfer_amount > 0 %}
+                    <div class="border-t pt-4 mb-4">
+                        <h4 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-3">Bank Transfer Details</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <p class="text-sm text-gray-500">Account Holder Name</p>
+                                <p class="font-medium">{{ payment.bank_account_name or '-' }}</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Reference Number</p>
+                                <p class="font-medium">{{ payment.bank_reference_number or '-' }}</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">IFSC Code</p>
+                                <p class="font-medium">{{ payment.ifsc_code or '-' }}</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Transfer Mode</p>
+                                <p class="font-medium">{{ payment.transfer_mode|upper if payment.transfer_mode else '-' }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if payment.upi_amount and payment.upi_amount > 0 %}
+                    <div class="border-t pt-4 mb-4">
+                        <h4 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-3">UPI Details</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <p class="text-sm text-gray-500">Transaction ID</p>
+                                <p class="font-medium">{{ payment.upi_transaction_id or '-' }}</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">UPI App</p>
+                                <p class="font-medium">{{ payment.upi_app_name|title if payment.upi_app_name else '-' }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- TDS Information -->
+            {% if payment.tds_applicable %}
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">TDS Information</h2>
+                </div>
+                
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <p class="text-sm text-gray-500">TDS Rate</p>
+                            <p class="font-medium">{{ payment.tds_rate }}%</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">TDS Amount</p>
+                            <p class="font-medium"> Rs.{{ "{:,.2f}".format(payment.tds_amount) }}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">TDS Reference</p>
+                            <p class="font-medium">{{ payment.tds_reference or '-' }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Supporting Documents -->
+            {% if payment.documents %}
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Supporting Documents</h2>
+                </div>
+                
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {% for document in payment.documents %}
+                        <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                            <div class="flex items-center mb-2">
+                                <i class="fas fa-file-{{ 'pdf' if document.file_extension == 'pdf' else 'image' }} text-indigo-600 dark:text-indigo-400 mr-2"></i>
+                                <span class="text-sm font-medium">{{ document.document_type|title }}</span>
+                            </div>
+                            <p class="text-xs text-gray-500 mb-2">{{ document.original_filename }}</p>
+                            <p class="text-xs text-gray-500 mb-3">Size: {{ "%.1f"|format(document.file_size/1024) }} KB</p>
+                            
+                            <div class="flex space-x-2">
+                                <a href="{{ url_for('supplier_views.view_payment_document', document_id=document.document_id) }}" 
+                                   class="text-xs bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700">
+                                    View
+                                </a>
+                                <a href="{{ url_for('supplier_views.view_payment_document', document_id=document.document_id) }}?download=1" 
+                                   class="text-xs bg-gray-600 text-white px-2 py-1 rounded hover:bg-gray-700">
+                                    Download
+                                </a>
+                            </div>
+                            
+                            {% if document.verification_status %}
+                            <div class="mt-2">
+                                {% if document.verification_status == 'verified' %}
+                                <span class="text-xs px-2 py-1 bg-green-100 text-green-800 rounded">Verified</span>
+                                {% elif document.verification_status == 'pending' %}
+                                <span class="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded">Pending</span>
+                                {% else %}
+                                <span class="text-xs px-2 py-1 bg-red-100 text-red-800 rounded">{{ document.verification_status|title }}</span>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Notes -->
+            {% if payment.notes %}
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Notes</h2>
+                </div>
+                
+                <div class="p-6">
+                    <p class="text-gray-700 dark:text-gray-300">{{ payment.notes }}</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Right Column (Summary & Actions) -->
+        <div class="lg:col-span-1 space-y-6">
+            <!-- Payment Summary -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Payment Summary</h2>
+                </div>
+                
+                <div class="p-6">
+                    <div class="text-center mb-4">
+                        <div class="text-3xl font-bold text-gray-800 dark:text-gray-100"> Rs.{{ "{:,.2f}".format(payment.amount) }}</div>
+                        <div class="text-sm text-gray-500 dark:text-gray-400">Total Payment Amount</div>
+                    </div>
+                    
+                    {% if payment.tds_applicable and payment.tds_amount %}
+                    <div class="border-t pt-4">
+                        <div class="flex justify-between mb-2">
+                            <span class="text-sm text-gray-500">Gross Amount:</span>
+                            <span class="text-sm font-medium"> Rs.{{ "{:,.2f}".format(payment.amount + payment.tds_amount) }}</span>
+                        </div>
+                        <div class="flex justify-between mb-2">
+                            <span class="text-sm text-gray-500">TDS Deducted:</span>
+                            <span class="text-sm font-medium text-red-600">- Rs.{{ "{:,.2f}".format(payment.tds_amount) }}</span>
+                        </div>
+                        <div class="flex justify-between border-t pt-2">
+                            <span class="text-sm font-medium">Net Amount:</span>
+                            <span class="text-sm font-bold"> Rs.{{ "{:,.2f}".format(payment.amount) }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Approval Information -->
+            {% if payment.requires_approval %}
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Approval Status</h2>
+                </div>
+                
+                <div class="p-6">
+                    {% if payment.workflow_status == 'pending_approval' %}
+                    <div class="text-center mb-4">
+                        <i class="fas fa-clock text-yellow-500 text-2xl mb-2"></i>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Pending Approval</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                            Approval required for amounts above  Rs.{{ "{:,.0f}".format(payment_config.APPROVAL_THRESHOLD_L1) }}
+                        </p>
+                    </div>
+                    
+                    {% if can_approve %}
+                    <div class="space-y-2">
+                        <a href="{{ url_for('supplier_views.approve_payment', payment_id=payment.payment_id) }}" 
+                           class="w-full bg-green-600 text-white text-center py-2 px-4 rounded hover:bg-green-700 block">
+                            <i class="fas fa-check mr-2"></i> Approve Payment
+                        </a>
+                    </div>
+                    {% endif %}
+                    
+                    {% elif payment.workflow_status == 'approved' %}
+                    <div class="text-center">
+                        <i class="fas fa-check-circle text-green-500 text-2xl mb-2"></i>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Approved</p>
+                        {% if payment.approved_by %}
+                        <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                            By: {{ payment.approved_by }}
+                        </p>
+                        {% endif %}
+                        {% if payment.approved_at %}
+                        <p class="text-xs text-gray-500 dark:text-gray-500">
+                            On: {{ payment.approved_at.strftime('%d/%m/%Y %H:%M') }}
+                        </p>
+                        {% endif %}
+                    </div>
+                    
+                    {% elif payment.workflow_status == 'rejected' %}
+                    <div class="text-center">
+                        <i class="fas fa-times-circle text-red-500 text-2xl mb-2"></i>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Rejected</p>
+                        {% if payment.rejected_by %}
+                        <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                            By: {{ payment.rejected_by }}
+                        </p>
+                        {% endif %}
+                        {% if payment.rejection_reason %}
+                        <p class="text-xs text-gray-500 dark:text-gray-500 mt-2 p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                            {{ payment.rejection_reason }}
+                        </p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Quick Actions -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Quick Actions</h2>
+                </div>
+                
+                <div class="p-6 space-y-2">
+                    <button onclick="window.print()" class="w-full bg-gray-600 text-white text-center py-2 px-4 rounded hover:bg-gray-700">
+                        <i class="fas fa-print mr-2"></i> Print Payment
+                    </button>
+                    
+                    <button onclick="downloadPaymentReceipt()" class="w-full bg-blue-600 text-white text-center py-2 px-4 rounded hover:bg-blue-700">
+                        <i class="fas fa-download mr-2"></i> Download Receipt
+                    </button>
+                    
+                    {% if payment.invoice_id %}
+                    <a href="{{ url_for('supplier_views.view_supplier_invoice', invoice_id=payment.invoice_id) }}" 
+                       class="w-full bg-purple-600 text-white text-center py-2 px-4 rounded hover:bg-purple-700 block">
+                        <i class="fas fa-file-invoice mr-2"></i> View Invoice
+                    </a>
+                    {% endif %}
+                    
+                    <a href="{{ url_for('supplier_views.create_payment') }}?supplier_id={{ payment.supplier_id }}" 
+                       class="w-full bg-indigo-600 text-white text-center py-2 px-4 rounded hover:bg-indigo-700 block">
+                        <i class="fas fa-plus mr-2"></i> New Payment
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Document Summary -->
+            {% if payment.document_summary %}
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Document Status</h2>
+                </div>
+                
+                <div class="p-6">
+                    <div class="grid grid-cols-3 gap-4 text-center">
+                        <div>
+                            <div class="text-lg font-bold text-gray-800 dark:text-gray-100">{{ payment.document_summary.total or 0 }}</div>
+                            <div class="text-xs text-gray-500">Total</div>
+                        </div>
+                        <div>
+                            <div class="text-lg font-bold text-green-600">{{ payment.document_summary.verified or 0 }}</div>
+                            <div class="text-xs text-gray-500">Verified</div>
+                        </div>
+                        <div>
+                            <div class="text-lg font-bold text-yellow-600">{{ payment.document_summary.pending or 0 }}</div>
+                            <div class="text-xs text-gray-500">Pending</div>
+                        </div>
+                    </div>
+                    
+                    {% if payment.document_summary.total > 0 %}
+                    <div class="mt-4">
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            {% if payment.document_summary.total > 0 %}
+                                {% set progress_percent = ((payment.document_summary.verified / payment.document_summary.total) * 100)|round|int %}
+                                <div class="bg-green-600 h-2 rounded-full progress-bar" data-width="{{ progress_percent }}"></div>
+                            {% else %}
+                                <div class="bg-green-600 h-2 rounded-full" style="width: 0%"></div>
+                            {% endif %}
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1 text-center">
+                            {{ (payment.document_summary.verified / payment.document_summary.total * 100)|round }}% Complete
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Audit Trail -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Audit Trail</h2>
+                </div>
+                
+                <div class="p-6">
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Created:</span>
+                            <span class="font-medium">{{ payment.created_at.strftime('%d/%m/%Y %H:%M') if payment.created_at else '-' }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Created By:</span>
+                            <span class="font-medium">{{ payment.created_by or '-' }}</span>
+                        </div>
+                        {% if payment.updated_at and payment.updated_at != payment.created_at %}
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Updated:</span>
+                            <span class="font-medium">{{ payment.updated_at.strftime('%d/%m/%Y %H:%M') }}</span>
+                        </div>
+                        {% endif %}
+                        {% if payment.updated_by %}
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Updated By:</span>
+                            <span class="font-medium">{{ payment.updated_by }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function downloadPaymentReceipt() {
+    // This would typically generate a PDF receipt
+    const paymentId = '{{ payment.payment_id }}';
+    const url = `/supplier/payment/receipt/${paymentId}`;
+    
+    // Create a temporary link to download
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `payment_receipt_${paymentId.slice(0, 8)}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Print styles for payment receipt
+const printStyles = `
+    @media print {
+        .no-print { display: none !important; }
+        .bg-white { background: white !important; }
+        .shadow-md { box-shadow: none !important; }
+        .rounded-lg { border-radius: 0 !important; }
+        .text-gray-800 { color: black !important; }
+        .text-gray-600 { color: #333 !important; }
+        .border-gray-200 { border-color: #ccc !important; }
+    }
+`;
+
+// Add print styles to head
+const styleSheet = document.createElement('style');
+styleSheet.textContent = printStyles;
+document.head.appendChild(styleSheet);
+</script>
+{% endblock %}

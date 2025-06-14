@@ -1,0 +1,236 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}Financial Reports{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Financial Reports</h1>
+        <div>
+            <a href="{{ url_for('gl_views.transaction_list') }}" class="btn-secondary">
+                Back to Transactions
+            </a>
+        </div>
+    </div>
+
+    <div class="mb-6 bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+        <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-white">Generate Financial Report</h2>
+        <form method="POST" action="{{ url_for('gl_views.financial_reports') }}" id="reportForm" class="space-y-4">
+            {{ form.csrf_token }}
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="report_type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Report Type
+                    </label>
+                    {{ form.report_type(class="form-select w-full", required="required") }}
+                    {% if form.report_type.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ form.report_type.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                
+                <div id="accountSelector" class="{% if form.report_type.data != 'account_ledger' %}hidden{% endif %}">
+                    <label for="account_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Account
+                    </label>
+                    {{ form.account_id(class="form-select w-full") }}
+                    {% if form.account_id.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ form.account_id.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="start_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        From Date
+                    </label>
+                    {{ form.start_date(class="form-input w-full", type="date", required="required") }}
+                    {% if form.start_date.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ form.start_date.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="end_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        To Date
+                    </label>
+                    {{ form.end_date(class="form-input w-full", type="date", required="required") }}
+                    {% if form.end_date.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ form.end_date.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="comparative" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Comparative
+                    </label>
+                    {{ form.comparative(class="form-select w-full") }}
+                    {% if form.comparative.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ form.comparative.errors[0] }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="flex justify-end space-x-4">
+                <button type="submit" class="btn-primary">
+                    Generate Report
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Trial Balance Card -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-300">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-semibold text-gray-700 dark:text-white">Trial Balance</h2>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-blue-500 dark:text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M3 3a1 1 0 000 2h10a1 1 0 100-2H3zm0 4a1 1 0 000 2h10a1 1 0 100-2H3zm0 4a1 1 0 100 2h10a1 1 0 100-2H3z" clip-rule="evenodd" />
+                    <path d="M3 15a1 1 0 100 2h10a1 1 0 100-2H3z" />
+                </svg>
+            </div>
+            <p class="text-gray-600 dark:text-gray-300 mb-6">View a summary of all debits and credits to ensure your books are balanced.</p>
+            <a href="#" class="select-report" data-report="trial_balance" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 font-medium">
+                Generate Trial Balance →
+            </a>
+        </div>
+
+        <!-- Profit & Loss Card -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-300">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-semibold text-gray-700 dark:text-white">Profit & Loss</h2>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-green-500 dark:text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586l3.293-3.293A1 1 0 0112 7z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <p class="text-gray-600 dark:text-gray-300 mb-6">View a summary of your business performance, including revenue, expenses, and net profit.</p>
+            <a href="#" class="select-report" data-report="profit_loss" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 font-medium">
+                Generate Profit & Loss →
+            </a>
+        </div>
+
+        <!-- Balance Sheet Card -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-300">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-semibold text-gray-700 dark:text-white">Balance Sheet</h2>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-purple-500 dark:text-purple-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M5 4a1 1 0 00-2 0v7.268a2 2 0 000 3.464V16a1 1 0 102 0v-1.268a2 2 0 000-3.464V4zM11 4a1 1 0 10-2 0v1.268a2 2 0 000 3.464V16a1 1 0 102 0V8.732a2 2 0 000-3.464V4zM16 3a1 1 0 011 1v7.268a2 2 0 010 3.464V16a1 1 0 11-2 0v-1.268a2 2 0 010-3.464V4a1 1 0 011-1z" />
+                </svg>
+            </div>
+            <p class="text-gray-600 dark:text-gray-300 mb-6">View a snapshot of your business assets, liabilities, and equity at a specific date.</p>
+            <a href="#" class="select-report" data-report="balance_sheet" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 font-medium">
+                Generate Balance Sheet →
+            </a>
+        </div>
+
+        <!-- Cash Flow Card -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-300">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-semibold text-gray-700 dark:text-white">Cash Flow</h2>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-yellow-500 dark:text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2 17.5 9.134a1 1 0 010 1.732l-3.354 1.935-1.18 4.455a1 1 0 01-1.933 0L9.854 12.8 6.5 10.866a1 1 0 010-1.732l3.354-1.935 1.18-4.455A1 1 0 0112 2z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <p class="text-gray-600 dark:text-gray-300 mb-6">View the cash inflows and outflows of your business across operating, investing, and financing activities.</p>
+            <a href="#" class="select-report" data-report="cash_flow" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 font-medium">
+                Generate Cash Flow →
+            </a>
+        </div>
+
+        <!-- Account Ledger Card -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-300">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-semibold text-gray-700 dark:text-white">Account Ledger</h2>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-red-500 dark:text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <p class="text-gray-600 dark:text-gray-300 mb-6">View detailed transactions for a specific account, including date, description, and amount.</p>
+            <a href="#" class="select-report" data-report="account_ledger" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 font-medium">
+                Generate Account Ledger →
+            </a>
+        </div>
+    </div>
+
+    <div class="mt-6 flex flex-wrap gap-4">
+        <a href="{{ url_for('gl_views.gst_reports') }}" class="btn-secondary">
+            GST Reports
+        </a>
+        <a href="{{ url_for('gl_views.account_reconciliation') }}" class="btn-secondary">
+            Account Reconciliation
+        </a>
+        <a href="{{ url_for('gl_views.transaction_list') }}" class="btn-secondary">
+            GL Transactions
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize select2 for account dropdown if available
+        if (typeof $.fn.select2 !== 'undefined') {
+            $('#account_id').select2({
+                theme: 'bootstrap4',
+                placeholder: 'Select Account',
+                allowClear: true,
+                ajax: {
+                    url: '/api/accounts',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function(params) {
+                        return {
+                            term: params.term || '',
+                            page: params.page || 1
+                        };
+                    },
+                    processResults: function(data, params) {
+                        return {
+                            results: data.accounts,
+                            pagination: {
+                                more: data.has_more
+                            }
+                        };
+                    },
+                    cache: true
+                },
+                minimumInputLength: 0
+            });
+        }
+        
+        // Show/hide account selector based on report type
+        const reportTypeSelect = document.getElementById('report_type');
+        const accountSelector = document.getElementById('accountSelector');
+        
+        reportTypeSelect.addEventListener('change', function() {
+            if (this.value === 'account_ledger') {
+                accountSelector.classList.remove('hidden');
+                document.getElementById('account_id').setAttribute('required', 'required');
+            } else {
+                accountSelector.classList.add('hidden');
+                document.getElementById('account_id').removeAttribute('required');
+            }
+        });
+        
+        // Report card selection
+        const reportCards = document.querySelectorAll('.select-report');
+        
+        reportCards.forEach(card => {
+            card.addEventListener('click', function(e) {
+                e.preventDefault();
+                const reportType = this.getAttribute('data-report');
+                
+                // Set the report type in the form
+                reportTypeSelect.value = reportType;
+                
+                // Trigger the change event to show/hide account selector
+                const event = new Event('change');
+                reportTypeSelect.dispatchEvent(event);
+                
+                // Scroll to the form
+                document.getElementById('reportForm').scrollIntoView({ behavior: 'smooth' });
+            });
+        });
+    });
+</script>
+{% endblock %}

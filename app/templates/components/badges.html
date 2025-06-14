@@ -1,0 +1,73 @@
+{# components/badges.html - Badge components for status indicators #}
+
+{# Status badge macro #}
+{% macro status_badge(status, text=None, class="") %}
+{% set display_text = text or status|title %}
+{% set badge_class = class %}
+
+{# Default status colors #}
+{% if status == 'active' or status == 'approved' or status == 'paid' or status == 'success' %}
+    {% set badge_class = badge_class + " inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" %}
+{% elif status == 'pending' or status == 'partial' or status == 'warning' %}
+    {% set badge_class = badge_class + " inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" %}
+{% elif status == 'cancelled' or status == 'rejected' or status == 'error' or status == 'unpaid' %}
+    {% set badge_class = badge_class + " inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" %}
+{% elif status == 'draft' or status == 'inactive' or status == 'info' %}
+    {% set badge_class = badge_class + " inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200" %}
+{% elif status == 'processing' or status == 'pending_approval' %}
+    {% set badge_class = badge_class + " inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" %}
+{% else %}
+    {% set badge_class = badge_class + " inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200" %}
+{% endif %}
+
+<span class="{{ badge_class }}">
+    {{ display_text }}
+</span>
+{% endmacro %}
+
+{# Payment status badge #}
+{% macro payment_status_badge(status) %}
+{% if status == 'paid' %}
+    {{ status_badge('paid', 'Paid') }}
+{% elif status == 'partial' %}
+    {{ status_badge('partial', 'Partial') }}
+{% elif status == 'unpaid' %}
+    {{ status_badge('unpaid', 'Unpaid') }}
+{% elif status == 'cancelled' %}
+    {{ status_badge('cancelled', 'Cancelled') }}
+{% else %}
+    {{ status_badge(status) }}
+{% endif %}
+{% endmacro %}
+
+{# Invoice status badge #}
+{% macro invoice_status_badge(status) %}
+{% if status == 'draft' %}
+    {{ status_badge('draft', 'Draft') }}
+{% elif status == 'sent' %}
+    {{ status_badge('processing', 'Sent') }}
+{% elif status == 'paid' %}
+    {{ status_badge('paid', 'Paid') }}
+{% elif status == 'overdue' %}
+    {{ status_badge('error', 'Overdue') }}
+{% elif status == 'cancelled' %}
+    {{ status_badge('cancelled', 'Cancelled') }}
+{% else %}
+    {{ status_badge(status) }}
+{% endif %}
+{% endmacro %}
+
+{# Approval status badge #}
+{% macro approval_status_badge(status) %}
+{% if status == 'pending' or status == 'pending_approval' %}
+    {{ status_badge('pending', 'Pending Approval') }}
+{% elif status == 'approved' %}
+    {{ status_badge('approved', 'Approved') }}
+{% elif status == 'rejected' %}
+    {{ status_badge('rejected', 'Rejected') }}
+{% elif status == 'requires_info' %}
+    {{ status_badge('warning', 'Needs Info') }}
+{% else %}
+    {{ status_badge(status) }}
+{% endif %}
+{% endmacro %}

@@ -1,0 +1,179 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}Inventory Movement History{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Inventory Movement History</h1>
+        <div>
+            <a href="{{ url_for('inventory_views.inventory_list') }}" class="btn-secondary">
+                Back to Inventory
+            </a>
+        </div>
+    </div>
+
+    <div class="mb-6 bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+        <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-white">Filter</h2>
+        <form method="GET" action="{{ url_for('inventory_views.inventory_movement') }}" class="flex flex-wrap gap-4">
+            <div class="w-full md:w-1/5">
+                <label for="medicine_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Medicine</label>
+                {{ form.medicine_id(class="form-select w-full") }}
+            </div>
+            <div class="w-full md:w-1/5">
+                <label for="start_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
+                {{ form.start_date(class="form-input w-full", type="date") }}
+            </div>
+            <div class="w-full md:w-1/5">
+                <label for="end_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
+                {{ form.end_date(class="form-input w-full", type="date") }}
+            </div>
+            <div class="w-full md:w-1/5">
+                <label for="stock_type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Transaction Type</label>
+                {{ form.stock_type(class="form-select w-full") }}
+            </div>
+            <div class="w-full md:w-1/5 flex items-end">
+                <button type="submit" class="btn-primary w-full">Apply Filter</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Date & Time
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Transaction Type
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Medicine
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Batch
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Quantity
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Reference
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Current Stock
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for item in movements %}
+                    <tr class="{% if loop.index % 2 == 0 %}bg-gray-50 dark:bg-gray-700{% endif %}">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {{ item.transaction_date.strftime('%d-%m-%Y %H:%M') }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {{ item.stock_type }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                            {{ item.medicine_name }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {{ item.batch }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {% if item.units >= 0 %}
+                                <span class="text-green-600 dark:text-green-400">+{{ item.units }}</span>
+                            {% else %}
+                                <span class="text-red-600 dark:text-red-400">{{ item.units }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {% if item.bill_id %}
+                                Invoice: {{ item.bill_id }}
+                            {% elif item.po_id %}
+                                PO: {{ item.po_id }}
+                            {% elif item.procedure_id %}
+                                Procedure: {{ item.procedure_id }}
+                            {% else %}
+                                {{ item.reason or '-' }}
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {{ item.current_stock }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500 dark:text-gray-300">
+                            No movement records found.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if total > per_page %}
+    <div class="mt-4 flex justify-between items-center">
+        <div class="text-sm text-gray-700 dark:text-gray-300">
+            Showing <span class="font-medium">{{ (page - 1) * per_page + 1 }}</span> to 
+            <span class="font-medium">{{ min(page * per_page, total) }}</span> of 
+            <span class="font-medium">{{ total }}</span> results
+        </div>
+        <div class="flex space-x-2">
+            {% if page > 1 %}
+            <a href="{{ url_for('inventory_views.inventory_movement', medicine_id=request.args.get('medicine_id'), 
+                            start_date=request.args.get('start_date'), end_date=request.args.get('end_date'),
+                            stock_type=request.args.get('stock_type'), page=page-1, per_page=per_page) }}" 
+                class="btn-secondary">Previous</a>
+            {% endif %}
+            
+            {% if page * per_page < total %}
+            <a href="{{ url_for('inventory_views.inventory_movement', medicine_id=request.args.get('medicine_id'),
+                            start_date=request.args.get('start_date'), end_date=request.args.get('end_date'),
+                            stock_type=request.args.get('stock_type'), page=page+1, per_page=per_page) }}" 
+                class="btn-primary">Next</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize select2 for medicine dropdown if available
+        if (typeof $.fn.select2 !== 'undefined') {
+            $('#medicine_id').select2({
+                theme: 'bootstrap4',
+                placeholder: 'Select Medicine',
+                allowClear: true,
+                ajax: {
+                    url: '/api/medicines',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function(params) {
+                        return {
+                            term: params.term || '',
+                            page: params.page || 1
+                        };
+                    },
+                    processResults: function(data, params) {
+                        return {
+                            results: data.medicines,
+                            pagination: {
+                                more: data.has_more
+                            }
+                        };
+                    },
+                    cache: true
+                },
+                minimumInputLength: 2
+            });
+        }
+    });
+</script>
+{% endblock %}

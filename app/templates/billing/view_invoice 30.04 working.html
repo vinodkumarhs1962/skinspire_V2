@@ -1,0 +1,1101 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Invoice Details{% endblock %}
+
+{% block head %}
+{{ super() }}
+<style>
+    /* Improved table styling */
+    .table-fixed {
+        table-layout: fixed;
+        width: 100%;
+    }
+    
+    .truncate {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+    
+    .invoice-card {
+        transition: all 0.3s ease;
+    }
+    
+    .invoice-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    }
+    
+    .active-invoice {
+        border-left: 4px solid #3B82F6;
+    }
+    
+    .related-invoice {
+        border-left: 4px solid #10B981;
+    }
+    
+    .amount-pill {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-weight: 600;
+        font-size: 0.875rem;
+    }
+    
+    .invoice-total-summary {
+        background-color: #F9FAFB;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-top: 1rem;
+        border: 1px solid #E5E7EB;
+    }
+    
+    /* For the tooltip effect on truncated text */
+    [title] {
+        position: relative;
+        cursor: pointer;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Calculate totals if they aren't defined -->
+{% if total_amount is not defined %}
+    {% set total_amount = invoice.grand_total %}
+{% endif %}
+
+{% if total_paid_amount is not defined %}
+    {% set total_paid_amount = invoice.paid_amount %}
+{% endif %}
+
+{% if total_balance_due is not defined %}
+    {% set total_balance_due = invoice.balance_due %}
+{% endif %}
+
+{% if all_payments is not defined %}
+    {% set all_payments = [] %}
+{% endif %}
+
+<div class="container mx-auto px-4 py-4">
+    <!-- Header with breadcrumbs and actions -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+        <div>
+            <div class="flex items-center text-sm text-gray-500 dark:text-gray-400 mb-2">
+                <a href="{{ url_for('billing_views.invoice_list') }}" class="hover:text-blue-500">Invoices</a>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mx-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+                <span>{{ patient.name }}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mx-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+                <span>{{ invoice.invoice_date.strftime('%d-%b-%Y') }}</span>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-white">
+                {% if related_invoices and related_invoices|length > 0 %}
+                    Invoice Group #{{ related_invoices[0].invoice_number.split('/')[2] }}
+                {% else %}
+                    Invoice #{{ invoice.invoice_number }}
+                {% endif %}
+            </h1>
+        </div>
+        
+        <!-- Action buttons right-aligned -->
+        <div class="flex items-center space-x-2 mt-4 md:mt-0">
+            <!-- Print button(s) first -->
+            {% if related_invoices and related_invoices|length > 1 %}
+            <button id="print-all-invoices" 
+                data-print-url="{% if related_invoices|length > 0 %}{{ url_for('billing_views.print_all_invoices', group_id=related_invoices[0].invoice_number.split('/')[2]) }}{% endif %}"
+                class="bg-blue-500 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded inline-flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Print All
+            </button>
+            {% else %}
+            <button id="print-invoice" class="bg-blue-500 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded inline-flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Print
+            </button>
+            {% endif %}
+            
+            <!-- Payment button(s) next -->
+            {% if related_invoices and related_invoices|length > 0 %}
+                {% if total_balance_due > 0 %}
+                <a href="{{ url_for('billing_views.record_invoice_payment', invoice_id=invoice.invoice_id) }}?pay_all=true" class="bg-green-500 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded inline-flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                    </svg>
+                    Pay All Invoices ({{ invoice.currency_code }} {{ "%.2f"|format(total_balance_due) }})
+                </a>
+                {% endif %}
+            {% elif invoice.balance_due > 0 %}
+                <a href="{{ url_for('billing_views.record_invoice_payment', invoice_id=invoice.invoice_id) }}" class="bg-green-500 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded inline-flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                    </svg>
+                    Record Payment
+                </a>
+            {% endif %}
+            
+            <!-- Back button last -->
+            <a href="{{ url_for('billing_views.invoice_list') }}" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-white font-semibold py-2 px-4 rounded inline-flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+                </svg>
+                Back to Invoices
+            </a>
+        </div>
+    </div>  
+
+    <!-- Overall Status Banner -->
+    <div class="mb-6">
+        {% if invoice.is_cancelled %}
+            <div class="bg-red-100 dark:bg-red-900 border-l-4 border-red-500 text-red-700 dark:text-red-300 p-4 rounded">
+                <div class="flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                        <p class="font-bold">Invoice Cancelled</p>
+                        <p class="text-sm">Reason: {{ invoice.cancellation_reason or 'Not specified' }}</p>
+                        {% if invoice.cancelled_at %}
+                            <p class="text-sm">Date: {{ invoice.cancelled_at.strftime('%d-%b-%Y') }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        {% elif total_balance_due is defined and total_balance_due == 0 or invoice.balance_due == 0 %}
+            <div class="bg-green-100 dark:bg-green-900 border-l-4 border-green-500 text-green-700 dark:text-green-300 p-4 rounded">
+                <div class="flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                        <p class="font-bold">All Invoices Paid</p>
+                        <p class="text-sm">Total Amount: {{ invoice.currency_code }} {{ "%.2f"|format(total_amount) }}</p>
+                    </div>
+                </div>
+            </div>
+        {% elif total_paid_amount is defined and total_paid_amount > 0 or invoice.paid_amount > 0 %}
+            <div class="bg-yellow-100 dark:bg-yellow-900 border-l-4 border-yellow-500 text-yellow-700 dark:text-yellow-300 p-4 rounded">
+                <div class="flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div>
+                        <p class="font-bold">Partially Paid</p>
+                        <p class="text-sm">Paid: {{ invoice.currency_code }} {{ "%.2f"|format(total_paid_amount if total_paid_amount is defined else invoice.paid_amount) }} | Balance Due: {{ invoice.currency_code }} {{ "%.2f"|format(total_balance_due if total_balance_due is defined else invoice.balance_due) }}</p>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="bg-blue-100 dark:bg-blue-900 border-l-4 border-blue-500 text-blue-700 dark:text-blue-300 p-4 rounded">
+                <div class="flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                        <p class="font-bold">Unpaid</p>
+                        <p class="text-sm">Total Due: {{ invoice.currency_code }} {{ "%.2f"|format(total_balance_due if total_balance_due is defined else invoice.balance_due) }}</p>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Main content grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left sidebar: Patient info and related invoices -->
+        <div class="lg:col-span-1">
+            <!-- Patient Details -->
+            <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Patient Details</h2>
+                {% if patient %}
+                    <table class="w-full table-fixed">
+                        <tr>
+                            <td class="py-2 text-gray-600 dark:text-gray-400 w-1/3">Name:</td>
+                            <td class="py-2 text-gray-900 dark:text-white font-medium w-2/3 truncate" title="{{ patient.name }}">{{ patient.name }}</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 text-gray-600 dark:text-gray-400">MRN:</td>
+                            <td class="py-2 text-gray-900 dark:text-white font-medium truncate">{{ patient.mrn }}</td>
+                        </tr>
+                        {% if patient.contact_info and patient.contact_info.phone %}
+                        <tr>
+                            <td class="py-2 text-gray-600 dark:text-gray-400">Phone:</td>
+                            <td class="py-2 text-gray-900 dark:text-white font-medium truncate">{{ patient.contact_info.phone }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if patient.contact_info and patient.contact_info.email %}
+                        <tr>
+                            <td class="py-2 text-gray-600 dark:text-gray-400">Email:</td>
+                            <td class="py-2 text-gray-900 dark:text-white font-medium truncate" title="{{ patient.contact_info.email }}">{{ patient.contact_info.email }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if patient.personal_info and patient.personal_info.gender %}
+                        <tr>
+                            <td class="py-2 text-gray-600 dark:text-gray-400">Gender:</td>
+                            <td class="py-2 text-gray-900 dark:text-white font-medium truncate">{{ patient.personal_info.gender }}</td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                {% else %}
+                    <p class="text-gray-600 dark:text-gray-400">Patient information not available</p>
+                {% endif %}
+            </div>
+            
+            <!-- Related Invoices -->
+            <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">
+                    {% if related_invoices and related_invoices|length > 1 %}
+                        Related Invoices
+                    {% else %}
+                        Invoice Summary
+                    {% endif %}
+                </h2>
+                
+                {% if related_invoices and related_invoices|length > 0 %}
+                    <!-- Show current invoice and related invoices (split) -->
+                    {% for related in [invoice] + related_invoices %}
+                        {% if (related is mapping and related.get('invoice_id', '') == invoice.invoice_id) or (not related is mapping and related.invoice_id == invoice.invoice_id) %}
+                        <div class="invoice-card mb-4 p-4 rounded-lg border active-invoice bg-blue-50 dark:bg-blue-900/20">
+                        {% else %}
+                        <div class="invoice-card mb-4 p-4 rounded-lg border {% if (related is mapping and related.get('is_cancelled', False)) or (not related is mapping and related.is_cancelled) %}bg-red-50 dark:bg-red-900/20{% else %}related-invoice bg-gray-50 dark:bg-gray-900/20{% endif %}">
+                        {% endif %}
+                            <div class="flex justify-between items-start mb-2">
+                                <div>
+                                    <div class="font-semibold text-gray-900 dark:text-white">{{ related.get('invoice_number', '') if related is mapping else related.invoice_number }}</div>
+                                    <div class="text-sm text-gray-500 dark:text-gray-400">{{ related.get('invoice_type', '') if related is mapping else related.invoice_type }}</div>
+                                </div>
+                                <div class="{% if (related is mapping and related.get('is_gst_invoice', False)) or (not related is mapping and related.is_gst_invoice) %}bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300{% else %}bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300{% endif %} px-2 py-1 rounded text-xs font-semibold">
+                                    {{ "GST" if (related is mapping and related.get('is_gst_invoice', False)) or (not related is mapping and related.is_gst_invoice) else "Non-GST" }}
+                                </div>
+                            </div>
+                            
+                            <div class="flex justify-between items-center mt-2">
+                                <div class="amount-pill {% if (related is mapping and (related.get('balance_due', 0)|float) > 0) or (not related is mapping and related.balance_due > 0) %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300{% else %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300{% endif %}">
+                                    {{ invoice.currency_code }} {{ "%.2f"|format(related.get('grand_total', 0)|float if related is mapping else related.grand_total) }}
+                                </div>
+                                
+                                {% if (related is mapping and related.get('invoice_id', '') == invoice.invoice_id) or (not related is mapping and related.invoice_id == invoice.invoice_id) %}
+                                    <span class="text-sm font-medium">Current</span>
+                                {% elif (related is mapping and related.get('is_cancelled', False)) or (not related is mapping and related.is_cancelled) %}
+                                    <a href="{{ url_for('billing_views.view_invoice', invoice_id=related.get('invoice_id', '') if related is mapping else related.invoice_id) }}" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium">
+                                        Voided
+                                    </a>
+                                {% else %}
+                                    <a href="{{ url_for('billing_views.view_invoice', invoice_id=related.get('invoice_id', '') if related is mapping else related.invoice_id) }}" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium">
+                                        View
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <!-- Single invoice (no related) - keep backward compatible -->
+                    <div class="invoice-card mb-4 p-4 rounded-lg border active-invoice bg-blue-50 dark:bg-blue-900/20">
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <div class="font-semibold text-gray-900 dark:text-white">{{ invoice.invoice_number }}</div>
+                                <div class="text-sm text-gray-500 dark:text-gray-400">{{ invoice.invoice_type }}</div>
+                            </div>
+                            <div class="{% if invoice.is_gst_invoice %}bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300{% else %}bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300{% endif %} px-2 py-1 rounded text-xs font-semibold">
+                                {{ "GST" if invoice.is_gst_invoice else "Non-GST" }}
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-between items-center mt-2">
+                            <div class="amount-pill {% if invoice.balance_due > 0 %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300{% else %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300{% endif %}">
+                                {{ invoice.currency_code }} {{ "%.2f"|format(invoice.grand_total) }}
+                            </div>
+                            
+                            <span class="text-sm font-medium">Current</span>
+                        </div>
+                    </div>
+                {% endif %}
+                
+                <!-- Total summary for all related invoices -->
+                <!-- Replace the entire invoice-total-summary div with this updated version -->
+                <div class="invoice-total-summary">
+                    {% if related_invoices and related_invoices|length > 0 %}
+                        <!-- Use the pre-calculated totals from Python - without redundant current invoice section -->
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-gray-600 dark:text-gray-400">Total Amount (All Invoices):</span>
+                            <span class="font-semibold text-gray-900 dark:text-white">{{ invoice.currency_code }} {{ "%.2f"|format(total_amount) }}</span>
+                        </div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-gray-600 dark:text-gray-400">Total Paid (All Invoices):</span>
+                            <span class="font-semibold text-green-600 dark:text-green-400">{{ invoice.currency_code }} {{ "%.2f"|format(total_paid_amount) }}</span>
+                        </div>
+                        <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                            <span class="text-gray-800 dark:text-gray-200 font-semibold">Total Balance Due:</span>
+                            <span class="font-bold {% if total_balance_due > 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
+                                {{ invoice.currency_code }} {{ "%.2f"|format(total_balance_due) }}
+                            </span>
+                        </div>
+                        
+                        <!-- Related invoices count information instead of current invoice details -->
+                        <div class="mt-4 pt-2 border-t border-gray-200 dark:border-gray-700">
+                            <div class="text-sm text-gray-500 dark:text-gray-400">
+                                This summary includes {{ related_invoices|length + 1 }} invoice{% if related_invoices|length > 0 %}s{% endif %} in total.
+                            </div>
+                        </div>
+                    {% else %}
+                        <!-- Original code for single invoice -->
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-gray-600 dark:text-gray-400">Total Amount:</span>
+                            <span class="font-semibold text-gray-900 dark:text-white">{{ invoice.currency_code }} {{ "%.2f"|format(invoice.grand_total) }}</span>
+                        </div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-gray-600 dark:text-gray-400">Paid Amount:</span>
+                            <span class="font-semibold text-green-600 dark:text-green-400">{{ invoice.currency_code }} {{ "%.2f"|format(invoice.paid_amount) }}</span>
+                        </div>
+                        <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                            <span class="text-gray-800 dark:text-gray-200 font-semibold">Balance Due:</span>
+                            <span class="font-bold {% if invoice.balance_due > 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
+                                {{ invoice.currency_code }} {{ "%.2f"|format(invoice.balance_due) }}
+                            </span>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main content area -->
+        <div class="lg:col-span-2">
+            <!-- Current Invoice Details -->
+            <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-white">Invoice Details</h2>
+                    
+                    <div class="flex space-x-2">
+                        <a href="{{ url_for('billing_views.print_invoice', invoice_id=invoice.invoice_id) }}" target="_blank" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 inline-flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                            </svg>
+                            Print
+                        </a>
+                        
+                        {% if invoice.paid_amount == 0 and not invoice.is_cancelled %}  <!-- Add "and not invoice.is_cancelled" condition -->
+                        <a href="{{ url_for('billing_views.void_invoice_view', invoice_id=invoice.invoice_id) }}" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 inline-flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Void
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Invoice Info -->
+                    <div>
+                        <table class="w-full table-fixed">
+                            <tr>
+                                <td class="py-2 text-gray-600 dark:text-gray-400 w-2/5">Invoice Number:</td>
+                                <td class="py-2 text-gray-900 dark:text-white font-medium w-3/5 truncate">{{ invoice.invoice_number }}</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2 text-gray-600 dark:text-gray-400">Date:</td>
+                                <td class="py-2 text-gray-900 dark:text-white font-medium truncate">{{ invoice.invoice_date.strftime('%d-%b-%Y') }}</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2 text-gray-600 dark:text-gray-400">Type:</td>
+                                <td class="py-2 text-gray-900 dark:text-white font-medium truncate">{{ invoice.invoice_type }}</td>
+                            </tr>
+                            {% if invoice.is_cancelled %}  
+                            <tr>
+                                <td class="py-2 text-gray-600 dark:text-gray-400">Status:</td>
+                                <td class="py-2 text-red-600 dark:text-red-400 font-medium">Cancelled</td>
+                            </tr>
+                            {% endif %}
+                            <tr>
+                                <td class="py-2 text-gray-600 dark:text-gray-400">GST Invoice:</td>
+                                <td class="py-2 text-gray-900 dark:text-white font-medium truncate">{{ "Yes" if invoice.is_gst_invoice else "No" }}</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2 text-gray-600 dark:text-gray-400">Currency:</td>
+                                <td class="py-2 text-gray-900 dark:text-white font-medium truncate">{{ invoice.currency_code }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <!-- Payment Summary -->
+                    <div>
+                        <table class="w-full table-fixed">
+                            <tr>
+                                <td class="py-2 text-gray-600 dark:text-gray-400 w-2/5">Total Amount:</td>
+                                <td class="py-2 text-gray-900 dark:text-white font-medium w-3/5 text-right">{{ invoice.currency_code }} {{ "%.2f"|format(invoice.total_amount) }}</td>
+                            </tr>
+                            {% if invoice.total_discount > 0 %}
+                            <tr>
+                                <td class="py-2 text-gray-600 dark:text-gray-400">Total Discount:</td>
+                                <td class="py-2 text-gray-900 dark:text-white font-medium text-right">{{ invoice.currency_code }} {{ "%.2f"|format(invoice.total_discount) }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if invoice.is_gst_invoice %}
+                            <tr>
+                                <td class="py-2 text-gray-600 dark:text-gray-400">Taxable Value:</td>
+                                <td class="py-2 text-gray-900 dark:text-white font-medium text-right">{{ invoice.currency_code }} {{ "%.2f"|format(invoice.total_taxable_value) }}</td>
+                            </tr>
+                            {% if invoice.total_cgst_amount > 0 %}
+                            <tr>
+                                <td class="py-2 text-gray-600 dark:text-gray-400">CGST:</td>
+                                <td class="py-2 text-gray-900 dark:text-white font-medium text-right">{{ invoice.currency_code }} {{ "%.2f"|format(invoice.total_cgst_amount) }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if invoice.total_sgst_amount > 0 %}
+                            <tr>
+                                <td class="py-2 text-gray-600 dark:text-gray-400">SGST:</td>
+                                <td class="py-2 text-gray-900 dark:text-white font-medium text-right">{{ invoice.currency_code }} {{ "%.2f"|format(invoice.total_sgst_amount) }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if invoice.total_igst_amount > 0 %}
+                            <tr>
+                                <td class="py-2 text-gray-600 dark:text-gray-400">IGST:</td>
+                                <td class="py-2 text-gray-900 dark:text-white font-medium text-right">{{ invoice.currency_code }} {{ "%.2f"|format(invoice.total_igst_amount) }}</td>
+                            </tr>
+                            {% endif %}
+                            {% endif %}
+                            <tr>
+                                <td class="py-2 text-gray-900 dark:text-white font-semibold">Grand Total:</td>
+                                <td class="py-2 text-gray-900 dark:text-white font-bold text-right">{{ invoice.currency_code }} {{ "%.2f"|format(invoice.grand_total) }}</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2 text-gray-600 dark:text-gray-400">Paid Amount:</td>
+                                <td class="py-2 text-green-600 dark:text-green-400 font-medium text-right">{{ invoice.currency_code }} {{ "%.2f"|format(invoice.paid_amount) }}</td>
+                            </tr>
+                            {% if invoice.balance_due > 0 %}
+                            <tr>
+                                <td class="py-2 text-gray-600 dark:text-gray-400">Balance Due:</td>
+                                <td class="py-2 text-red-600 dark:text-red-400 font-bold text-right">{{ invoice.currency_code }} {{ "%.2f"|format(invoice.balance_due) }}</td>
+                            </tr>
+                            {% endif %}
+                        </table>
+
+                        <!-- Record payment button for just this invoice -->
+                        {% if invoice.balance_due > 0 and not invoice.is_cancelled %}
+                        <div class="mt-4">
+                            <a href="{{ url_for('billing_views.record_invoice_payment', invoice_id=invoice.invoice_id) }}" class="w-full bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded text-center block">
+                                Record Payment for This Invoice
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                {% if invoice.notes %}
+                <div class="mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Notes</h3>
+                    <p class="text-gray-600 dark:text-gray-400">{{ invoice.notes }}</p>
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Invoice Line Items -->
+            <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Line Items</h2>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700">
+                        <thead>
+                            <tr class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                                <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Item</th>
+                                <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Type</th>
+                                {% if invoice.is_gst_invoice %}
+                                <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">HSN/SAC</th>
+                                {% endif %}
+                                <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-center">Qty</th>
+                                <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">Unit Price</th>
+                                {% if invoice.total_discount > 0 %}
+                                <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">Discount</th>
+                                {% endif %}
+                                {% if invoice.is_gst_invoice %}
+                                <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">Taxable</th>
+                                <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">GST</th>
+                                {% endif %}
+                                <th class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-right">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if invoice.line_items %}
+                                {% for item in invoice.line_items %}
+                                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                        <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">
+                                            {{ item.item_name }}
+                                            {% if item.item_type == 'Medicine' and item.batch %}
+                                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                    Batch: {{ item.batch }}
+                                                    {% if item.expiry_date %}
+                                                        | Exp: {{ item.expiry_date.strftime('%d-%b-%Y') }}
+                                                    {% endif %}
+                                                </div>
+                                            {% endif %}
+                                            {% if item.included_in_consultation %}
+                                                <div class="text-xs italic text-gray-500 dark:text-gray-400">
+                                                    Included in consultation
+                                                </div>
+                                            {% endif %}
+                                        </td>
+                                        <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">{{ item.item_type }}</td>
+                                        {% if invoice.is_gst_invoice %}
+                                        <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">{{ item.hsn_sac_code or '-' }}</td>
+                                        {% endif %}
+                                        <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-center">{{ item.quantity }}</td>
+                                        <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">{{ invoice.currency_code }} {{ "%.2f"|format(item.unit_price) }}</td>
+                                        {% if invoice.total_discount > 0 %}
+                                        <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">
+                                            {% if item.discount_amount > 0 %}
+                                                {{ item.discount_percent }}% ({{ invoice.currency_code }} {{ "%.2f"|format(item.discount_amount) }})
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                        {% endif %}
+                                        {% if invoice.is_gst_invoice %}
+                                        <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">{{ invoice.currency_code }} {{ "%.2f"|format(item.taxable_amount) }}</td>
+                                        <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">
+                                            {{ item.gst_rate }}% 
+                                            {% if not invoice.is_interstate %}
+                                            ({{ "%.2f"|format(item.cgst_amount + item.sgst_amount) }})
+                                            {% else %}
+                                            ({{ "%.2f"|format(item.igst_amount) }})
+                                            {% endif %}
+                                        </td>
+                                        {% endif %}
+                                        <td class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-right font-semibold">{{ invoice.currency_code }} {{ "%.2f"|format(item.line_total) }}</td>
+                                    </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="{% if invoice.is_gst_invoice %}{% if invoice.total_discount > 0 %}9{% else %}8{% endif %}{% else %}{% if invoice.total_discount > 0 %}6{% else %}5{% endif %}{% endif %}" class="py-4 px-4 text-center text-gray-500 dark:text-gray-400">No line items available</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Payment History -->
+            <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Payment History</h2>
+                
+                <!-- Tabs for viewing payments by invoice or consolidated -->
+                <div class="mb-4 border-b border-gray-200 dark:border-gray-700">
+                    {% if related_invoices and related_invoices|length > 1 and all_payments and all_payments|length > 0 %}
+                    <ul class="flex flex-wrap -mb-px">
+                        <li class="mr-2">
+                            <a href="#" class="payment-tab active inline-block py-2 px-4 text-blue-600 border-b-2 border-blue-600 rounded-t-lg" data-target="current-invoice-payments">Current Invoice</a>
+                        </li>
+                        <li class="mr-2">
+                            <a href="#" class="payment-tab inline-block py-2 px-4 text-gray-500 hover:text-gray-700 border-b-2 border-transparent rounded-t-lg" data-target="all-invoices-payments">All Related Invoices</a>
+                        </li>
+                    </ul>
+                    {% endif %}
+                </div>
+                
+                <!-- Current Invoice Payments -->
+                <div id="current-invoice-payments" class="payment-tab-content">
+                    {% if invoice.payments and invoice.payments|length > 0 %}
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700">
+                                <thead>
+                                    <tr class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Date</th>
+                                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Payment Method</th>
+                                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Reference</th>
+                                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">Amount</th>
+                                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-center">Status</th>
+                                        <th class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for payment in invoice.payments %}
+                                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">{{ payment.payment_date.strftime('%d-%b-%Y') }}</td>
+                                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">
+                                                {% if payment.cash_amount > 0 %}Cash{% endif %}
+                                                {% if payment.credit_card_amount > 0 %}{% if payment.cash_amount > 0 %}, {% endif %}Credit Card{% endif %}
+                                                {% if payment.debit_card_amount > 0 %}{% if payment.cash_amount > 0 or payment.credit_card_amount > 0 %}, {% endif %}Debit Card{% endif %}
+                                                {% if payment.upi_amount > 0 %}{% if payment.cash_amount > 0 or payment.credit_card_amount > 0 or payment.debit_card_amount > 0 %}, {% endif %}UPI{% endif %}
+                                            </td>
+                                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 truncate" title="{{ payment.reference_number or payment.card_number_last4 or payment.upi_id or '-' }}">
+                                                {% if payment.reference_number %}
+                                                    {{ payment.reference_number }}
+                                                {% elif payment.card_number_last4 %}
+                                                    {{ payment.card_type }} ({{ payment.card_number_last4 }})
+                                                {% elif payment.upi_id %}
+                                                    {{ payment.upi_id }}
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </td>
+                                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">{{ payment.currency_code }} {{ "%.2f"|format(payment.total_amount) }}</td>
+                                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-center">
+                                                {% if payment.refunded_amount > 0 %}
+                                                    {% if payment.refunded_amount == payment.total_amount %}
+                                                        <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300">Refunded</span>
+                                                    {% else %}
+                                                        <span class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">Partially Refunded</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">Completed</span>
+                                                {% endif %}
+                                            </td>
+                                            <td class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-center">
+                                                {% if payment.refunded_amount < payment.total_amount %}
+                                                    <button type="button" class="refund-payment-btn text-red-500 hover:text-red-700" data-payment-id="{{ payment.payment_id }}" data-amount="{{ payment.total_amount - payment.refunded_amount }}">
+                                                        Refund
+                                                    </button>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% if payment.refunded_amount > 0 %}
+                                            <tr class="bg-red-50 dark:bg-red-900/20">
+                                                <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">{{ payment.refund_date.strftime('%d-%b-%Y') }}</td>
+                                                <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">Refund</td>
+                                                <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 truncate" title="{{ payment.refund_reason or '-' }}">
+                                                    {{ payment.refund_reason or '-' }}
+                                                </td>
+                                                <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right text-red-600 dark:text-red-400">-{{ payment.currency_code }} {{ "%.2f"|format(payment.refunded_amount) }}</td>
+                                                <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-center">
+                                                    <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300">Refund</span>
+                                                </td>
+                                                <td class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-center">-</td>
+                                            </tr>
+                                        {% endif %}
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-gray-600 dark:text-gray-400">No payments recorded for this invoice yet</p>
+                    {% endif %}
+                </div>
+                
+                <!-- All Related Invoices Payments -->
+                <div id="all-invoices-payments" class="payment-tab-content hidden">
+                    {% if all_payments and all_payments|length > 0 %}
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700">
+                                <thead>
+                                    <tr class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Date</th>
+                                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Invoice</th>
+                                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Payment Method</th>
+                                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Reference</th>
+                                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">Amount</th>
+                                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for payment in all_payments %}
+                                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 {% if payment.invoice_id == invoice.invoice_id %}bg-blue-50 dark:bg-blue-900/10{% endif %}">
+                                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">{{ payment.payment_date.strftime('%d-%b-%Y') }}</td>
+                                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">
+                                                <a href="{{ url_for('billing_views.view_invoice', invoice_id=payment.invoice_id) }}" class="text-blue-600 hover:underline">
+                                                    {{ payment.invoice_number }}
+                                                </a>
+                                            </td>
+                                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">
+                                                {% if payment.cash_amount > 0 %}Cash{% endif %}
+                                                {% if payment.credit_card_amount > 0 %}{% if payment.cash_amount > 0 %}, {% endif %}Credit Card{% endif %}
+                                                {% if payment.debit_card_amount > 0 %}{% if payment.cash_amount > 0 or payment.credit_card_amount > 0 %}, {% endif %}Debit Card{% endif %}
+                                                {% if payment.upi_amount > 0 %}{% if payment.cash_amount > 0 or payment.credit_card_amount > 0 or payment.debit_card_amount > 0 %}, {% endif %}UPI{% endif %}
+                                            </td>
+                                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 truncate">
+                                                {% if payment.reference_number %}
+                                                    {{ payment.reference_number }}
+                                                {% elif payment.card_number_last4 %}
+                                                    {{ payment.card_type }} ({{ payment.card_number_last4 }})
+                                                {% elif payment.upi_id %}
+                                                    {{ payment.upi_id }}
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </td>
+                                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">{{ payment.currency_code }} {{ "%.2f"|format(payment.total_amount) }}</td>
+                                            <td class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-center">
+                                                {% if payment.refunded_amount > 0 %}
+                                                    {% if payment.refunded_amount == payment.total_amount %}
+                                                        <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300">Refunded</span>
+                                                    {% else %}
+                                                        <span class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">Partially Refunded</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">Completed</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-gray-600 dark:text-gray-400">No payments recorded for any of the related invoices yet</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Form Modal -->
+    <div id="payment-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-md w-full mx-4">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold text-gray-900 dark:text-white">Record Payment</h3>
+                    <button type="button" id="close-payment-modal" class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <form id="payment-form" method="POST" action="{{ url_for('billing_views.record_invoice_payment', invoice_id=invoice.invoice_id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    {{ payment_form.invoice_id }}
+                    
+                    <div class="mb-4">
+                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ payment_form.payment_date.id }}">
+                            Payment Date
+                        </label>
+                        {{ payment_form.payment_date(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="font-semibold text-gray-700 dark:text-gray-300 mb-2">Payment Methods</div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ payment_form.cash_amount.id }}">
+                                    Cash Amount
+                                </label>
+                                {{ payment_form.cash_amount(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ payment_form.credit_card_amount.id }}">
+                                    Credit Card Amount
+                                </label>
+                                {{ payment_form.credit_card_amount(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <div>
+                                <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ payment_form.debit_card_amount.id }}">
+                                    Debit Card Amount
+                                </label>
+                                {{ payment_form.debit_card_amount(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ payment_form.upi_amount.id }}">
+                                    UPI Amount
+                                </label>
+                                {{ payment_form.upi_amount(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="card-details" class="mb-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ payment_form.card_number_last4.id }}">
+                                    Last 4 Digits
+                                </label>
+                                {{ payment_form.card_number_last4(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ payment_form.card_type.id }}">
+                                    Card Type
+                                </label>
+                                {{ payment_form.card_type(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="upi-details" class="mb-4">
+                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ payment_form.upi_id.id }}">
+                            UPI ID
+                        </label>
+                        {{ payment_form.upi_id(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ payment_form.reference_number.id }}">
+                            Reference Number
+                        </label>
+                        {{ payment_form.reference_number(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                    </div>
+                    
+                    <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg mb-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-blue-800 dark:text-blue-300 font-semibold">Balance Due:</span>
+                            <span class="text-blue-800 dark:text-blue-300 font-bold">{{ invoice.currency_code }} {{ "%.2f"|format(invoice.balance_due) }}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-end">
+                        <button type="button" id="cancel-payment" class="bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-2 px-4 rounded mr-2">
+                            Cancel
+                        </button>
+                        <button type="submit" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+                            Record Payment
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Refund Modal (include your existing refund modal here) -->
+    <div id="refund-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <!-- Refund form content from your existing implementation -->
+    </div>
+    
+    <!-- Void Invoice Modal -->
+    <div id="void-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-md w-full mx-4">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold text-gray-900 dark:text-white">Void Invoice</h3>
+                    <button type="button" id="close-void-modal" class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <form id="void-form" method="POST" action="{{ url_for('billing_views.void_invoice_view', invoice_id=invoice.invoice_id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="mb-4">
+                        <p class="text-yellow-600 dark:text-yellow-400 mb-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            Warning: Voiding an invoice cannot be undone.
+                        </p>
+                        <p class="text-gray-600 dark:text-gray-400 text-sm mb-4">
+                            This will cancel the invoice and reverse any inventory movements. Only invoices with no payments can be voided.
+                        </p>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="reason">
+                            Reason for Voiding
+                        </label>
+                        <textarea id="reason" name="reason" rows="3" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline" required></textarea>
+                    </div>
+                    
+                    <div class="flex justify-end">
+                        <button type="button" id="cancel-void" class="bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-2 px-4 rounded mr-2">
+                            Cancel
+                        </button>
+                        <button type="submit" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+                            Void Invoice
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Pay All Invoices Modal (New) -->
+    <div id="pay-all-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-md w-full mx-4">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold text-gray-900 dark:text-white">Pay All Invoices</h3>
+                    <button type="button" id="close-pay-all-modal" class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <form id="pay-all-form" method="POST" action="{{ url_for('billing_views.record_invoice_payment', invoice_id=invoice.invoice_id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="is_multi_invoice" value="true">
+                    
+                    <!-- List of invoices with amounts due -->
+                    <div class="mb-4">
+                        <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Invoices to Pay</h4>
+                        <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 max-h-40 overflow-y-auto mb-2">
+                            {% if related_invoices and related_invoices|length > 0 %}
+                                {% for related in related_invoices %}
+                                    {% if related.balance_due > 0 %}
+                                    <div class="flex justify-between items-center py-1 border-b border-gray-200 dark:border-gray-600 last:border-0">
+                                        <div class="flex items-center">
+                                            <input type="checkbox" id="invoice-{{ related.invoice_id }}" name="invoice_ids" value="{{ related.invoice_id }}" checked class="invoice-checkbox h-4 w-4 text-blue-600">
+                                            <label for="invoice-{{ related.invoice_id }}" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                                                {{ related.invoice_number }}
+                                                <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                                                    ({{ "GST" if related.is_gst_invoice else "Non-GST" }})
+                                                </span>
+                                            </label>
+                                        </div>
+                                        <span class="text-right text-sm font-semibold">{{ related.currency_code }} {{ "%.2f"|format(related.balance_due) }}</span>
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                <div class="flex justify-between items-center py-1">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="invoice-{{ invoice.invoice_id }}" name="invoice_ids" value="{{ invoice.invoice_id }}" checked class="invoice-checkbox h-4 w-4 text-blue-600">
+                                        <label for="invoice-{{ invoice.invoice_id }}" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                                            {{ invoice.invoice_number }}
+                                            <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                                                ({{ "GST" if invoice.is_gst_invoice else "Non-GST" }})
+                                            </span>
+                                        </label>
+                                    </div>
+                                    <span class="text-right text-sm font-semibold">{{ invoice.currency_code }} {{ "%.2f"|format(invoice.balance_due) }}</span>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Payment details (similar to single payment form) -->
+                    <div class="mb-4">
+                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="payment_date">
+                            Payment Date
+                        </label>
+                        <input type="date" id="payment_date" name="payment_date" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="font-semibold text-gray-700 dark:text-gray-300 mb-2">Payment Methods</div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="cash_amount">
+                                    Cash Amount
+                                </label>
+                                <input type="number" id="cash_amount" name="cash_amount" step="0.01" min="0" value="0" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline payment-amount">
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="credit_card_amount">
+                                    Credit Card Amount
+                                </label>
+                                <input type="number" id="credit_card_amount" name="credit_card_amount" step="0.01" min="0" value="0" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline payment-amount">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <div>
+                                <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="debit_card_amount">
+                                    Debit Card Amount
+                                </label>
+                                <input type="number" id="debit_card_amount" name="debit_card_amount" step="0.01" min="0" value="0" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline payment-amount">
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="upi_amount">
+                                    UPI Amount
+                                </label>
+                                <input type="number" id="upi_amount" name="upi_amount" step="0.01" min="0" value="0" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline payment-amount">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg mb-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-blue-800 dark:text-blue-300 font-semibold">Total Balance Due:</span>
+                            <span class="text-blue-800 dark:text-blue-300 font-bold">{{ invoice.currency_code }} {{ "%.2f"|format(total_balance_due if total_balance_due is defined else invoice.balance_due) }}</span>
+                        </div>
+                        <div class="flex justify-between items-center mt-2">
+                            <span class="text-gray-700 dark:text-gray-300 font-semibold">Payment Amount:</span>
+                            <span class="text-gray-700 dark:text-gray-300 font-bold" id="total-multi-payment-amount">{{ invoice.currency_code }} 0.00</span>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-end">
+                        <button type="button" id="cancel-pay-all" class="bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-2 px-4 rounded mr-2">
+                            Cancel
+                        </button>
+                        <button type="submit" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+                            Record Payments
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Initialize print functionality - define first
+    function initPrintFunctionality() {
+        console.log("Initializing print functionality");
+        const printBtn = document.getElementById('print-invoice');
+        const printAllBtn = document.getElementById('print-all-invoices');
+        
+        if (printBtn) {
+            printBtn.addEventListener('click', function() {
+                window.open('{{ url_for("billing_views.print_invoice", invoice_id=invoice.invoice_id) }}', '_blank');
+            });
+        }
+        
+        if (printAllBtn) {
+            printAllBtn.addEventListener('click', function() {
+                // Get URL from data attribute
+                var printUrl = this.getAttribute('data-print-url');
+                if (printUrl) {
+                    window.open(printUrl, '_blank');
+                } else {
+                    // Fallback
+                    window.open('{{ url_for("billing_views.print_invoice", invoice_id=invoice.invoice_id) }}', '_blank');
+                }
+            });
+        }
+    }
+    
+    // Initialize payment tabs
+    function initPaymentTabs() {
+        console.log("Initializing payment tabs");
+        const tabs = document.querySelectorAll('.payment-tab');
+        const tabContents = document.querySelectorAll('.payment-tab-content');
+        
+        tabs.forEach(tab => {
+            tab.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                // Remove active class from all tabs
+                tabs.forEach(t => {
+                    t.classList.remove('active', 'text-blue-600', 'border-blue-600');
+                    t.classList.add('text-gray-500', 'border-transparent');
+                });
+                
+                // Add active class to clicked tab
+                this.classList.add('active', 'text-blue-600', 'border-blue-600');
+                this.classList.remove('text-gray-500', 'border-transparent');
+                
+                // Hide all tab contents
+                tabContents.forEach(content => {
+                    content.classList.add('hidden');
+                });
+                
+                // Show corresponding content
+                const target = this.getAttribute('data-target');
+                document.getElementById(target).classList.remove('hidden');
+            });
+        });
+    }
+    
+    // Main initialization - ensure functions are defined before they're called
+    document.addEventListener('DOMContentLoaded', function() {
+        try {
+            console.log('Initializing invoice view JS...');
+            
+            // Initialize in correct order
+            initPaymentTabs();
+            initPrintFunctionality();
+            
+            console.log("All initialization complete");
+        } catch (error) {
+            console.error("Error during initialization:", error);
+        }
+    });
+</script>
+{% endblock %}

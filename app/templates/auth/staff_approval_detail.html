@@ -1,0 +1,256 @@
+<!-- app/templates/auth/staff_approval_detail.html -->
+
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}Staff Approval Detail - SkinSpire Clinic{% endblock %}
+{% block page_title %}Staff Approval Request Details{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="mb-6 rounded-md p-4 {{ 'bg-red-50 text-red-700' if category == 'error' else 'bg-green-50 text-green-700' }}">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            {% if category == 'error' %}
+                            <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                            </svg>
+                            {% else %}
+                            <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                            </svg>
+                            {% endif %}
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium">{{ message }}</p>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- Navigation buttons -->
+    <div class="mb-6 flex space-x-3">
+        <a href="{{ url_for('admin_views.hospital_admin_dashboard') }}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+            <svg class="-ml-1 mr-2 h-5 w-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Dashboard
+        </a>
+        <a href="{{ url_for('admin_views.staff_approval_admin') }}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+            Back to Approval List
+        </a>
+    </div>
+
+    {% if request %}
+        <div class="bg-white shadow-md rounded-lg overflow-hidden">
+            <!-- Header with Status Badge -->
+            <div class="px-6 py-5 border-b flex items-center justify-between">
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-900">
+                        Staff Approval Request
+                    </h2>
+                    <p class="mt-1 text-sm text-gray-500">
+                        Submitted on {{ request.created_at.strftime('%d %b %Y, %H:%M') if request.created_at else 'N/A' }}
+                    </p>
+                </div>
+                <span class="px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                    {{ request.status|title }}
+                </span>
+            </div>
+            
+            <!-- Verification Status Section -->
+            <div class="px-6 py-5 border-b bg-gray-50">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Verification Status</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500">Email Verification</p>
+                        <div class="flex items-center mt-1">
+                            <svg class="h-5 w-5 {{ 'text-green-500' if request.email_verified else 'text-gray-300' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            <span class="ml-2 text-sm">
+                                {{ 'Verified' if request.email_verified else 'Not Verified' }}
+                            </span>
+                        </div>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-500">Phone Verification</p>
+                        <div class="flex items-center mt-1">
+                            <svg class="h-5 w-5 {{ 'text-green-500' if request.phone_verified else 'text-gray-300' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            <span class="ml-2 text-sm">
+                                {{ 'Verified' if request.phone_verified else 'Not Verified' }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Staff Information Section -->
+            <div class="px-6 py-5 border-b">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Staff Information</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">Name</h4>
+                        <p class="mt-1 text-sm text-gray-900">
+                            {{ request.staff_info.personal_info.title if request.staff_info.personal_info.title else '' }} 
+                            {{ request.staff_info.personal_info.first_name if request.staff_info.personal_info.first_name else '' }} 
+                            {{ request.staff_info.personal_info.last_name if request.staff_info.personal_info.last_name else '' }}
+                        </p>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">Email</h4>
+                        <p class="mt-1 text-sm text-gray-900">{{ request.staff_info.contact_info.email if request.staff_info.contact_info.email else 'N/A' }}</p>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">Phone</h4>
+                        <p class="mt-1 text-sm text-gray-900">{{ request.staff_info.contact_info.phone if request.staff_info.contact_info.phone else 'N/A' }}</p>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">Requested Role</h4>
+                        <p class="mt-1 text-sm text-gray-900">{{ request.request_data.role_name if request.request_data and request.request_data.role_name else 'N/A' }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Application Information Section -->
+            <div class="px-6 py-5 border-b">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Application Information</h3>
+                <div class="space-y-4">
+                    {% if request.request_data %}
+                        {% if request.request_data.qualifications %}
+                            <div>
+                                <h4 class="text-sm font-medium text-gray-500">Qualifications</h4>
+                                <p class="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{{ request.request_data.qualifications }}</p>
+                            </div>
+                        {% endif %}
+                        {% if request.request_data.experience %}
+                            <div>
+                                <h4 class="text-sm font-medium text-gray-500">Experience</h4>
+                                <p class="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{{ request.request_data.experience }}</p>
+                            </div>
+                        {% endif %}
+                        {% if request.request_data.specialization %}
+                            <div>
+                                <h4 class="text-sm font-medium text-gray-500">Specialization</h4>
+                                <p class="mt-1 text-sm text-gray-900">{{ request.request_data.specialization }}</p>
+                            </div>
+                        {% endif %}
+                        {% if request.request_data.comments %}
+                            <div>
+                                <h4 class="text-sm font-medium text-gray-500">Additional Comments</h4>
+                                <p class="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{{ request.request_data.comments }}</p>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-sm text-gray-500">No additional information provided.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Approval Actions - Show form for all pending requests -->
+            <div class="px-6 py-5">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Approval Decision</h3>
+                
+                <!-- Always show form for any request with status "pending" -->
+                {% if request.status == 'pending' %}
+                    <form action="{{ url_for('admin_views.process_approval', request_id=request.request_id) }}" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        
+                        <!-- Role Selection -->
+                        <div class="mb-4">
+                            <label for="role_id" class="block text-sm font-medium text-gray-700">
+                                Assign Staff Role 
+                                <span class="text-xs text-gray-500">(Requested: {{ request.request_data.role_name if request.request_data and request.request_data.role_name else 'N/A' }})</span>
+                            </label>
+                            <select id="role_id" name="role_id" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                                <option value="0">Select Role</option>
+                                {% for role in available_roles %}
+                                    <option value="{{ role.role_id }}" 
+                                        {% if role.role_name == request.request_data.role_name %}selected{% endif %}>
+                                        {{ role.role_name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="notes" class="block text-sm font-medium text-gray-700">Admin Notes</label>
+                            <textarea id="notes" name="notes" rows="3" class="mt-1 shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border border-gray-300 rounded-md"></textarea>
+                            <p class="mt-1 text-xs text-gray-500">Optional notes regarding your decision</p>
+                        </div>
+                        
+                        <!-- Replace your current button section with this: -->
+                        <div class="flex justify-end space-x-4">
+                            <!-- Reject button with inline style -->
+                            <button type="submit" name="action" value="reject" style="background-color: #b91c1c; color: black; font-weight: bold;" class="inline-flex items-center px-4 py-2 border border-gray-800 text-sm rounded-md shadow-sm">
+                            Reject Request
+                            </button>
+                            
+                            <!-- Approve button with inline style -->
+                            <button type="submit" name="action" value="approve" 
+                                {% if not (request.email_verified and request.phone_verified) %}
+                                    disabled 
+                                    title="Verification required before approval"
+                                    style="background-color: #6b7280; color: black; font-weight: bold; cursor: not-allowed;"
+                                {% else %}
+                                    style="background-color: #15803d; color: black; font-weight: bold;"
+                                {% endif %}
+                                class="inline-flex items-center px-4 py-2 border border-gray-800 text-sm rounded-md shadow-sm">
+                            Approve Request
+                            </button>
+                        </div>
+                    </form>
+                {% else %}
+                    <!-- Display for already processed requests -->
+                    <div class="bg-gray-50 rounded-md p-4">
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0">
+                                {% if request.status == 'approved' %}
+                                <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                </svg>
+                                {% else %}
+                                <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                                </svg>
+                                {% endif %}
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-gray-900">
+                                    {% if request.status == 'approved' %}
+                                        This request was approved on {{ request.approved_at.strftime('%d %b %Y, %H:%M') if request.approved_at else 'N/A' }}
+                                    {% else %}
+                                        This request was rejected on {{ request.approved_at.strftime('%d %b %Y, %H:%M') if request.approved_at else 'N/A' }}
+                                    {% endif %}
+                                </p>
+                                {% if request.notes %}
+                                    <p class="mt-2 text-sm text-gray-500 whitespace-pre-wrap">{{ request.notes }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    {% else %}
+        <!-- Not found view -->
+        <div class="bg-white shadow-md rounded-lg overflow-hidden p-6">
+            <div class="text-center">
+                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <h3 class="mt-2 text-sm font-medium text-gray-900">Request not found</h3>
+                <p class="mt-1 text-sm text-gray-500">
+                    The requested approval request doesn't exist or has been removed.
+                </p>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

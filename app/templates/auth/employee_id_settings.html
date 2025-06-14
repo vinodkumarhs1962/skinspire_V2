@@ -1,0 +1,147 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}Employee ID Settings - SkinSpire Clinic{% endblock %}
+{% block page_title %}Employee ID Settings{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="mb-6 rounded-md p-4 {{ 'bg-red-50 text-red-700' if category == 'error' else 'bg-green-50 text-green-700' }}">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            {% if category == 'error' %}
+                            <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                            </svg>
+                            {% else %}
+                            <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                            </svg>
+                            {% endif %}
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium">{{ message }}</p>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- Navigation buttons -->
+    <div class="mb-6">
+        <a href="{{ url_for('admin_views.staff_management') }}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+            <svg class="-ml-1 mr-2 h-5 w-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Staff Management
+        </a>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <!-- Settings Form -->
+        <div class="col-span-2 bg-white shadow-md rounded-lg overflow-hidden">
+            <div class="px-6 py-5 border-b">
+                <h3 class="text-lg font-medium text-gray-900">Employee ID Generation Settings</h3>
+                <p class="mt-1 text-sm text-gray-500">
+                    Configure how employee IDs are generated for your hospital
+                </p>
+            </div>
+            
+            <form method="POST" action="{{ url_for('admin_views.employee_id_settings') }}" class="px-6 py-5">
+                {{ form.csrf_token }}
+                
+                <div class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="prefix" class="block text-sm font-medium text-gray-700">Prefix</label>
+                            {{ form.prefix(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm") }}
+                            <p class="mt-1 text-xs text-gray-500">Text to appear at the beginning of ID (e.g., EMP, DOC)</p>
+                        </div>
+                        
+                        <div>
+                            <label for="next_number" class="block text-sm font-medium text-gray-700">Next Number</label>
+                            {{ form.next_number(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm") }}
+                            <p class="mt-1 text-xs text-gray-500">The next sequential number to use</p>
+                            {% if form.next_number.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.next_number.errors[0] }}</p>
+                            {% endif %}
+                        </div>
+                        
+                        <div>
+                            <label for="padding" class="block text-sm font-medium text-gray-700">Number Padding</label>
+                            {{ form.padding(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm") }}
+                            <p class="mt-1 text-xs text-gray-500">How many digits to use for the number</p>
+                        </div>
+                        
+                        <div>
+                            <label for="suffix" class="block text-sm font-medium text-gray-700">Suffix</label>
+                            {{ form.suffix(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm") }}
+                            <p class="mt-1 text-xs text-gray-500">Text to appear at the end of ID (e.g., 2023, MAIN)</p>
+                        </div>
+                        
+                        <div>
+                            <label for="separator" class="block text-sm font-medium text-gray-700">Separator</label>
+                            {{ form.separator(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm") }}
+                            <p class="mt-1 text-xs text-gray-500">Character to separate parts of the ID</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6 flex justify-end">
+                    <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        Save Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Preview Panel -->
+        <div class="bg-white shadow-md rounded-lg overflow-hidden">
+            <div class="px-6 py-5 border-b">
+                <h3 class="text-lg font-medium text-gray-900">ID Preview</h3>
+                <p class="mt-1 text-sm text-gray-500">
+                    How your employee IDs will appear
+                </p>
+            </div>
+            <div class="px-6 py-5">
+                {% if preview_id %}
+                    <div class="bg-gray-50 rounded-md p-8 flex items-center justify-center">
+                        <div class="text-2xl font-mono font-bold text-gray-900">{{ preview_id }}</div>
+                    </div>
+                    <p class="mt-4 text-sm text-gray-600 text-center">
+                        Next ID to be generated
+                    </p>
+                {% else %}
+                    <div class="bg-gray-50 rounded-md p-8 flex items-center justify-center">
+                        <div class="text-gray-400">No preview available</div>
+                    </div>
+                {% endif %}
+                
+                <div class="mt-6">
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">Format Guide</h4>
+                    <div class="text-sm text-gray-600 space-y-2">
+                        <div class="flex items-center">
+                            <span class="w-20 text-xs text-gray-500">PREFIX</span>
+                            <span class="h-6 border-l border-gray-300 mx-2"></span>
+                            <span>Helps identify ID type (e.g., EMP, DOC)</span>
+                        </div>
+                        <div class="flex items-center">
+                            <span class="w-20 text-xs text-gray-500">NUMBER</span>
+                            <span class="h-6 border-l border-gray-300 mx-2"></span>
+                            <span>Sequential number with padding</span>
+                        </div>
+                        <div class="flex items-center">
+                            <span class="w-20 text-xs text-gray-500">SUFFIX</span>
+                            <span class="h-6 border-l border-gray-300 mx-2"></span>
+                            <span>Optional end identifier (e.g., year)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

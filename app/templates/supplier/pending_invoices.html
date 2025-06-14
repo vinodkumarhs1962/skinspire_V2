@@ -1,0 +1,819 @@
+{% extends "layouts/dashboard.html" %}
+{% from "components/alerts.html" import alert %}
+{% from "components/badges.html" import payment_status_badge %}
+{% from "components/tables.html" import sortable_header, pagination %}
+
+{% block title %}Pending Supplier Invoices{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <!-- Header Section -->
+    <div class="flex flex-col md:flex-row items-start justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Pending Supplier Invoices</h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">
+                {% if supplier %}
+                Manage unpaid and partially paid invoices for {{ supplier.supplier_name }}
+                {% else %}
+                Manage unpaid and partially paid supplier invoices
+                {% endif %}
+            </p>
+        </div>
+        <div class="mt-4 md:mt-0 space-x-2">
+            {% if supplier %}
+            <a href="{{ url_for('supplier_views.view_supplier', supplier_id=supplier.supplier_id) }}" class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i> Back to Supplier
+            </a>
+            <a href="{{ url_for('supplier_views.create_supplier_invoice') }}?supplier_id={{ supplier.supplier_id }}" class="btn-primary">
+                <i class="fas fa-plus mr-2"></i> New Invoice
+            </a>
+            {% else %}
+            <a href="{{ url_for('supplier_views.supplier_invoice_list') }}" class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i> All Invoices
+            </a>
+            <a href="{{ url_for('supplier_views.create_supplier_invoice') }}" class="btn-primary">
+                <i class="fas fa-plus mr-2"></i> New Invoice
+            </a>
+            {% endif %}
+            <a href="{{ url_for('supplier_views.record_payment') }}{% if supplier %}?supplier_id={{ supplier.supplier_id }}{% endif %}" class="btn-success">
+                <i class="fas fa-money-bill mr-2"></i> Record Payment
+            </a>
+        </div>
+    </div>
+    
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <!-- Total Pending Amount -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <div class="flex items-center">
+                <div class="p-3 rounded-full bg-red-100 dark:bg-red-900 text-red-500 dark:text-red-300 mr-4">
+                    <i class="fas fa-file-invoice-dollar text-xl"></i>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">Total Pending Amount</p>
+                    <div class="flex items-baseline">
+                        <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100">{{ summary.total_pending_amount|currencyformat }}</h3>
+                        <p class="ml-2 text-xs text-gray-500 dark:text-gray-400">across {{ summary.total_pending_count }} invoices</p>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-2">
+                <div class="h-1 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div class="h-1 bg-red-500 rounded-full" style="width: 100%"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Overdue Amount -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <div class="flex items-center">
+                <div class="p-3 rounded-full bg-yellow-100 dark:bg-yellow-900 text-yellow-500 dark:text-yellow-300 mr-4">
+                    <i class="fas fa-exclamation-triangle text-xl"></i>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">Overdue Amount</p>
+                    <div class="flex items-baseline">
+                        <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100">{{ summary.overdue_amount|currencyformat }}</h3>
+                        <p class="ml-2 text-xs text-gray-500 dark:text-gray-400">across {{ summary.overdue_count }} invoices</p>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-2">
+                <div class="h-1 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div class="h-1 bg-yellow-500 rounded-full" style="width: {{ summary.overdue_percentage }}%"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Due This Week -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <div class="flex items-center">
+                <div class="p-3 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-500 dark:text-blue-300 mr-4">
+                    <i class="fas fa-calendar-alt text-xl"></i>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">Due This Week</p>
+                    <div class="flex items-baseline">
+                        <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100">{{ summary.due_this_week_amount|currencyformat }}</h3>
+                        <p class="ml-2 text-xs text-gray-500 dark:text-gray-400">across {{ summary.due_this_week_count }} invoices</p>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-2">
+                <div class="h-1 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div class="h-1 bg-blue-500 rounded-full" style="width: {{ summary.due_this_week_percentage }}%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Filter Section -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+        <form method="GET" action="{{ url_for('supplier_views.pending_invoices') }}" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <!-- Supplier Filter (only if not already viewing a specific supplier) -->
+            {% if not supplier %}
+            <div>
+                <label for="supplier_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Supplier</label>
+                <select id="supplier_id" name="supplier_id" class="form-select">
+                    <option value="">All Suppliers</option>
+                    {% for s in all_suppliers %}
+                    <option value="{{ s.supplier_id }}" {% if request.args.get('supplier_id') == s.supplier_id %}selected{% endif %}>
+                        {{ s.supplier_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% else %}
+            <input type="hidden" name="supplier_id" value="{{ supplier.supplier_id }}">
+            {% endif %}
+            
+            <!-- Date Range -->
+            <div>
+                <label for="invoice_from_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Invoice From</label>
+                <input type="date" id="invoice_from_date" name="invoice_from_date" class="form-input" value="{{ request.args.get('invoice_from_date', '') }}">
+            </div>
+            
+            <div>
+                <label for="invoice_to_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Invoice To</label>
+                <input type="date" id="invoice_to_date" name="invoice_to_date" class="form-input" value="{{ request.args.get('invoice_to_date', '') }}">
+            </div>
+            
+            <!-- Due Date Range -->
+            <div>
+                <label for="due_from_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Due From</label>
+                <input type="date" id="due_from_date" name="due_from_date" class="form-input" value="{{ request.args.get('due_from_date', '') }}">
+            </div>
+            
+            <div>
+                <label for="due_to_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Due To</label>
+                <input type="date" id="due_to_date" name="due_to_date" class="form-input" value="{{ request.args.get('due_to_date', '') }}">
+            </div>
+            
+            <!-- Payment Status -->
+            <div>
+                <label for="payment_status" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Payment Status</label>
+                <select id="payment_status" name="payment_status" class="form-select">
+                    <option value="">All Pending</option>
+                    <option value="unpaid" {% if request.args.get('payment_status') == 'unpaid' %}selected{% endif %}>Unpaid</option>
+                    <option value="partial" {% if request.args.get('payment_status') == 'partial' %}selected{% endif %}>Partially Paid</option>
+                    <option value="overdue" {% if request.args.get('payment_status') == 'overdue' %}selected{% endif %}>Overdue</option>
+                </select>
+            </div>
+            
+            <!-- Amount Range -->
+            <div>
+                <label for="min_amount" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Min Amount</label>
+                <input type="number" id="min_amount" name="min_amount" class="form-input" step="0.01" min="0" value="{{ request.args.get('min_amount', '') }}">
+            </div>
+            
+            <div>
+                <label for="max_amount" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Max Amount</label>
+                <input type="number" id="max_amount" name="max_amount" class="form-input" step="0.01" min="0" value="{{ request.args.get('max_amount', '') }}">
+            </div>
+            
+            <!-- Filter Actions -->
+            <div class="md:col-span-4 flex justify-end items-center mt-2">
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-filter mr-2"></i> Apply Filters
+                </button>
+                <a href="{{ url_for('supplier_views.pending_invoices', supplier_id=supplier.supplier_id if supplier else None) }}" class="btn-secondary ml-2">
+                    <i class="fas fa-sync-alt mr-2"></i> Reset Filters
+                </a>
+                <button type="button" id="export-csv" class="btn-secondary ml-2">
+                    <i class="fas fa-file-export mr-2"></i> Export CSV
+                </button>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Pending Invoices Table -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-between items-center">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Pending Invoices</h2>
+            <div class="text-sm text-gray-600 dark:text-gray-400">
+                Showing {{ invoices|length }} of {{ total_invoices }} pending invoices
+            </div>
+        </div>
+        
+        <div class="p-6">
+            {% if invoices %}
+            <div class="overflow-x-auto">
+                <table class="min-w-full table-auto">
+                    <thead>
+                        <tr class="bg-gray-50 dark:bg-gray-700 text-xs uppercase">
+                            <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">
+                                {{ sortable_header('Invoice', 'supplier_invoice_number', request.args.get('sort_by', ''), request.args) }}
+                            </th>
+                            {% if not supplier %}
+                            <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">
+                                {{ sortable_header('Supplier', 'supplier_name', request.args.get('sort_by', ''), request.args) }}
+                            </th>
+                            {% endif %}
+                            <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">
+                                {{ sortable_header('Invoice Date', 'invoice_date', request.args.get('sort_by', ''), request.args) }}
+                            </th>
+                            <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">
+                                {{ sortable_header('Due Date', 'due_date', request.args.get('sort_by', ''), request.args) }}
+                            </th>
+                            <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">
+                                {{ sortable_header('Total', 'total_amount', request.args.get('sort_by', ''), request.args) }}
+                            </th>
+                            <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">
+                                {{ sortable_header('Paid', 'paid_amount', request.args.get('sort_by', ''), request.args) }}
+                            </th>
+                            <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">
+                                {{ sortable_header('Balance', 'balance_due', request.args.get('sort_by', ''), request.args) }}
+                            </th>
+                            <th class="px-4 py-2 text-center text-gray-500 dark:text-gray-300">Status</th>
+                            <th class="px-4 py-2 text-center text-gray-500 dark:text-gray-300">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for invoice in invoices %}
+                        <tr class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 
+                            {% if invoice.is_overdue %}bg-red-50 dark:bg-red-900/20{% endif %}">
+                            <td class="px-4 py-3">
+                                <div class="font-medium text-gray-800 dark:text-gray-200">
+                                    <a href="{{ url_for('supplier_views.view_supplier_invoice', invoice_id=invoice.invoice_id) }}" class="hover:underline text-indigo-600 dark:text-indigo-400">
+                                        {{ invoice.supplier_invoice_number }}
+                                    </a>
+                                </div>
+                                {% if invoice.po_id %}
+                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                    PO: <a href="{{ url_for('supplier_views.view_purchase_order', po_id=invoice.po_id) }}" class="hover:underline text-indigo-600 dark:text-indigo-400">
+                                        {{ invoice.po_number }}
+                                    </a>
+                                </div>
+                                {% endif %}
+                            </td>
+                            {% if not supplier %}
+                            <td class="px-4 py-3">
+                                <div class="font-medium text-gray-800 dark:text-gray-200">
+                                    <a href="{{ url_for('supplier_views.view_supplier', supplier_id=invoice.supplier_id) }}" class="hover:underline text-indigo-600 dark:text-indigo-400">
+                                        {{ invoice.supplier_name }}
+                                    </a>
+                                </div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                    {{ invoice.supplier_category }}
+                                </div>
+                            </td>
+                            {% endif %}
+                            <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                {{ invoice.invoice_date|dateformat }}
+                            </td>
+                            <td class="px-4 py-3 {% if invoice.is_overdue %}font-medium text-red-600 dark:text-red-400{% else %}text-gray-700 dark:text-gray-300{% endif %}">
+                                {{ invoice.due_date|dateformat }}
+                                {% if invoice.is_overdue %}
+                                <div class="text-xs">
+                                    Overdue by {{ invoice.days_overdue }} days
+                                </div>
+                                {% else %}
+                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                    {% if invoice.days_until_due < 0 %}
+                                    Due today
+                                    {% elif invoice.days_until_due == 0 %}
+                                    Due tomorrow
+                                    {% else %}
+                                    Due in {{ invoice.days_until_due }} days
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                {{ invoice.total_amount|currencyformat(invoice.currency_code) }}
+                                {% if invoice.currency_code != 'INR' %}
+                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                    {{ (invoice.total_amount * invoice.exchange_rate)|currencyformat('INR') }}
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-right text-green-600 dark:text-green-400">
+                                {{ invoice.paid_amount|currencyformat(invoice.currency_code) }}
+                                {% if invoice.payment_status == 'partial' %}
+                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                    {{ ((invoice.paid_amount / invoice.total_amount) * 100)|round(1) }}% paid
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-right font-medium text-red-600 dark:text-red-400">
+                                {{ invoice.balance_due|currencyformat(invoice.currency_code) }}
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                {{ payment_status_badge(invoice.payment_status) }}
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <div class="flex items-center justify-center space-x-2">
+                                    <a href="{{ url_for('supplier_views.view_supplier_invoice', invoice_id=invoice.invoice_id) }}" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300" title="View Invoice">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{{ url_for('supplier_views.record_payment') }}?invoice_id={{ invoice.invoice_id }}" class="text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300" title="Record Payment">
+                                        <i class="fas fa-money-bill"></i>
+                                    </a>
+                                    {% if invoice.payment_status == 'unpaid' %}
+                                    <a href="{{ url_for('supplier_views.edit_supplier_invoice', invoice_id=invoice.invoice_id) }}" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300" title="Edit Invoice">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            <div class="mt-4">
+                {{ pagination(pagination_info) }}
+            </div>
+            {% else %}
+            <div class="text-center py-6">
+                <div class="text-gray-500 dark:text-gray-400">
+                    <i class="fas fa-check-circle text-4xl mb-3"></i>
+                    <p>No pending invoices found</p>
+                    <p class="text-sm mt-2">
+                        {% if filters_applied %}
+                        Try adjusting your filters or date range
+                        {% else %}
+                        All supplier invoices have been paid
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Upcoming Payments Chart -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+            <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Upcoming Payments</h2>
+            </div>
+            
+            <div class="p-6">
+                <div id="upcoming-payments-chart" class="h-64"></div>
+            </div>
+        </div>
+        
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+            <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Pending Amount by Supplier</h2>
+            </div>
+            
+            <div class="p-6">
+                <div id="supplier-distribution-chart" class="h-64"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Batch Payment Section -->
+    {% if invoices|length > 1 %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Batch Payment</h2>
+        </div>
+        
+        <div class="p-6">
+            <p class="text-gray-600 dark:text-gray-400 mb-4">Process payments for multiple invoices at once</p>
+            
+            <form method="POST" action="{{ url_for('supplier_views.batch_payment') }}" id="batch-payment-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                
+                <div class="overflow-x-auto mb-4">
+                    <table class="min-w-full table-auto">
+                        <thead>
+                            <tr class="bg-gray-50 dark:bg-gray-700 text-xs uppercase">
+                                <th class="px-4 py-2 text-center w-10">
+                                    <input type="checkbox" id="select-all" class="form-checkbox">
+                                </th>
+                                <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">Invoice</th>
+                                {% if not supplier %}
+                                <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">Supplier</th>
+                                {% endif %}
+                                <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">Due Date</th>
+                                <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">Balance Due</th>
+                                <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">Pay Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for invoice in invoices %}
+                            <tr class="border-b dark:border-gray-700">
+                                <td class="px-4 py-3 text-center">
+                                    <input type="checkbox" name="invoice_ids" value="{{ invoice.invoice_id }}" class="invoice-checkbox form-checkbox">
+                                </td>
+                                <td class="px-4 py-3">
+                                    <div class="font-medium text-gray-800 dark:text-gray-200">
+                                        {{ invoice.supplier_invoice_number }}
+                                    </div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                                        {{ invoice.invoice_date|dateformat }}
+                                    </div>
+                                </td>
+                                {% if not supplier %}
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    {{ invoice.supplier_name }}
+                                </td>
+                                {% endif %}
+                                <td class="px-4 py-3 {% if invoice.is_overdue %}text-red-600 dark:text-red-400{% else %}text-gray-700 dark:text-gray-300{% endif %}">
+                                    {{ invoice.due_date|dateformat }}
+                                </td>
+                                <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                    {{ invoice.balance_due|currencyformat(invoice.currency_code) }}
+                                </td>
+                                <td class="px-4 py-3">
+                                    <input type="hidden" name="invoice_currency_{{ invoice.invoice_id }}" value="{{ invoice.currency_code }}">
+                                    <input type="number" name="payment_amount_{{ invoice.invoice_id }}" value="{{ invoice.balance_due }}" step="0.01" min="0" max="{{ invoice.balance_due }}" class="form-input w-full payment-amount-input" data-invoice-id="{{ invoice.invoice_id }}" disabled>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label for="batch_payment_method" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Payment Method</label>
+                        <select id="batch_payment_method" name="payment_method" class="form-select" required>
+                            <option value="">Select Payment Method</option>
+                            <option value="bank_transfer">Bank Transfer</option>
+                            <option value="cheque">Cheque</option>
+                            <option value="online_banking">Online Banking</option>
+                            <option value="upi">UPI</option>
+                            <option value="cash">Cash</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="batch_payment_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Payment Date</label>
+                        <input type="date" id="batch_payment_date" name="payment_date" class="form-input" value="{{ today_date }}" required>
+                    </div>
+                    
+                    <div>
+                        <label for="batch_reference_no" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reference Number</label>
+                        <input type="text" id="batch_reference_no" name="reference_no" class="form-input" placeholder="Transaction/Cheque/UPI reference">
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <label for="batch_notes" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
+                    <textarea id="batch_notes" name="notes" rows="2" class="form-textarea w-full" placeholder="Add any notes about this batch payment"></textarea>
+                </div>
+                
+                <div class="mt-4 flex justify-between items-center">
+                    <div>
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Selected:</span>
+                        <span id="selected-count" class="ml-1 text-sm text-gray-600 dark:text-gray-400">0</span>
+                        <span class="mx-2 text-gray-400">|</span>
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Total Amount:</span>
+                        <span id="selected-total" class="ml-1 text-sm font-bold text-gray-800 dark:text-gray-200"> Rs.0.00</span>
+                    </div>
+                    
+                    <div>
+                        <button type="button" id="select-overdue-btn" class="btn-secondary">
+                            Select Overdue
+                        </button>
+                        <button type="submit" id="process-batch-payment" class="btn-primary ml-2" disabled>
+                            <i class="fas fa-money-bill mr-2"></i> Process Batch Payment
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Export CSV functionality
+    const exportCsvBtn = document.getElementById('export-csv');
+    if (exportCsvBtn) {
+        exportCsvBtn.addEventListener('click', function() {
+            // Get current URL and add export parameter
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('export', 'csv');
+            window.location.href = currentUrl.toString();
+        });
+    }
+    
+    // Upcoming Payments Chart
+    const upcomingPaymentsChart = document.getElementById('upcoming-payments-chart');
+    if (upcomingPaymentsChart) {
+        const ctx = upcomingPaymentsChart.getContext('2d');
+        const isDarkMode = document.querySelector('html').classList.contains('dark');
+        const textColor = isDarkMode ? '#D1D5DB' : '#4B5563';
+        const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+        
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: {{ upcoming_payments.labels|tojson if upcoming_payments and upcoming_payments.labels else '[]'|safe }},
+                datasets: [{
+                    label: 'Amount Due',
+                    data: {{ upcoming_payments.values|tojson if upcoming_payments and upcoming_payments.values else '[]'|safe }},
+                    backgroundColor: [
+                        'rgba(239, 68, 68, 0.7)',  // Red for overdue
+                        'rgba(245, 158, 11, 0.7)', // Yellow for this week
+                        'rgba(16, 185, 129, 0.7)', // Green for next week
+                        'rgba(79, 70, 229, 0.7)',  // Indigo for later
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false,
+                        labels: {
+                            color: textColor
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `Amount Due: ${new Intl.NumberFormat('en-IN', {
+                                    style: 'currency',
+                                    currency: 'INR'
+                                }).format(context.raw)}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            color: gridColor
+                        },
+                        ticks: {
+                            color: textColor
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: gridColor
+                        },
+                        ticks: {
+                            color: textColor,
+                            callback: function(value) {
+                                return new Intl.NumberFormat('en-IN', {
+                                    style: 'currency',
+                                    currency: 'INR',
+                                    maximumSignificantDigits: 3
+                                }).format(value);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Supplier Distribution Chart
+    const supplierDistributionChart = document.getElementById('supplier-distribution-chart');
+    if (supplierDistributionChart) {
+        const ctx = supplierDistributionChart.getContext('2d');
+        const isDarkMode = document.querySelector('html').classList.contains('dark');
+        const textColor = isDarkMode ? '#D1D5DB' : '#4B5563';
+        
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: {{ supplier_distribution.labels|tojson if supplier_distribution and supplier_distribution.labels else '[]'|safe }},
+                datasets: [{
+                    data: {{ supplier_distribution.values|tojson if supplier_distribution and supplier_distribution.values else '[]'|safe }},
+                    backgroundColor: [
+                        'rgba(79, 70, 229, 0.7)',  // Indigo
+                        'rgba(139, 92, 246, 0.7)', // Purple
+                        'rgba(16, 185, 129, 0.7)', // Green
+                        'rgba(245, 158, 11, 0.7)', // Yellow
+                        'rgba(239, 68, 68, 0.7)',  // Red
+                        'rgba(236, 72, 153, 0.7)', // Pink
+                        'rgba(96, 165, 250, 0.7)'  // Blue
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            color: textColor
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.raw || 0;
+                                const formattedValue = new Intl.NumberFormat('en-IN', {
+                                    style: 'currency',
+                                    currency: 'INR'
+                                }).format(value);
+                                const total = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                const percentage = Math.round((value / total) * 100);
+                                
+                                return `${label}: ${formattedValue} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Batch Payment Functionality
+    const selectAllCheckbox = document.getElementById('select-all');
+    const invoiceCheckboxes = document.querySelectorAll('.invoice-checkbox');
+    const paymentAmountInputs = document.querySelectorAll('.payment-amount-input');
+    const selectedCountElem = document.getElementById('selected-count');
+    const selectedTotalElem = document.getElementById('selected-total');
+    const processBatchPaymentBtn = document.getElementById('process-batch-payment');
+    const selectOverdueBtn = document.getElementById('select-overdue-btn');
+    
+    // Function to update total and count
+    function updateSelectionSummary() {
+        let selectedCount = 0;
+        let selectedTotal = 0;
+        let currencyCodes = new Set();
+        
+        invoiceCheckboxes.forEach(function(checkbox) {
+            if (checkbox.checked) {
+                selectedCount++;
+                const invoiceId = checkbox.value;
+                const amountInput = document.querySelector(`.payment-amount-input[data-invoice-id="${invoiceId}"]`);
+                const currencyInput = document.querySelector(`input[name="invoice_currency_${invoiceId}"]`);
+                
+                if (amountInput && amountInput.value) {
+                    selectedTotal += parseFloat(amountInput.value);
+                }
+                
+                if (currencyInput && currencyInput.value) {
+                    currencyCodes.add(currencyInput.value);
+                }
+            }
+        });
+        
+        // Update display elements
+        if (selectedCountElem) {
+            selectedCountElem.textContent = selectedCount;
+        }
+        
+        if (selectedTotalElem) {
+            // If multiple currencies, show just the number
+            if (currencyCodes.size > 1) {
+                selectedTotalElem.textContent = new Intl.NumberFormat('en-IN', {
+                    maximumFractionDigits: 2,
+                    minimumFractionDigits: 2
+                }).format(selectedTotal);
+            } else {
+                // Otherwise show formatted with currency
+                const currency = currencyCodes.size === 1 ? Array.from(currencyCodes)[0] : 'INR';
+                selectedTotalElem.textContent = new Intl.NumberFormat('en-IN', {
+                    style: 'currency',
+                    currency: currency
+                }).format(selectedTotal);
+            }
+        }
+        
+        // Enable/disable process payment button
+        if (processBatchPaymentBtn) {
+            processBatchPaymentBtn.disabled = selectedCount === 0;
+        }
+    }
+    
+    // Handle "Select All" checkbox
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            const isChecked = this.checked;
+            
+            invoiceCheckboxes.forEach(function(checkbox) {
+                checkbox.checked = isChecked;
+                
+                // Also enable/disable corresponding amount input
+                const invoiceId = checkbox.value;
+                const amountInput = document.querySelector(`.payment-amount-input[data-invoice-id="${invoiceId}"]`);
+                if (amountInput) {
+                    amountInput.disabled = !isChecked;
+                }
+            });
+            
+            updateSelectionSummary();
+        });
+    }
+    
+    // Handle individual invoice checkboxes
+    invoiceCheckboxes.forEach(function(checkbox) {
+        checkbox.addEventListener('change', function() {
+            // Enable/disable corresponding amount input
+            const invoiceId = this.value;
+            const amountInput = document.querySelector(`.payment-amount-input[data-invoice-id="${invoiceId}"]`);
+            if (amountInput) {
+                amountInput.disabled = !this.checked;
+            }
+            
+            // Update summary
+            updateSelectionSummary();
+            
+            // Check/uncheck "Select All" based on all checkboxes
+            if (selectAllCheckbox) {
+                const allChecked = Array.from(invoiceCheckboxes).every(cb => cb.checked);
+                selectAllCheckbox.checked = allChecked;
+            }
+        });
+    });
+    
+    // Handle amount input changes
+    paymentAmountInputs.forEach(function(input) {
+        input.addEventListener('change', function() {
+            updateSelectionSummary();
+        });
+    });
+    
+    // Handle "Select Overdue" button
+    if (selectOverdueBtn) {
+        selectOverdueBtn.addEventListener('click', function() {
+            // Find all overdue invoice rows
+            const overdueRows = document.querySelectorAll('tr.bg-red-50, tr.dark\\:bg-red-900\\/20');
+            
+            // Reset all checkboxes first
+            invoiceCheckboxes.forEach(function(checkbox) {
+                checkbox.checked = false;
+                
+                // Disable all amount inputs
+                const invoiceId = checkbox.value;
+                const amountInput = document.querySelector(`.payment-amount-input[data-invoice-id="${invoiceId}"]`);
+                if (amountInput) {
+                    amountInput.disabled = true;
+                }
+            });
+            
+            // Check checkboxes for overdue invoices
+            overdueRows.forEach(function(row) {
+                const checkbox = row.querySelector('.invoice-checkbox');
+                if (checkbox) {
+                    checkbox.checked = true;
+                    
+                    // Enable corresponding amount input
+                    const invoiceId = checkbox.value;
+                    const amountInput = document.querySelector(`.payment-amount-input[data-invoice-id="${invoiceId}"]`);
+                    if (amountInput) {
+                        amountInput.disabled = false;
+                    }
+                }
+            });
+            
+            // Update summary
+            updateSelectionSummary();
+            
+            // Update "Select All" checkbox
+            if (selectAllCheckbox) {
+                const allChecked = Array.from(invoiceCheckboxes).every(cb => cb.checked);
+                selectAllCheckbox.checked = allChecked;
+            }
+        });
+    }
+    
+    // Form validation for batch payment
+    const batchPaymentForm = document.getElementById('batch-payment-form');
+    if (batchPaymentForm) {
+        batchPaymentForm.addEventListener('submit', function(e) {
+            // Check if any invoices are selected
+            const selectedInvoices = document.querySelectorAll('.invoice-checkbox:checked');
+            if (selectedInvoices.length === 0) {
+                e.preventDefault();
+                alert('Please select at least one invoice for payment');
+                return false;
+            }
+            
+            // Check if payment method is selected
+            const paymentMethod = document.getElementById('batch_payment_method');
+            if (paymentMethod && !paymentMethod.value) {
+                e.preventDefault();
+                alert('Please select a payment method');
+                return false;
+            }
+            
+            // Check if payment date is provided
+            const paymentDate = document.getElementById('batch_payment_date');
+            if (paymentDate && !paymentDate.value) {
+                e.preventDefault();
+                alert('Please select a payment date');
+                return false;
+            }
+            
+            return true;
+        });
+    }
+});
+</script>
+{% endblock %}

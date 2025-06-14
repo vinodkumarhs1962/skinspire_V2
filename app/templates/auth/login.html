@@ -1,3 +1,4 @@
+<!-- login.html -->
 {% extends "layouts/public.html" %}
 
 {% block title %}Login - SkinSpire Clinic{% endblock %}
@@ -6,12 +7,21 @@
 <div class="min-h-[85vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
     <div class="max-w-md w-full space-y-8">
         <div class="text-center">
-            <!-- Logo -->
-            <div class="mx-auto h-16 w-16 bg-blue-600 rounded-full flex items-center justify-center text-white text-xl font-bold mb-4">
-                SK
-            </div>
+            <!-- Logo Rendering with Backward Compatibility -->
+            {% if hospital and hospital.logo and hospital.logo.variants %}
+                <img 
+                    src="{{ url_for('static', filename='uploads/hospital_logos/' + hospital.hospital_id|string + '/' + hospital.logo.variants.medium.filename) }}" 
+                    alt="{{ hospital.name }} Logo" 
+                    class="mx-auto h-36 w-60 md:h-48 md:w-48 mb-4 object-contain"
+                >
+            {% else %}
+                <div class="mx-auto h-16 w-16 md:h-24 md:w-24 bg-blue-600 rounded-full flex items-center justify-center text-white text-xl font-bold mb-4">
+                    SK
+                </div>
+            {% endif %}
+            Welcome!
             <h2 class="text-center text-3xl font-extrabold text-gray-900 dark:text-white">
-                Sign in to SkinSpire
+                Sign in to SkinSpire Clinic
             </h2>
             <p class="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
                 Hospital Management System

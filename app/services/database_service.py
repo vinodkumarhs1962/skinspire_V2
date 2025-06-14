@@ -14,7 +14,6 @@ Usage:
 """
 
 import os
-import logging
 import traceback
 from contextlib import contextmanager
 from typing import Optional, Dict, Any, Generator, Union, Type, TypeVar
@@ -24,8 +23,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from flask import current_app, has_app_context
 from app.config.db_config import DatabaseConfig
 
-# Setup logging
-logger = logging.getLogger(__name__)
+from app.utils.unicode_logging import get_unicode_safe_logger
+logger = get_unicode_safe_logger(__name__)
 
 # Track initialization status
 _initialized = False

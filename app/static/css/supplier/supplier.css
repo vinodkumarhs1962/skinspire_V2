@@ -1,0 +1,170 @@
+/* static/css/supplier/supplier.css */
+
+/* Modal styles for supplier modules */
+.modal {
+    position: fixed;
+    z-index: 50;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+    background-color: #ffffff;
+    margin: 5% auto;
+    padding: 0;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    width: 80%;
+    max-width: 600px;
+}
+
+.dark .modal-content {
+    background-color: #1f2937;
+    border-color: #374151;
+}
+
+.modal-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.dark .modal-header {
+    border-bottom-color: #374151;
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.close-modal {
+    color: #6b7280;
+    font-size: 1.5rem;
+    font-weight: bold;
+    cursor: pointer;
+    background: none;
+    border: none;
+}
+
+.close-modal:hover,
+.close-modal:focus {
+    color: #374151;
+    text-decoration: none;
+}
+
+.dark .close-modal {
+    color: #9ca3af;
+}
+
+.dark .close-modal:hover,
+.dark .close-modal:focus {
+    color: #d1d5db;
+}
+
+/* Line item styles */
+.line-item {
+    padding: 1rem 0;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.dark .line-item {
+    border-bottom-color: #374151;
+}
+
+.line-item:last-child {
+    border-bottom: none;
+}
+
+/* Form group spacing */
+.form-group {
+    margin-bottom: 1rem;
+}
+
+/* Totals display */
+.invoice-totals {
+    background-color: #f9fafb;
+    padding: 1rem;
+    border-radius: 0.375rem;
+    margin-top: 1rem;
+}
+
+.dark .invoice-totals {
+    background-color: #1f2937;
+}
+
+.totals-grid {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.5rem;
+}
+
+.totals-label {
+    text-align: right;
+    font-weight: 500;
+}
+
+.totals-value {
+    text-align: right;
+    font-weight: 600;
+}
+
+/* Search results table */
+.search-results-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.search-results-table th,
+.search-results-table td {
+    padding: 0.5rem;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.dark .search-results-table th,
+.dark .search-results-table td {
+    border-bottom-color: #374151;
+}
+
+.search-results-table th {
+    background-color: #f9fafb;
+    font-weight: 600;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.dark .search-results-table th {
+    background-color: #374151;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+    .modal-content {
+        width: 95%;
+        margin: 2% auto;
+    }
+    
+    .line-item .grid {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+}
+
+.readonly-field {
+    background-color: #f3f4f6 !important;
+    color: #6b7280 !important;
+    cursor: not-allowed !important;
+    opacity: 0.7;
+}
+
+.readonly-field:focus {
+    outline: none !important;
+    box-shadow: none !important;
+}

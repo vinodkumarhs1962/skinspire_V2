@@ -31,6 +31,8 @@ class MenuService:
         # Generate menu based on role
         if role == 'admin':
             return MenuService._get_admin_menu()
+        elif role == 'hospital_admin':
+            return MenuService._get_hospital_admin_menu()
         elif role == 'doctor':
             return MenuService._get_doctor_menu()
         elif role == 'receptionist':
@@ -56,6 +58,13 @@ class MenuService:
                 ]
             },
             {
+                "name": "Hospital Management",
+                "items": [
+                    {"name": "Hospital Settings", "url": "/admin/hospital-settings", "icon": "settings"},
+                    {"name": "Hospitals", "url": "/admin/hospitals", "icon": "building"}
+                ]
+            },
+            {
                 "name": "Patient Management",
                 "items": [
                     {"name": "Patients", "url": "/admin/patients", "icon": "user-plus"},
@@ -65,8 +74,34 @@ class MenuService:
             {
                 "name": "System",
                 "items": [
-                    {"name": "Settings", "url": "/admin/settings", "icon": "settings"},
+                    {"name": "Global Settings", "url": "/admin/system-settings", "icon": "cog"},
                     {"name": "Logs", "url": "/admin/logs", "icon": "clipboard"}
+                ]
+            }
+        ]
+
+    @staticmethod
+    def _get_hospital_admin_menu():
+        """Generate menu for hospital admin users."""
+        return [
+            {
+                "name": "Dashboard",
+                "items": [
+                    {"name": "Overview", "url": "/hospital-admin/dashboard", "icon": "dashboard"}
+                ]
+            },
+            {
+                "name": "User Management",
+                "items": [
+                    {"name": "Staff", "url": "/hospital-admin/staff", "icon": "users"},
+                    {"name": "Approvals", "url": "/hospital-admin/approvals", "icon": "user-check"}
+                ]
+            },
+            {
+                "name": "Hospital Configuration",
+                "items": [
+                    {"name": "Hospital Settings", "url": "/hospital-admin/settings", "icon": "settings"},
+                    {"name": "Branches", "url": "/hospital-admin/branches", "icon": "building"}
                 ]
             }
         ]

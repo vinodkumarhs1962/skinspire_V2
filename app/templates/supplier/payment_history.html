@@ -1,0 +1,477 @@
+{% extends "layouts/dashboard.html" %}
+{% from "components/alerts.html" import alert %}
+{% from "components/badges.html" import payment_status_badge %}
+{% from "components/tables.html" import sortable_header, pagination %}
+
+{% block title %}Supplier Payment History{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <!-- Header Section -->
+    <div class="flex flex-col md:flex-row items-start justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                {% if supplier %}
+                Payment History for {{ supplier.supplier_name }}
+                {% else %}
+                Supplier Payment History
+                {% endif %}
+            </h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">
+                Track payments made to suppliers
+            </p>
+        </div>
+        <div class="mt-4 md:mt-0 space-x-2">
+            {% if supplier %}
+            <a href="{{ url_for('supplier_views.view_supplier', supplier_id=supplier.supplier_id) }}" class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i> Back to Supplier
+            </a>
+            <a href="{{ url_for('supplier_views.record_payment') }}?supplier_id={{ supplier.supplier_id }}" class="btn-primary">
+                <i class="fas fa-plus mr-2"></i> Record Payment
+            </a>
+            {% else %}
+            <a href="{{ url_for('supplier_views.supplier_list') }}" class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i> Back to Suppliers
+            </a>
+            <a href="{{ url_for('supplier_views.record_payment') }}" class="btn-primary">
+                <i class="fas fa-plus mr-2"></i> Record Payment
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Filter Section -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+        <form method="GET" action="{{ url_for('supplier_views.payment_history') }}" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <!-- Supplier Filter (only if not already viewing a specific supplier) -->
+            {% if not supplier %}
+            <div>
+                <label for="supplier_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Supplier</label>
+                <select id="supplier_id" name="supplier_id" class="form-select">
+                    <option value="">All Suppliers</option>
+                    {% for s in all_suppliers %}
+                    <option value="{{ s.supplier_id }}" {% if request.args.get('supplier_id') == s.supplier_id %}selected{% endif %}>
+                        {{ s.supplier_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% else %}
+            <input type="hidden" name="supplier_id" value="{{ supplier.supplier_id }}">
+            {% endif %}
+            
+            <!-- Date Range -->
+            <div>
+                <label for="start_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">From Date</label>
+                <input type="date" id="start_date" name="start_date" class="form-input" value="{{ request.args.get('start_date', '') }}">
+            </div>
+            
+            <div>
+                <label for="end_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">To Date</label>
+                <input type="date" id="end_date" name="end_date" class="form-input" value="{{ request.args.get('end_date', '') }}">
+            </div>
+            
+            <!-- Payment Method -->
+            <div>
+                <label for="payment_method" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Payment Method</label>
+                <select id="payment_method" name="payment_method" class="form-select">
+                    <option value="">All Methods</option>
+                    <option value="bank_transfer" {% if request.args.get('payment_method') == 'bank_transfer' %}selected{% endif %}>Bank Transfer</option>
+                    <option value="cheque" {% if request.args.get('payment_method') == 'cheque' %}selected{% endif %}>Cheque</option>
+                    <option value="cash" {% if request.args.get('payment_method') == 'cash' %}selected{% endif %}>Cash</option>
+                    <option value="credit_card" {% if request.args.get('payment_method') == 'credit_card' %}selected{% endif %}>Credit Card</option>
+                    <option value="debit_card" {% if request.args.get('payment_method') == 'debit_card' %}selected{% endif %}>Debit Card</option>
+                    <option value="upi" {% if request.args.get('payment_method') == 'upi' %}selected{% endif %}>UPI</option>
+                    <option value="online_banking" {% if request.args.get('payment_method') == 'online_banking' %}selected{% endif %}>Online Banking</option>
+                </select>
+            </div>
+            
+            <!-- Status Filter -->
+            <div>
+                <label for="status" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                <select id="status" name="status" class="form-select">
+                    <option value="">All Statuses</option>
+                    <option value="completed" {% if request.args.get('status') == 'completed' %}selected{% endif %}>Completed</option>
+                    <option value="pending" {% if request.args.get('status') == 'pending' %}selected{% endif %}>Pending</option>
+                    <option value="failed" {% if request.args.get('status') == 'failed' %}selected{% endif %}>Failed</option>
+                </select>
+            </div>
+            
+            <!-- Reconciliation Status -->
+            <div>
+                <label for="reconciliation_status" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reconciliation</label>
+                <select id="reconciliation_status" name="reconciliation_status" class="form-select">
+                    <option value="">All</option>
+                    <option value="reconciled" {% if request.args.get('reconciliation_status') == 'reconciled' %}selected{% endif %}>Reconciled</option>
+                    <option value="pending" {% if request.args.get('reconciliation_status') == 'pending' %}selected{% endif %}>Pending</option>
+                    <option value="disputed" {% if request.args.get('reconciliation_status') == 'disputed' %}selected{% endif %}>Disputed</option>
+                </select>
+            </div>
+            
+            <!-- Amount Range -->
+            <div>
+                <label for="min_amount" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Min Amount</label>
+                <input type="number" id="min_amount" name="min_amount" class="form-input" step="0.01" min="0" value="{{ request.args.get('min_amount', '') }}">
+            </div>
+            
+            <div>
+                <label for="max_amount" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Max Amount</label>
+                <input type="number" id="max_amount" name="max_amount" class="form-input" step="0.01" min="0" value="{{ request.args.get('max_amount', '') }}">
+            </div>
+            
+            <!-- Filter Actions -->
+            <div class="md:col-span-4 flex justify-end items-center mt-2">
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-filter mr-2"></i> Apply Filters
+                </button>
+                <a href="{{ url_for('supplier_views.payment_history', supplier_id=supplier.supplier_id if supplier else None) }}" class="btn-secondary ml-2">
+                    <i class="fas fa-sync-alt mr-2"></i> Reset Filters
+                </a>
+                <button type="button" id="export-csv" class="btn-secondary ml-2">
+                    <i class="fas fa-file-export mr-2"></i> Export CSV
+                </button>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <p class="text-sm text-gray-500 dark:text-gray-400">Total Payments</p>
+            <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100">{{ summary.total_count }}</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">For selected period</p>
+        </div>
+        
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <p class="text-sm text-gray-500 dark:text-gray-400">Total Amount</p>
+            <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100">{{ summary.total_amount|currencyformat }}</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">For selected period</p>
+        </div>
+        
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <p class="text-sm text-gray-500 dark:text-gray-400">Pending Reconciliation</p>
+            <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100">{{ summary.pending_reconciliation_count }}</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ summary.pending_reconciliation_amount|currencyformat }}</p>
+        </div>
+        
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <p class="text-sm text-gray-500 dark:text-gray-400">Average Payment</p>
+            <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100">{{ summary.average_amount|currencyformat }}</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">For selected period</p>
+        </div>
+    </div>
+    
+    <!-- Payment History Table -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-between items-center">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Payment History</h2>
+            <div class="text-sm text-gray-600 dark:text-gray-400">
+                Showing {{ payments|length }} of {{ total_payments }} payments
+            </div>
+        </div>
+        
+        <div class="p-6">
+            {% if payments %}
+            <div class="overflow-x-auto">
+                <table class="min-w-full table-auto">
+                    <thead>
+                        <tr class="bg-gray-50 dark:bg-gray-700 text-xs uppercase">
+                            <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">
+                                {{ sortable_header('Date', 'payment_date', request.args.get('sort_by', ''), request.args) }}
+                            </th>
+                            {% if not supplier %}
+                            <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">
+                                {{ sortable_header('Supplier', 'supplier_name', request.args.get('sort_by', ''), request.args) }}
+                            </th>
+                            {% endif %}
+                            <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">
+                                {{ sortable_header('Invoice', 'invoice_number', request.args.get('sort_by', ''), request.args) }}
+                            </th>
+                            <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">
+                                {{ sortable_header('Method', 'payment_method', request.args.get('sort_by', ''), request.args) }}
+                            </th>
+                            <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">Reference</th>
+                            <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">
+                                {{ sortable_header('Amount', 'amount', request.args.get('sort_by', ''), request.args) }}
+                            </th>
+                            <th class="px-4 py-2 text-center text-gray-500 dark:text-gray-300">Status</th>
+                            <th class="px-4 py-2 text-center text-gray-500 dark:text-gray-300">Reconciled</th>
+                            <th class="px-4 py-2 text-center text-gray-500 dark:text-gray-300">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for payment in payments %}
+                        <tr class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                {{ payment.payment_date|dateformat }}
+                            </td>
+                            {% if not supplier %}
+                            <td class="px-4 py-3">
+                                <div class="font-medium text-gray-800 dark:text-gray-200">
+                                    {{ payment.supplier_name }}
+                                </div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                    {{ payment.supplier_category }}
+                                </div>
+                            </td>
+                            {% endif %}
+                            <td class="px-4 py-3">
+                                <div class="font-medium text-gray-800 dark:text-gray-200">
+                                    {% if payment.invoice_id %}
+                                    <a href="{{ url_for('supplier_views.view_supplier_invoice', invoice_id=payment.invoice_id) }}" class="hover:underline text-indigo-600 dark:text-indigo-400">
+                                        {{ payment.invoice_number }}
+                                    </a>
+                                    {% else %}
+                                    <span class="text-gray-400 dark:text-gray-500">No Invoice</span>
+                                    {% endif %}
+                                </div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                    {% if payment.invoice_date %}
+                                    {{ payment.invoice_date|dateformat }}
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                <span class="px-2 py-1 text-xs rounded-full 
+                                    {% if payment.payment_method == 'bank_transfer' %}
+                                        bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300
+                                    {% elif payment.payment_method == 'cheque' %}
+                                        bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300
+                                    {% elif payment.payment_method == 'cash' %}
+                                        bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300
+                                    {% elif payment.payment_method in ['credit_card', 'debit_card'] %}
+                                        bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300
+                                    {% elif payment.payment_method == 'upi' %}
+                                        bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300
+                                    {% else %}
+                                        bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300
+                                    {% endif %}">
+                                    {{ payment.payment_method|replace('_', ' ')|title }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                {% if payment.reference_no %}
+                                {{ payment.reference_no }}
+                                {% elif payment.transaction_id %}
+                                {{ payment.transaction_id }}
+                                {% elif payment.cheque_number %}
+                                Cheque #{{ payment.cheque_number }}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-right font-medium text-gray-800 dark:text-gray-200">
+                                {{ payment.amount|currencyformat(payment.currency_code) }}
+                                {% if payment.currency_code != 'INR' %}
+                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                    {{ payment.exchange_rate }} • {{ (payment.amount * payment.exchange_rate)|currencyformat('INR') }}
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                {{ payment_status_badge(payment.status) }}
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <span class="flex items-center justify-center">
+                                    {% if payment.reconciliation_status == 'reconciled' %}
+                                    <i class="fas fa-check-circle text-green-500 dark:text-green-400"></i>
+                                    {% elif payment.reconciliation_status == 'disputed' %}
+                                    <i class="fas fa-exclamation-triangle text-red-500 dark:text-red-400"></i>
+                                    {% else %}
+                                    <i class="fas fa-clock text-yellow-500 dark:text-yellow-400"></i>
+                                    {% endif %}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <div class="flex items-center justify-center space-x-2">
+                                    <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) }}" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300" title="View Payment">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    {% if payment.status != 'failed' and payment.reconciliation_status != 'reconciled' %}
+                                    <a href="{{ url_for('supplier_views.mark_payment_reconciled', payment_id=payment.payment_id) }}" class="text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300" title="Mark as Reconciled">
+                                        <i class="fas fa-check-circle"></i>
+                                    </a>
+                                    {% endif %}
+                                    {% if payment.document_url %}
+                                    <a href="{{ payment.document_url }}" target="_blank" class="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200" title="View Document">
+                                        <i class="fas fa-file-alt"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            <div class="mt-4">
+                {{ pagination(pagination_info) }}
+            </div>
+            {% else %}
+            <div class="text-center py-6">
+                <div class="text-gray-500 dark:text-gray-400">
+                    <i class="fas fa-search text-4xl mb-3"></i>
+                    <p>No payments found matching your criteria</p>
+                    <p class="text-sm mt-2">Try adjusting your filters or date range</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Payment Trend Chart -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+            <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Payment Trend</h2>
+            </div>
+            
+            <div class="p-6">
+                <div id="payment-trend-chart" class="h-64"></div>
+            </div>
+        </div>
+        
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+            <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Payment Method Distribution</h2>
+            </div>
+            
+            <div class="p-6">
+                <div id="payment-method-chart" class="h-64"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Export CSV functionality
+    const exportCsvBtn = document.getElementById('export-csv');
+    if (exportCsvBtn) {
+        exportCsvBtn.addEventListener('click', function() {
+            // Get current URL and add export parameter
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('export', 'csv');
+            window.location.href = currentUrl.toString();
+        });
+    }
+    
+    // Payment Trend Chart
+    const paymentTrendChart = document.getElementById('payment-trend-chart');
+    if (paymentTrendChart) {
+        const ctx = paymentTrendChart.getContext('2d');
+        const isDarkMode = document.querySelector('html').classList.contains('dark');
+        const textColor = isDarkMode ? '#D1D5DB' : '#4B5563';
+        const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+        
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: {{ trend_data.dates|tojson if trend_data and trend_data.dates else '[]'|safe }},
+                datasets: [{
+                    label: 'Payment Amount',
+                    data: {{ trend_data.amounts|tojson if trend_data and trend_data.amounts else '[]'|safe }},
+                    backgroundColor: 'rgba(79, 70, 229, 0.2)',
+                    borderColor: 'rgba(79, 70, 229, 1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        labels: {
+                            color: textColor
+                        }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            color: gridColor
+                        },
+                        ticks: {
+                            color: textColor
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: gridColor
+                        },
+                        ticks: {
+                            color: textColor
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Payment Method Chart
+    const paymentMethodChart = document.getElementById('payment-method-chart');
+    if (paymentMethodChart) {
+        const ctx = paymentMethodChart.getContext('2d');
+        const isDarkMode = document.querySelector('html').classList.contains('dark');
+        const textColor = isDarkMode ? '#D1D5DB' : '#4B5563';
+        
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: {{ method_data.labels|tojson if method_data and method_data.labels else '[]'|safe }},
+                datasets: [{
+                    data: {{ method_data.values|tojson if method_data and method_data.values else '[]'|safe }},
+                    backgroundColor: [
+                        'rgba(79, 70, 229, 0.7)',  // Indigo
+                        'rgba(139, 92, 246, 0.7)', // Purple
+                        'rgba(16, 185, 129, 0.7)', // Green
+                        'rgba(245, 158, 11, 0.7)', // Yellow
+                        'rgba(239, 68, 68, 0.7)',  // Red
+                        'rgba(236, 72, 153, 0.7)', // Pink
+                        'rgba(96, 165, 250, 0.7)'  // Blue
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            color: textColor
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.raw || 0;
+                                const total = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                const percentage = Math.round((value / total) * 100);
+                                
+                                return `${label}: ${value} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,167 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}Staff Approval Request{% endblock %}
+
+{% block content %}
+<div class="px-4 py-5 sm:p-6">
+    <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">Staff Approval Request</h2>
+    <p class="mb-6 text-gray-600 dark:text-gray-400">
+        Please provide the following information to complete your registration as a staff member. 
+        Your account will be reviewed by an administrator before activation.
+    </p>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="mb-4 rounded-md p-4 {{ 'bg-red-50 dark:bg-red-900 dark:bg-opacity-50 text-red-700 dark:text-red-300' if category == 'error' else 'bg-green-50 dark:bg-green-900 dark:bg-opacity-50 text-green-700 dark:text-green-300' }}">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            {% if category == 'error' %}
+                            <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                            </svg>
+                            {% else %}
+                            <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                            </svg>
+                            {% endif %}
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium">{{ message }}</p>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <div class="mt-5 bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+        <form method="POST" action="{{ url_for('auth_views.staff_approval_request') }}">
+            {{ form.hidden_tag() }}
+            
+            <div class="space-y-6">
+                <!-- Role selection - new field -->
+                {% if hasattr(form, 'role_id') %}
+                <div>
+                    <label for="role_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Requested Role
+                    </label>
+                    <div class="mt-1">
+                        <select name="role_id" id="role_id" class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-md">
+                            <option value="0">Select Role</option>
+                            {% for role_id, role_name in form.role_choices %}
+                                <option value="{{ role_id }}">{{ role_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% if form.role_id.errors %}
+                        <div class="text-red-600 dark:text-red-400 text-sm mt-1">
+                            {% for error in form.role_id.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Select the role you are applying for</p>
+                </div>
+                {% endif %}
+                
+                <div>
+                    <label for="qualifications" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {{ form.qualifications.label.text }} <span class="text-red-500">*</span>
+                    </label>
+                    <div class="mt-1">
+                        {{ form.qualifications(class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-md", rows="3") }}
+                    </div>
+                    {% if form.qualifications.errors %}
+                        <div class="text-red-600 dark:text-red-400 text-sm mt-1">
+                            {% for error in form.qualifications.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="experience" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {{ form.experience.label.text }} <span class="text-red-500">*</span>
+                    </label>
+                    <div class="mt-1">
+                        {{ form.experience(class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-md", rows="3") }}
+                    </div>
+                    {% if form.experience.errors %}
+                        <div class="text-red-600 dark:text-red-400 text-sm mt-1">
+                            {% for error in form.experience.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="specialization" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {{ form.specialization.label.text }} <span class="text-red-500">*</span>
+                    </label>
+                    <div class="mt-1">
+                        {{ form.specialization(class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-md") }}
+                    </div>
+                    {% if form.specialization.errors %}
+                        <div class="text-red-600 dark:text-red-400 text-sm mt-1">
+                            {% for error in form.specialization.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                {% if hasattr(form, 'reference') %}
+                <div>
+                    <label for="reference" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {{ form.reference.label.text }}
+                    </label>
+                    <div class="mt-1">
+                        {{ form.reference(class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-md") }}
+                    </div>
+                    {% if form.reference.errors %}
+                        <div class="text-red-600 dark:text-red-400 text-sm mt-1">
+                            {% for error in form.reference.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
+                <div>
+                    <label for="comments" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {{ form.comments.label.text }}
+                    </label>
+                    <div class="mt-1">
+                        {{ form.comments(class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-md", rows="3") }}
+                    </div>
+                    {% if form.comments.errors %}
+                        <div class="text-red-600 dark:text-red-400 text-sm mt-1">
+                            {% for error in form.comments.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="mt-6 flex justify-end space-x-3">
+                <a href="{{ url_for('auth_views.dashboard') }}" class="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 dark:focus:ring-offset-gray-800">
+                    Cancel
+                </a>
+                <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800">
+                    Submit for Approval
+                </button>
+            </div>
+        </form>
+    </div>
+    
+    <div class="mt-6 text-sm text-gray-500 dark:text-gray-400">
+        <p><strong>Note:</strong> Your account will remain in pending status until an administrator reviews and approves your information. You will receive a notification once your account is activated.</p>
+        <p class="mt-2">You can skip this form for now by clicking the Cancel button.</p>
+    </div>
+</div>
+{% endblock %}

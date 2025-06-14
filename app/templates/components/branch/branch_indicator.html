@@ -1,0 +1,69 @@
+<!-- Smart Branch Selector - Handles all user types internally -->
+{% set superuser_ids = ['7777777777', 'admin', 'superuser'] %}
+{% set is_superuser = current_user.user_id in superuser_ids %}
+{% set is_multi_branch = branch_context and branch_context.get('is_multi_branch_user', False) %}
+{% set show_selector = is_superuser or is_multi_branch %}
+
+{% if show_selector %}
+<div class="{{ container_class or 'w-48' }}">
+    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1" for="{{ field_name or 'branch_id' }}">
+        {{ label or 'Branch' }}
+        {% if required %}<span class="text-red-500">*</span>{% endif %}
+        {% if is_superuser %}
+            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 ml-1">
+                <i class="fas fa-crown mr-1"></i>Admin
+            </span>
+        {% endif %}
+    </label>
+    
+    <select 
+        id="{{ field_name or 'branch_id' }}" 
+        name="{{ field_name or 'branch_id' }}" 
+        class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline {{ 'border-purple-300' if is_superuser else '' }}"
+        {% if required %}required{% endif %}>
+        
+        <option value="">{{ placeholder or 'Select Branch' }}</option>
+        
+        {% if is_superuser %}
+            <!-- Superuser sees ALL branches -->
+            {% if branches %}
+                {% for branch in branches %}
+                <option value="{{ branch.branch_id }}" 
+                        {% if branch.branch_id == (selected_branch_id or (branch_context.assigned_branch_id if branch_context else '')) %}selected{% endif %}>
+                    {{ branch.name }}
+                    {% if branch_context and branch.branch_id == branch_context.assigned_branch_id %} (Default){% endif %}
+                </option>
+                {% endfor %}
+            {% endif %}
+            
+            <!-- Add "All Branches" option for superusers if applicable -->
+            {% if allow_all_branches %}
+            <option value="all" {% if selected_branch_id == 'all' %}selected{% endif %}>
+                🌐 All Branches
+            </option>
+            {% endif %}
+            
+        {% elif is_multi_branch %}
+            <!-- Regular multi-branch user sees accessible branches only -->
+            {% for branch in branch_context.accessible_branches %}
+            <option value="{{ branch.branch_id }}" 
+                    {% if branch.branch_id == (selected_branch_id or branch_context.assigned_branch_id) %}selected{% endif %}>
+                {{ branch.name }}
+                {% if branch.branch_id == branch_context.assigned_branch_id %} (My Branch){% endif %}
+            </option>
+            {% endfor %}
+        {% endif %}
+    </select>
+    
+    {% if help_text %}
+    <p class="text-xs text-gray-500 mt-1">{{ help_text }}</p>
+    {% endif %}
+</div>
+
+{% else %}
+<!-- Single branch user - hidden field with default branch -->
+<input type="hidden" 
+       id="{{ field_name or 'branch_id' }}" 
+       name="{{ field_name or 'branch_id' }}" 
+       value="{{ selected_branch_id or (branch_context.assigned_branch_id if branch_context else default_branch_id or '') }}">
+{% endif %}

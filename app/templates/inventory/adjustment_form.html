@@ -1,0 +1,255 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">{{ title }}</h1>
+        <div>
+            <a href="{{ url_for('inventory_views.inventory_list') }}" class="btn-secondary">
+                Back to Inventory
+            </a>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+        <form method="POST" id="adjustmentForm">
+            {{ form.csrf_token }}
+            
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-white">Medicine Information</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="medicine_selector" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Select Medicine
+                        </label>
+                        <select id="medicine_selector" class="form-select w-full" required>
+                            <option value="">Select Medicine</option>
+                        </select>
+                        {{ form.medicine_id }}
+                        {{ form.medicine_name }}
+                    </div>
+                    
+                    {% if 'batch' in form and form.batch.type == 'SelectField' %}
+                    <div>
+                        <label for="batch" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Batch
+                        </label>
+                        {{ form.batch(class="form-select w-full", required="required") }}
+                        {% if form.batch.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.batch.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <div>
+                        <label for="batch" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Batch Number
+                        </label>
+                        {{ form.batch(class="form-input w-full", required="required") }}
+                        {% if form.batch.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.batch.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if 'expiry_date' in form %}
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-white">Batch Information</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="expiry_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Expiry Date
+                        </label>
+                        {{ form.expiry_date(class="form-input w-full", type="date", required="required") }}
+                        {% if form.expiry_date.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.expiry_date.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if 'adjustment_type' in form %}
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-white">Adjustment Details</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="adjustment_type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Adjustment Type
+                        </label>
+                        {{ form.adjustment_type(class="form-select w-full", required="required") }}
+                        {% if form.adjustment_type.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.adjustment_type.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="reason" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Reason
+                        </label>
+                        {{ form.reason(class="form-select w-full", required="required") }}
+                        {% if form.reason.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.reason.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    {% if 'notes' in form %}
+                    <div class="col-span-2">
+                        <label for="notes" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Notes
+                        </label>
+                        {{ form.notes(class="form-textarea w-full", rows=3) }}
+                        {% if form.notes.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.notes.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-white">Stock Details</h2>
+                <div class="grid grid-cols-1 md:grid-cols-{% if 'pack_purchase_price' in form %}3{% else %}2{% endif %} gap-4">
+                    <div>
+                        <label for="quantity" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Quantity
+                        </label>
+                        {{ form.quantity(class="form-input w-full", required="required", step="0.01", min="0.01") }}
+                        {% if form.quantity.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.quantity.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    {% if 'pack_purchase_price' in form %}
+                    <div>
+                        <label for="pack_purchase_price" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Pack Purchase Price
+                        </label>
+                        {{ form.pack_purchase_price(class="form-input w-full", required="required", step="0.01", min="0.01") }}
+                        {% if form.pack_purchase_price.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.pack_purchase_price.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="pack_mrp" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Pack MRP
+                        </label>
+                        {{ form.pack_mrp(class="form-input w-full", required="required", step="0.01", min="0.01") }}
+                        {% if form.pack_mrp.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.pack_mrp.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="units_per_pack" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Units Per Pack
+                        </label>
+                        {{ form.units_per_pack(class="form-input w-full", required="required", step="0.01", min="1") }}
+                        {% if form.units_per_pack.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.units_per_pack.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    <div>
+                        <label for="location" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Location
+                        </label>
+                        {{ form.location(class="form-input w-full") }}
+                        {% if form.location.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.location.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end space-x-4">
+                <a href="{{ url_for('inventory_views.inventory_list') }}" class="btn-secondary">
+                    Cancel
+                </a>
+                <button type="submit" class="btn-primary">
+                    Submit
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize select2 for medicine selector if available
+        if (typeof $.fn.select2 !== 'undefined') {
+            $('#medicine_selector').select2({
+                theme: 'bootstrap4',
+                placeholder: 'Select Medicine',
+                allowClear: true,
+                ajax: {
+                    url: '/api/medicines',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function(params) {
+                        return {
+                            term: params.term || '',
+                            page: params.page || 1
+                        };
+                    },
+                    processResults: function(data, params) {
+                        return {
+                            results: data.medicines,
+                            pagination: {
+                                more: data.has_more
+                            }
+                        };
+                    },
+                    cache: true
+                },
+                minimumInputLength: 2
+            }).on('select2:select', function(e) {
+                const data = e.params.data;
+                // Update hidden fields with selected medicine info
+                $('#medicine_id').val(data.id);
+                $('#medicine_name').val(data.text);
+                
+                // If this is a stock adjustment (with batch selector)
+                if ($('#batch').length && $('#batch').is('select')) {
+                    // Fetch batches for selected medicine
+                    $.ajax({
+                        url: '/inventory/api/medicine-batches',
+                        data: {
+                            medicine_id: data.id
+                        },
+                        success: function(response) {
+                            const batchSelect = $('#batch');
+                            batchSelect.empty();
+                            
+                            if (response.batches && response.batches.length > 0) {
+                                $.each(response.batches, function(i, batch) {
+                                    batchSelect.append($('<option>', {
+                                        value: batch.batch,
+                                        text: batch.batch + ' (Exp: ' + batch.expiry + ', Stock: ' + batch.stock + ')'
+                                    }));
+                                });
+                            } else {
+                                batchSelect.append($('<option>', {
+                                    value: '',
+                                    text: 'No batches available'
+                                }));
+                            }
+                        },
+                        error: function() {
+                            alert('Error fetching batches for selected medicine');
+                        }
+                    });
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

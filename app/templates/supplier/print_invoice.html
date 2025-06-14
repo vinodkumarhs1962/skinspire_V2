@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Supplier Invoice #{{ invoice.supplier_invoice_number }} - SkinSpire Clinic</title>
+    
+    <!-- Print-optimized CSS based on PO template -->
+    <style>
+        /* Additional styles for pagination and layout */
+        @page {
+            size: A4;
+            margin: 15mm;
+            orphans: 4;
+            widows: 2;
+        }
+        
+        html, body {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto !important;
+            padding: 0 !important;
+            overflow: visible !important;
+        }
+        
+        .print-container {
+            width: 180mm !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
+            box-sizing: border-box !important;
+            overflow: visible !important;
+            page-break-inside: auto;
+        }
+        
+        /* Reset and base styles */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+            color: black;
+            background: white;
+            padding: 20px;
+        }
+        
+        /* Screen styles for preview */
+        @media screen {
+            .print-controls {
+                background: #f3f4f6;
+                padding: 15px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                text-align: center;
+            }
+            
+            .btn {
+                display: inline-block;
+                padding: 12px 16px;
+                margin: 0 10px;
+                border: none;
+                border-radius: 5px;
+                text-decoration: none;
+                font-family: Arial, sans-serif;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                width: 200px;
+                height: 50px;
+                text-align: center;
+                line-height: 1.2;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .btn-primary {
+                background-color: #3b82f6;
+                color: white;
+            }
+            
+            .btn-primary:hover {
+                background-color: #1d4ed8;
+            }
+            
+            .btn-secondary {
+                background-color: #6b7280;
+                color: white;
+            }
+            
+            .btn-secondary:hover {
+                background-color: #4b5563;
+            }
+            
+            .document {
+                max-width: 21cm;
+                margin: 0 auto;
+                background: white;
+                padding: 2cm;
+                box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            }
+        }
+        
+        /* Print styles */
+        @media print {
+            body {
+                padding: 0;
+                font-size: 11px;
+            }
+            
+            .print-controls {
+                display: none !important;
+            }
+            
+            .no-print {
+                display: none !important;
+            }
+            
+            .document {
+                max-width: none;
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+            }
+            
+            .page-break {
+                page-break-before: always;
+            }
+            
+            .no-page-break {
+                page-break-inside: avoid;
+            }
+            
+            table {
+                page-break-inside: auto;
+            }
+            
+            tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }
+            
+            thead {
+                display: table-header-group;
+            }
+            
+            tfoot {
+                display: table-footer-group;
+            }
+        }
+        
+        /* Header styles - Similar to PO */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 20px;
+        }
+        
+        .logo {
+            flex: 1;
+            text-align: left;
+        }
+        
+        .hospital-info {
+            flex: 2;
+            text-align: right;
+            font-size: 12px;
+            line-height: 1.3;
+        }
+        
+        .hospital-info div {
+            margin-bottom: 2px;
+        }
+        
+        /* Document title */
+        .document-title {
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: #000;
+            margin: 20px 0;
+        }
+        
+        /* Status display */
+        .status-display {
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+            margin: 10px 0;
+            padding: 8px 15px;
+            border-radius: 5px;
+        }
+        
+        .status-cancelled {
+            background-color: #fecaca;
+            color: #991b1b;
+            border: 2px solid #dc2626;
+        }
+        
+        /* Invoice metadata */
+        .invoice-meta {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+            font-size: 12px;
+        }
+        
+        .meta-section {
+            flex: 1;
+            padding: 0 10px;
+        }
+        
+        .meta-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 3px;
+        }
+        
+        .meta-section div {
+            margin-bottom: 3px;
+        }
+        
+        /* Currency note */
+        .currency-note {
+            text-align: center;
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 15px;
+            font-style: italic;
+        }
+        
+        /* Table styles */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        th, td {
+            border: 1px solid #000;
+            padding: 8px;
+            text-align: left;
+            font-size: 11px;
+        }
+        
+        th {
+            background-color: #f5f5f5;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .text-right {
+            text-align: right;
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        
+        .font-bold {
+            font-weight: bold;
+        }
+        
+        .bg-green {
+            background-color: #f0f9ff;
+        }
+        
+        .text-green {
+            color: #059669;
+        }
+        
+        /* Amount in words section */
+        .amount-words {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .amount-words td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+        
+        /* Payment info section */
+        .payment-info {
+            margin: 20px 0;
+        }
+        
+        .payment-info h4 {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        /* Terms section */
+        .terms {
+            margin-top: 30px;
+        }
+        
+        .terms h4 {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .terms ol {
+            margin: 0;
+            padding-left: 15px;
+        }
+        
+        .terms li {
+            margin-bottom: 5px;
+        }
+        
+        /* Authorized signature */
+        .authorized-signature {
+            margin-top: 50px;
+            text-align: right;
+        }
+        
+        .authorized-signature div:first-child {
+            margin-bottom: 30px;
+        }
+        
+        /* Free items notice */
+        .free-items-notice {
+            background-color: #f0fdf4;
+            border-left: 4px solid #22c55e;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .free-items-notice h4 {
+            color: #166534;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .free-items-notice p {
+            color: #15803d;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Print Controls (hidden in print) -->
+    <div class="print-controls no-print">
+        <button onclick="window.print()" class="btn btn-primary">
+            🖨️ Print<br>Invoice
+        </button>
+        <button onclick="history.back()" class="btn btn-secondary">
+            ← Back to<br>Invoice
+        </button>
+    </div>
+
+    <!-- Document Content -->
+    <div class="print-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">
+                {% if logo_url %}
+                    <img src="{{ logo_url }}" alt="SkinSpire Clinic" style="max-height: 80px; max-width: 200px;">
+                {% else %}
+                    SkinSpire Clinic
+                {% endif %}
+            </div>
+            <div class="hospital-info">
+                <div>{{ hospital.name if hospital else "SkinSpire Clinic" }}</div>
+                <div>{{ hospital.address if hospital else "702, Ideal Homes Township, Rajrajeshwari Nagar, Bangalore 560098" }}</div>
+                <div>Phone: {{ hospital.phone if hospital else "+91 9876543210" }}</div>
+                <div>Email: {{ hospital.email if hospital else "info@skinspire.com" }}</div>
+                {% if hospital and hospital.gst_registration_number %}
+                <div>GSTIN: {{ hospital.gst_registration_number }}</div>
+                {% endif %}
+                {% if hospital and hospital.pharmacy_registration_number %}
+                <div>Pharmacy Reg: {{ hospital.pharmacy_registration_number }}
+                    {% if hospital.pharmacy_registration_valid_until %} 
+                    (Valid until: {{ hospital.pharmacy_registration_valid_until.strftime('%d-%b-%Y') }})
+                    {% elif hospital.pharmacy_reg_valid_until %}
+                    (Valid until: {{ hospital.pharmacy_reg_valid_until.strftime('%d-%b-%Y') }})
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Invoice Title -->
+        <div class="document-title">
+            SUPPLIER INVOICE
+        </div>
+        
+        <!-- Status Display for Cancelled -->
+        {% if invoice.payment_status == 'cancelled' %}
+        <div class="status-display status-cancelled">
+            [NO] CANCELLED - THIS INVOICE IS VOID
+        </div>
+        {% endif %}
+        
+        <!-- Invoice Metadata -->
+        <div class="invoice-meta">
+            <div class="meta-section">
+                <div class="meta-title">Supplier Details:</div>
+                <div>Name: {{ invoice.supplier_name or 'N/A' }}</div>
+                {% if invoice.supplier_gstin %}
+                <div>GSTIN: {{ invoice.supplier_gstin }}</div>
+                {% endif %}
+                {% if supplier and supplier.supplier_address %}
+                    {% set addr = supplier.supplier_address %}
+                    {% if addr.get('address_line1') %}
+                    <div>{{ addr.get('address_line1') }}</div>
+                    {% endif %}
+                    {% if addr.get('address_line2') %}
+                    <div>{{ addr.get('address_line2') }}</div>
+                    {% endif %}
+                    {% if addr.get('city') or addr.get('state') or addr.get('pincode') %}
+                    <div>{{ addr.get('city', '') }}{% if addr.get('city') and addr.get('state') %}, {% endif %}{{ addr.get('state', '') }} {{ addr.get('pincode', '') }}</div>
+                    {% endif %}
+                {% endif %}
+            </div>
+            
+            <div class="meta-section">
+                <div class="meta-title">Invoice Details:</div>
+                <div>Invoice #: {{ invoice.supplier_invoice_number }}</div>
+                <div>Date: {{ invoice.invoice_date.strftime('%d-%b-%Y') if invoice.invoice_date else 'N/A' }}</div>
+                <div>Due Date: {{ invoice.due_date.strftime('%d-%b-%Y') if invoice.due_date else 'N/A' }}</div>
+                <div>Status: {{ invoice.payment_status|title }}</div>
+                {% if invoice.po_id %}
+                <div>PO Reference: {{ invoice.po_number or 'Available' }}</div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Currency Note -->
+        <div class="currency-note">
+            Amounts are in {{ invoice.currency_code or 'INR' }}
+        </div>
+
+        <!-- Line Items Table -->
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%;">S.No.</th>
+                    <th style="width: 30%;">Item Description</th>
+                    <th style="width: 10%;">HSN Code</th>
+                    <th style="width: 8%;">Batch</th>
+                    <th style="width: 7%;">Qty</th>
+                    <th style="width: 10%;">Rate</th>
+                    <th style="width: 8%;">MRP</th>
+                    <th style="width: 8%;">GST</th>
+                    <th style="width: 10%;">Total</th>
+                    <th style="width: 9%;">Expiry</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for line in invoice.line_items %}
+                <tr {% if line.is_free_item %}class="bg-green"{% endif %}>
+                    <td class="text-center">{{ loop.index }}</td>
+                    <td>
+                        <div class="font-bold">
+                            {{ line.medicine_name }}
+                            {% if line.is_free_item %}
+                            <span class="text-green font-bold">(FREE)</span>
+                            {% endif %}
+                        </div>
+                        {% if line.units_per_pack and line.units_per_pack > 1 %}
+                        <div style="font-size: 9px;">Pack: {{ line.units_per_pack }} units</div>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">{{ line.hsn_code or 'N/A' }}</td>
+                    <td class="text-center">{{ line.batch_number or 'N/A' }}</td>
+                    <td class="text-center">
+                        {{ "%.0f"|format(line.units|float) }}
+                        {% if line.is_free_item %}
+                        <div style="font-size: 9px;" class="text-green">(Free)</div>
+                        {% endif %}
+                    </td>
+                    <td class="text-right">
+                        {% if line.is_free_item %}
+                        <span class="text-green font-bold">0.00</span>
+                        {% else %}
+                        {{ "%.2f"|format(line.pack_purchase_price|float) }}
+                        {% endif %}
+                    </td>
+                    <td class="text-right">{{ "%.2f"|format(line.pack_mrp|float) }}</td>
+                    <td class="text-center">
+                        {{ "%.1f"|format(line.gst_rate|float) }}%
+                        {% if line.total_gst %}
+                        <div style="font-size: 9px;">({{ "%.2f"|format(line.total_gst|float) }})</div>
+                        {% endif %}
+                    </td>
+                    <td class="text-right font-bold">
+                        {% if line.is_free_item %}
+                        <span class="text-green">0.00</span>
+                        {% else %}
+                        {{ "%.2f"|format(line.line_total|float) }}
+                        {% endif %}
+                    </td>
+                    <td class="text-center" style="font-size: 9px;">
+                        {% if line.expiry_date %}
+                            {{ line.expiry_date.strftime('%m/%y') if line.expiry_date is not string else line.expiry_date }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="8" class="text-right font-bold">Total Amount:</td>
+                    <td class="text-right font-bold" style="font-size: 14px;"> Rs. {{ "%.2f"|format(invoice.total_amount|float) }}</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+        
+        <!-- Total Section -->
+        <table class="amount-words">
+            <tr>
+                <td colspan="2" style="background-color: #f9f9f9; padding: 8px; width: 100%;">
+                    <strong>Amount in Words:</strong> INR {{ invoice.amount_in_words or 'Amount in words not available' }} only
+                </td>
+            </tr>
+        </table>
+
+        <!-- Payment Information -->
+        {% if invoice.payments and invoice.payments|length > 0 %}
+        <div class="payment-info">
+            <h4>Payment Details:</h4>
+            <table style="margin-top: 10px;">
+                <thead>
+                    <tr>
+                        <th>Payment Date</th>
+                        <th>Method</th>
+                        <th>Reference</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for payment in invoice.payments %}
+                    <tr>
+                        <td>{{ payment.payment_date.strftime('%d-%b-%Y') if payment.payment_date else 'N/A' }}</td>
+                        <td>{{ payment.payment_method|title if payment.payment_method else 'N/A' }}</td>
+                        <td>{{ payment.reference_no or 'N/A' }}</td>
+                        <td class="text-right"> Rs. {{ "%.2f"|format(payment.amount|float) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- Free Items Notice -->
+        {% set free_items = invoice.line_items|selectattr('is_free_item')|list %}
+        {% if free_items %}
+        <div class="free-items-notice">
+            <h4>Free Items Notice</h4>
+            <p>This invoice includes {{ free_items|length }} free item(s). Free items have zero cost but are included for inventory tracking purposes.</p>
+        </div>
+        {% endif %}
+
+        <!-- Terms & Conditions -->
+        <div class="terms">
+            <h4>Terms & Conditions:</h4>
+            <ol>
+                <li>Payment is due within the agreed credit terms.</li>
+                <li>All goods received are subject to quality inspection.</li>
+                <li>Any discrepancies must be reported within 24 hours of receipt.</li>
+                <li>Returns are subject to supplier's return policy.</li>
+                <li>This invoice serves as proof of purchase for warranty claims.</li>
+                <li>All disputes are subject to local jurisdiction.</li>
+            </ol>
+        </div>
+        
+        <!-- Authorized Signature -->
+        <div class="authorized-signature">
+            <div style="margin-bottom: 30px;">
+                For {{ hospital.name if hospital else "SkinSpire Clinic" }}
+            </div>
+            <div>
+                Authorized Signatory
+            </div>
+        </div>
+    </div>
+
+    <!-- Manual print script -->
+    <script>
+        // Print dialog triggered manually by user clicking Print button
+        // Auto-focus on print button for keyboard accessibility
+        document.addEventListener('DOMContentLoaded', function() {
+            const printBtn = document.querySelector('.btn-primary');
+            if (printBtn) {
+                printBtn.focus();
+            }
+        });
+    </script>
+</body>
+</html>

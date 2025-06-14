@@ -1,0 +1,370 @@
+{% extends "layouts/dashboard.html" %}
+{% from 'components/forms/macros.html' import input_field, select_field, date_field, submit_button %}
+
+{% block title %}GSTR-1 Report (Outward Supplies){% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <!-- Header section with title and filters -->
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold mb-4 dark:text-gray-200">GSTR-1 Report (Outward Supplies)</h1>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+            <form id="gstr1Form" method="GET" action="{{ url_for('gl_views.gstr1_report') }}" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {{ select_field(form.month, class="w-full", label_class="dark:text-gray-300") }}
+                {{ select_field(form.year, class="w-full", label_class="dark:text-gray-300") }}
+                {{ select_field(form.branch_id, class="w-full", label_class="dark:text-gray-300") }}
+                {{ select_field(form.format_type, class="w-full", label_class="dark:text-gray-300") }}
+                <div class="md:col-span-4 flex justify-end space-x-2 mt-4">
+                    <button type="button" id="printReportBtn" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md">
+                        <i class="fas fa-print mr-2"></i>Print
+                    </button>
+                    <button type="button" id="exportJsonBtn" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md">
+                        <i class="fas fa-file-code mr-2"></i>Export JSON
+                    </button>
+                    <button type="button" id="exportExcelBtn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md">
+                        <i class="fas fa-file-excel mr-2"></i>Export Excel
+                    </button>
+                    {{ submit_button('Generate', class="bg-blue-600 hover:bg-blue-700 text-white") }}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Report content -->
+    {% if report_data %}
+    <div id="reportContent" class="bg-white dark:bg-gray-800 rounded-lg shadow">
+        <!-- Hospital details header -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700 text-center">
+            <h2 class="text-xl font-bold mb-1 dark:text-gray-200">{{ hospital.name }}</h2>
+            <p class="text-gray-600 dark:text-gray-400">{{ hospital.address }}</p>
+            <p class="text-gray-600 dark:text-gray-400">GSTIN: {{ hospital.gst_registration_number }}</p>
+            <h3 class="text-lg font-bold mt-4 mb-1 dark:text-gray-200">GSTR-1 Report (Outward Supplies)</h3>
+            <p class="text-gray-600 dark:text-gray-400">Period: {{ report_period }}</p>
+            {% if branch %}
+            <p class="text-gray-600 dark:text-gray-400">Branch: {{ branch.name }}</p>
+            {% endif %}
+        </div>
+
+        <!-- Summary Section -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-bold mb-4 dark:text-gray-200">Summary</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-700">
+                    <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-700">
+                            <th class="p-3 text-left dark:text-gray-300">Section</th>
+                            <th class="p-3 text-left dark:text-gray-300">Description</th>
+                            <th class="p-3 text-right dark:text-gray-300">Total Taxable Value</th>
+                            <th class="p-3 text-right dark:text-gray-300">Integrated Tax</th>
+                            <th class="p-3 text-right dark:text-gray-300">Central Tax</th>
+                            <th class="p-3 text-right dark:text-gray-300">State/UT Tax</th>
+                            <th class="p-3 text-right dark:text-gray-300">Cess</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">4</td>
+                            <td class="p-3 dark:text-gray-300">B2B Invoices</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.b2b.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.b2b.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.b2b.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.b2b.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.b2b.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">5</td>
+                            <td class="p-3 dark:text-gray-300">B2C (Large) Invoices</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.b2c_large.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.b2c_large.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.b2c_large.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.b2c_large.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.b2c_large.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">7</td>
+                            <td class="p-3 dark:text-gray-300">B2C (Small) Details</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.b2c_small.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.b2c_small.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.b2c_small.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.b2c_small.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.b2c_small.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">9</td>
+                            <td class="p-3 dark:text-gray-300">Credit/Debit Notes (Registered)</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.credit_debit_registered.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.credit_debit_registered.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.credit_debit_registered.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.credit_debit_registered.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.credit_debit_registered.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">10</td>
+                            <td class="p-3 dark:text-gray-300">Credit/Debit Notes (Unregistered)</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.credit_debit_unregistered.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.credit_debit_unregistered.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.credit_debit_unregistered.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.credit_debit_unregistered.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.credit_debit_unregistered.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">11</td>
+                            <td class="p-3 dark:text-gray-300">Export Invoices</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.export.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.export.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.export.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.export.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.export.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">12</td>
+                            <td class="p-3 dark:text-gray-300">HSN Summary</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.hsn.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.hsn.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.hsn.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.hsn.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.hsn.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="font-bold bg-gray-50 dark:bg-gray-700">
+                            <td class="p-3 dark:text-gray-300" colspan="2">Total</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.total.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.total.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.total.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.total.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.total.cess|format_currency }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- B2B Invoices Section -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-bold mb-4 dark:text-gray-200">4. B2B Invoices</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-700">
+                    <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-700">
+                            <th class="p-3 text-left dark:text-gray-300">GSTIN/UIN of Recipient</th>
+                            <th class="p-3 text-left dark:text-gray-300">Invoice Number</th>
+                            <th class="p-3 text-left dark:text-gray-300">Invoice Date</th>
+                            <th class="p-3 text-right dark:text-gray-300">Invoice Value</th>
+                            <th class="p-3 text-left dark:text-gray-300">Place of Supply</th>
+                            <th class="p-3 text-right dark:text-gray-300">Taxable Value</th>
+                            <th class="p-3 text-right dark:text-gray-300">Rate</th>
+                            <th class="p-3 text-right dark:text-gray-300">IGST</th>
+                            <th class="p-3 text-right dark:text-gray-300">CGST</th>
+                            <th class="p-3 text-right dark:text-gray-300">SGST</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for invoice in report_data.b2b_invoices %}
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">{{ invoice.gstin }}</td>
+                            <td class="p-3 dark:text-gray-300">{{ invoice.invoice_number }}</td>
+                            <td class="p-3 dark:text-gray-300">{{ invoice.invoice_date }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ invoice.invoice_value|format_currency }}</td>
+                            <td class="p-3 dark:text-gray-300">{{ invoice.place_of_supply }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ invoice.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ invoice.rate }}%</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ invoice.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ invoice.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ invoice.sgst|format_currency }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- B2C (Large) Invoices Section -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-bold mb-4 dark:text-gray-200">5. B2C (Large) Invoices</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-700">
+                    <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-700">
+                            <th class="p-3 text-left dark:text-gray-300">Invoice Number</th>
+                            <th class="p-3 text-left dark:text-gray-300">Invoice Date</th>
+                            <th class="p-3 text-right dark:text-gray-300">Invoice Value</th>
+                            <th class="p-3 text-left dark:text-gray-300">Place of Supply</th>
+                            <th class="p-3 text-right dark:text-gray-300">Taxable Value</th>
+                            <th class="p-3 text-right dark:text-gray-300">Rate</th>
+                            <th class="p-3 text-right dark:text-gray-300">IGST</th>
+                            <th class="p-3 text-right dark:text-gray-300">CGST</th>
+                            <th class="p-3 text-right dark:text-gray-300">SGST</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for invoice in report_data.b2c_large_invoices %}
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">{{ invoice.invoice_number }}</td>
+                            <td class="p-3 dark:text-gray-300">{{ invoice.invoice_date }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ invoice.invoice_value|format_currency }}</td>
+                            <td class="p-3 dark:text-gray-300">{{ invoice.place_of_supply }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ invoice.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ invoice.rate }}%</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ invoice.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ invoice.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ invoice.sgst|format_currency }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- B2C (Small) Summary Section -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-bold mb-4 dark:text-gray-200">7. B2C (Small) Summary</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-700">
+                    <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-700">
+                            <th class="p-3 text-left dark:text-gray-300">Type</th>
+                            <th class="p-3 text-left dark:text-gray-300">Place of Supply</th>
+                            <th class="p-3 text-right dark:text-gray-300">Rate</th>
+                            <th class="p-3 text-right dark:text-gray-300">Taxable Value</th>
+                            <th class="p-3 text-right dark:text-gray-300">IGST</th>
+                            <th class="p-3 text-right dark:text-gray-300">CGST</th>
+                            <th class="p-3 text-right dark:text-gray-300">SGST</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in report_data.b2c_small_summary %}
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">{{ item.type }}</td>
+                            <td class="p-3 dark:text-gray-300">{{ item.place_of_supply }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ item.rate }}%</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ item.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ item.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ item.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ item.sgst|format_currency }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- HSN Summary Section -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-bold mb-4 dark:text-gray-200">12. HSN Summary</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-700">
+                    <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-700">
+                            <th class="p-3 text-left dark:text-gray-300">HSN</th>
+                            <th class="p-3 text-left dark:text-gray-300">Description</th>
+                            <th class="p-3 text-left dark:text-gray-300">UQC</th>
+                            <th class="p-3 text-right dark:text-gray-300">Total Quantity</th>
+                            <th class="p-3 text-right dark:text-gray-300">Total Value</th>
+                            <th class="p-3 text-right dark:text-gray-300">Taxable Value</th>
+                            <th class="p-3 text-right dark:text-gray-300">IGST</th>
+                            <th class="p-3 text-right dark:text-gray-300">CGST</th>
+                            <th class="p-3 text-right dark:text-gray-300">SGST</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in report_data.hsn_summary %}
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">{{ item.hsn }}</td>
+                            <td class="p-3 dark:text-gray-300">{{ item.description }}</td>
+                            <td class="p-3 dark:text-gray-300">{{ item.uqc }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ item.total_quantity }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ item.total_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ item.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ item.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ item.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ item.sgst|format_currency }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Notes section -->
+        <div class="p-6 border-t border-gray-200 dark:border-gray-700">
+            <h4 class="font-bold mb-2 dark:text-gray-300">Notes:</h4>
+            <ol class="list-decimal list-inside text-sm dark:text-gray-400">
+                <li>This report is generated based on the financial data for {{ report_period }}.</li>
+                <li>B2B Large Invoices include invoices with value greater than  Rs.2.5 lakhs issued to customers outside the state.</li>
+                <li>B2C Small includes all B2C invoices with value less than  Rs.2.5 lakhs.</li>
+                <li>All amounts are displayed in {{ hospital.default_currency|default('INR') }}.</li>
+            </ol>
+        </div>
+        
+        <!-- Footer with report generation info -->
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-400 flex justify-between">
+            <span>Generated on: {{ now.strftime('%d %b, %Y %H:%M') }}</span>
+            <span>Generated by: {{ current_user.name }}</span>
+        </div>
+    </div>
+    {% else %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
+        <p class="text-gray-600 dark:text-gray-400">Select a period and generate the report to view the GSTR-1 data.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Print report functionality
+    const printReportBtn = document.getElementById('printReportBtn');
+    if (printReportBtn) {
+        printReportBtn.addEventListener('click', function() {
+            window.print();
+        });
+    }
+    
+    // Export JSON functionality
+    const exportJsonBtn = document.getElementById('exportJsonBtn');
+    if (exportJsonBtn) {
+        exportJsonBtn.addEventListener('click', function() {
+            const formData = new FormData(document.getElementById('gstr1Form'));
+            formData.append('export_format', 'json');
+            
+            window.location.href = "{{ url_for('gl_views.export_gstr1') }}?" + new URLSearchParams(formData).toString();
+        });
+    }
+    
+    // Export Excel functionality
+    const exportExcelBtn = document.getElementById('exportExcelBtn');
+    if (exportExcelBtn) {
+        exportExcelBtn.addEventListener('click', function() {
+            const formData = new FormData(document.getElementById('gstr1Form'));
+            formData.append('export_format', 'excel');
+            
+            window.location.href = "{{ url_for('gl_views.export_gstr1') }}?" + new URLSearchParams(formData).toString();
+        });
+    }
+});
+</script>
+
+<style>
+@media print {
+    body * {
+        visibility: hidden;
+    }
+    
+    #reportContent, #reportContent * {
+        visibility: visible;
+    }
+    
+    #reportContent {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+    }
+    
+    /* Hide buttons when printing */
+    button {
+        display: none !important;
+    }
+}
+</style>
+{% endblock %}

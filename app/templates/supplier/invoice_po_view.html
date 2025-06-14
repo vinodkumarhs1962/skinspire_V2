@@ -1,0 +1,134 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}Purchase Order Details{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <!-- Header Section -->
+    <div class="flex flex-col md:flex-row items-start justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Purchase Order Details</h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">PO Number: {{ po.po_number }} | Date: {{ po.po_date.strftime('%d-%b-%Y') }}</p>
+        </div>
+        <div class="mt-4 md:mt-0 space-x-2">
+            <a href="javascript:history.back()" class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i> Back to Invoice
+            </a>
+        </div>
+    </div>
+    
+    <!-- Status Banner -->
+    <div class="mb-6">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <div class="flex flex-col md:flex-row justify-between">
+                <div class="flex items-center mb-4 md:mb-0">
+                    <span class="mr-3 text-gray-700 dark:text-gray-300">Status:</span>
+                    <span class="px-3 py-1 text-sm rounded-full {% if po.status == 'approved' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300{% elif po.status == 'draft' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300{% elif po.status == 'cancelled' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300{% else %}bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300{% endif %}">
+                        {{ po.status|capitalize }}
+                    </span>
+                </div>
+                
+                <div class="flex flex-col">
+                    <div class="text-right">
+                        <span class="text-gray-700 dark:text-gray-300">Total Amount:</span>
+                        <span class="ml-2 text-xl font-bold text-gray-800 dark:text-gray-100"> Rs. {{ "%.2f"|format(po.total_amount|float) }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <!-- Left Column -->
+        <div class="md:col-span-2">
+            <!-- Line Items Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Order Items</h2>
+                </div>
+                
+                <div class="p-6">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full table-auto">
+                            <thead>
+                                <tr class="bg-gray-50 dark:bg-gray-700 text-xs uppercase">
+                                    <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">Item</th>
+                                    <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">Qty</th>
+                                    <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">Pack Price</th>
+                                    <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">MRP</th>
+                                    <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">GST</th>
+                                    <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for line in po.line_items %}
+                                <tr class="border-b dark:border-gray-700">
+                                    <td class="px-4 py-3">
+                                        <div class="font-medium text-gray-800 dark:text-gray-200">{{ line.medicine_name }}</div>
+                                        <div class="text-xs text-gray-500 dark:text-gray-400">HSN: {{ line.hsn_code }}</div>
+                                    </td>
+                                    <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{{ line.units }}</td>
+                                    <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300"> Rs. {{ "%.2f"|format(line.pack_purchase_price|float) }}</td>
+                                    <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300"> Rs. {{ "%.2f"|format(line.pack_mrp|float) }}</td>
+                                    <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                        {{ line.gst_rate }}% 
+                                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                                             Rs. {{ "%.2f"|format(line.total_gst|float) }}
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 text-right font-medium text-gray-800 dark:text-gray-200"> Rs. {{ "%.2f"|format(line.line_total|float) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr class="bg-gray-50 dark:bg-gray-700">
+                                    <td colspan="5" class="px-4 py-3 text-right font-semibold text-gray-700 dark:text-gray-300">Total Amount:</td>
+                                    <td class="px-4 py-3 text-right font-bold text-gray-800 dark:text-gray-200"> Rs. {{ "%.2f"|format(po.total_amount|float) }}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Column -->
+        <div>
+            <!-- Supplier Info Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Supplier Information</h2>
+                </div>
+                
+                <div class="p-6">
+                    {% if supplier %}
+                    <div class="mb-4">
+                        <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">Supplier</h3>
+                        <p class="text-gray-800 dark:text-gray-200 font-medium">{{ supplier.supplier_name }}</p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">{{ supplier.supplier_category }}</p>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">Contact</h3>
+                        <p class="text-gray-700 dark:text-gray-300">{{ supplier.contact_person_name or 'N/A' }}</p>
+                        <p class="text-gray-700 dark:text-gray-300">{{ supplier.email or 'N/A' }}</p>
+                        <p class="text-gray-700 dark:text-gray-300">{{ supplier.contact_info.phone if supplier.contact_info else 'N/A' }}</p>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">GST Details</h3>
+                        <p class="text-gray-700 dark:text-gray-300">GSTIN: {{ supplier.gst_registration_number or 'N/A' }}</p>
+                        <p class="text-gray-700 dark:text-gray-300">State Code: {{ supplier.state_code or 'N/A' }}</p>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <p class="text-gray-500 dark:text-gray-400">Supplier information not available</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

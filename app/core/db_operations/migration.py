@@ -51,10 +51,15 @@ def create_migration(message: str, env: str, backup: bool = True) -> Tuple[bool,
     current_env = os.environ.get('FLASK_ENV')
     os.environ['FLASK_ENV'] = full_env
     
+    # This is the critical line - make sure FLASK_APP is set correctly
+    os.environ['FLASK_APP'] = 'run.py'
+    
     try:
-        # Run flask db migrate
+        # Run flask db migrate - here, we're using the full path to flask to avoid path issues
+        flask_path = os.path.join(sys.prefix, 'Scripts', 'flask.exe') if sys.platform == 'win32' else 'flask'
+        
         result = subprocess.run(
-            [sys.executable, '-m', 'flask', 'db', 'migrate', '-m', message],
+            [flask_path, 'db', 'migrate', '-m', message],
             check=True, 
             capture_output=True,
             text=True
@@ -90,6 +95,9 @@ def create_migration(message: str, env: str, backup: bool = True) -> Tuple[bool,
             os.environ['FLASK_ENV'] = current_env
         else:
             os.environ.pop('FLASK_ENV', None)
+        # Clean up FLASK_APP
+        if 'FLASK_APP' in os.environ:
+            os.environ.pop('FLASK_APP')
 
 def apply_migration(env: str) -> bool:
     """

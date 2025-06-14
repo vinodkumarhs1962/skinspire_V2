@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Print Purchase Order - {{ po.po_number }}</title>
+    
+    <!-- Minimal CSS for print only -->
+    <style>
+        /* Reset and base styles */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+            color: black;
+            background: white;
+            padding: 20px;
+        }
+        
+        /* Screen styles for preview */
+        @media screen {
+            .print-controls {
+                background: #f3f4f6;
+                padding: 15px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                text-align: center;
+            }
+            
+            .btn {
+                display: inline-block;
+                padding: 12px 16px;
+                margin: 0 10px;
+                border: none;
+                border-radius: 5px;
+                text-decoration: none;
+                font-family: Arial, sans-serif;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                width: 200px;
+                height: 50px;
+                text-align: center;
+                line-height: 1.2;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .btn-primary {
+                background-color: #3b82f6;
+                color: white;
+            }
+            
+            .btn-primary:hover {
+                background-color: #1d4ed8;
+            }
+            
+            .btn-secondary {
+                background-color: #6b7280;
+                color: white;
+            }
+            
+            .btn-secondary:hover {
+                background-color: #4b5563;
+            }
+            
+            .document {
+                max-width: 21cm;
+                margin: 0 auto;
+                background: white;
+                padding: 2cm;
+                box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            }
+        }
+        
+        /* Print styles */
+        @media print {
+            body {
+                padding: 0;
+                font-size: 11px;
+            }
+            
+            .print-controls {
+                display: none !important;
+            }
+            
+            .document {
+                max-width: none;
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+            }
+            
+            .page-break {
+                page-break-before: always;
+            }
+            
+            .no-page-break {
+                page-break-inside: avoid;
+            }
+        }
+        
+        /* Document styles */
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 20px;
+        }
+        
+        .company-info {
+            margin-bottom: 20px;
+        }
+        
+        .company-logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 5px;
+        }
+        
+        .company-name {
+            font-size: 16px;
+            color: #4b5563;
+            margin-bottom: 15px;
+        }
+        
+        .document-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #000;
+            margin-bottom: 10px;
+        }
+        
+        .po-info {
+            font-size: 14px;
+            color: #374151;
+        }
+        
+        .details-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .section h3 {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 5px;
+        }
+        
+        .section p {
+            margin-bottom: 5px;
+        }
+        
+        .label {
+            font-weight: bold;
+        }
+        
+        /* Table styles */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        th, td {
+            border: 1px solid #000;
+            padding: 8px;
+            text-align: left;
+            font-size: 11px;
+        }
+        
+        th {
+            background-color: #f5f5f5;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .text-right {
+            text-align: right;
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        
+        .font-bold {
+            font-weight: bold;
+        }
+        
+        .bg-green {
+            background-color: #f0f9ff;
+        }
+        
+        .text-green {
+            color: #059669;
+        }
+        
+        .signature-section {
+            margin-top: 50px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 50px;
+        }
+        
+        .signature-box {
+            text-align: center;
+            border-top: 1px solid #000;
+            padding-top: 10px;
+            margin-top: 60px;
+        }
+        
+        .terms {
+            margin-top: 30px;
+        }
+        
+        .terms h4 {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .terms p {
+            margin-bottom: 10px;
+            white-space: pre-line;
+        }
+        
+        .free-items-notice {
+            background-color: #f0fdf4;
+            border-left: 4px solid #22c55e;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .free-items-notice h4 {
+            color: #166534;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .free-items-notice p {
+            color: #15803d;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Print Controls (hidden in print) -->
+    <div class="print-controls">
+        <button onclick="window.print()" class="btn btn-primary">
+            🖨️ Print<br>Document
+        </button>
+        <a href="{{ url_for('supplier_views.view_purchase_order', po_id=po.po_id) }}" class="btn btn-secondary">
+            ← Back to<br>Purchase Order
+        </a>
+    </div>
+
+    <!-- Document Content -->
+    <div class="document">
+        <!-- Header -->
+        <div class="header no-page-break">
+            <div class="company-info">
+                <div class="company-logo">🏥 SKINSPIRE CLINIC</div>
+                <div class="company-name">702, Ideal Homes Township, Rajrajeshwari Nagar, Bangalore 560098</div>
+            </div>
+            <div class="document-title">PURCHASE ORDER</div>
+            <div class="po-info">
+                <strong>PO Number:</strong> {{ po.po_number }} &nbsp;&nbsp;|&nbsp;&nbsp; 
+                <strong>Date:</strong> {{ po.po_date.strftime('%d-%m-%Y') if po.po_date else 'N/A' }}
+            </div>
+        </div>
+
+        <!-- PO Details -->
+        <div class="details-grid no-page-break">
+            <div class="section">
+                <h3>Supplier Details</h3>
+                {% if supplier %}
+                    <p class="font-bold">{{ supplier.supplier_name }}</p>
+                    {% if supplier.supplier_address %}
+                        {% set addr = supplier.supplier_address %}
+                        {% if addr.get('address_line1') %}
+                            <p>{{ addr.get('address_line1') }}</p>
+                        {% endif %}
+                        {% if addr.get('address_line2') %}
+                            <p>{{ addr.get('address_line2') }}</p>
+                        {% endif %}
+                        {% if addr.get('city') or addr.get('state') or addr.get('pincode') %}
+                            <p>{{ addr.get('city', '') }}{% if addr.get('city') and addr.get('state') %}, {% endif %}{{ addr.get('state', '') }} {{ addr.get('pincode', '') }}</p>
+                        {% endif %}
+                    {% endif %}
+                    <p><span class="label">GSTIN:</span> {{ supplier.gst_registration_number or 'N/A' }}</p>
+                {% else %}
+                    <p>Supplier information not available</p>
+                {% endif %}
+            </div>
+            
+            <div class="section">
+                <h3>Order Details</h3>
+                <p><span class="label">PO Number:</span> {{ po.po_number }}</p>
+                <p><span class="label">PO Date:</span> {{ po.po_date.strftime('%d-%m-%Y') if po.po_date else 'N/A' }}</p>
+                <p><span class="label">Expected Delivery:</span> {{ po.expected_delivery_date.strftime('%d-%m-%Y') if po.expected_delivery_date else 'N/A' }}</p>
+                <p><span class="label">Status:</span> {{ po.status|capitalize }}</p>
+            </div>
+        </div>
+
+        <!-- Line Items Table -->
+        <table>
+            <thead>
+                <tr>
+                    <th>Item Description</th>
+                    <th class="text-center">Qty</th>
+                    <th class="text-center">Pack Price</th>
+                    <th class="text-center">MRP</th>
+                    <th class="text-center">GST Rate</th>
+                    <th class="text-right">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for line in po.line_items %}
+                <tr {% if line.is_free_item %}class="bg-green"{% endif %}>
+                    <td>
+                        <div class="font-bold">
+                            {{ line.medicine_name }}
+                            {% if line.is_free_item %}
+                            <span class="text-green font-bold">(FREE ITEM)</span>
+                            {% endif %}
+                        </div>
+                        <div style="font-size: 9px; color: #666;">HSN: {{ line.hsn_code or 'N/A' }}</div>
+                    </td>
+                    <td class="text-center">
+                        {{ "%.0f"|format(line.units|float) }}
+                        {% if line.is_free_item %}
+                        <div style="font-size: 9px;" class="text-green">(Free)</div>
+                        {% endif %}
+                    </td>
+                    <td class="text-right">
+                        {% if line.is_free_item %}
+                        <span class="text-green font-bold">0.00</span>
+                        {% else %}
+                        {{ "%.2f"|format(line.pack_purchase_price|float) }}
+                        {% endif %}
+                    </td>
+                    <td class="text-right">{{ "%.2f"|format(line.pack_mrp|float) }}</td>
+                    <td class="text-center">
+                        {{ "%.1f"|format(line.gst_rate|float) }}%
+                        {% if line.total_gst %}
+                        <div style="font-size: 9px;">({{ "%.2f"|format(line.total_gst|float) }})</div>
+                        {% endif %}
+                    </td>
+                    <td class="text-right font-bold">
+                        {% if line.is_free_item %}
+                        <span class="text-green">0.00</span>
+                        {% else %}
+                        {{ "%.2f"|format(line.line_total|float) }}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="5" class="text-right font-bold">Total Amount:</td>
+                    <td class="text-right font-bold" style="font-size: 14px;"> Rs. {{ "%.2f"|format(po.total_amount|float) }}</td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <!-- Free Items Notice -->
+        {% set free_items = po.line_items|selectattr('is_free_item')|list %}
+        {% if free_items %}
+        <div class="free-items-notice">
+            <h4>Free Items Notice</h4>
+            <p>This purchase order includes {{ free_items|length }} free item(s). Free items have zero cost but are included for inventory tracking purposes.</p>
+        </div>
+        {% endif %}
+
+        <!-- Terms and Conditions -->
+        <div class="terms">
+            {% if po.terms_conditions %}
+            <h4>Terms and Conditions:</h4>
+            <p>{{ po.terms_conditions }}</p>
+            {% else %}
+            <h4>Terms and Conditions:</h4>
+            <p>1. Payment terms: Net 30 days from invoice date
+2. All goods must be delivered as per specifications
+3. Supplier responsible for quality and timely delivery
+4. Any damages during transit to be borne by supplier
+5. Invoices must include PO number for processing
+6. Price quoted is firm and not subject to escalation
+7. Delivery schedule must be strictly adhered to
+8. All applicable taxes extra unless specifically mentioned</p>
+            {% endif %}
+            
+            {% if po.delivery_instructions %}
+            <h4>Delivery Instructions:</h4>
+            <p>{{ po.delivery_instructions }}</p>
+            {% else %}
+            <h4>Delivery Instructions:</h4>
+            <p>• Deliver during business hours (9 AM - 6 PM)
+- Contact pharmacy department before delivery
+- All items must be properly labeled and packed
+- Delivery receipt required for all consignments</p>
+            {% endif %}
+        </div>
+
+        <!-- Signature Section -->
+        <div class="signature-section">
+            <div>
+                <div class="signature-box">
+                    <p class="font-bold">Authorized Signature</p>
+                </div>
+            </div>
+            <div>
+                <div class="signature-box">
+                    <p class="font-bold">Supplier Signature</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auto-print script removed - manual print only -->
+    <script>
+        // Optional: Add any future JavaScript functionality here
+        // Print dialog will be triggered manually by user clicking Print button
+    </script>
+</body>
+</html>

@@ -1,0 +1,625 @@
+{% extends "layouts/dashboard.html" %}
+{% from "components/forms.html" import input_field, select_field, date_field, checkbox_field %}
+{% from "components/alerts.html" import alert %}
+{% from "components/badges.html" import status_badge %}
+
+{% block title %}GST Reports{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <!-- Header Section -->
+    <div class="flex flex-col md:flex-row items-start justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">GST Reports</h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">Generate and view Goods and Services Tax reports</p>
+        </div>
+        <div class="mt-4 md:mt-0">
+            <a href="{{ url_for('gl_views.financial_reports') }}" class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i> Back to Reports
+            </a>
+        </div>
+    </div>
+    
+    <!-- Success or Error Alerts -->
+    {% if success_message %}
+    <div class="mb-6">
+        {{ alert(success_message, "success") }}
+    </div>
+    {% endif %}
+    
+    {% if error_message %}
+    <div class="mb-6">
+        {{ alert(error_message, "error") }}
+    </div>
+    {% endif %}
+    
+    <!-- GST Summary Card -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+        <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">GST Summary for Current Quarter</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- GSTR-1 Output Tax Summary -->
+            <div>
+                <h3 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">Output Tax (Sales)</h3>
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">CGST Collected:</span>
+                        <span class="font-medium text-gray-800 dark:text-gray-200">{{ current_quarter.output_cgst|currencyformat }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">SGST Collected:</span>
+                        <span class="font-medium text-gray-800 dark:text-gray-200">{{ current_quarter.output_sgst|currencyformat }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">IGST Collected:</span>
+                        <span class="font-medium text-gray-800 dark:text-gray-200">{{ current_quarter.output_igst|currencyformat }}</span>
+                    </div>
+                    <div class="pt-2 border-t border-gray-200 dark:border-gray-700 flex justify-between">
+                        <span class="text-gray-800 dark:text-gray-200 font-medium">Total Output Tax:</span>
+                        <span class="font-bold text-gray-800 dark:text-gray-200">{{ current_quarter.total_output_tax|currencyformat }}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- GSTR-2 Input Tax Summary -->
+            <div>
+                <h3 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">Input Tax (Purchases)</h3>
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">CGST Paid:</span>
+                        <span class="font-medium text-gray-800 dark:text-gray-200">{{ current_quarter.input_cgst|currencyformat }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">SGST Paid:</span>
+                        <span class="font-medium text-gray-800 dark:text-gray-200">{{ current_quarter.input_sgst|currencyformat }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">IGST Paid:</span>
+                        <span class="font-medium text-gray-800 dark:text-gray-200">{{ current_quarter.input_igst|currencyformat }}</span>
+                    </div>
+                    <div class="pt-2 border-t border-gray-200 dark:border-gray-700 flex justify-between">
+                        <span class="text-gray-800 dark:text-gray-200 font-medium">Total Input Tax:</span>
+                        <span class="font-bold text-gray-800 dark:text-gray-200">{{ current_quarter.total_input_tax|currencyformat }}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Net Tax Liability -->
+            <div>
+                <h3 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">Net Tax Position</h3>
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">CGST Balance:</span>
+                        <span class="font-medium {{ 'text-red-600 dark:text-red-400' if current_quarter.net_cgst > 0 else 'text-green-600 dark:text-green-400' }}">
+                            {{ current_quarter.net_cgst|currencyformat }}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">SGST Balance:</span>
+                        <span class="font-medium {{ 'text-red-600 dark:text-red-400' if current_quarter.net_sgst > 0 else 'text-green-600 dark:text-green-400' }}">
+                            {{ current_quarter.net_sgst|currencyformat }}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">IGST Balance:</span>
+                        <span class="font-medium {{ 'text-red-600 dark:text-red-400' if current_quarter.net_igst > 0 else 'text-green-600 dark:text-green-400' }}">
+                            {{ current_quarter.net_igst|currencyformat }}
+                        </span>
+                    </div>
+                    <div class="pt-2 border-t border-gray-200 dark:border-gray-700 flex justify-between">
+                        <span class="text-gray-800 dark:text-gray-200 font-medium">Net Tax Liability:</span>
+                        <span class="font-bold {{ 'text-red-600 dark:text-red-400' if current_quarter.net_tax_liability > 0 else 'text-green-600 dark:text-green-400' }}">
+                            {{ current_quarter.net_tax_liability|currencyformat }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-4 text-right">
+            <a href="{{ url_for('gl_views.gst_dashboard') }}" class="text-indigo-600 dark:text-indigo-400 hover:underline text-sm">
+                View Detailed Dashboard <i class="fas fa-arrow-right ml-1"></i>
+            </a>
+        </div>
+    </div>
+    
+    <!-- GST Report Generator -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Generate GST Reports</h2>
+        </div>
+        
+        <div class="p-6">
+            <form method="POST" action="{{ url_for('gl_views.generate_gst_report') }}" id="gst-report-form">
+                {{ form.csrf_token }}
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <!-- Report Type -->
+                    <div>
+                        {{ select_field(form.report_type, "Report Type", required=true, class="form-select") }}
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            <span id="report-description">Select a report type to see description</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Period Type -->
+                    <div>
+                        {{ select_field(form.period_type, "Period Type", required=true, class="form-select") }}
+                    </div>
+                    
+                    <!-- Branch Selection -->
+                    <div>
+                        {{ select_field(form.branch_id, "Branch", class="form-select") }}
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Leave blank for all branches
+                        </div>
+                    </div>
+                    
+                    <!-- Period Selection (conditional based on period type) -->
+                    <div id="month-selection" class="{{ 'hidden' if form.period_type.data != 'monthly' else '' }}">
+                        {{ select_field(form.month, "Month", class="form-select") }}
+                    </div>
+                    
+                    <div id="year-selection" class="{{ 'hidden' if form.period_type.data == 'custom' else '' }}">
+                        {{ select_field(form.year, "Year", class="form-select") }}
+                    </div>
+                    
+                    <div id="quarter-selection" class="{{ 'hidden' if form.period_type.data != 'quarterly' else '' }}">
+                        {{ select_field(form.quarter, "Quarter", class="form-select") }}
+                    </div>
+                    
+                    <!-- Custom Date Range (only for custom period type) -->
+                    <div id="date-range-from" class="{{ 'hidden' if form.period_type.data != 'custom' else '' }}">
+                        {{ date_field(form.from_date, "From Date", class="form-input") }}
+                    </div>
+                    
+                    <div id="date-range-to" class="{{ 'hidden' if form.period_type.data != 'custom' else '' }}">
+                        {{ date_field(form.to_date, "To Date", class="form-input") }}
+                    </div>
+                </div>
+                
+                <!-- GSTR-1 Specific Options -->
+                <div id="gstr1-options" class="{{ 'hidden' if form.report_type.data != 'gstr1' else '' }}">
+                    <div class="mb-6">
+                        <h3 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">GSTR-1 Options</h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="flex items-center">
+                                {{ checkbox_field(form.include_b2b, "Include B2B Invoices (B2B)", class="form-checkbox mr-2") }}
+                                <label for="include_b2b" class="text-sm text-gray-700 dark:text-gray-300">
+                                    Include B2B Invoices (B2B)
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center">
+                                {{ checkbox_field(form.include_b2c, "Include B2C Invoices (B2C)", class="form-checkbox mr-2") }}
+                                <label for="include_b2c" class="text-sm text-gray-700 dark:text-gray-300">
+                                    Include B2C Invoices (B2C)
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center">
+                                {{ checkbox_field(form.include_hsn_summary, "Include HSN Summary", class="form-checkbox mr-2") }}
+                                <label for="include_hsn_summary" class="text-sm text-gray-700 dark:text-gray-300">
+                                    Include HSN Summary
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center">
+                                {{ checkbox_field(form.include_nil_rated, "Include Nil-Rated, Exempted and Non-GST Supplies", class="form-checkbox mr-2") }}
+                                <label for="include_nil_rated" class="text-sm text-gray-700 dark:text-gray-300">
+                                    Include Nil-Rated, Exempted and Non-GST Supplies
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- GSTR-2 Specific Options -->
+                <div id="gstr2-options" class="{{ 'hidden' if form.report_type.data != 'gstr2' else '' }}">
+                    <div class="mb-6">
+                        <h3 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">GSTR-2 Options</h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="flex items-center">
+                                {{ checkbox_field(form.include_itc_eligible, "Include ITC Eligible Invoices", class="form-checkbox mr-2") }}
+                                <label for="include_itc_eligible" class="text-sm text-gray-700 dark:text-gray-300">
+                                    Include ITC Eligible Invoices
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center">
+                                {{ checkbox_field(form.include_itc_ineligible, "Include ITC Ineligible Invoices", class="form-checkbox mr-2") }}
+                                <label for="include_itc_ineligible" class="text-sm text-gray-700 dark:text-gray-300">
+                                    Include ITC Ineligible Invoices
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center">
+                                {{ checkbox_field(form.include_supplier_summary, "Include Supplier Summary", class="form-checkbox mr-2") }}
+                                <label for="include_supplier_summary" class="text-sm text-gray-700 dark:text-gray-300">
+                                    Include Supplier Summary
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- GSTR-3B Specific Options -->
+                <div id="gstr3b-options" class="{{ 'hidden' if form.report_type.data != 'gstr3b' else '' }}">
+                    <div class="mb-6">
+                        <h3 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">GSTR-3B Options</h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="flex items-center">
+                                {{ checkbox_field(form.include_nil_rated_3b, "Include Nil-Rated, Exempted Supplies", class="form-checkbox mr-2") }}
+                                <label for="include_nil_rated_3b" class="text-sm text-gray-700 dark:text-gray-300">
+                                    Include Nil-Rated, Exempted Supplies
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center">
+                                {{ checkbox_field(form.include_reversal, "Include ITC Reversals", class="form-checkbox mr-2") }}
+                                <label for="include_reversal" class="text-sm text-gray-700 dark:text-gray-300">
+                                    Include ITC Reversals
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- File Format Options -->
+                <div class="mb-6">
+                    <h3 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">Output Options</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <!-- Format Selection -->
+                        <div>
+                            {{ select_field(form.file_format, "File Format", required=true, class="form-select") }}
+                        </div>
+                        
+                        <!-- JSON Format for GST Portal -->
+                        <div class="flex items-center mt-6">
+                            {{ checkbox_field(form.generate_json, "Generate JSON for GST Portal", class="form-checkbox mr-2") }}
+                            <label for="generate_json" class="text-sm text-gray-700 dark:text-gray-300">
+                                Generate JSON for GST Portal
+                            </label>
+                        </div>
+                        
+                        <!-- Include Supporting Details -->
+                        <div class="flex items-center mt-6">
+                            {{ checkbox_field(form.include_details, "Include Supporting Details", class="form-checkbox mr-2") }}
+                            <label for="include_details" class="text-sm text-gray-700 dark:text-gray-300">
+                                Include Supporting Details
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Form Actions -->
+                <div class="flex justify-end">
+                    <button type="button" class="btn-secondary mr-2" id="reset-form-btn">
+                        Reset Form
+                    </button>
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-file-export mr-2"></i> Generate Report
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Recent Reports -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-between items-center">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Recent Reports</h2>
+            <a href="{{ url_for('gl_views.gst_report_history') }}" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+                View All Reports
+            </a>
+        </div>
+        
+        <div class="p-6">
+            {% if recent_reports %}
+            <div class="overflow-x-auto">
+                <table class="min-w-full table-auto">
+                    <thead>
+                        <tr class="bg-gray-50 dark:bg-gray-700 text-xs uppercase">
+                            <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">Report Type</th>
+                            <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">Period</th>
+                            <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">Generated By</th>
+                            <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">Generated At</th>
+                            <th class="px-4 py-2 text-center text-gray-500 dark:text-gray-300">Format</th>
+                            <th class="px-4 py-2 text-center text-gray-500 dark:text-gray-300">Status</th>
+                            <th class="px-4 py-2 text-center text-gray-500 dark:text-gray-300">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for report in recent_reports %}
+                        <tr class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <td class="px-4 py-3">
+                                <div class="font-medium text-gray-800 dark:text-gray-200">
+                                    {{ report.report_type_display }}
+                                </div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                    {{ report.description }}
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                {{ report.period_display }}
+                            </td>
+                            <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                {{ report.generated_by }}
+                            </td>
+                            <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                {{ report.generated_at|datetimeformat }}
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <span class="px-2 py-1 text-xs rounded-full 
+                                    {% if report.file_format == 'excel' %}
+                                        bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300
+                                    {% elif report.file_format == 'pdf' %}
+                                        bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300
+                                    {% elif report.file_format == 'csv' %}
+                                        bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300
+                                    {% elif report.file_format == 'json' %}
+                                        bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300
+                                    {% else %}
+                                        bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300
+                                    {% endif %}">
+                                    {{ report.file_format|upper }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                {{ status_badge(report.status) }}
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <div class="flex items-center justify-center space-x-2">
+                                    <a href="{{ url_for('gl_views.download_gst_report', report_id=report.report_id) }}" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300" title="Download Report">
+                                        <i class="fas fa-download"></i>
+                                    </a>
+                                    <a href="{{ url_for('gl_views.view_gst_report', report_id=report.report_id) }}" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300" title="View Report">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{{ url_for('gl_views.regenerate_gst_report', report_id=report.report_id) }}" class="text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300" title="Regenerate Report">
+                                        <i class="fas fa-sync-alt"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-6">
+                <div class="text-gray-500 dark:text-gray-400">
+                    <i class="fas fa-file-alt text-4xl mb-3"></i>
+                    <p>No recent reports found</p>
+                    <p class="text-sm mt-2">Generate a new report using the form above</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // References to form elements
+    const reportTypeSelect = document.getElementById('report_type');
+    const periodTypeSelect = document.getElementById('period_type');
+    const reportDescriptionSpan = document.getElementById('report-description');
+    
+    // Report option containers
+    const gstr1Options = document.getElementById('gstr1-options');
+    const gstr2Options = document.getElementById('gstr2-options');
+    const gstr3bOptions = document.getElementById('gstr3b-options');
+    
+    // Period selection containers
+    const monthSelection = document.getElementById('month-selection');
+    const yearSelection = document.getElementById('year-selection');
+    const quarterSelection = document.getElementById('quarter-selection');
+    const dateRangeFrom = document.getElementById('date-range-from');
+    const dateRangeTo = document.getElementById('date-range-to');
+    
+    // Reset form button
+    const resetFormBtn = document.getElementById('reset-form-btn');
+    
+    // Report type descriptions
+    const reportDescriptions = {
+        'gstr1': 'GSTR-1 is a monthly or quarterly return that summarizes all outward supplies (sales).',
+        'gstr2': 'GSTR-2 is a return that contains details of inward supplies (purchases) of taxable goods and/or services.',
+        'gstr3b': 'GSTR-3B is a monthly summary return of outward supplies, inward supplies liable to reverse charge, eligible ITC, and payment of taxes.',
+        'gstr9': 'GSTR-9 is an annual return to be filed once in a year by the registered taxpayers under GST.',
+        'hsn_summary': 'HSN Summary report provides details of outward and inward supplies classified by HSN codes.',
+        'b2b_invoices': 'B2B Invoices report shows all business-to-business invoices issued during the selected period.',
+        'b2c_invoices': 'B2C Invoices report shows all business-to-consumer invoices issued during the selected period.',
+        'itc_report': 'Input Tax Credit report shows details of all eligible and ineligible ITC claimed during the period.'
+    };
+    
+    // Handle report type change
+    if (reportTypeSelect) {
+        reportTypeSelect.addEventListener('change', function() {
+            const reportType = this.value;
+            
+            // Update description
+            if (reportDescriptionSpan) {
+                reportDescriptionSpan.textContent = reportDescriptions[reportType] || 'Select a report type to see description';
+            }
+            
+            // Show/hide report-specific options
+            if (gstr1Options) gstr1Options.classList.toggle('hidden', reportType !== 'gstr1');
+            if (gstr2Options) gstr2Options.classList.toggle('hidden', reportType !== 'gstr2');
+            if (gstr3bOptions) gstr3bOptions.classList.toggle('hidden', reportType !== 'gstr3b');
+        });
+    }
+    
+    // Handle period type change
+    if (periodTypeSelect) {
+        periodTypeSelect.addEventListener('change', function() {
+            const periodType = this.value;
+            
+            // Show/hide period selection fields based on period type
+            if (monthSelection) monthSelection.classList.toggle('hidden', periodType !== 'monthly');
+            if (quarterSelection) quarterSelection.classList.toggle('hidden', periodType !== 'quarterly');
+            if (yearSelection) yearSelection.classList.toggle('hidden', periodType === 'custom');
+            if (dateRangeFrom) dateRangeFrom.classList.toggle('hidden', periodType !== 'custom');
+            if (dateRangeTo) dateRangeTo.classList.toggle('hidden', periodType !== 'custom');
+        });
+    }
+    
+    // Handle reset form button
+    if (resetFormBtn) {
+        resetFormBtn.addEventListener('click', function() {
+            // Reset form fields
+            document.getElementById('gst-report-form').reset();
+            
+            // Trigger change events to update UI
+            if (reportTypeSelect) {
+                reportTypeSelect.dispatchEvent(new Event('change'));
+            }
+            
+            if (periodTypeSelect) {
+                periodTypeSelect.dispatchEvent(new Event('change'));
+            }
+        });
+    }
+    
+    // Form validation
+    const gstReportForm = document.getElementById('gst-report-form');
+    if (gstReportForm) {
+        gstReportForm.addEventListener('submit', function(e) {
+            const reportType = reportTypeSelect.value;
+            const periodType = periodTypeSelect.value;
+            
+            // Validate report type
+            if (!reportType) {
+                e.preventDefault();
+                alert('Please select a report type');
+                return false;
+            }
+            
+            // Validate period type
+            if (!periodType) {
+                e.preventDefault();
+                alert('Please select a period type');
+                return false;
+            }
+            
+            // Validate period-specific fields
+            if (periodType === 'monthly') {
+                const monthSelect = document.getElementById('month');
+                const yearSelect = document.getElementById('year');
+                
+                if (!monthSelect.value) {
+                    e.preventDefault();
+                    alert('Please select a month');
+                    return false;
+                }
+                
+                if (!yearSelect.value) {
+                    e.preventDefault();
+                    alert('Please select a year');
+                    return false;
+                }
+            } else if (periodType === 'quarterly') {
+                const quarterSelect = document.getElementById('quarter');
+                const yearSelect = document.getElementById('year');
+                
+                if (!quarterSelect.value) {
+                    e.preventDefault();
+                    alert('Please select a quarter');
+                    return false;
+                }
+                
+                if (!yearSelect.value) {
+                    e.preventDefault();
+                    alert('Please select a year');
+                    return false;
+                }
+            } else if (periodType === 'yearly') {
+                const yearSelect = document.getElementById('year');
+                
+                if (!yearSelect.value) {
+                    e.preventDefault();
+                    alert('Please select a year');
+                    return false;
+                }
+            } else if (periodType === 'custom') {
+                const fromDateInput = document.getElementById('from_date');
+                const toDateInput = document.getElementById('to_date');
+                
+                if (!fromDateInput.value) {
+                    e.preventDefault();
+                    alert('Please select a from date');
+                    return false;
+                }
+                
+                if (!toDateInput.value) {
+                    e.preventDefault();
+                    alert('Please select a to date');
+                    return false;
+                }
+                
+                // Validate date range
+                const fromDate = new Date(fromDateInput.value);
+                const toDate = new Date(toDateInput.value);
+                
+                if (fromDate > toDate) {
+                    e.preventDefault();
+                    alert('From date cannot be after to date');
+                    return false;
+                }
+            }
+            
+            // Validate format-specific options
+            const fileFormat = document.getElementById('file_format').value;
+            if (!fileFormat) {
+                e.preventDefault();
+                alert('Please select a file format');
+                return false;
+            }
+            
+            // GSTR-1 specific validations
+            if (reportType === 'gstr1') {
+                const includeB2B = document.getElementById('include_b2b');
+                const includeB2C = document.getElementById('include_b2c');
+                const includeHSN = document.getElementById('include_hsn_summary');
+                const includeNilRated = document.getElementById('include_nil_rated');
+                
+                if (!includeB2B.checked && !includeB2C.checked && !includeHSN.checked && !includeNilRated.checked) {
+                    e.preventDefault();
+                    alert('Please select at least one section to include in GSTR-1 report');
+                    return false;
+                }
+            }
+            
+            // GSTR-2 specific validations
+            if (reportType === 'gstr2') {
+                const includeITCEligible = document.getElementById('include_itc_eligible');
+                const includeITCIneligible = document.getElementById('include_itc_ineligible');
+                
+                if (!includeITCEligible.checked && !includeITCIneligible.checked) {
+                    e.preventDefault();
+                    alert('Please select at least one ITC option to include in GSTR-2 report');
+                    return false;
+                }
+            }
+            
+            return true;
+        });
+    }
+    
+    // If there are values in the form fields from a previous submission, trigger change events to update UI
+    if (reportTypeSelect && reportTypeSelect.value) {
+        reportTypeSelect.dispatchEvent(new Event('change'));
+    }
+    
+    if (periodTypeSelect && periodTypeSelect.value) {
+        periodTypeSelect.dispatchEvent(new Event('change'));
+    }
+});
+</script>
+{% endblock %}

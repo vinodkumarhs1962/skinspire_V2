@@ -1,0 +1,232 @@
+{% macro payment_history(payments, invoice_id, currency_code) %}
+<div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+    <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Payment History</h2>
+    
+    {% if payments and payments|length > 0 %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700">
+                <thead>
+                    <tr class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Date</th>
+                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Payment Method</th>
+                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Reference</th>
+                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">Amount</th>
+                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-center">Status</th>
+                        <th class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for payment in payments %}
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">{{ payment.payment_date.strftime('%d-%b-%Y') }}</td>
+                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">
+                                {% set methods = [] %}
+                                {% if payment.cash_amount > 0 %}{% set _ = methods.append('Cash') %}{% endif %}
+                                {% if payment.credit_card_amount > 0 %}{% set _ = methods.append('Credit Card') %}{% endif %}
+                                {% if payment.debit_card_amount > 0 %}{% set _ = methods.append('Debit Card') %}{% endif %}
+                                {% if payment.upi_amount > 0 %}{% set _ = methods.append('UPI') %}{% endif %}
+                                {{ methods|join(', ') }}
+                            </td>
+                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">
+                                {% if payment.reference_number %}
+                                    {{ payment.reference_number }}
+                                {% elif payment.card_number_last4 %}
+                                    {{ payment.card_type }} ({{ payment.card_number_last4 }})
+                                {% elif payment.upi_id %}
+                                    {{ payment.upi_id }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">{{ payment.currency_code }} {{ payment.total_amount }}</td>
+                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-center">
+                                {% if payment.refunded_amount > 0 %}
+                                    {% if payment.refunded_amount == payment.total_amount %}
+                                        <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300">Refunded</span>
+                                    {% else %}
+                                        <span class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">Partially Refunded</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">Completed</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-center">
+                                {% if payment.refunded_amount < payment.total_amount %}
+                                    <button type="button" class="refund-payment-btn text-red-500 hover:text-red-700" data-payment-id="{{ payment.payment_id }}" data-amount="{{ payment.total_amount - payment.refunded_amount }}">
+                                        Refund
+                                    </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% if payment.refunded_amount > 0 %}
+                            <tr class="bg-red-50 dark:bg-red-900/20">
+                                <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">{{ payment.refund_date.strftime('%d-%b-%Y') }}</td>
+                                <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">Refund</td>
+                                <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">
+                                    {{ payment.refund_reason or '-' }}
+                                </td>
+                                <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right text-red-600 dark:text-red-400">-{{ payment.currency_code }} {{ payment.refunded_amount }}</td>
+                                <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-center">
+                                    <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300">Refund</span>
+                                </td>
+                                <td class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-center">-</td>
+                            </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Payment Summary -->
+        <div class="mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="text-center">
+                    <div class="text-sm text-gray-500 dark:text-gray-400">Total Invoice Amount</div>
+                    <div class="font-bold text-gray-900 dark:text-white">{{ currency_code }} {{ invoice_total }}</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-sm text-gray-500 dark:text-gray-400">Paid Amount</div>
+                    <div class="font-bold text-green-600 dark:text-green-400">{{ currency_code }} {{ paid_amount }}</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-sm text-gray-500 dark:text-gray-400">Balance Due</div>
+                    <div class="font-bold {% if balance_due > 0 %}text-red-600 dark:text-red-400{% else %}text-gray-900 dark:text-white{% endif %}">
+                        {{ currency_code }} {{ balance_due }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="p-4 text-center text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-lg">
+            No payments recorded yet
+        </div>
+    {% endif %}
+    
+    <!-- Refund Modal -->
+    <div id="refund-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-md w-full mx-4">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold text-gray-900 dark:text-white">Issue Refund</h3>
+                    <button type="button" id="close-refund-modal" class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <form id="refund-form" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="invoice_id" value="{{ invoice_id }}">
+                    <input type="hidden" name="payment_id" id="refund-payment-id">
+                    
+                    <div class="mb-4">
+                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="refund-amount">
+                            Refund Amount
+                        </label>
+                        <input type="number" id="refund-amount" name="refund_amount" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline" step="0.01" min="0.01">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Maximum available: <span id="max-refund-amount">0.00</span></p>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="refund-reason">
+                            Reason for Refund
+                        </label>
+                        <textarea id="refund-reason" name="refund_reason" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline h-24"></textarea>
+                    </div>
+                    
+                    <div class="flex justify-end">
+                        <button type="button" id="cancel-refund" class="bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-2 px-4 rounded mr-2">
+                            Cancel
+                        </button>
+                        <button type="submit" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+                            Issue Refund
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        initRefundModal();
+    });
+    
+    // Initialize refund modal
+    function initRefundModal() {
+        const refundBtns = document.querySelectorAll('.refund-payment-btn');
+        const refundModal = document.getElementById('refund-modal');
+        const closeRefundModal = document.getElementById('close-refund-modal');
+        const cancelRefund = document.getElementById('cancel-refund');
+        const refundPaymentId = document.getElementById('refund-payment-id');
+        const refundAmount = document.getElementById('refund-amount');
+        const maxRefundAmount = document.getElementById('max-refund-amount');
+        const refundForm = document.getElementById('refund-form');
+        
+        // Show modal
+        refundBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const paymentId = this.getAttribute('data-payment-id');
+                const amount = parseFloat(this.getAttribute('data-amount'));
+                
+                refundPaymentId.value = paymentId;
+                maxRefundAmount.textContent = '{{ currency_code }} ' + amount.toFixed(2);
+                refundAmount.max = amount;
+                refundAmount.value = amount.toFixed(2);
+                
+                // Set form action
+                refundForm.action = `/billing/payment/${paymentId}/refund`;
+                
+                refundModal.classList.remove('hidden');
+            });
+        });
+        
+        // Hide modal
+        if (closeRefundModal) {
+            closeRefundModal.addEventListener('click', function() {
+                refundModal.classList.add('hidden');
+            });
+        }
+        
+        if (cancelRefund) {
+            cancelRefund.addEventListener('click', function() {
+                refundModal.classList.add('hidden');
+            });
+        }
+        
+        // Validate refund amount
+        if (refundAmount) {
+            refundAmount.addEventListener('input', function() {
+                const max = parseFloat(this.max);
+                let value = parseFloat(this.value);
+                
+                if (value > max) {
+                    this.value = max.toFixed(2);
+                }
+            });
+        }
+        
+        // Validate form before submission
+        if (refundForm) {
+            refundForm.addEventListener('submit', function(e) {
+                const amount = parseFloat(refundAmount.value);
+                const reason = document.getElementById('refund-reason').value.trim();
+                
+                if (isNaN(amount) || amount <= 0) {
+                    e.preventDefault();
+                    alert('Please enter a valid refund amount.');
+                    return;
+                }
+                
+                if (!reason) {
+                    e.preventDefault();
+                    alert('Please provide a reason for the refund.');
+                    return;
+                }
+            });
+        }
+    }
+</script>
+{% endmacro %}

@@ -11,6 +11,7 @@
 # python scripts/manage_db.py create-backup
 # python scripts/manage_db.py create-backup --env dev
 # python scripts/manage_db.py create-db-migration
+# python scripts/manage_db.py create-db-migration -m "Your migration message"
 # python scripts/manage_db.py drop-all-db-tables
 # python scripts/manage_db.py initialize-db
 # python scripts/manage_db.py inspect-db
@@ -24,6 +25,36 @@
 # python scripts/manage_db.py switch-env
 # python scripts/manage_db.py test-db-triggers
 # python scripts/manage_db.py verify-db-triggers
+# python scripts/manage_db.py reset-migration-tracking
+# python scripts/manage_db.py reset-migration-tracking --mode trace-reset
+# python scripts/manage_db.py clean-migration-files   # not working  use another command below
+# python scripts/manage_db.py clean-migration-files --force    # not working use another command below
+
+# 
+# MIGRATION STEPS  
+# python scripts/manage_db.py detect-schema-changes
+# python scripts/manage_db.py create-model-migration -m "Your message here"
+# python scripts/manage_db.py create-model-migration -m "Your message" --apply
+# python scripts/manage_db.py apply-db-migration   # Apply to current environment
+# python scripts/manage_db.py init-migrations
+# set FLASK_APP=app:create_app  flask db init   # for initializing database direct flask command
+# python scripts/manage_db.py apply-db-migration --env dev   # Apply to dev database
+# python scripts/manage_db.py apply-db-migration --env test  # Apply to test database
+# python scripts/manage_db.py debug-migration-config
+
+# python scripts/manage_db.py sync-models-to-db
+# python scripts/manage_db.py execute-sql path/to/sql_file.sql
+# python scripts/manage_db.py verify-db-structure
+
+# ALEMBIC MIGRATION TRACKING RESET or STAMP COMMANDS
+# python scripts/manage_db.py stamp-migrations  # Stamp to latest migration (head) 
+# python scripts/manage_db.py stamp-migrations base  # Stamp to base (no migrations):  
+# python scripts/manage_db.py stamp-migrations <revision_hash>  # Stamp to a specific revision:   
+# python scripts/manage_db.py stamp-migrations --force  # Force stamp without confirmation: 
+# python scripts/manage_db.py merge-migration-heads
+# python scripts/manage_db.py merge-migration-heads -m "Resolving multiple migration branches"
+# python scripts/manage_db.py reset-migrations-completely   # With confirmation prompt:
+# python scripts/manage_db.py reset-migrations-completely --force  # Skip confirmation (for scripts):
 
 # Setup imports for manage_db.py
 import os
@@ -1434,26 +1465,51 @@ def sync_dev_schema(force):
 
 @cli.command()
 def detect_schema_changes():
-    """
-    Detect changes between models and database schema
-    """
+    """Detect changes between models and database schema"""
     if not CORE_MODULES_AVAILABLE:
         click.echo("Error: Core modules not properly imported")
         sys.exit(1)
-    
-    click.echo('Detecting schema changes...')
-    from app.core.db_operations import detect_model_changes
-    changes = detect_model_changes()
-    
-    if changes['has_changes']:
-        click.echo(f"\nDetected {len(changes['changes'])} changes:")
-        for change in changes['changes']:
-            click.echo(f"- {change}")
         
-        click.echo("\nTo create a migration with these changes:")
-        click.echo("  python scripts/manage_db.py prepare-migration -m \"Your migration message\"")
-    else:
-        click.echo("No schema changes detected")
+    try:
+        from app.core.db_operations.schema_sync import detect_model_changes
+        
+        click.echo('Detecting schema changes...')
+        changes = detect_model_changes()
+        
+        if changes.get('has_changes', False):
+            click.echo(f"\nDetected {len(changes['changes'])} changes:")
+            
+            # Handle both old and new format changes
+            changes_list = changes.get('changes', [])
+            if changes_list and isinstance(changes_list[0], dict):
+                # New format - more detailed output
+                for change in changes_list:
+                    change_type = change['type'].replace('_', ' ').title()
+                    auto_apply_note = "" if change.get('auto_apply', True) else " (will not be auto-applied)"
+                    
+                    if 'column' in change:
+                        click.echo(f"- {change_type}: {change['table']}.{change['column']} - {change['details']}{auto_apply_note}")
+                    else:
+                        click.echo(f"- {change_type}: {change['table']} - {change['details']}{auto_apply_note}")
+            else:
+                # Old format - simple output
+                for change in changes_list:
+                    click.echo(f"- {change}")
+            
+            click.echo("\nTo create a migration with these changes:")
+            click.echo("  python scripts/manage_db.py create-model-migration -m \"Your message here\"")
+            
+            click.echo("\nTo directly apply these changes in development:")
+            click.echo("  python scripts/manage_db.py sync-models-to-db")
+        else:
+            if 'error' in changes:
+                click.echo(f"Error: {changes['error']}")
+                sys.exit(1)
+            else:
+                click.echo("No schema changes detected")
+    except Exception as e:
+        click.echo(f"Error detecting schema changes: {e}")
+        sys.exit(1)
 
 @cli.command()
 @click.option('--message', '-m', required=True, help='Migration message')
@@ -1509,6 +1565,634 @@ def prepare_migration(message):
                 click.echo(f"ERROR: {str(e)}")
             sys.exit(1)
 
+@cli.command()
+@click.option('--mode', type=click.Choice(['stamp', 'trace-reset']), default='stamp', 
+              help='stamp: Mark all migrations as applied, trace-reset: Clear migration tracking')
+def reset_migration_tracking(mode):
+    """
+    Reset Alembic migration tracking
+
+    - stamp: Marks all migrations as applied without changing database
+    - trace-reset: Clears migration tracking table (alembic_version)
+    """
+    try:
+        from alembic.config import Config
+        from alembic import command
+        from sqlalchemy import create_engine, text
+        from app.config.db_config import DatabaseConfig
+
+        # Get current database URL
+        db_url = DatabaseConfig.get_database_url()
+        
+        # Find migrations directory
+        project_root = Path(__file__).parent.parent
+        migrations_dir = project_root / 'migrations'
+        alembic_ini = migrations_dir / 'alembic.ini'
+
+        # Validate paths
+        if not alembic_ini.exists():
+            click.echo(f"Error: Alembic configuration not found at {alembic_ini}")
+            sys.exit(1)
+
+        # Create Alembic config
+        alembic_cfg = Config(str(alembic_ini))
+
+        # Manually set script location if not in config
+        if not alembic_cfg.get_main_option('script_location'):
+            alembic_cfg.set_main_option('script_location', str(migrations_dir))
+
+        if mode == 'stamp':
+            # Stamp migrations to base
+            click.echo("Performing stamp reset - marking all migrations as applied...")
+            command.stamp(alembic_cfg, "head")
+            click.echo("Stamp reset completed: All migrations marked as applied")
+
+        elif mode == 'trace-reset':
+            # Reset migration tracking table
+            click.echo("Performing migration trace reset - clearing migration tracking...")
+            
+            # Create engine directly
+            engine = create_engine(db_url)
+            
+            with engine.connect() as connection:
+                # Disable foreign key constraints
+                connection.execute(text('SET session_replication_role = replica;'))
+                
+                # Delete alembic_version table
+                connection.execute(text('DELETE FROM alembic_version;'))
+                
+                # Re-enable foreign key constraints
+                connection.execute(text('SET session_replication_role = default;'))
+                
+                click.echo("Migration trace reset completed: Tracking table cleared")
+
+    except Exception as e:
+        click.echo(f"Error during migration tracking reset: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+@cli.command()
+@click.option('--force', is_flag=True, help='Force cleanup even with only one migration file')
+def clean_migration_files(force):
+    """
+    Clean up old migration files
+    
+    By default, does not clean if only one migration file exists.
+    Use --force to override.
+    """
+    # Find migrations directory
+    project_root = Path(__file__).parent.parent
+    migrations_dir = project_root / 'migrations' / 'versions'
+    
+    if not migrations_dir.exists():
+        click.echo(f"Migration versions directory not found: {migrations_dir}")
+        sys.exit(1)
+    
+    # Find migration Python files, excluding __init__.py and __pycache__
+    migration_files = [
+        f for f in migrations_dir.glob('*.py') 
+        if f.stem != '__init__' and 
+           not f.stem.startswith('__') and 
+           f.is_file()
+    ]
+    
+    # If only one migration file and no force flag
+    if len(migration_files) <= 1 and not force:
+        click.echo("Only one migration file exists. Use --force to clean.")
+        for file in migration_files:
+            click.echo(f"Current migration file: {file.name}")
+        return
+    
+    # Sort by modification time
+    migration_files.sort(key=os.path.getmtime)
+    
+    # Keep the latest file if multiple exist
+    if len(migration_files) > 1:
+        latest_file = migration_files[-1]
+        migration_files = migration_files[:-1]
+    else:
+        latest_file = None
+    
+    # Remove old migration files
+    click.echo("Cleaning migration files:")
+    for file_path in migration_files:
+        click.echo(f"  Deleting: {file_path}")
+        os.unlink(file_path)
+    
+    if latest_file:
+        click.echo(f"Kept latest migration: {latest_file}")
+    else:
+        click.echo("No migration files to clean")
+    
+    click.echo("Migration file cleanup completed")
+
+@cli.command()
+@click.argument('revision', default='head')
+@click.option('--force', is_flag=True, help='Force stamp without confirmation')
+def stamp_migrations(revision, force):
+    """
+    Stamp Alembic migrations to a specific revision
+
+    REVISION: Revision to stamp to (default: 'head')
+    Use 'base' to reset all migrations
+    Use a specific revision hash to stamp to that point
+    """
+    try:
+        from alembic.config import Config
+        from alembic import command
+        
+        # Get the app and ensure we're in the app context
+        app = get_app()
+        with app.app_context():
+            from app.config.db_config import DatabaseConfig
+
+            # Get current database URL
+            db_url = DatabaseConfig.get_database_url()
+            
+            # Find migrations directory
+            project_root = Path(__file__).parent.parent
+            migrations_dir = project_root / 'migrations'
+            alembic_ini = migrations_dir / 'alembic.ini'
+
+            # Validate paths
+            if not alembic_ini.exists():
+                click.echo(f"Error: Alembic configuration not found at {alembic_ini}")
+                sys.exit(1)
+
+            # Create Alembic config
+            alembic_cfg = Config(str(alembic_ini))
+
+            # Manually set script location if not in config
+            if not alembic_cfg.get_main_option('script_location'):
+                alembic_cfg.set_main_option('script_location', str(migrations_dir))
+
+            # Confirmation for potentially destructive operations
+            if not force:
+                if revision == 'base':
+                    confirm = click.confirm("WARNING: This will mark ALL migrations as not applied. Are you sure?")
+                elif revision == 'head':
+                    confirm = click.confirm("This will mark ALL migrations as applied. Proceed?")
+                else:
+                    confirm = click.confirm(f"Stamp migrations to revision {revision}. Proceed?")
+                
+                if not confirm:
+                    click.echo("Operation cancelled")
+                    return
+
+            # Perform stamp operation
+            click.echo(f"Stamping migrations to: {revision}")
+            command.stamp(alembic_cfg, revision)
+            
+            click.echo(f"SUCCESS: Migrations stamped to {revision}")
+
+    except Exception as e:
+        click.echo(f"Error during migration stamping: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+@cli.command()
+@click.option('--message', '-m', required=True, help='Migration message')
+@click.option('--apply', is_flag=True, help='Apply migration immediately')
+@click.option('--backup/--no-backup', default=True, help='Create backup before generating')
+def create_model_migration(message, apply, backup):
+    """Create migration based on model changes"""
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
+    
+    try:
+        from app.core.db_operations.schema_sync import create_model_based_migration
+        from app.core.db_operations.migration import apply_migration
+        
+        # Determine environment
+        try:
+            from app.config.db_config import DatabaseConfig
+            env = DatabaseConfig.get_active_env()
+            short_env = {'development': 'dev', 'testing': 'test', 'production': 'prod'}.get(env, 'dev')
+        except:
+            short_env = 'dev'
+        
+        click.echo(f'Creating model-based migration: {message}')
+        success, file_path = create_model_based_migration(message, short_env)
+        
+        if success:
+            if file_path:
+                click.echo(f"SUCCESS: Migration created at {file_path}")
+                
+                # Offer to open the file
+                if not apply and click.confirm("Would you like to review the migration file?", default=True):
+                    # Open file with default program
+                    try:
+                        import os
+                        os.startfile(file_path)
+                    except AttributeError:
+                        # On non-Windows platforms
+                        if sys.platform.startswith('darwin'):
+                            import subprocess
+                            subprocess.run(['open', str(file_path)])
+                        else:
+                            import subprocess
+                            subprocess.run(['xdg-open', str(file_path)])
+                
+                if apply:
+                    click.echo("Applying migration...")
+                    apply_success = apply_migration(short_env)
+                    
+                    if apply_success:
+                        click.echo("SUCCESS: Migration applied")
+                    else:
+                        click.echo("FAILED: Could not apply migration")
+                        sys.exit(1)
+            else:
+                click.echo("No schema changes detected, no migration created")
+        else:
+            click.echo("FAILED: Could not create migration")
+            sys.exit(1)
+    except Exception as e:
+        click.echo(f"Error creating migration: {e}")
+        sys.exit(1)
+
+@cli.command()
+@click.option('--env', type=click.Choice(['dev', 'test', 'prod']), default=None, 
+              help='Target environment (default: current environment)')
+def apply_db_migration(env):
+    """Apply pending database migrations"""
+    # If environment specified, switch to it
+    if env:
+        try:
+            from app.core.environment import Environment
+            Environment.set_environment(env)
+            click.echo(f"Switched to environment: {env}")
+        except ImportError:
+            # Fall back to manual environment setting
+            env_map = {'dev': 'development', 'test': 'testing', 'prod': 'production'}
+            full_env = env_map.get(env, env)
+            os.environ['FLASK_ENV'] = full_env
+            click.echo(f"Manually set environment to: {full_env}")
+    
+    try:
+        # Set environment variables
+        os.environ['FLASK_APP'] = 'app:create_app'
+        
+        app = get_app()
+        with app.app_context():
+            # Check for multiple heads
+            from flask_migrate import Migrate
+            from alembic.script import ScriptDirectory
+            
+            # Initialize Migrate
+            migrate = Migrate(app, get_db())
+            config = migrate.get_config()
+            script = ScriptDirectory.from_config(config)
+            
+            if len(script.get_heads()) > 1:
+                click.echo("Multiple migration heads detected. Attempting to merge...")
+                
+                # Execute merge command
+                result = subprocess.run(
+                    [sys.executable, '-m', 'flask', 'db', 'merge', 'heads', '-m', 'Merge migration heads'],
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+                
+                click.echo("Heads merged successfully, now upgrading...")
+            
+            # Run the upgrade command
+            result = subprocess.run(
+                [sys.executable, '-m', 'flask', 'db', 'upgrade'],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            
+            # Display output
+            for line in result.stdout.splitlines():
+                click.echo(line)
+                
+            click.echo("Migrations applied successfully")
+            return True
+            
+    except subprocess.CalledProcessError as e:
+        click.echo(f"Error applying migrations: {e}")
+        if e.stdout:
+            click.echo(f"Output: {e.stdout}")
+        if e.stderr:
+            click.echo(f"Error: {e.stderr}")
+        return False
+    except Exception as e:
+        click.echo(f"Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+@cli.command()
+@click.option('--force', is_flag=True, help='Skip confirmation')
+@click.option('--allow-drops', is_flag=True, help='Allow dropping columns/tables not in models')
+def sync_models_to_db(force, allow_drops):
+    """Synchronize database with models (DEVELOPMENT ONLY)"""
+    if not CORE_MODULES_AVAILABLE:
+        click.echo("Error: Core modules not properly imported")
+        sys.exit(1)
+    
+    try:
+        from app.core.db_operations.schema_sync import sync_models_to_schema
+        
+        # Ensure we're in development environment
+        try:
+            from app.core.environment import Environment, current_env
+            if current_env != 'development':
+                click.echo(f"Current environment is {current_env}. Schema sync only allowed in development.")
+                if not force and not click.confirm("Continue anyway?", default=False):
+                    click.echo("Operation cancelled")
+                    return
+        except ImportError:
+            # Fallback check
+            if os.environ.get('FLASK_ENV') not in (None, 'development'):
+                click.echo("WARNING: Not in development environment. Schema sync is intended for development only.")
+                if not force and not click.confirm("Continue anyway?", default=False):
+                    click.echo("Operation cancelled")
+                    return
+        
+        # Warn about potential data loss if allowing drops
+        if allow_drops:
+            click.echo("WARNING: --allow-drops flag is set. This may result in DATA LOSS!")
+            click.echo("Tables and columns not present in your models will be DROPPED!")
+            
+            if not force and not click.confirm("Are you ABSOLUTELY SURE you want to continue?", default=False):
+                click.echo("Operation cancelled")
+                return
+        
+        if not force:
+            click.echo("WARNING: This will modify your database schema directly.")
+            click.echo("This should only be used in development.")
+            if not click.confirm("Continue?", default=False):
+                click.echo("Operation cancelled")
+                return
+        
+        click.echo("Synchronizing models to database...")
+        success = sync_models_to_schema('dev', backup=True, allow_drops=allow_drops)
+        
+        if success:
+            click.echo("SUCCESS: Database schema synced with models")
+        else:
+            click.echo("FAILED: Database schema sync failed")
+            sys.exit(1)
+    except Exception as e:
+        click.echo(f"Error syncing models to database: {e}")
+        sys.exit(1)
+
+@cli.command()
+@click.option('--message', '-m', default='Merge migration heads', help='Merge message')
+def merge_migration_heads(message):
+    """
+    Merge multiple migration heads
+    
+    This command helps resolve situations where multiple migration heads exist
+    """
+    try:
+        from alembic.config import Config
+        from alembic import command
+        from sqlalchemy import create_engine, text
+        from app.config.db_config import DatabaseConfig
+
+        # Get current database URL
+        db_url = DatabaseConfig.get_database_url()
+        
+        # Find migrations directory
+        project_root = Path(__file__).parent.parent
+        migrations_dir = project_root / 'migrations'
+        alembic_ini = migrations_dir / 'alembic.ini'
+
+        # Validate paths
+        if not alembic_ini.exists():
+            click.echo(f"Error: Alembic configuration not found at {alembic_ini}")
+            sys.exit(1)
+
+        # Create Alembic config
+        alembic_cfg = Config(str(alembic_ini))
+
+        # Manually set script location if not in config
+        if not alembic_cfg.get_main_option('script_location'):
+            alembic_cfg.set_main_option('script_location', str(migrations_dir))
+
+        # Get current heads
+        from alembic.script import ScriptDirectory
+        script = ScriptDirectory.from_config(alembic_cfg)
+        heads = list(script.get_heads())
+
+        click.echo(f"Detected {len(heads)} migration heads:")
+        for head in heads:
+            click.echo(f"  - {head}")
+
+        if len(heads) <= 1:
+            click.echo("No merge needed. Only one head exists.")
+            return
+
+        # Prepare revision flags
+        revision_flags = heads
+
+        # Perform merge
+        click.echo(f"Merging migration heads with message: {message}")
+        
+        # Use Alembic's merge command
+        command.merge(
+            alembic_cfg, 
+            revision_flags, 
+            message=message
+        )
+
+        click.echo("SUCCESS: Migration heads merged successfully")
+
+    except Exception as e:
+        click.echo(f"Error during migration head merge: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+@cli.command()
+@click.option('--force', is_flag=True, help='Skip confirmation prompt')
+def reset_migrations_completely(force):
+    """
+    Complete reset of all migrations - both files and tracking
+    
+    This performs a more thorough reset than reset-migration-tracking:
+    1. Removes all migration files (except __init__.py)
+    2. Directly deletes alembic_version table records
+    3. Doesn't require app context
+    
+    USE WITH CAUTION - ensure you have database backups
+    """
+    if not force:
+        click.echo("WARNING: This will completely remove ALL migration history!")
+        click.echo("This includes deleting migration files and clearing the tracking table.")
+        if not click.confirm("Are you ABSOLUTELY sure you want to continue?", default=False):
+            click.echo("Operation cancelled")
+            return
+    
+    # Step 1: Delete migration files
+    migrations_dir = Path(__file__).parent.parent / 'migrations' / 'versions'
+    if migrations_dir.exists():
+        click.echo("Removing migration files...")
+        count = 0
+        for file in migrations_dir.glob('*.py'):
+            # Keep __init__.py
+            if file.name != '__init__.py':
+                file.unlink()
+                count += 1
+        click.echo(f"Removed {count} migration files")
+    else:
+        click.echo("No migrations directory found at: " + str(migrations_dir))
+    
+    # Step 2: Clear alembic_version table
+    try:
+        # Get database URL directly - not using application context
+        try:
+            from app.config.db_config import DatabaseConfig
+            db_url = DatabaseConfig.get_database_url()
+        except ImportError:
+            # Fallback if config module not available
+            if ENVIRONMENT_MODULE_AVAILABLE:
+                from app.core.environment import Environment
+                db_url = Environment.get_database_url()
+            else:
+                # Last resort - use environment variable
+                env = os.environ.get('FLASK_ENV', 'development')
+                if env == 'development':
+                    db_url = os.environ.get('DEV_DATABASE_URL')
+                elif env == 'testing':
+                    db_url = os.environ.get('TEST_DATABASE_URL')
+                elif env == 'production':
+                    db_url = os.environ.get('PROD_DATABASE_URL')
+                else:
+                    db_url = os.environ.get('DATABASE_URL')
+        
+        if not db_url:
+            click.echo("Error: Could not determine database URL")
+            return
+        
+        # Clear alembic_version table directly with SQLAlchemy
+        from sqlalchemy import create_engine, text
+        click.echo("Clearing migration tracking table...")
+        engine = create_engine(db_url)
+        with engine.connect() as connection:
+            # Check if table exists first
+            try:
+                connection.execute(text("DELETE FROM alembic_version"))
+                connection.commit()
+                click.echo("Successfully cleared migration tracking table")
+            except Exception as e:
+                click.echo(f"Note: Could not clear alembic_version table: {e}")
+                click.echo("This is normal if the table doesn't exist yet.")
+    
+    except Exception as e:
+        click.echo(f"Error during database operation: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    click.echo("\nMigration system has been completely reset.")
+    click.echo("You can now add new migration files and apply them.")
+
+@cli.command()
+def debug_migration_config():
+    """
+    Debug migration and database configuration
+    
+    Provides detailed information about current migration setup,
+    database configuration, and potential issues.
+    """
+    try:
+        # Utilize existing environment and configuration modules
+        from app.config.db_config import DatabaseConfig
+        
+        # Reuse existing mask_db_url function for sensitive information
+        click.echo("Database Configuration:")
+        click.echo(f"Active Environment: {DatabaseConfig.get_active_env()}")
+        
+        # Mask database URL to protect sensitive information
+        db_url = DatabaseConfig.get_database_url()
+        masked_url = mask_db_url(db_url)
+        click.echo(f"Database URL: {masked_url}")
+        
+        # Get the app with existing get_app() method
+        app = get_app()
+        
+        with app.app_context():
+            # Import existing migrate and SQLAlchemy db 
+            from flask_migrate import Migrate
+            from alembic.script import ScriptDirectory
+            from alembic.config import Config
+            
+            # Reuse existing database instance
+            db = get_db()
+            
+            # Set up migration using existing methods
+            migrate = Migrate(app, db)
+            config = migrate.get_config()
+            script = ScriptDirectory.from_config(config)
+
+            # Check migration heads
+            heads = list(script.get_heads())
+            click.echo(f"\nMigration Heads: {len(heads)}")
+            for head in heads:
+                click.echo(f"  - {head}")
+
+            # Find migrations directory using existing project structure
+            migrations_dir = Path(__file__).parent.parent / 'migrations'
+            
+            # Check migration files
+            click.echo("\nMigration Files:")
+            migration_files = list(migrations_dir.glob('versions/*.py'))
+            if not migration_files:
+                click.echo("  No migration files found!")
+            else:
+                for file in migration_files:
+                    click.echo(f"  - {file.name}")
+
+            # Additional checks for alembic_version table
+            try:
+                from sqlalchemy import text
+                engine = get_db().engine
+                with engine.connect() as connection:
+                    result = connection.execute(text("SELECT * FROM alembic_version")).fetchall()
+                    click.echo(f"\nAlembic Version Table:")
+                    if not result:
+                        click.echo("  No tracked migrations")
+                    else:
+                        for row in result:
+                            click.echo(f"  Tracked Version: {row[0]}")
+            except Exception as e:
+                click.echo(f"  Error checking alembic_version table: {e}")
+
+    except Exception as e:
+        # Comprehensive error handling
+        click.echo(f"Error during migration configuration debug: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+@cli.command()
+def init_migrations():
+    """Initialize database migrations"""
+    try:
+        import subprocess
+        import sys
+        
+        # Run db init using subprocess
+        result = subprocess.run(
+            [sys.executable, '-m', 'flask', 'db', 'init'],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        
+        click.echo("SUCCESS: Migration environment initialized")
+    except subprocess.CalledProcessError as e:
+        click.echo(f"FAILED: Migration initialization failed")
+        click.echo(f"Error: {e.stderr}")
+        sys.exit(1)
 
 if __name__ == '__main__':
     cli()

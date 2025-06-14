@@ -1,0 +1,349 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Record Advance Payment{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Record Advance Payment</h1>
+        <a href="{{ url_for('billing_views.invoice_list') }}" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-white font-semibold py-2 px-4 rounded inline-flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+            </svg>
+            Back to Invoices
+        </a>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+        <form id="advance-payment-form" method="POST">
+            {{ form.csrf_token }}
+            
+            <div class="mb-8">
+                <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2">
+                    Patient
+                </label>
+                <div class="relative">
+                    <input type="text" id="patient-search" 
+                        class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
+                        placeholder="Search patient..."
+                        autocomplete="off">
+
+                    <!-- Hidden fields -->
+                    {{ form.patient_id(class="hidden", id="patient_id") }}
+                </div>
+                <div id="patient-search-results" class="absolute z-10 bg-white dark:bg-gray-700 shadow-md rounded w-full max-h-60 overflow-y-auto hidden"></div>
+                
+                <div id="selected-patient-info" class="patient-info mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg hidden">
+                    <h3 class="font-semibold text-gray-800 dark:text-white" id="patient-name-display"></h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-300" id="patient-mrn-display"></p>
+                    <p class="text-sm text-gray-600 dark:text-gray-300" id="patient-contact-display"></p>
+                </div>
+            </div>
+            
+            <div class="mb-6">
+                <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ form.payment_date.id }}">
+                    Payment Date
+                </label>
+                {{ form.payment_date(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                {% if form.payment_date.errors %}
+                    <p class="text-red-500 text-xs italic">{{ form.payment_date.errors[0] }}</p>
+                {% endif %}
+            </div>
+
+            <div class="mb-4">
+                <div class="font-semibold text-gray-700 dark:text-gray-300 mb-2">Payment Methods</div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ form.cash_amount.id }}">
+                            Cash Amount
+                        </label>
+                        {{ form.cash_amount(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline payment-amount") }}
+                        {% if form.cash_amount.errors %}
+                            <p class="text-red-500 text-xs italic">{{ form.cash_amount.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ form.credit_card_amount.id }}">
+                            Credit Card Amount
+                        </label>
+                        {{ form.credit_card_amount(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline payment-amount") }}
+                        {% if form.credit_card_amount.errors %}
+                            <p class="text-red-500 text-xs italic">{{ form.credit_card_amount.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div>
+                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ form.debit_card_amount.id }}">
+                            Debit Card Amount
+                        </label>
+                        {{ form.debit_card_amount(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline payment-amount") }}
+                        {% if form.debit_card_amount.errors %}
+                            <p class="text-red-500 text-xs italic">{{ form.debit_card_amount.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ form.upi_amount.id }}">
+                            UPI Amount
+                        </label>
+                        {{ form.upi_amount(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline payment-amount") }}
+                        {% if form.upi_amount.errors %}
+                            <p class="text-red-500 text-xs italic">{{ form.upi_amount.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Card Details (conditionally shown) -->
+            <div id="card-details" class="mb-4 hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ form.card_number_last4.id }}">
+                            Card Last 4 Digits
+                        </label>
+                        {{ form.card_number_last4(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                        {% if form.card_number_last4.errors %}
+                            <p class="text-red-500 text-xs italic">{{ form.card_number_last4.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ form.card_type.id }}">
+                            Card Type
+                        </label>
+                        {{ form.card_type(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                        {% if form.card_type.errors %}
+                            <p class="text-red-500 text-xs italic">{{ form.card_type.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- UPI Details (conditionally shown) -->
+            <div id="upi-details" class="mb-4 hidden">
+                <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ form.upi_id.id }}">
+                    UPI ID
+                </label>
+                {{ form.upi_id(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                {% if form.upi_id.errors %}
+                    <p class="text-red-500 text-xs italic">{{ form.upi_id.errors[0] }}</p>
+                {% endif %}
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ form.reference_number.id }}">
+                    Reference Number
+                </label>
+                {{ form.reference_number(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                {% if form.reference_number.errors %}
+                    <p class="text-red-500 text-xs italic">{{ form.reference_number.errors[0] }}</p>
+                {% endif %}
+            </div>
+            
+            <div class="mb-6">
+                <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ form.notes.id }}">
+                    Notes
+                </label>
+                {{ form.notes(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline h-24") }}
+                {% if form.notes.errors %}
+                    <p class="text-red-500 text-xs italic">{{ form.notes.errors[0] }}</p>
+                {% endif %}
+            </div>
+            
+            <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg mb-4">
+                <div class="flex justify-between items-center">
+                    <span class="text-blue-800 dark:text-blue-300 font-semibold">Total Payment Amount:</span>
+                    <span class="text-blue-800 dark:text-blue-300 font-bold" id="total-payment-amount">INR 0.00</span>
+                </div>
+            </div>
+            
+            <div class="flex justify-end">
+                <a href="{{ url_for('billing_views.invoice_list') }}" class="bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-2 px-4 rounded mr-2">
+                    Cancel
+                </a>
+                <button type="submit" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+                    Record Advance Payment
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set default date to today
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('{{ form.payment_date.id }}').value = today;
+        
+        // Show/hide card details based on card amount
+        const creditCardAmount = document.getElementById('{{ form.credit_card_amount.id }}');
+        const debitCardAmount = document.getElementById('{{ form.debit_card_amount.id }}');
+        const cardDetails = document.getElementById('card-details');
+        
+        function toggleCardDetails() {
+            const creditCardValue = parseFloat(creditCardAmount.value) || 0;
+            const debitCardValue = parseFloat(debitCardAmount.value) || 0;
+            
+            if (creditCardValue > 0 || debitCardValue > 0) {
+                cardDetails.classList.remove('hidden');
+            } else {
+                cardDetails.classList.add('hidden');
+            }
+        }
+        
+        creditCardAmount.addEventListener('input', toggleCardDetails);
+        debitCardAmount.addEventListener('input', toggleCardDetails);
+        
+        // Show/hide UPI details based on UPI amount
+        const upiAmount = document.getElementById('{{ form.upi_amount.id }}');
+        const upiDetails = document.getElementById('upi-details');
+        
+        function toggleUpiDetails() {
+            const upiValue = parseFloat(upiAmount.value) || 0;
+            
+            if (upiValue > 0) {
+                upiDetails.classList.remove('hidden');
+            } else {
+                upiDetails.classList.add('hidden');
+            }
+        }
+        
+        upiAmount.addEventListener('input', toggleUpiDetails);
+        
+        // Calculate total payment amount
+        const cashAmount = document.getElementById('{{ form.cash_amount.id }}');
+        const totalPaymentAmount = document.getElementById('total-payment-amount');
+        
+        function calculateTotalPayment() {
+            const cashValue = parseFloat(cashAmount.value) || 0;
+            const creditCardValue = parseFloat(creditCardAmount.value) || 0;
+            const debitCardValue = parseFloat(debitCardAmount.value) || 0;
+            const upiValue = parseFloat(upiAmount.value) || 0;
+            
+            const total = cashValue + creditCardValue + debitCardValue + upiValue;
+            totalPaymentAmount.textContent = 'INR ' + total.toFixed(2);
+        }
+        
+        cashAmount.addEventListener('input', calculateTotalPayment);
+        creditCardAmount.addEventListener('input', calculateTotalPayment);
+        debitCardAmount.addEventListener('input', calculateTotalPayment);
+        upiAmount.addEventListener('input', calculateTotalPayment);
+        
+        // Patient search functionality
+        const patientSearch = document.getElementById('patient-search');
+        const patientSearchResults = document.getElementById('patient-search-results');
+        const patientIdField = document.getElementById('patient_id');
+        const selectedPatientInfo = document.getElementById('selected-patient-info');
+        const patientNameDisplay = document.getElementById('patient-name-display');
+        const patientMrnDisplay = document.getElementById('patient-mrn-display');
+        const patientContactDisplay = document.getElementById('patient-contact-display');
+        
+        patientSearch.addEventListener('input', function() {
+            const query = this.value.trim();
+            
+            if (query.length >= 2) {
+                // Make API request to search patients
+                fetch(`/invoice/web_api/patient/search?q=${encodeURIComponent(query)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        patientSearchResults.innerHTML = '';
+                        
+                        if (data.length > 0) {
+                            data.forEach(patient => {
+                                const div = document.createElement('div');
+                                div.className = 'p-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer';
+                                div.innerHTML = `
+                                    <div class="font-medium">${patient.name}</div>
+                                    <div class="text-sm text-gray-600 dark:text-gray-400">MRN: ${patient.mrn || 'N/A'}</div>
+                                `;
+                                div.setAttribute('data-patient-id', patient.id);
+                                div.setAttribute('data-patient-name', patient.name);
+                                div.setAttribute('data-patient-mrn', patient.mrn || 'N/A');
+                                div.setAttribute('data-patient-contact', patient.contact || 'N/A');
+                                
+                                div.addEventListener('click', function() {
+                                    // Set patient ID
+                                    patientIdField.value = this.getAttribute('data-patient-id');
+                                    
+                                    // Update patient search field
+                                    patientSearch.value = this.getAttribute('data-patient-name');
+                                    
+                                    // Show selected patient info
+                                    patientNameDisplay.textContent = this.getAttribute('data-patient-name');
+                                    patientMrnDisplay.textContent = 'MRN: ' + this.getAttribute('data-patient-mrn');
+                                    patientContactDisplay.textContent = 'Contact: ' + this.getAttribute('data-patient-contact');
+                                    selectedPatientInfo.classList.remove('hidden');
+                                    
+                                    // Hide search results
+                                    patientSearchResults.classList.add('hidden');
+                                });
+                                
+                                patientSearchResults.appendChild(div);
+                            });
+                            
+                            patientSearchResults.classList.remove('hidden');
+                        } else {
+                            patientSearchResults.innerHTML = '<div class="p-2 text-gray-500">No patients found</div>';
+                            patientSearchResults.classList.remove('hidden');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error searching patients:', error);
+                    });
+            } else {
+                patientSearchResults.classList.add('hidden');
+            }
+        });
+        
+        // Close patient search results when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!patientSearch.contains(e.target) && !patientSearchResults.contains(e.target)) {
+                patientSearchResults.classList.add('hidden');
+            }
+        });
+        
+        // Validate form before submission
+        document.getElementById('advance-payment-form').addEventListener('submit', function(e) {
+            // Check if patient is selected
+            if (!patientIdField.value) {
+                e.preventDefault();
+                alert('Please select a patient.');
+                return;
+            }
+            
+            // Calculate total payment
+            const cashValue = parseFloat(cashAmount.value) || 0;
+            const creditCardValue = parseFloat(creditCardAmount.value) || 0;
+            const debitCardValue = parseFloat(debitCardAmount.value) || 0;
+            const upiValue = parseFloat(upiAmount.value) || 0;
+            
+            const total = cashValue + creditCardValue + debitCardValue + upiValue;
+            
+            // Check if any payment amount is provided
+            if (total <= 0) {
+                e.preventDefault();
+                alert('Please enter at least one payment amount.');
+                return;
+            }
+            
+            // Validate card details if card payment is selected
+            if ((creditCardValue > 0 || debitCardValue > 0) && 
+                (!document.getElementById('{{ form.card_number_last4.id }}').value || 
+                !document.getElementById('{{ form.card_type.id }}').value)) {
+                e.preventDefault();
+                alert('Please enter card details for card payment.');
+                return;
+            }
+            
+            // Validate UPI ID if UPI payment is selected
+            if (upiValue > 0 && !document.getElementById('{{ form.upi_id.id }}').value) {
+                e.preventDefault();
+                alert('Please enter UPI ID for UPI payment.');
+                return;
+            }
+        });
+    });
+</script>
+{% endblock %}

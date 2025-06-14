@@ -1,0 +1,336 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}Purchase Orders{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<style>
+    /* Make the table more compact */
+    .min-w-full th,
+    .min-w-full td {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.875rem;
+    }
+    
+    /* Make Expected Delivery column narrower and wrap the heading text */
+    .min-w-full th:nth-child(4) {
+        width: 70px;
+        white-space: normal; /* Allow text to wrap */
+        word-break: break-word;
+    }
+    
+    /* Make Expected Delivery cell content compact */
+    .min-w-full td:nth-child(4) {
+        width: 70px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    /* Other column adjustments */
+    .min-w-full th:nth-child(5),
+    .min-w-full td:nth-child(5) {
+        width: 80px;
+        text-align: right;
+    }
+    
+    .min-w-full th:nth-child(2),
+    .min-w-full td:nth-child(2) {
+        width: 90px;
+        white-space: nowrap;
+    }
+    
+    .min-w-full td:nth-child(3) {
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    .min-w-full th:nth-child(6),
+    .min-w-full td:nth-child(6) {
+        width: 80px;
+    }
+    
+    .min-w-full td:nth-child(7) .flex {
+        gap: 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    {% from "components/alerts.html" import alert %}
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                {{ alert(message, type=category) }}
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Purchase Orders</h1>
+        <div>
+            <a href="{{ url_for('supplier_views.add_purchase_order') }}" class="btn-primary">
+                Create Purchase Order
+            </a>
+        </div>
+    </div>
+
+    <div class="mb-6 bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+        <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-white">Filter</h2>
+        <form method="GET" action="{{ url_for('supplier_views.purchase_order_list') }}" class="flex flex-wrap gap-4">
+            <div class="w-full md:w-1/4">
+                <label for="po_number" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">PO Number</label>
+                {{ form.po_number(class="form-input w-full", value=request.args.get('po_number', '')) }}
+            </div>
+            <div class="w-full md:w-1/4">
+                <label for="supplier_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Supplier</label>
+                {{ form.supplier_id(class="form-select w-full") }}
+            </div>
+            <div class="w-full md:w-1/4">
+                <label for="status" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                {{ form.status(class="form-select w-full") }}
+            </div>
+            <div class="w-full md:w-1/4">
+                <label for="start_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">From Date</label>
+                {{ form.start_date(class="form-input w-full", type="date", value=request.args.get('start_date', '')) }}
+            </div>
+            <div class="w-full md:w-1/5">
+                <label for="end_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">To Date</label>
+                {{ form.end_date(class="form-input w-full", type="date", value=request.args.get('end_date', '')) }}
+            </div>
+            <!-- Branch filter integration: This component will show/hide itself based on user permissions -->
+            <div class="w-full md:w-1/5">
+                {% include 'components/branch/branch_filter.html' %}
+            </div>
+            <div class="w-full flex justify-end">
+                <button type="submit" class="btn-primary">Apply Filter</button>
+                <a href="{{ url_for('supplier_views.purchase_order_list') }}" class="btn-secondary ml-2">
+                    Clear Filters
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            PO Number
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Date
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Supplier
+                        </th>
+                        <th scope="col" class="hidden lg:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Branch
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Expected Delivery
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Amount
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Status
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Actions
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for po in purchase_orders %}
+                    <tr class="{% if loop.index % 2 == 0 %}bg-gray-50 dark:bg-gray-700{% endif %}">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                            {{ po.po_number }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {{ po.po_date.strftime('%d-%m-%Y') }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {{ po.supplier_name }}
+                        </td>
+                        <td class="hidden lg:table-cell px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {% if po.get('branch_name') %}
+                                {% set branch_name = po.branch_name %}
+                                {% include 'components/branch/branch_indicator.html' %}
+                            {% else %}
+                                <span class="text-gray-400">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {{ po.expected_delivery_date.strftime('%d-%m-%Y') if po.expected_delivery_date else '-' }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500 dark:text-gray-300">
+                             Rs.{{ "%.2f"|format(po.total_amount|float) }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {% from "components/badges.html" import status_badge %}
+                            {{ status_badge(po.status) }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            <div class="flex space-x-3">
+                                <a href="{{ url_for('supplier_views.view_purchase_order', po_id=po.po_id) }}" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300">
+                                    View
+                                </a>
+                                {% if po.status == 'draft' %}
+                                <a href="{{ url_for('supplier_views.approve_purchase_order', po_id=po.po_id) }}" class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300">
+                                    Approve
+                                </a>
+                                {% endif %}
+                                {% if po.status == 'approved' %}
+                                <!-- ENHANCEMENT: Check if PO has existing invoices -->
+                                {% if not po.has_invoices %}
+                                <a href="{{ url_for('supplier_views.add_supplier_invoice', po_id=po.po_id) }}" class="text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300">
+                                    Create Invoice
+                                </a>
+                                {% else %}
+                                <span class="text-gray-400 cursor-not-allowed" title="This PO already has invoices">
+                                    Create Invoice
+                                </span>
+                                {% endif %}
+                                {% endif %} <!-- End of po.status == 'approved' check -->
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500 dark:text-gray-300">
+                            No purchase orders found.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if total > per_page %}
+    <div class="mt-4 flex justify-between items-center">
+        <div class="text-sm text-gray-700 dark:text-gray-300">
+            Showing <span class="font-medium">{{ (page - 1) * per_page + 1 }}</span> to 
+            <span class="font-medium">{{ min(page * per_page, total) }}</span> of 
+            <span class="font-medium">{{ total }}</span> results
+        </div>
+        <div class="flex space-x-2">
+            {% if page > 1 %}
+            <a href="{{ url_for('supplier_views.purchase_order_list', po_number=request.args.get('po_number'), 
+                            supplier_id=request.args.get('supplier_id'), 
+                            status=request.args.get('status'),
+                            start_date=request.args.get('start_date'),
+                            end_date=request.args.get('end_date'),
+                            page=page-1, per_page=per_page) }}" 
+                class="btn-secondary">Previous</a>
+            {% endif %}
+            
+            {% if page * per_page < total %}
+            <a href="{{ url_for('supplier_views.purchase_order_list', po_number=request.args.get('po_number'), 
+                            supplier_id=request.args.get('supplier_id'), 
+                            status=request.args.get('status'),
+                            start_date=request.args.get('start_date'),
+                            end_date=request.args.get('end_date'),
+                            page=page+1, per_page=per_page) }}" 
+                class="btn-primary">Next</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="mt-6 flex flex-wrap gap-4">
+        <a href="{{ url_for('supplier_views.supplier_list') }}" class="btn-secondary">
+            Suppliers
+        </a>
+        <a href="{{ url_for('supplier_views.supplier_invoice_list') }}" class="btn-secondary">
+            Supplier Invoices
+        </a>
+    </div>
+</div>
+
+<!-- Approval Modal -->
+<div id="approvalModal" class="fixed inset-0 bg-gray-500 bg-opacity-75 hidden z-50 flex items-center justify-center">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl mx-4 w-full max-w-md">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Approve Purchase Order</h3>
+        </div>
+        <div class="p-6">
+            <p class="text-gray-700 dark:text-gray-300 mb-4">Are you sure you want to approve this purchase order? This action cannot be undone.</p>
+            <form id="approvalForm" method="POST">
+                <input type="hidden" name="status" value="approved">
+                <div class="flex justify-end space-x-3">
+                    <button type="button" id="cancelApproval" class="btn-secondary">Cancel</button>
+                    <button type="submit" class="btn-primary">Approve</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize select2 for supplier dropdown if available
+        if (typeof $.fn.select2 !== 'undefined') {
+            $('#supplier_id').select2({
+                theme: 'bootstrap4',
+                placeholder: 'Select Supplier',
+                allowClear: true,
+                ajax: {
+                    url: '/api/suppliers',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function(params) {
+                        return {
+                            term: params.term || '',
+                            page: params.page || 1
+                        };
+                    },
+                    processResults: function(data, params) {
+                        return {
+                            results: data.suppliers,
+                            pagination: {
+                                more: data.has_more
+                            }
+                        };
+                    },
+                    cache: true
+                },
+                minimumInputLength: 0
+            });
+        }
+        
+        // PO Approval functionality
+        const approvalModal = document.getElementById('approvalModal');
+        const approvalForm = document.getElementById('approvalForm');
+        const cancelApprovalBtn = document.getElementById('cancelApproval');
+        const approveButtons = document.querySelectorAll('.approve-po');
+        
+        approveButtons.forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                const poId = this.getAttribute('data-po-id');
+                approvalForm.action = `/supplier/purchase-order/update-status/${poId}`;
+                approvalModal.classList.remove('hidden');
+            });
+        });
+        
+        cancelApprovalBtn.addEventListener('click', function() {
+            approvalModal.classList.add('hidden');
+        });
+        
+        // Close modal when clicking outside
+        approvalModal.addEventListener('click', function(e) {
+            if (e.target === approvalModal) {
+                approvalModal.classList.add('hidden');
+            }
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,758 @@
+{% extends "layouts/dashboard.html" %}
+{% from "components/forms.html" import textarea_field, select_field %}
+{% from "components/alerts.html" import alert %}
+
+{% block title %}{{ title or "Payment Approval" }}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <!-- Header Section -->
+    <div class="flex flex-col md:flex-row items-start justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">{{ title or "Payment Approval" }}</h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">
+                Review and approve supplier payment
+            </p>
+        </div>
+        <div class="mt-4 md:mt-0">
+            <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) }}" class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i> Back to Payment
+            </a>
+        </div>
+    </div>
+    
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left Column (Payment Details) -->
+        <div class="lg:col-span-2">
+            <!-- Payment Summary -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 flex items-center">
+                        <i class="fas fa-file-invoice-dollar mr-2 text-indigo-600"></i>
+                        Payment Details
+                    </h2>
+                </div>
+                
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-3">Payment Information</h3>
+                            <dl class="space-y-2">
+                                <div class="flex justify-between">
+                                    <dt class="text-sm text-gray-500">Reference:</dt>
+                                    <dd class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.reference_no or payment.payment_id[:8] }}
+                                    </dd>
+                                </div>
+                                <div class="flex justify-between">
+                                    <dt class="text-sm text-gray-500">Date:</dt>
+                                    <dd class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.payment_date.strftime('%d %B %Y') if payment.payment_date else '-' }}
+                                    </dd>
+                                </div>
+                                <div class="flex justify-between">
+                                    <dt class="text-sm text-gray-500">Amount:</dt>
+                                    <dd class="text-lg font-bold text-indigo-600 dark:text-indigo-400">
+                                         Rs.{{ "{:,.2f}".format(payment.amount) }}
+                                    </dd>
+                                </div>
+                                <div class="flex justify-between">
+                                    <dt class="text-sm text-gray-500">Currency:</dt>
+                                    <dd class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.currency_code or 'INR' }}
+                                    </dd>
+                                </div>
+                            </dl>
+                        </div>
+                        
+                        <div>
+                            <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-3">Supplier Information</h3>
+                            <dl class="space-y-2">
+                                <div class="flex justify-between">
+                                    <dt class="text-sm text-gray-500">Supplier:</dt>
+                                    <dd class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.supplier_name or 'Unknown Supplier' }}
+                                    </dd>
+                                </div>
+                                <div class="flex justify-between">
+                                    <dt class="text-sm text-gray-500">Branch:</dt>
+                                    <dd class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.branch_name or '-' }}
+                                    </dd>
+                                </div>
+                                {% if payment.invoice_number %}
+                                <div class="flex justify-between">
+                                    <dt class="text-sm text-gray-500">Invoice:</dt>
+                                    <dd class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.invoice_number }}
+                                    </dd>
+                                </div>
+                                {% endif %}
+                                <div class="flex justify-between">
+                                    <dt class="text-sm text-gray-500">Requested By:</dt>
+                                    <dd class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.created_by or '-' }}
+                                    </dd>
+                                </div>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Payment Method Breakdown -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 flex items-center">
+                        <i class="fas fa-credit-card mr-2 text-green-600"></i>
+                        Payment Methods
+                    </h2>
+                </div>
+                
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {% if payment.cash_amount and payment.cash_amount > 0 %}
+                        <div class="bg-green-50 dark:bg-green-900 rounded-lg p-4 flex items-center">
+                            <i class="fas fa-money-bill-wave text-green-600 dark:text-green-400 text-xl mr-3"></i>
+                            <div>
+                                <p class="text-sm text-green-600 dark:text-green-400">Cash Payment</p>
+                                <p class="text-lg font-bold text-green-800 dark:text-green-200"> Rs.{{ "{:,.2f}".format(payment.cash_amount) }}</p>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if payment.cheque_amount and payment.cheque_amount > 0 %}
+                        <div class="bg-purple-50 dark:bg-purple-900 rounded-lg p-4 flex items-center">
+                            <i class="fas fa-money-check text-purple-600 dark:text-purple-400 text-xl mr-3"></i>
+                            <div>
+                                <p class="text-sm text-purple-600 dark:text-purple-400">Cheque Payment</p>
+                                <p class="text-lg font-bold text-purple-800 dark:text-purple-200"> Rs.{{ "{:,.2f}".format(payment.cheque_amount) }}</p>
+                                {% if payment.cheque_number %}
+                                <p class="text-xs text-purple-600 dark:text-purple-400">Cheque: {{ payment.cheque_number }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if payment.bank_transfer_amount and payment.bank_transfer_amount > 0 %}
+                        <div class="bg-blue-50 dark:bg-blue-900 rounded-lg p-4 flex items-center">
+                            <i class="fas fa-university text-blue-600 dark:text-blue-400 text-xl mr-3"></i>
+                            <div>
+                                <p class="text-sm text-blue-600 dark:text-blue-400">Bank Transfer</p>
+                                <p class="text-lg font-bold text-blue-800 dark:text-blue-200"> Rs.{{ "{:,.2f}".format(payment.bank_transfer_amount) }}</p>
+                                {% if payment.bank_reference_number %}
+                                <p class="text-xs text-blue-600 dark:text-blue-400">Ref: {{ payment.bank_reference_number }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if payment.upi_amount and payment.upi_amount > 0 %}
+                        <div class="bg-pink-50 dark:bg-pink-900 rounded-lg p-4 flex items-center">
+                            <i class="fas fa-mobile-alt text-pink-600 dark:text-pink-400 text-xl mr-3"></i>
+                            <div>
+                                <p class="text-sm text-pink-600 dark:text-pink-400">UPI Payment</p>
+                                <p class="text-lg font-bold text-pink-800 dark:text-pink-200"> Rs.{{ "{:,.2f}".format(payment.upi_amount) }}</p>
+                                {% if payment.upi_transaction_id %}
+                                <p class="text-xs text-pink-600 dark:text-pink-400">TxnID: {{ payment.upi_transaction_id[:12] }}...</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Supporting Documents -->
+            {% if payment.documents %}
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 flex items-center">
+                        <i class="fas fa-folder-open mr-2 text-blue-600"></i>
+                        Supporting Documents
+                    </h2>
+                </div>
+                
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {% for document in payment.documents %}
+                        <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                            <div class="flex items-center mb-2">
+                                <i class="fas fa-file-{{ 'pdf' if document.file_extension == 'pdf' else 'image' }} text-indigo-600 dark:text-indigo-400 mr-2"></i>
+                                <span class="text-sm font-medium">{{ document.document_type|title }}</span>
+                            </div>
+                            <p class="text-xs text-gray-500 mb-2">{{ document.original_filename }}</p>
+                            <p class="text-xs text-gray-500 mb-3">Size: {{ "%.1f"|format(document.file_size/1024) }} KB</p>
+                            
+                            <div class="flex space-x-2">
+                                <a href="{{ url_for('supplier_views.view_payment_document', document_id=document.document_id) }}" 
+                                   class="text-xs bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700"
+                                   target="_blank">
+                                    View
+                                </a>
+                                <a href="{{ url_for('supplier_views.view_payment_document', document_id=document.document_id) }}?download=1" 
+                                   class="text-xs bg-gray-600 text-white px-2 py-1 rounded hover:bg-gray-700">
+                                    Download
+                                </a>
+                            </div>
+                            
+                            {% if document.verification_status %}
+                            <div class="mt-2">
+                                {% if document.verification_status == 'verified' %}
+                                <span class="text-xs px-2 py-1 bg-green-100 text-green-800 rounded">Verified</span>
+                                {% elif document.verification_status == 'pending' %}
+                                <span class="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded">Pending</span>
+                                {% else %}
+                                <span class="text-xs px-2 py-1 bg-red-100 text-red-800 rounded">{{ document.verification_status|title }}</span>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Notes -->
+            {% if payment.notes %}
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 flex items-center">
+                        <i class="fas fa-sticky-note mr-2 text-yellow-600"></i>
+                        Payment Notes
+                    </h2>
+                </div>
+                
+                <div class="p-6">
+                    <p class="text-gray-700 dark:text-gray-300">{{ payment.notes }}</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Right Column (Approval Actions) -->
+        <div class="lg:col-span-1">
+            <!-- Approval Form -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 flex items-center">
+                        <i class="fas fa-check-circle mr-2 text-green-600"></i>
+                        Approval Decision
+                    </h2>
+                </div>
+                
+                <div class="p-6">
+                    <form method="POST" id="approval-form">
+                        {{ form.csrf_token }}
+                        
+                        <!-- Action Selection -->
+                        <div class="mb-6">
+                            <label for="{{ form.action.id }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Approval Action <span class="text-red-500">*</span>
+                            </label>
+                            {{ form.action(class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-300", 
+                                           id="approval-action") }}
+                            
+                            {% if form.action.errors %}
+                                {% for error in form.action.errors %}
+                                    <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Approval Notes -->
+                        <div class="mb-6">
+                            <label for="{{ form.approval_notes.id }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                <span id="notes-label">Comments</span> <span class="text-red-500">*</span>
+                            </label>
+                            {{ form.approval_notes(
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-300",
+                                rows="4",
+                                placeholder="Please provide detailed comments for your decision..."
+                            ) }}
+                            
+                            {% if form.approval_notes.errors %}
+                                {% for error in form.approval_notes.errors %}
+                                    <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+                                {% endfor %}
+                            {% endif %}
+                            
+                            <p class="mt-1 text-xs text-gray-500">Minimum 5 characters required</p>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="flex flex-col space-y-3">
+                            <button type="submit" 
+                                    id="submit-approval"
+                                    class="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition duration-200 flex items-center justify-center">
+                                <i class="fas fa-check mr-2"></i>
+                                <span id="submit-text">Submit Approval</span>
+                            </button>
+                            
+                            <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) }}" 
+                               class="w-full bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition duration-200 text-center">
+                                <i class="fas fa-times mr-2"></i>
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Payment Summary -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Payment Summary</h2>
+                </div>
+                
+                <div class="p-6">
+                    <div class="text-center mb-4">
+                        <div class="text-3xl font-bold text-gray-800 dark:text-gray-100"> Rs.{{ "{:,.2f}".format(payment.amount) }}</div>
+                        <div class="text-sm text-gray-500 dark:text-gray-400">Total Payment Amount</div>
+                    </div>
+                    
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Status:</span>
+                            <span class="font-medium">
+                                {% if payment.workflow_status == 'pending_approval' %}
+                                <span class="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">Pending Approval</span>
+                                {% else %}
+                                <span class="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full">{{ payment.workflow_status|title }}</span>
+                                {% endif %}
+                            </span>
+                        </div>
+                        
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Created:</span>
+                            <span class="font-medium">{{ payment.created_at.strftime('%d/%m/%Y') if payment.created_at else '-' }}</span>
+                        </div>
+                        
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Created By:</span>
+                            <span class="font-medium">{{ payment.created_by or '-' }}</span>
+                        </div>
+                        
+                        {% if payment.requires_approval %}
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Approval Level:</span>
+                            <span class="font-medium">{{ payment.approval_level|title if payment.approval_level else 'Standard' }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Approval Guidelines -->
+            <div class="bg-blue-50 dark:bg-blue-900 rounded-lg p-4">
+                <h3 class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">
+                    <i class="fas fa-info-circle mr-1"></i> Approval Guidelines
+                </h3>
+                <ul class="text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                    <li>• Verify payment amount matches supporting documents</li>
+                    <li>• Check supplier details and payment methods</li>
+                    <li>• Ensure proper authorization documentation</li>
+                    <li>• Review payment terms and conditions</li>
+                    <li>• Validate bank details for transfers above  Rs.10,000</li>
+                    {% if payment.amount >= 50000 %}
+                    <li>• <strong>High Value:</strong> Additional verification required</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div id="confirmation-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">
+        <div class="mt-3 text-center">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full" id="modal-icon-container">
+                <i id="modal-icon" class="text-2xl"></i>
+            </div>
+            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-gray-100 mt-2" id="modal-title">Confirm Action</h3>
+            <div class="mt-2 px-7 py-3">
+                <p class="text-sm text-gray-500 dark:text-gray-400" id="modal-message">
+                    Are you sure you want to proceed with this action?
+                </p>
+            </div>
+            <div class="items-center px-4 py-3">
+                <button id="confirm-action" 
+                        class="px-4 py-2 bg-green-600 text-white text-base font-medium rounded-md w-24 mr-2 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-300">
+                    Confirm
+                </button>
+                <button id="cancel-action" 
+                        class="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md w-24 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-300">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('approval-form');
+    const actionSelect = document.getElementById('approval-action');
+    const notesLabel = document.getElementById('notes-label');
+    const submitButton = document.getElementById('submit-approval');
+    const submitText = document.getElementById('submit-text');
+    const modal = document.getElementById('confirmation-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalMessage = document.getElementById('modal-message');
+    const modalIcon = document.getElementById('modal-icon');
+    const modalIconContainer = document.getElementById('modal-icon-container');
+    const confirmButton = document.getElementById('confirm-action');
+    const cancelButton = document.getElementById('cancel-action');
+    
+    // Update form based on selected action
+    function updateFormForAction() {
+        const action = actionSelect.value;
+        
+        switch(action) {
+            case 'approve':
+                notesLabel.textContent = 'Approval Comments';
+                submitText.textContent = 'Approve Payment';
+                submitButton.className = 'w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition duration-200 flex items-center justify-center';
+                submitButton.querySelector('i').className = 'fas fa-check mr-2';
+                break;
+                
+            case 'reject':
+                notesLabel.textContent = 'Rejection Reason';
+                submitText.textContent = 'Reject Payment';
+                submitButton.className = 'w-full bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition duration-200 flex items-center justify-center';
+                submitButton.querySelector('i').className = 'fas fa-times mr-2';
+                break;
+                
+            case 'request_more_info':
+                notesLabel.textContent = 'Information Request';
+                submitText.textContent = 'Request More Info';
+                submitButton.className = 'w-full bg-yellow-600 text-white py-2 px-4 rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 transition duration-200 flex items-center justify-center';
+                submitButton.querySelector('i').className = 'fas fa-question-circle mr-2';
+                break;
+                
+            default:
+                notesLabel.textContent = 'Comments';
+                submitText.textContent = 'Submit';
+                submitButton.className = 'w-full bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition duration-200 flex items-center justify-center';
+                submitButton.querySelector('i').className = 'fas fa-check mr-2';
+        }
+    }
+    
+    // Show confirmation modal
+    function showConfirmation(action) {
+        const actionTexts = {
+            'approve': {
+                title: 'Approve Payment',
+                message: 'Are you sure you want to approve this payment? This action cannot be undone.',
+                icon: 'fas fa-check-circle text-green-600',
+                containerClass: 'bg-green-100'
+            },
+            'reject': {
+                title: 'Reject Payment',
+                message: 'Are you sure you want to reject this payment? The payment will be returned to the submitter.',
+                icon: 'fas fa-times-circle text-red-600',
+                containerClass: 'bg-red-100'
+            },
+            'request_more_info': {
+                title: 'Request More Information',
+                message: 'Are you sure you want to request more information? The payment will be returned to the submitter.',
+                icon: 'fas fa-question-circle text-yellow-600',
+                containerClass: 'bg-yellow-100'
+            }
+        };
+        
+        const config = actionTexts[action];
+        if (config) {
+            modalTitle.textContent = config.title;
+            modalMessage.textContent = config.message;
+            modalIcon.className = config.icon;
+            modalIconContainer.className = `mx-auto flex items-center justify-center h-12 w-12 rounded-full ${config.containerClass}`;
+        }
+        
+        modal.classList.remove('hidden');
+    }
+    
+    // Hide confirmation modal
+    function hideConfirmation() {
+        modal.classList.add('hidden');
+    }
+    
+    // Event listeners
+    actionSelect.addEventListener('change', updateFormForAction);
+    
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const action = actionSelect.value;
+        const notes = document.getElementById('{{ form.approval_notes.id }}').value.trim();
+        
+        // Validate form
+        if (!action) {
+            alert('Please select an action');
+            return;
+        }
+        
+        if (notes.length < 5) {
+            alert('Please provide detailed comments (minimum 5 characters)');
+            return;
+        }
+        
+        // Show confirmation
+        showConfirmation(action);
+    });
+    
+    confirmButton.addEventListener('click', function() {
+        hideConfirmation();
+        form.submit();
+    });
+    
+    cancelButton.addEventListener('click', hideConfirmation);
+    
+    // Close modal on background click
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            hideConfirmation();
+        }
+    });
+    
+    // Initialize form
+    updateFormForAction();
+    
+    // Auto-resize textarea
+    const textarea = document.getElementById('{{ form.approval_notes.id }}');
+    textarea.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = this.scrollHeight + 'px';
+    });
+    
+    // Character counter
+    textarea.addEventListener('input', function() {
+        const length = this.value.length;
+        const minLength = 5;
+        const maxLength = 500;
+        
+        // Remove existing counter
+        const existingCounter = this.parentNode.querySelector('.char-counter');
+        if (existingCounter) {
+            existingCounter.remove();
+        }
+        
+        // Add counter
+        const counter = document.createElement('p');
+        counter.className = 'char-counter mt-1 text-xs';
+        
+        if (length < minLength) {
+            counter.className += ' text-red-500';
+            counter.textContent = `${length}/${maxLength} characters (minimum ${minLength} required)`;
+        } else if (length > maxLength) {
+            counter.className += ' text-red-500';
+            counter.textContent = `${length}/${maxLength} characters (maximum exceeded)`;
+        } else {
+            counter.className += ' text-gray-500';
+            counter.textContent = `${length}/${maxLength} characters`;
+        }
+        
+        this.parentNode.appendChild(counter);
+    });
+    
+    // Trigger initial validation
+    textarea.dispatchEvent(new Event('input'));
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    // Ctrl/Cmd + Enter to submit
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        const submitButton = document.getElementById('submit-approval');
+        if (submitButton && !submitButton.disabled) {
+            submitButton.click();
+        }
+    }
+    
+    // Escape to close modal
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('confirmation-modal');
+        if (!modal.classList.contains('hidden')) {
+            modal.classList.add('hidden');
+        }
+    }
+});
+
+// Form validation feedback
+function validateForm() {
+    const form = document.getElementById('approval-form');
+    const action = document.getElementById('approval-action').value;
+    const notes = document.getElementById('{{ form.approval_notes.id }}').value.trim();
+    const submitButton = document.getElementById('submit-approval');
+    
+    let isValid = true;
+    
+    // Clear previous validation
+    document.querySelectorAll('.validation-error').forEach(el => el.remove());
+    
+    // Validate action
+    if (!action) {
+        showFieldError('approval-action', 'Please select an action');
+        isValid = false;
+    }
+    
+    // Validate notes
+    if (notes.length < 5) {
+        showFieldError('{{ form.approval_notes.id }}', 'Comments must be at least 5 characters long');
+        isValid = false;
+    } else if (notes.length > 500) {
+        showFieldError('{{ form.approval_notes.id }}', 'Comments must not exceed 500 characters');
+        isValid = false;
+    }
+    
+    // Update submit button
+    submitButton.disabled = !isValid;
+    if (isValid) {
+        submitButton.classList.remove('opacity-50', 'cursor-not-allowed');
+    } else {
+        submitButton.classList.add('opacity-50', 'cursor-not-allowed');
+    }
+    
+    return isValid;
+}
+
+function showFieldError(fieldId, message) {
+    const field = document.getElementById(fieldId);
+    const error = document.createElement('p');
+    error.className = 'validation-error mt-1 text-sm text-red-600';
+    error.textContent = message;
+    field.parentNode.appendChild(error);
+    field.classList.add('border-red-500');
+}
+
+// Real-time validation
+document.getElementById('approval-action').addEventListener('change', validateForm);
+document.getElementById('{{ form.approval_notes.id }}').addEventListener('input', validateForm);
+
+// Initial validation
+validateForm();
+</script>
+
+<!-- Print styles for approval records -->
+<style>
+@media print {
+    .no-print { 
+        display: none !important; 
+    }
+    
+    .bg-white { 
+        background: white !important; 
+    }
+    
+    .shadow-md { 
+        box-shadow: none !important; 
+    }
+    
+    .rounded-lg { 
+        border-radius: 0 !important; 
+    }
+    
+    .text-gray-800 { 
+        color: black !important; 
+    }
+    
+    .text-gray-600 { 
+        color: #333 !important; 
+    }
+    
+    .border-gray-200 { 
+        border-color: #ccc !important; 
+    }
+    
+    /* Hide approval form when printing */
+    #approval-form,
+    .lg\\:col-span-1 {
+        display: none !important;
+    }
+    
+    .lg\\:col-span-2 {
+        grid-column: span 3 !important;
+    }
+}
+
+/* Custom styles for approval interface */
+.approval-action-approve:checked ~ label {
+    background-color: #f0fdf4;
+    border-color: #22c55e;
+    color: #15803d;
+}
+
+.approval-action-reject:checked ~ label {
+    background-color: #fef2f2;
+    border-color: #ef4444;
+    color: #dc2626;
+}
+
+.approval-action-info:checked ~ label {
+    background-color: #fefce8;
+    border-color: #eab308;
+    color: #a16207;
+}
+
+/* Loading state for submit button */
+.btn-loading {
+    position: relative;
+}
+
+.btn-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid transparent;
+    border-top: 2px solid currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Focus indicators for accessibility */
+.focus\\:ring-indigo-500:focus {
+    --tw-ring-color: rgb(99 102 241 / 0.5);
+}
+
+.focus\\:ring-green-500:focus {
+    --tw-ring-color: rgb(34 197 94 / 0.5);
+}
+
+.focus\\:ring-red-500:focus {
+    --tw-ring-color: rgb(239 68 68 / 0.5);
+}
+
+.focus\\:ring-yellow-500:focus {
+    --tw-ring-color: rgb(234 179 8 / 0.5);
+}
+
+/* Dark mode enhancements */
+@media (prefers-color-scheme: dark) {
+    .dark\\:bg-gray-800 {
+        background-color: rgb(31 41 55);
+    }
+    
+    .dark\\:text-gray-100 {
+        color: rgb(243 244 246);
+    }
+    
+    .dark\\:border-gray-600 {
+        border-color: rgb(75 85 99);
+    }
+}
+</style>
+{% endblock %}

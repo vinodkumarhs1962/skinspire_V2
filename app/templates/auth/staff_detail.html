@@ -1,0 +1,254 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}Staff Details - SkinSpire Clinic{% endblock %}
+{% block page_title %}Staff Details{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="mb-6 rounded-md p-4 {{ 'bg-red-50 text-red-700' if category == 'error' else 'bg-green-50 text-green-700' }}">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            {% if category == 'error' %}
+                            <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                            </svg>
+                            {% else %}
+                            <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                            </svg>
+                            {% endif %}
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium">{{ message }}</p>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- Navigation buttons -->
+    <div class="mb-6">
+        <a href="{{ url_for('admin_views.staff_management') }}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+            <svg class="-ml-1 mr-2 h-5 w-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Staff List
+        </a>
+    </div>
+
+    <!-- Staff Information Form -->
+    <div class="bg-white shadow-md rounded-lg overflow-hidden">
+        <div class="px-6 py-5 border-b flex justify-between items-center">
+            <div>
+                <h3 class="text-lg font-medium text-gray-900">Staff Information</h3>
+                <p class="mt-1 text-sm text-gray-500">
+                    Edit staff details and manage employee ID
+                </p>
+            </div>
+            {% if approval_info %}
+                <span class="px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full 
+                        {{ 'bg-green-100 text-green-800' if approval_info.status == 'approved' else 
+                           'bg-yellow-100 text-yellow-800' if approval_info.status == 'pending' else 
+                           'bg-red-100 text-red-800' }}">
+                    {{ approval_info.status|title }}
+                </span>
+            {% endif %}
+        </div>
+        
+        <form method="POST" action="{{ url_for('admin_views.staff_detail', staff_id=staff.staff_id) }}" class="px-6 py-5">
+            {{ form.csrf_token }}
+            {{ form.staff_id }}
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <!-- Employee ID field with generate button -->
+                <div class="col-span-1 md:col-span-3">
+                    <label for="employee_code" class="block text-sm font-medium text-gray-700 mb-2">Employee ID</label>
+                    <div class="flex">
+                        {{ form.employee_code(class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm") }}
+                        <button type="button" id="generate-id-btn" class="ml-2 inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                            Generate
+                        </button>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500">A unique identifier for this staff member</p>
+                </div>
+                
+                <!-- Personal information -->
+                <div>
+                    <label for="title" class="block text-sm font-medium text-gray-700">Title</label>
+                    {{ form.title(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm") }}
+                </div>
+                
+                <div>
+                    <label for="first_name" class="block text-sm font-medium text-gray-700">First Name</label>
+                    {{ form.first_name(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm") }}
+                    {% if form.first_name.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.first_name.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="last_name" class="block text-sm font-medium text-gray-700">Last Name</label>
+                    {{ form.last_name(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm") }}
+                    {% if form.last_name.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.last_name.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="specialization" class="block text-sm font-medium text-gray-700">Specialization</label>
+                    {{ form.specialization(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm") }}
+                </div>
+                
+                <div>
+                    <label for="role_id" class="block text-sm font-medium text-gray-700">Role</label>
+                    {{ form.role_id(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm") }}
+                </div>
+                
+                <div>
+                    <label for="branch_id" class="block text-sm font-medium text-gray-700">Branch</label>
+                    {{ form.branch_id(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm") }}
+                </div>
+                
+                <div>
+                    <label for="status" class="block text-sm font-medium text-gray-700">Status</label>
+                    {{ form.status(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm") }}
+                </div>
+            </div>
+            
+            <!-- Contact Information (Read-only display) -->
+            <div class="mb-6">
+                <h4 class="text-sm font-medium text-gray-700 mb-3">Contact Information</h4>
+                <div class="bg-gray-50 p-4 rounded-md">
+                    {% if staff.contact_info %}
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <p class="text-xs text-gray-500">Email</p>
+                                <p class="text-sm text-gray-900">{{ staff.contact_info.email if staff.contact_info.email else 'N/A' }}</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500">Phone</p>
+                                <p class="text-sm text-gray-900">{{ staff.contact_info.phone if staff.contact_info.phone else 'N/A' }}</p>
+                            </div>
+                            {% if staff.contact_info.address %}
+                                <div class="col-span-2">
+                                    <p class="text-xs text-gray-500">Address</p>
+                                    <p class="text-sm text-gray-900">{{ staff.contact_info.address }}</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <p class="text-sm text-gray-500">No contact information available</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Submit button -->
+            <div class="flex justify-end">
+                <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Approval Information (if available) -->
+    {% if approval_info %}
+        <div class="mt-8 bg-white shadow-md rounded-lg overflow-hidden">
+            <div class="px-6 py-5 border-b">
+                <h3 class="text-lg font-medium text-gray-900">Approval Information</h3>
+            </div>
+            <div class="px-6 py-5">
+                <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Status</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ approval_info.status|title }}</dd>
+                    </div>
+                    {% if approval_info.approved_at %}
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Processed Date</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ approval_info.approved_at.strftime('%d %b %Y, %H:%M') }}</dd>
+                        </div>
+                    {% endif %}
+                    {% if approval_info.approver_name %}
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Processed By</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ approval_info.approver_name }}</dd>
+                        </div>
+                    {% endif %}
+                    {% if approval_info.notes %}
+                        <div class="col-span-2">
+                            <dt class="text-sm font-medium text-gray-500">Notes</dt>
+                            <dd class="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{{ approval_info.notes }}</dd>
+                        </div>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- User Account Information -->
+    {% if user_info %}
+        <div class="mt-8 bg-white shadow-md rounded-lg overflow-hidden">
+            <div class="px-6 py-5 border-b">
+                <h3 class="text-lg font-medium text-gray-900">User Account Information</h3>
+            </div>
+            <div class="px-6 py-5">
+                <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Username</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ user_info.user_id }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Account Status</dt>
+                        <dd class="mt-1 text-sm text-gray-900">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ 'bg-green-100 text-green-800' if user_info.is_active else 'bg-red-100 text-red-800' }}">
+                                {{ 'Active' if user_info.is_active else 'Inactive' }}
+                            </span>
+                        </dd>
+                    </div>
+                    {% if user_info.last_login %}
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Last Login</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ user_info.last_login.strftime('%d %b %Y, %H:%M') }}</dd>
+                        </div>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Generate Employee ID button
+        const generateIdBtn = document.getElementById('generate-id-btn');
+        const employeeCodeInput = document.getElementById('employee_code');
+        
+        generateIdBtn.addEventListener('click', function() {
+            fetch('{{ url_for("admin_views.generate_employee_id") }}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token() }}',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    employeeCodeInput.value = data.employee_id;
+                } else {
+                    alert('Error generating ID: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while generating the ID');
+            });
+        });
+    });
+</script>
+{% endblock %}

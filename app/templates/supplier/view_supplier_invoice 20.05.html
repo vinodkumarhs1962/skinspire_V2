@@ -1,0 +1,716 @@
+{% extends "layouts/dashboard.html" %}
+{% from "components/alerts.html" import alert %}
+{% from "components/badges.html" import status_badge %}
+
+{% block title %}Supplier Invoice Details{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <!-- Header Section -->
+    <div class="flex flex-col md:flex-row items-start justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                Supplier Invoice: {{ invoice.supplier_invoice_number }}
+            </h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">
+                Invoice Date: {% if invoice.invoice_date %}
+                    {{ invoice.invoice_date.strftime('%Y-%m-%d') if invoice.invoice_date is not string else invoice.invoice_date }}
+                {% endif %}
+            </p>
+        </div>
+        
+        <div class="mt-4 md:mt-0 space-x-2 flex">
+            <a href="{{ url_for('supplier_views.supplier_invoice_list') }}" class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i> Back to List
+            </a>
+            
+            <div class="relative dropdown">
+                <button type="button" class="btn-primary dropdown-toggle">
+                    <i class="fas fa-cog mr-2"></i> Actions <i class="fas fa-chevron-down ml-2"></i>
+                </button>
+                <div class="dropdown-menu origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 hidden z-10">
+                    <div class="py-1" role="menu" aria-orientation="vertical">
+                        {% if invoice.payment_status != 'cancelled' and invoice.payment_status != 'paid' %}
+                        <a href="{{ url_for('supplier_views.record_payment', invoice_id=invoice.invoice_id) }}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600">
+                            <i class="fas fa-money-bill mr-2"></i> Record Payment
+                        </a>
+                        {% endif %}
+                        
+                        <a href="#" onclick="window.print(); return false;" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600">
+                            <i class="fas fa-print mr-2"></i> Print Invoice
+                        </a>
+                        
+                        {% if invoice.payment_status != 'cancelled' %}
+                        <a href="{{ url_for('supplier_views.edit_supplier_invoice', invoice_id=invoice.invoice_id) }}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600">
+                            <i class="fas fa-edit mr-2"></i> Edit Invoice
+                        </a>
+                        
+                        <button type="button" onclick="openCancelModal()" class="w-full text-left block px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-600">
+                            <i class="fas fa-times-circle mr-2"></i> Cancel Invoice
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Status and Summary Banner - With cancelled status indication -->
+    <div class="mb-6">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            {% if invoice.payment_status == 'cancelled' %}
+            <div class="bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-700 rounded-lg p-4 mb-4">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 bg-red-100 dark:bg-red-800 rounded-full p-2">
+                        <i class="fas fa-ban text-red-600 dark:text-red-300 text-2xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-bold text-red-800 dark:text-red-200">
+                            CANCELLED INVOICE
+                        </h3>
+                        <div class="mt-1 text-red-700 dark:text-red-300">
+                            <p class="font-medium">
+                                This invoice has been cancelled and is no longer valid.
+                            </p>
+                            <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {% if invoice.cancelled_at %}
+                                <div>
+                                    <span class="font-semibold">Cancelled on:</span> 
+                                    {{ invoice.cancelled_at.strftime('%Y-%m-%d %H:%M') }}
+                                </div>
+                                {% endif %}
+                                {% if invoice.cancelled_by %}
+                                <div>
+                                    <span class="font-semibold">Cancelled by:</span> 
+                                    {{ invoice.cancelled_by }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% if invoice.cancellation_reason %}
+                            <div class="mt-2 p-2 bg-white/50 dark:bg-black/20 rounded border border-red-200 dark:border-red-800">
+                                <span class="font-semibold">Reason:</span> {{ invoice.cancellation_reason }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <!-- Status Column -->
+                <div class="flex flex-col justify-center">
+                    <div class="flex items-center">
+                        <span class="mr-3 text-gray-700 dark:text-gray-300">Payment Status:</span>
+                        {% if invoice.payment_status == 'paid' %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                Paid
+                            </span>
+                        {% elif invoice.payment_status == 'partial' %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                                Partial
+                            </span>
+                        {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                                Unpaid
+                            </span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mt-2 text-sm">
+                        {% if invoice.po_id %}
+                        <div class="flex items-center text-gray-600 dark:text-gray-400">
+                            <i class="fas fa-file-invoice mr-2"></i>
+                            <a href="{{ url_for('supplier_views.view_purchase_order', po_id=invoice.po_id) }}" class="hover:underline text-indigo-600 dark:text-indigo-400">
+                                Related PO: {{ invoice.po_number if invoice.po_number else "View PO" }}
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Due Date -->
+                <div class="flex flex-col justify-center">
+                    <div class="text-gray-600 dark:text-gray-400">Due Date</div>
+                    <div class="font-medium text-gray-800 dark:text-gray-200">
+                        {% if invoice.due_date %}
+                            {{ invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date is not string else invoice.due_date }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Amount Column -->
+                <div class="flex flex-col justify-center">
+                    <div class="text-gray-600 dark:text-gray-400">Total Amount</div>
+                    <div class="text-xl font-bold text-gray-800 dark:text-gray-100">
+                        {% if invoice.total_amount is defined %}
+                             Rs. {{ "%.2f"|format(invoice.total_amount) }}
+                        {% else %}
+                             Rs. 0.00
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Payment Column -->
+                <div class="flex flex-col justify-center">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <div class="text-sm text-gray-600 dark:text-gray-400">Paid</div>
+                            <div class="text-lg font-medium text-green-600 dark:text-green-400">
+                                {% if invoice.payment_total is defined %}
+                                     Rs. {{ "%.2f"|format(invoice.payment_total) }}
+                                {% else %}
+                                     Rs. 0.00
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-sm text-gray-600 dark:text-gray-400">Balance</div>
+                            <div class="text-lg font-medium text-{{ 'green' if invoice.balance_due == 0 else 'red' }}-600 dark:text-{{ 'green' if invoice.balance_due == 0 else 'red' }}-400">
+                                {% if invoice.balance_due is defined %}
+                                     Rs. {{ "%.2f"|format(invoice.balance_due) }}
+                                {% else %}
+                                     Rs. 0.00
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if invoice.payment_status == 'partial' or invoice.payment_status == 'paid' %}
+                    <div class="mt-2">
+                        <a href="#payment-history" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+                            <i class="fas fa-history mr-1"></i> View Payment History
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <!-- Left Column (Line Items and GST Details) -->
+        <div class="md:col-span-2">
+            <!-- Line Items Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Invoice Items</h2>
+                </div>
+                
+                <div class="p-6">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full table-auto">
+                            <thead>
+                                <tr class="bg-gray-50 dark:bg-gray-700 text-xs uppercase">
+                                    <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">Item</th>
+                                    <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">Batch</th>
+                                    <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">Qty</th>
+                                    <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">Price</th>
+                                    <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">Disc.</th>
+                                    <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">GST</th>
+                                    <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if invoice.line_items %}
+                                    {% for line in invoice.line_items %}
+                                    <tr class="border-b dark:border-gray-700 {{ 'bg-green-50 dark:bg-green-900/20' if line.is_free_item else '' }}">
+                                        <td class="px-4 py-3">
+                                            <div class="font-medium text-gray-800 dark:text-gray-200 flex items-center">
+                                                {{ line.medicine_name }}
+                                                {% if line.is_free_item %}
+                                                <span class="ml-2 px-1.5 py-0.5 rounded text-xs bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200">
+                                                    Free
+                                                </span>
+                                                {% endif %}
+                                            </div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                HSN: {{ line.hsn_code }}
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                            <div>{{ line.batch_number }}</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                {% if line.expiry_date %}
+                                                    Exp: {{ line.expiry_date.strftime('%Y-%m-%d') if line.expiry_date is not string else line.expiry_date }}
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                            {{ line.units }}
+                                        </td>
+                                        <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                            {{ line.pack_purchase_price|float|round(2) }}
+                                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                MRP: {{ line.pack_mrp|float|round(2) }}
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                            {% if line.discount_percent and line.discount_percent > 0 %}
+                                            <div>{{ line.discount_percent }}%</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                {{ line.discount_amount|float|round(2) }}
+                                            </div>
+                                            {% else %}
+                                            -
+                                            {% endif %}
+                                        </td>
+                                        <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                            {{ line.gst_rate }}% 
+                                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                {{ line.total_gst|float|round(2) }}
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 text-right font-medium text-gray-800 dark:text-gray-200">
+                                            {{ line.line_total|float|round(2) }}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="7" class="px-4 py-3 text-center text-gray-500 dark:text-gray-400">
+                                            No line items found for this invoice.
+                                        </td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                            <tfoot>
+                                <tr class="bg-gray-50 dark:bg-gray-700">
+                                    <td colspan="6" class="px-4 py-3 text-right font-semibold text-gray-700 dark:text-gray-300">Subtotal:</td>
+                                    <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{{ invoice.subtotal|float|round(2) if invoice.subtotal else '0.00' }}</td>
+                                </tr>
+                                {% if invoice.discount_amount and invoice.discount_amount > 0 %}
+                                <tr class="bg-gray-50 dark:bg-gray-700">
+                                    <td colspan="6" class="px-4 py-3 text-right font-semibold text-gray-700 dark:text-gray-300">Discount:</td>
+                                    <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{{ invoice.discount_amount|float|round(2) }}</td>
+                                </tr>
+                                {% endif %}
+                                <tr class="bg-gray-50 dark:bg-gray-700">
+                                    <td colspan="6" class="px-4 py-3 text-right font-semibold text-gray-700 dark:text-gray-300">Taxable Value:</td>
+                                    <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{{ invoice.taxable_value|float|round(2) if invoice.taxable_value else (invoice.subtotal - (invoice.discount_amount or 0))|float|round(2) if invoice.subtotal else '0.00' }}</td>
+                                </tr>
+                                <tr class="bg-gray-50 dark:bg-gray-700">
+                                    <td colspan="6" class="px-4 py-3 text-right font-semibold text-gray-700 dark:text-gray-300">Total GST:</td>
+                                    <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{{ invoice.total_gst_amount|float|round(2) if invoice.total_gst_amount else '0.00' }}</td>
+                                </tr>
+                                <tr class="bg-gray-50 dark:bg-gray-700">
+                                    <td colspan="6" class="px-4 py-3 text-right font-semibold text-gray-700 dark:text-gray-300">Total Amount:</td>
+                                    <td class="px-4 py-3 text-right font-bold text-gray-800 dark:text-gray-200">{{ invoice.total_amount|float|round(2) if invoice.total_amount else '0.00' }}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- GST Details Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">GST Details</h2>
+                </div>
+                
+                <div class="p-6">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full table-auto">
+                            <thead>
+                                <tr class="bg-gray-50 dark:bg-gray-700 text-xs uppercase">
+                                    <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">HSN/SAC</th>
+                                    <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">Taxable Value</th>
+                                    <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">CGST</th>
+                                    <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">SGST</th>
+                                    <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">IGST</th>
+                                    <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">Total GST</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if gst_summary %}
+                                    {% for gst_group in gst_summary %}
+                                    <tr class="border-b dark:border-gray-700">
+                                        <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                            {{ gst_group.hsn_code }}
+                                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                Rate: {{ gst_group.gst_rate }}%
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                            {{ gst_group.taxable_value|float|round(2) }}
+                                        </td>
+                                        <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                            {% if gst_group.cgst > 0 %}
+                                            <div>{{ (gst_group.gst_rate / 2)|string + '%' if gst_group.cgst_rate is not defined else gst_group.cgst_rate|string + '%' }}</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                {{ gst_group.cgst|float|round(2) }}
+                                            </div>
+                                            {% else %}
+                                            -
+                                            {% endif %}
+                                        </td>
+                                        <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                            {% if gst_group.sgst > 0 %}
+                                            <div>{{ (gst_group.gst_rate / 2)|string + '%' if gst_group.sgst_rate is not defined else gst_group.sgst_rate|string + '%' }}</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                {{ gst_group.sgst|float|round(2) }}
+                                            </div>
+                                            {% else %}
+                                            -
+                                            {% endif %}
+                                        </td>
+                                        <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                            {% if gst_group.igst > 0 %}
+                                            <div>{{ gst_group.gst_rate|string + '%' if gst_group.igst_rate is not defined else gst_group.igst_rate|string + '%' }}</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                {{ gst_group.igst|float|round(2) }}
+                                            </div>
+                                            {% else %}
+                                            -
+                                            {% endif %}
+                                        </td>
+                                        <td class="px-4 py-3 text-right font-medium text-gray-800 dark:text-gray-200">
+                                            {{ gst_group.total_gst|float|round(2) }}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="6" class="px-4 py-3 text-center text-gray-500 dark:text-gray-400">
+                                            No GST details available.
+                                        </td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                            <tfoot>
+                                <tr class="bg-gray-50 dark:bg-gray-700 font-medium">
+                                    <td class="px-4 py-3 text-gray-700 dark:text-gray-300">Total</td>
+                                    <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                        {{ invoice.taxable_value|float|round(2) if invoice.taxable_value else '0.00' }}
+                                    </td>
+                                    <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                        {{ invoice.cgst_amount|float|round(2) if invoice.cgst_amount else '0.00' }}
+                                    </td>
+                                    <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                        {{ invoice.sgst_amount|float|round(2) if invoice.sgst_amount else '0.00' }}
+                                    </td>
+                                    <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                        {{ invoice.igst_amount|float|round(2) if invoice.igst_amount else '0.00' }}
+                                    </td>
+                                    <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                        {{ invoice.total_gst_amount|float|round(2) if invoice.total_gst_amount else '0.00' }}
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    
+                    <div class="mt-4 text-sm text-gray-600 dark:text-gray-400">
+                        {% if invoice.reverse_charge %}
+                        <div class="mb-2">
+                            <span class="font-medium text-yellow-600 dark:text-yellow-400">
+                                <i class="fas fa-exclamation-triangle mr-1"></i> Reverse Charge Applicable
+                            </span>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="flex items-center {{ 'text-green-600 dark:text-green-400' if invoice.itc_eligible else 'text-red-600 dark:text-red-400' }}">
+                            <i class="fas {{ 'fa-check-circle' if invoice.itc_eligible else 'fa-times-circle' }} mr-1"></i>
+                            Input Tax Credit: {{ 'Eligible' if invoice.itc_eligible else 'Not Eligible' }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Payment History Section -->
+            {% if payments and payments|length > 0 %}
+            <div id="payment-history" class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Payment History</h2>
+                </div>
+                
+                <div class="p-6">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full table-auto">
+                            <thead>
+                                <tr class="bg-gray-50 dark:bg-gray-700 text-xs uppercase">
+                                    <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">Date</th>
+                                    <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">Method</th>
+                                    <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">Reference</th>
+                                    <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">Amount</th>
+                                    <th class="px-4 py-2 text-center text-gray-500 dark:text-gray-300">Status</th>
+                                    <th class="px-4 py-2 text-center text-gray-500 dark:text-gray-300">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in payments %}
+                                <tr class="border-b dark:border-gray-700">
+                                    <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                        {% if payment.payment_date %}
+                                            {{ payment.payment_date.strftime('%Y-%m-%d') if payment.payment_date is not string else payment.payment_date }}
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                        {{ payment.payment_method|replace('_', ' ')|title if payment.payment_method else 'Unknown' }}
+                                    </td>
+                                    <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                        {{ payment.reference_no or '-' }}
+                                    </td>
+                                    <td class="px-4 py-3 text-right font-medium text-gray-800 dark:text-gray-200">
+                                        {{ payment.amount|float|round(2) }}
+                                    </td>
+                                    <td class="px-4 py-3 text-center">
+                                        <span class="px-2 py-1 text-xs rounded-full 
+                                            {{ 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' if payment.status == 'completed' else
+                                               'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' if payment.status == 'pending' else
+                                               'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' }}">
+                                            {{ payment.status|title if payment.status else 'Unknown' }}
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-center">
+                                        <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) }}" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300" title="View Payment">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Right Column (Supplier and Info) -->
+        <div>
+            <!-- Supplier Info Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Supplier Information</h2>
+                </div>
+                
+                <div class="p-6">
+                    <div class="mb-4">
+                        <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">Supplier</h3>
+                        <p class="text-gray-800 dark:text-gray-200 font-medium">{{ supplier.supplier_name if supplier else invoice.supplier_name }}</p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">{{ supplier.supplier_category if supplier else '' }}</p>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">GST Details</h3>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">GSTIN</p>
+                                <p class="text-gray-700 dark:text-gray-300">{{ supplier.gst_registration_number if supplier and supplier.gst_registration_number else invoice.supplier_gstin }}</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">PAN</p>
+                                <p class="text-gray-700 dark:text-gray-300">{{ supplier.pan_number if supplier and supplier.pan_number else 'N/A' }}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                            <div>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">Place of Supply</p>
+                                <p class="text-gray-700 dark:text-gray-300">{{ invoice.place_of_supply }}</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">Tax Type</p>
+                                <p class="text-gray-700 dark:text-gray-300">{{ supplier.tax_type if supplier and supplier.tax_type else 'Regular' }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">Address</h3>
+                        {% if supplier and supplier.supplier_address %}
+                            <p class="text-gray-700 dark:text-gray-300 whitespace-pre-line">{{ supplier.supplier_address.street }}
+{{ supplier.supplier_address.city }}, {{ supplier.supplier_address.state }} {{ supplier.supplier_address.pincode }}</p>
+                        {% else %}
+                            <p class="text-gray-700 dark:text-gray-300">Address information not available</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <a href="{{ url_for('supplier_views.view_supplier', supplier_id=supplier.supplier_id if supplier else invoice.supplier_id) }}" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+                            <i class="fas fa-external-link-alt mr-1"></i> View Supplier Details
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Notes and Attachments Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Notes & Attachments</h2>
+                </div>
+                
+                <div class="p-6">
+                    {% if invoice.notes %}
+                    <div class="mb-6">
+                        <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">Internal Notes</h3>
+                        <p class="text-gray-700 dark:text-gray-300 whitespace-pre-line">{{ invoice.notes }}</p>
+                    </div>
+                    {% endif %}
+                    
+                    {% if attachments and attachments|length > 0 %}
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">Attachments</h3>
+                        <ul class="space-y-2">
+                            {% for attachment in attachments %}
+                            <li class="flex items-center p-2 border border-gray-200 dark:border-gray-700 rounded-lg">
+                                <div class="flex-shrink-0 mr-3">
+                                    <i class="fas fa-{{ attachment.icon }} text-{{ attachment.color }}-500 text-xl"></i>
+                                </div>
+                                <div class="flex-grow">
+                                    <p class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ attachment.filename }}</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ attachment.size }} • {{ attachment.uploaded_at|datetimeformat }}</p>
+                                <div>
+                                    <a href="{{ attachment.url }}" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 mr-2" target="_blank">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{{ attachment.download_url }}" class="text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100">
+                                        <i class="fas fa-download"></i>
+                                    </a>
+                                </div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                    
+                    {% if not invoice.notes and (not attachments or attachments|length == 0) %}
+                    <div class="text-center py-6 text-gray-500 dark:text-gray-400">
+                        <i class="fas fa-sticky-note text-4xl mb-3"></i>
+                        <p>No notes or attachments available</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Create New Button Row -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+        <div class="flex flex-wrap gap-2 justify-center">
+            <a href="{{ url_for('supplier_views.add_supplier_invoice') }}" class="btn-primary">
+                <i class="fas fa-plus mr-2"></i> New Invoice
+            </a>
+            
+            <a href="{{ url_for('supplier_views.create_purchase_order') }}" class="btn-secondary">
+                <i class="fas fa-file-invoice mr-2"></i> New Purchase Order
+            </a>
+            
+            <a href="{{ url_for('supplier_views.supplier_list') }}" class="btn-secondary">
+                <i class="fas fa-truck mr-2"></i> Supplier List
+            </a>
+            
+            <a href="{{ url_for('supplier_views.record_payment', invoice_id=invoice.invoice_id) }}" class="btn-success">
+                <i class="fas fa-money-bill mr-2"></i> Record Payment
+            </a>
+        </div>
+    </div>
+    
+   <!-- Cancel Invoice Modal -->
+    <div id="cancelModal" class="fixed inset-0 z-50 hidden overflow-auto bg-black bg-opacity-50 flex items-center justify-center">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-md w-full mx-4">
+            <div class="p-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Cancel Invoice</h3>
+            </div>
+            <div class="p-4">
+                <p class="text-gray-700 dark:text-gray-300 mb-4">
+                    Are you sure you want to cancel invoice {{ invoice.supplier_invoice_number }}?
+                </p>
+                <p class="text-gray-500 dark:text-gray-400 text-sm mb-4">
+                    This action cannot be undone. The invoice will be marked as canceled.
+                </p>
+                
+                <form id="cancelForm" method="POST" action="">
+                    <!-- CSRF Token -->
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="mb-4">
+                        <label for="cancellation_reason" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Reason for Cancellation
+                        </label>
+                        <textarea id="cancellation_reason" name="cancellation_reason" rows="3" required
+                                  class="form-textarea w-full rounded-md shadow-sm"></textarea>
+                    </div>
+                    
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" id="cancelModalClose" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-md">
+                            Cancel
+                        </button>
+                        <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md">
+                            Confirm Cancellation
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Dropdown toggle functionality
+        const dropdownToggle = document.querySelector('.dropdown-toggle');
+        const dropdownMenu = document.querySelector('.dropdown-menu');
+        
+        if (dropdownToggle && dropdownMenu) {
+            dropdownToggle.addEventListener('click', function() {
+                dropdownMenu.classList.toggle('hidden');
+            });
+            
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(event) {
+                if (!dropdownToggle.contains(event.target) && !dropdownMenu.contains(event.target)) {
+                    dropdownMenu.classList.add('hidden');
+                }
+            });
+        }
+        
+        // Cancel invoice modal
+        const cancelModal = document.getElementById('cancelModal');
+        const cancelModalClose = document.getElementById('cancelModalClose');
+        
+        // Function to open the cancel modal
+        window.openCancelModal = function() {
+            if (cancelModal) {
+                cancelModal.classList.remove('hidden');
+            }
+        };
+        
+        // Close modal when clicking the close button
+        if (cancelModalClose) {
+            cancelModalClose.addEventListener('click', function() {
+                cancelModal.classList.add('hidden');
+            });
+        }
+        
+        // Close modal when clicking outside
+        if (cancelModal) {
+            cancelModal.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    cancelModal.classList.add('hidden');
+                }
+            });
+        }
+        
+        // Add smooth scroll for payment history link
+        const paymentHistoryLink = document.querySelector('a[href="#payment-history"]');
+        if (paymentHistoryLink) {
+            paymentHistoryLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                const paymentHistorySection = document.getElementById('payment-history');
+                if (paymentHistorySection) {
+                    paymentHistorySection.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

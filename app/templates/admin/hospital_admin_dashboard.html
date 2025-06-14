@@ -1,0 +1,335 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}Hospital Administrator Dashboard - SkinSpire Clinic{% endblock %}
+{% block page_title %}Hospital Administrator Dashboard{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="mb-6 rounded-md p-4 {{ 'bg-red-50 text-red-700' if category == 'error' else 'bg-green-50 text-green-700' }}">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            {% if category == 'error' %}
+                            <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                            </svg>
+                            {% else %}
+                            <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                            </svg>
+                            {% endif %}
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium">{{ message }}</p>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- Hospital Information Card -->
+    <div class="bg-white shadow-md rounded-lg overflow-hidden mb-8">
+        <div class="px-6 py-5 border-b">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+                <div class="flex items-center mb-4 md:mb-0">
+                    <div class="h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
+                        <span class="text-2xl font-bold text-blue-600">{{ hospital.name[:1] | upper if hospital and hospital.name else 'H' }}</span>
+                    </div>
+                    <div class="ml-5">
+                        <h2 class="text-2xl font-bold text-gray-900">{{ hospital.name if hospital and hospital.name else 'Hospital' }}</h2>
+                        <p class="text-sm text-gray-500">{{ hospital.license_no if hospital and hospital.license_no else 'License ID: N/A' }}</p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-3">
+                    <a href="{{ url_for('admin_views.hospital_settings') if url_for is defined and hospital else '#' }}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        <svg class="-ml-1 mr-2 h-5 w-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                        Edit Profile
+                    </a>
+                    <a href="{{ url_for('admin_views.hospital_settings') if url_for is defined and hospital else '#' }}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        <svg class="-ml-1 mr-2 h-5 w-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        Settings
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="px-6 py-5">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider">Branches</h3>
+                    <p class="mt-1 text-lg font-semibold text-gray-900">{{ branch_count if branch_count is defined else '0' }}</p>
+                </div>
+                <div>
+                    <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider">Staff</h3>
+                    <p class="mt-1 text-lg font-semibold text-gray-900">{{ staff_count if staff_count is defined else '0' }}</p>
+                </div>
+                <div>
+                    <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider">Patients</h3>
+                    <p class="mt-1 text-lg font-semibold text-gray-900">{{ patient_count if patient_count is defined else '0' }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Staff Action Items Section -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+        <!-- Staff Approval Requests Card -->
+        <div class="bg-white shadow-md rounded-lg overflow-hidden">
+            <div class="px-4 py-5 sm:px-6 border-b flex justify-between items-center">
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900">Staff Approval Requests</h3>
+                    <p class="mt-1 text-sm text-gray-500">Pending staff registrations requiring review</p>
+                </div>
+                {% if pending_approvals_count and pending_approvals_count > 0 %}
+                    <span class="px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                        {{ pending_approvals_count }} Pending
+                    </span>
+                {% else %}
+                    <span class="px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                        No Pending
+                    </span>
+                {% endif %}
+            </div>
+            <div class="p-6">
+                {% if pending_approvals and pending_approvals|length > 0 %}
+                    <ul class="divide-y divide-gray-200">
+                        {% for approval in pending_approvals %}
+                            <li class="py-4">
+                                <div class="flex justify-between">
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900">
+                                            {{ approval.staff_info.personal_info.first_name if approval.staff_info and approval.staff_info.personal_info else '' }}
+                                            {{ approval.staff_info.personal_info.last_name if approval.staff_info and approval.staff_info.personal_info else '' }}
+                                        </p>
+                                        <p class="text-sm text-gray-500">
+                                            {{ approval.request_data.specialization if approval.request_data else 'N/A' }}
+                                        </p>
+                                        <p class="text-xs text-gray-500">
+                                            Submitted {{ approval.created_at.strftime('%d %b %Y') if approval.created_at else 'N/A' }}
+                                        </p>
+                                    </div>
+                                    <!-- Use admin_views blueprint route -->
+                                    <a href="{{ url_for('admin_views.staff_approval_detail', request_id=approval.request_id) }}" class="text-blue-600 hover:text-blue-900 text-sm">
+                                        Review
+                                    </a>
+                                </div>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                    <div class="mt-4">
+                        <!-- Use admin_views blueprint route -->
+                        <a href="{{ url_for('admin_views.staff_approval_admin') }}" class="text-sm font-medium text-blue-600 hover:text-blue-500">
+                            View all requests <span aria-hidden="true">&rarr;</span>
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <svg class="mx-auto h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <p class="mt-2 text-sm text-gray-500">No pending approval requests</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Branch Management Card -->
+        <div class="bg-white shadow-md rounded-lg overflow-hidden">
+            <div class="px-4 py-5 sm:px-6 border-b flex justify-between items-center">
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900">Branch Management</h3>
+                    <p class="mt-1 text-sm text-gray-500">Manage hospital branches</p>
+                </div>
+                <a href="#" class="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    Add Branch
+                </a>
+            </div>
+            <div class="p-6">
+                {% if branches and branches|length > 0 %}
+                    <ul class="divide-y divide-gray-200">
+                        {% for branch in branches %}
+                            <li class="py-4">
+                                <div class="flex justify-between">
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900">{{ branch.name }}</p>
+                                        <p class="text-xs text-gray-500">
+                                            {{ branch.address.city if branch.address and branch.address.city else 'No address' }}
+                                        </p>
+                                    </div>
+                                    <div class="flex space-x-2">
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ 'bg-green-100 text-green-800' if branch.is_active else 'bg-red-100 text-red-800' }}">
+                                            {{ 'Active' if branch.is_active else 'Inactive' }}
+                                        </span>
+                                        <a href="#" class="text-blue-600 hover:text-blue-900 text-sm">
+                                            Edit
+                                        </a>
+                                    </div>
+                                </div>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                    <div class="mt-4">
+                        <a href="#" class="text-sm font-medium text-blue-600 hover:text-blue-500">
+                            View all branches <span aria-hidden="true">&rarr;</span>
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <svg class="mx-auto h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                        <p class="mt-2 text-sm text-gray-500">No branches found</p>
+                        <a href="#" class="mt-2 inline-block text-sm font-medium text-blue-600 hover:text-blue-500">
+                            Add your first branch
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Hospital Settings Overview -->
+    <div class="bg-white shadow-md rounded-lg overflow-hidden">
+        <div class="px-4 py-5 sm:px-6 border-b">
+            <h3 class="text-lg font-medium text-gray-900">Hospital Settings</h3>
+            <p class="mt-1 text-sm text-gray-500">Configure hospital-specific settings</p>
+        </div>
+        <div class="px-6 py-5 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Verification Settings -->
+            <div class="border rounded-lg p-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h4 class="text-base font-medium text-gray-900">Verification Settings</h4>
+                    <a href="{{ url_for('admin_views.hospital_settings') if url_for is defined and hospital else '#' }}" class="text-sm text-blue-600 hover:text-blue-900">
+                        Edit
+                    </a>
+                </div>
+                <div class="space-y-2">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 {{ 'text-green-500' if verification_settings.require_email_verification else 'text-gray-300' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-gray-700">Email Verification Required</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 {{ 'text-green-500' if verification_settings.require_phone_verification else 'text-gray-300' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-gray-700">Phone Verification Required</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 {{ 'text-green-500' if verification_settings.verification_required_for_staff else 'text-gray-300' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-gray-700">Verification Required for Staff</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 {{ 'text-green-500' if verification_settings.verification_required_for_patients else 'text-gray-300' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-gray-700">Verification Required for Patients</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Security Settings -->
+            <div class="border rounded-lg p-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h4 class="text-base font-medium text-gray-900">Security Settings</h4>
+                    <a href="{{ url_for('admin_views.hospital_settings') if url_for is defined and hospital else '#' }}" class="text-sm text-blue-600 hover:text-blue-900">
+                        Edit
+                    </a>
+                </div>
+                <div class="space-y-2">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 {{ 'text-green-500' if hospital and hospital.encryption_enabled else 'text-gray-300' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-gray-700">Encryption Enabled</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-gray-700">Password Complexity Enforced</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-gray-700">Session Timeout Enabled</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Staff Management Card (add to existing dashboard template) -->
+    <div class="bg-white shadow-md rounded-lg overflow-hidden">
+        <div class="px-4 py-5 sm:px-6 border-b flex justify-between items-center">
+            <div>
+                <h3 class="text-lg font-medium text-gray-900">Staff Management</h3>
+                <p class="mt-1 text-sm text-gray-500">Manage staff members and employee IDs</p>
+            </div>
+            <a href="{{ url_for('admin_views.staff_management') }}" class="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                View All
+            </a>
+        </div>
+        <div class="p-6">
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-900">Total Staff</p>
+                        <p class="text-2xl font-semibold text-gray-900">{{ staff_count if staff_count is defined else '0' }}</p>
+                    </div>
+                    <svg class="h-12 w-12 text-blue-100" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 00-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 010 7.75"></path>
+                    </svg>
+                </div>
+                <div class="flex space-x-4">
+                    <a href="{{ url_for('admin_views.staff_management') }}" class="text-blue-600 hover:text-blue-900 text-sm">Manage Staff</a>
+                    <span class="text-gray-300">|</span>
+                    <a href="{{ url_for('admin_views.employee_id_settings') }}" class="text-blue-600 hover:text-blue-900 text-sm">ID Settings</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

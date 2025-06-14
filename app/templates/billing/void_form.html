@@ -1,0 +1,106 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Void Invoice{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Void Invoice</h1>
+        <a href="{{ url_for('billing_views.view_invoice', invoice_id=invoice.invoice_id) }}" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-white font-semibold py-2 px-4 rounded inline-flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+            </svg>
+            Back to Invoice
+        </a>
+    </div>
+    
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left sidebar: Invoice & patient info -->
+        <div>
+            <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Invoice Details</h2>
+                <div class="mb-4">
+                    <table class="w-full">
+                        <tr>
+                            <td class="py-2 text-gray-600 dark:text-gray-400">Invoice Number:</td>
+                            <td class="py-2 text-gray-900 dark:text-white font-medium">{{ invoice.invoice_number }}</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 text-gray-600 dark:text-gray-400">Date:</td>
+                            <td class="py-2 text-gray-900 dark:text-white font-medium">{{ invoice.invoice_date.strftime('%d-%b-%Y') }}</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 text-gray-600 dark:text-gray-400">Type:</td>
+                            <td class="py-2 text-gray-900 dark:text-white font-medium">{{ invoice.invoice_type }}</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 text-gray-600 dark:text-gray-400">Total Amount:</td>
+                            <td class="py-2 text-gray-900 dark:text-white font-medium">{{ invoice.currency_code }} {{ "%.2f"|format(invoice.grand_total|float) }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            
+            {% if patient %}
+            <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Patient Details</h2>
+                <table class="w-full">
+                    <tr>
+                        <td class="py-2 text-gray-600 dark:text-gray-400">Name:</td>
+                        <td class="py-2 text-gray-900 dark:text-white font-medium">{{ patient.name }}</td>
+                    </tr>
+                    <tr>
+                        <td class="py-2 text-gray-600 dark:text-gray-400">MRN:</td>
+                        <td class="py-2 text-gray-900 dark:text-white font-medium">{{ patient.mrn }}</td>
+                    </tr>
+                    {% if patient.contact_info and patient.contact_info.phone %}
+                    <tr>
+                        <td class="py-2 text-gray-600 dark:text-gray-400">Phone:</td>
+                        <td class="py-2 text-gray-900 dark:text-white font-medium">{{ patient.contact_info.phone }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Right content: Void form -->
+        <div class="lg:col-span-2">
+            <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+                <div class="bg-yellow-100 dark:bg-yellow-900 border-l-4 border-yellow-500 text-yellow-700 dark:text-yellow-300 p-4 mb-6">
+                    <div class="flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <div>
+                            <p class="font-bold">Warning: Voiding an invoice cannot be undone</p>
+                            <p class="text-sm">This will cancel the invoice and reverse any inventory movements.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <form id="void-form" method="POST" action="{{ url_for('billing_views.void_invoice_view', invoice_id=invoice.invoice_id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="mb-6">
+                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="reason">
+                            Reason for Voiding
+                        </label>
+                        <textarea id="reason" name="reason" rows="5" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline" required></textarea>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Please provide a detailed reason for voiding this invoice.</p>
+                    </div>
+                    
+                    <div class="flex justify-end">
+                        <a href="{{ url_for('billing_views.view_invoice', invoice_id=invoice.invoice_id) }}" class="bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-2 px-4 rounded mr-2">
+                            Cancel
+                        </a>
+                        <button type="submit" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+                            Void Invoice
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,413 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Invoices</h1>
+        <a href="{{ url_for('billing_views.create_invoice_view') }}" class="bg-blue-500 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded inline-flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Create Invoice
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+        <form id="filter-form" method="GET" action="{{ url_for('billing_views.invoice_list') }}">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="invoice_number">
+                        Invoice Number
+                    </label>
+                    <input type="text" id="invoice_number" name="invoice_number" value="{{ filters.get('invoice_number', '') }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="patient_search">
+                        Patient
+                    </label>
+                    <div class="relative">
+                        <input type="text" id="patient_search" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline" placeholder="Search patient...">
+                        <input type="hidden" id="patient_id" name="patient_id" value="{{ filters.get('patient_id', '') }}">
+                    </div>
+                    <div id="patient-search-results" class="absolute z-10 bg-white dark:bg-gray-700 shadow-md rounded w-full max-h-60 overflow-y-auto hidden"></div>
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="invoice_type">
+                        Invoice Type
+                    </label>
+                    <select id="invoice_type" name="invoice_type" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                        <option value="">All Types</option>
+                        <option value="Service" {% if filters.get('invoice_type') == 'Service' %}selected{% endif %}>Service</option>
+                        <option value="Product" {% if filters.get('invoice_type') == 'Product' %}selected{% endif %}>Product</option>
+                        <option value="Prescription" {% if filters.get('invoice_type') == 'Prescription' %}selected{% endif %}>Prescription</option>
+                        <option value="Misc" {% if filters.get('invoice_type') == 'Misc' %}selected{% endif %}>Miscellaneous</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="is_gst_invoice">
+                        GST Type
+                    </label>
+                    <select id="is_gst_invoice" name="is_gst_invoice" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                        <option value="">All</option>
+                        <option value="true" {% if filters.get('is_gst_invoice') == 'true' %}selected{% endif %}>GST Invoice</option>
+                        <option value="false" {% if filters.get('is_gst_invoice') == 'false' %}selected{% endif %}>Non-GST Invoice</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="date_from">
+                        Date From
+                    </label>
+                    <input type="date" id="date_from" name="date_from" value="{{ filters.get('date_from', '') }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="date_to">
+                        Date To
+                    </label>
+                    <input type="date" id="date_to" name="date_to" value="{{ filters.get('date_to', '') }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="payment_status">
+                        Payment Status
+                    </label>
+                    <select id="payment_status" name="payment_status" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                        <option value="">All Statuses</option>
+                        <option value="paid" {% if filters.get('payment_status') == 'paid' %}selected{% endif %}>Paid</option>
+                        <option value="partial" {% if filters.get('payment_status') == 'partial' %}selected{% endif %}>Partially Paid</option>
+                        <option value="unpaid" {% if filters.get('payment_status') == 'unpaid' %}selected{% endif %}>Unpaid</option>
+                    </select>
+                </div>
+                
+                <div class="flex items-end">
+                    <div class="flex space-x-2">
+                        <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                            Filter
+                        </button>
+                        <button type="button" id="clear-filters" class="bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-2 px-4 rounded">
+                            Clear
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Invoices Table -->
+    <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white dark:bg-gray-800">
+                <thead>
+                    <tr class="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
+                        <th class="py-3 px-4 font-semibold">
+                            <a href="{{ url_for('billing_views.invoice_list', **dict(request.args, sort='invoice_number', order='asc' if request.args.get('sort') == 'invoice_number' and request.args.get('order') == 'desc' else 'desc')) }}" class="flex items-center">
+                                Invoice #
+                                {% if request.args.get('sort') == 'invoice_number' %}
+                                    {% if request.args.get('order') == 'asc' %}
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                                        </svg>
+                                    {% else %}
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    {% endif %}
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th class="py-3 px-4 font-semibold">
+                            <a href="{{ url_for('billing_views.invoice_list', **dict(request.args, sort='invoice_date', order='asc' if request.args.get('sort') == 'invoice_date' and request.args.get('order') == 'desc' else 'desc')) }}" class="flex items-center">
+                                Date
+                                {% if request.args.get('sort') == 'invoice_date' %}
+                                    {% if request.args.get('order') == 'asc' %}
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                                        </svg>
+                                    {% else %}
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    {% endif %}
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th class="py-3 px-4 font-semibold">Patient</th>
+                        <th class="py-3 px-4 font-semibold">Type</th>
+                        <th class="py-3 px-4 font-semibold text-right">
+                            <a href="{{ url_for('billing_views.invoice_list', **dict(request.args, sort='grand_total', order='asc' if request.args.get('sort') == 'grand_total' and request.args.get('order') == 'desc' else 'desc')) }}" class="flex items-center justify-end">
+                                Amount
+                                {% if request.args.get('sort') == 'grand_total' %}
+                                    {% if request.args.get('order') == 'asc' %}
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                                        </svg>
+                                    {% else %}
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    {% endif %}
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th class="py-3 px-4 font-semibold text-center">Status</th>
+                        <th class="py-3 px-4 font-semibold text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    {% if invoices %}
+                        {% for invoice in invoices %}
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <td class="py-3 px-4">
+                                    <a href="{{ url_for('billing_views.view_invoice', invoice_id=invoice.invoice_id) }}" class="text-blue-600 dark:text-blue-400 hover:underline">
+                                        {{ invoice.invoice_number }}
+                                    </a>
+                                </td>
+                                <td class="py-3 px-4">{{ invoice.invoice_date.strftime('%d-%b-%Y') }}</td>
+                                <td class="py-3 px-4">
+                                    {% if invoice.patient_name %}
+                                        {{ invoice.patient_name }}
+                                    {% else %}
+                                        <span class="text-gray-500 dark:text-gray-400">Unknown</span>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3 px-4">
+                                    {{ invoice.invoice_type }}
+                                    {% if invoice.is_gst_invoice %}
+                                        <span class="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 px-2 py-0.5 rounded">GST</span>
+                                    {% else %}
+                                        <span class="text-xs bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300 px-2 py-0.5 rounded">Non-GST</span>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3 px-4 text-right">
+                                    {{ invoice.currency_code }} {{ invoice.grand_total }}
+                                </td>
+                                <td class="py-3 px-4 text-center">
+                                    {% if invoice.balance_due == 0 %}
+                                        <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">Paid</span>
+                                    {% elif invoice.paid_amount > 0 %}
+                                        <span class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">Partially Paid</span>
+                                    {% else %}
+                                        <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">Unpaid</span>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3 px-4">
+                                    <div class="flex justify-center space-x-2">
+                                        <a href="{{ url_for('billing_views.view_invoice', invoice_id=invoice.invoice_id) }}" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300" title="View">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                            </svg>
+                                        </a>
+                                        
+                                        {% if invoice.balance_due > 0 %}
+                                            <a href="{{ url_for('billing_views.view_invoice', invoice_id=invoice.invoice_id) }}#payment" class="text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300" title="Record Payment">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                                                </svg>
+                                            </a>
+                                        {% endif %}
+                                        
+                                        <a href="{{ url_for('billing_views.print_invoice', invoice_id=invoice.invoice_id) }}" target="_blank" class="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300" title="Print">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                            </svg>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="py-8 px-4 text-center text-gray-500 dark:text-gray-400">
+                                No invoices found matching the search criteria.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if pages > 1 %}
+            <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 flex items-center justify-between border-t border-gray-200 dark:border-gray-600 sm:px-6">
+                <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                    <div>
+                        <p class="text-sm text-gray-700 dark:text-gray-300">
+                            Showing <span class="font-medium">{{ (page - 1) * page_size + 1 }}</span> to <span class="font-medium">{{ [page * page_size, total]|min }}</span> of <span class="font-medium">{{ total }}</span> results
+                        </p>
+                    </div>
+                    <div>
+                        <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                            <!-- Previous Page -->
+                            {% if page > 1 %}
+                                <a href="{{ url_for('billing_views.invoice_list', **dict(request.args, page=page-1)) }}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <span class="sr-only">Previous</span>
+                                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                        <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                    </svg>
+                                </a>
+                            {% else %}
+                                <span class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-sm font-medium text-gray-400 dark:text-gray-500">
+                                    <span class="sr-only">Previous</span>
+                                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                        <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                    </svg>
+                                </span>
+                            {% endif %}
+                            
+                            <!-- Page Numbers -->
+                            {% set start_page = [page - 2, 1]|max %}
+                            {% set end_page = [start_page + 4, pages]|min %}
+                            {% set start_page = [end_page - 4, 1]|max %}
+                            
+                            {% for p in range(start_page, end_page + 1) %}
+                                {% if p == page %}
+                                    <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 bg-blue-50 dark:bg-blue-900 text-sm font-medium text-blue-600 dark:text-blue-300">
+                                        {{ p }}
+                                    </span>
+                                {% else %}
+                                    <a href="{{ url_for('billing_views.invoice_list', **dict(request.args, page=p)) }}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                        {{ p }}
+                                    </a>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            <!-- Next Page -->
+                            {% if page < pages %}
+                                <a href="{{ url_for('billing_views.invoice_list', **dict(request.args, page=page+1)) }}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <span class="sr-only">Next</span>
+                                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                                    </svg>
+                                </a>
+                            {% else %}
+                                <span class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-sm font-medium text-gray-400 dark:text-gray-500">
+                                    <span class="sr-only">Next</span>
+                                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                                    </svg>
+                                </span>
+                            {% endif %}
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize patient search
+        initPatientSearch();
+        
+        // Initialize clear filters button
+        initClearFilters();
+    });
+    
+    // Patient search functionality
+    function initPatientSearch() {
+        const patientSearch = document.getElementById('patient_search');
+        const patientResults = document.getElementById('patient-search-results');
+        const patientIdInput = document.getElementById('patient_id');
+        
+        // Set initial value if patient_id exists
+        if (patientIdInput.value) {
+            // Make an AJAX request to get patient details by ID
+            fetch(`/billing/api/patient/${patientIdInput.value}`)
+                .then(response => response.json())
+                .then(patient => {
+                    if (patient) {
+                        patientSearch.value = patient.name;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching patient:', error);
+                });
+        }
+        
+        // Search when typing
+        patientSearch.addEventListener('input', function() {
+            const query = this.value.trim();
+            
+            if (query.length < 3) {
+                patientResults.innerHTML = '';
+                patientResults.classList.add('hidden');
+                return;
+            }
+            
+            // AJAX request to search patients
+            fetch(`/billing/api/patient/search?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    patientResults.innerHTML = '';
+                    
+                    if (data.length === 0) {
+                        patientResults.innerHTML = '<div class="p-2 text-gray-500 dark:text-gray-400">No patients found</div>';
+                        patientResults.classList.remove('hidden');
+                        return;
+                    }
+                    
+                    data.forEach(patient => {
+                        const div = document.createElement('div');
+                        div.className = 'p-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer';
+                        div.innerHTML = `
+                            <div class="font-semibold">${patient.name}</div>
+                            <div class="text-sm text-gray-600 dark:text-gray-400">MRN: ${patient.mrn}</div>
+                            <div class="text-sm text-gray-600 dark:text-gray-400">${patient.contact || ''}</div>
+                        `;
+                        
+                        div.addEventListener('click', function() {
+                            patientIdInput.value = patient.id;
+                            patientSearch.value = patient.name;
+                            patientResults.classList.add('hidden');
+                        });
+                        
+                        patientResults.appendChild(div);
+                    });
+                    
+                    patientResults.classList.remove('hidden');
+                })
+                .catch(error => {
+                    console.error('Error searching patients:', error);
+                });
+        });
+        
+        // Hide results when clicking elsewhere
+        document.addEventListener('click', function(e) {
+            if (!patientSearch.contains(e.target) && !patientResults.contains(e.target)) {
+                patientResults.classList.add('hidden');
+            }
+        });
+    }
+    
+    // Initialize clear filters button
+    function initClearFilters() {
+        const clearFiltersBtn = document.getElementById('clear-filters');
+        
+        clearFiltersBtn.addEventListener('click', function() {
+            // Clear all filter inputs
+            document.getElementById('invoice_number').value = '';
+            document.getElementById('patient_search').value = '';
+            document.getElementById('patient_id').value = '';
+            document.getElementById('invoice_type').value = '';
+            document.getElementById('is_gst_invoice').value = '';
+            document.getElementById('date_from').value = '';
+            document.getElementById('date_to').value = '';
+            document.getElementById('payment_status').value = '';
+            
+            // Submit the form
+            document.getElementById('filter-form').submit();
+        });
+    }
+</script>
+{% endblock %}

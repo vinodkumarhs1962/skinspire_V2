@@ -1,0 +1,108 @@
+<!-- app/templates/auth/verification_status.html -->
+
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Verification Status{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-md mx-auto bg-white rounded-lg overflow-hidden shadow-lg">
+        <div class="px-6 py-4">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Account Verification Status</h2>
+            
+            <div class="mb-6">
+                <p class="text-sm text-gray-600 mb-4">
+                    Keep your account secure by verifying your contact information. Verified accounts have additional
+                    security benefits and ensure you receive important notifications.
+                </p>
+                
+                <!-- Phone Verification Status -->
+                <div class="border rounded mb-4">
+                    <div class="flex items-center justify-between px-4 py-3 border-b">
+                        <h3 class="text-lg font-semibold">Phone Verification</h3>
+                        {% if status.phone.verified %}
+                            <span class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded">Verified</span>
+                        {% else %}
+                            <span class="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded">Not Verified</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="px-4 py-3">
+                        {% if status.phone.verified %}
+                            <p class="text-sm text-gray-600">
+                                Your phone number <strong>{{ status.phone.target }}</strong> was verified on 
+                                <strong>{{ status.phone.verified_at|default('', true) }}</strong>.
+                            </p>
+                        {% else %}
+                            <p class="text-sm text-gray-600 mb-2">
+                                Verifying your phone number allows us to send you important security notifications
+                                and helps protect your account.
+                            </p>
+                            <a href="{{ url_for('verification_views.verify_phone') }}" 
+                               class="bg-blue-500 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded">
+                                Verify Phone
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Email Verification Status -->
+                <div class="border rounded">
+                    <div class="flex items-center justify-between px-4 py-3 border-b">
+                        <h3 class="text-lg font-semibold">Email Verification</h3>
+                        {% if status.email.verified %}
+                            <span class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded">Verified</span>
+                        {% else %}
+                            <span class="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded">Not Verified</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="px-4 py-3">
+                        {% if status.email.verified %}
+                            <p class="text-sm text-gray-600">
+                                Your email address <strong>{{ status.email.target }}</strong> was verified on 
+                                <strong>{{ status.email.verified_at|default('', true) }}</strong>.
+                            </p>
+                        {% else %}
+                            <p class="text-sm text-gray-600 mb-2">
+                                Verifying your email allows you to receive important account notifications
+                                and reset your password if needed.
+                            </p>
+                            <a href="{{ url_for('verification_views.verify_email') }}" 
+                               class="bg-blue-500 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded">
+                                Verify Email
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Staff Profile Completion Section -->
+                {% if current_user.entity_type == 'staff' %}
+                <div class="border rounded mt-4">
+                    <div class="flex items-center justify-between px-4 py-3 border-b">
+                        <h3 class="text-lg font-semibold">Staff Profile Completion</h3>
+                    </div>
+                    
+                    <div class="px-4 py-3">
+                        <p class="text-sm text-gray-600 mb-2">
+                            Complete your professional information to submit for administrator approval.
+                            This step is required to activate your staff account fully.
+                        </p>
+                        <a href="{{ url_for('auth_views.staff_approval_request') }}" 
+                           class="bg-blue-500 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded">
+                            Complete Staff Profile
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="px-6 py-4 bg-gray-100 border-t">
+            <a href="{{ url_for('auth_views.settings') }}" class="text-blue-500 hover:text-blue-700">
+                &larr; Back to Settings
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

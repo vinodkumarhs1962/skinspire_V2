@@ -1,0 +1,474 @@
+{% extends "layouts/dashboard.html" %}
+{% from "components/forms.html" import input_field, select_field, date_field %}
+{% from "components/tables.html" import sortable_header, pagination %}
+
+{% block title %}Medicine Consumption Report{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <div class="flex flex-col md:flex-row items-start justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Medicine Consumption Report</h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">View and analyze medicine consumption patterns</p>
+        </div>
+        <div class="mt-4 md:mt-0">
+            <a href="{{ url_for('inventory_views.stock_list') }}" class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i> Back to Inventory
+            </a>
+            <button id="export-report" class="btn-primary ml-2">
+                <i class="fas fa-file-export mr-2"></i> Export Report
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter Form -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+        <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4">Filter Options</h2>
+        <form method="GET" action="{{ url_for('inventory_views.consumption_report') }}" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {{ form.csrf_token }}
+            
+            <div>
+                {{ select_field(form.category_id, "Category", class="form-select") }}
+            </div>
+            
+            <div>
+                {{ select_field(form.medicine_type, "Medicine Type", class="form-select") }}
+            </div>
+            
+            <div>
+                {{ select_field(form.consumption_type, "Consumption Type", class="form-select") }}
+            </div>
+            
+            <div>
+                {{ date_field(form.start_date, "Start Date", class="form-input") }}
+            </div>
+            
+            <div>
+                {{ date_field(form.end_date, "End Date", class="form-input") }}
+            </div>
+            
+            <div>
+                {{ select_field(form.sort_by, "Sort By", class="form-select") }}
+            </div>
+            
+            <div class="lg:col-span-3 flex justify-end items-center mt-2">
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-filter mr-2"></i> Apply Filters
+                </button>
+                <a href="{{ url_for('inventory_views.consumption_report') }}" class="btn-secondary ml-2">
+                    <i class="fas fa-sync-alt mr-2"></i> Reset Filters
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <p class="text-sm text-gray-500 dark:text-gray-400">Total Consumption</p>
+            <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100">{{ total_consumption|default(0)|currencyformat }}</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">For selected period</p>
+        </div>
+        
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <p class="text-sm text-gray-500 dark:text-gray-400">Total Items Consumed</p>
+            <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100">{{ total_items|default(0) }}</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Unique medicine count</p>
+        </div>
+        
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <p class="text-sm text-gray-500 dark:text-gray-400">Top Consumption Category</p>
+            <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100">{{ top_category|default('N/A') }}</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">By value</p>
+        </div>
+        
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <p class="text-sm text-gray-500 dark:text-gray-400">Average Daily Consumption</p>
+            <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100">{{ avg_daily_consumption|default(0)|currencyformat }}</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">For selected period</p>
+        </div>
+    </div>
+
+    <!-- Consumption Graph -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+        <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4">Consumption Trend</h2>
+        <div id="consumption-chart" class="h-64"></div>
+    </div>
+
+    <!-- Consumption Table -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+        <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4">Consumption Details</h2>
+        
+        {% if consumption_data %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full table-auto">
+                <thead>
+                    <tr class="bg-gray-100 dark:bg-gray-700">
+                        <th class="px-4 py-2 text-left">
+                            {{ sortable_header('Medicine Name', 'medicine_name', form.sort_by.data, request.args) }}
+                        </th>
+                        <th class="px-4 py-2 text-left">
+                            {{ sortable_header('Category', 'category', form.sort_by.data, request.args) }}
+                        </th>
+                        <th class="px-4 py-2 text-left">
+                            {{ sortable_header('Type', 'medicine_type', form.sort_by.data, request.args) }}
+                        </th>
+                        <th class="px-4 py-2 text-right">
+                            {{ sortable_header('Total Units', 'total_units', form.sort_by.data, request.args) }}
+                        </th>
+                        <th class="px-4 py-2 text-right">
+                            {{ sortable_header('Cost Value', 'cost_value', form.sort_by.data, request.args) }}
+                        </th>
+                        <th class="px-4 py-2 text-right">
+                            {{ sortable_header('Sales Value', 'sales_value', form.sort_by.data, request.args) }}
+                        </th>
+                        <th class="px-4 py-2 text-right">Consumption Breakdown</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in consumption_data %}
+                    <tr class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <td class="px-4 py-3">
+                            <div class="font-medium text-gray-800 dark:text-gray-200">{{ item.medicine_name }}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">{{ item.medicine_id }}</div>
+                        </td>
+                        <td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ item.category }}</td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-1 text-xs rounded-full 
+                                {% if item.medicine_type == 'Prescription' %}
+                                    bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300
+                                {% elif item.medicine_type == 'OTC' %}
+                                    bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300
+                                {% elif item.medicine_type == 'Consumable' %}
+                                    bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300
+                                {% else %}
+                                    bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300
+                                {% endif %}">
+                                {{ item.medicine_type }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{{ item.total_units }}</td>
+                        <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{{ item.cost_value|currencyformat }}</td>
+                        <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{{ item.sales_value|currencyformat }}</td>
+                        <td class="px-4 py-3">
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                {% if item.by_prescription and item.by_prescription > 0 %}
+                                <div class="bg-blue-600 h-2.5 rounded-l-full" style="width: {{ item.by_prescription }}%;"></div>
+                                {% endif %}
+                                
+                                {% if item.by_service and item.by_service > 0 %}
+                                <div class="bg-purple-600 h-2.5 
+                                    {% if not item.by_prescription or item.by_prescription == 0 %}rounded-l-full{% endif %} 
+                                    {% if (not item.by_procedure or item.by_procedure == 0) and (not item.by_adjustment or item.by_adjustment == 0) %}rounded-r-full{% endif %}" 
+                                    style="width: {{ item.by_service }}%; 
+                                    margin-left: {% if item.by_prescription %}{{ item.by_prescription }}{% else %}0{% endif %}%;"></div>
+                                {% endif %}
+                                
+                                {% if item.by_procedure and item.by_procedure > 0 %}
+                                <div class="bg-green-600 h-2.5 
+                                    {% if (not item.by_prescription or item.by_prescription == 0) and (not item.by_service or item.by_service == 0) %}rounded-l-full{% endif %} 
+                                    {% if not item.by_adjustment or item.by_adjustment == 0 %}rounded-r-full{% endif %}" 
+                                    style="width: {{ item.by_procedure }}%; 
+                                    margin-left: {% if item.by_prescription or item.by_service %}{% if item.by_prescription %}{{ item.by_prescription }}{% else %}0{% endif %}{% if item.by_service %}+{{ item.by_service }}{% else %}+0{% endif %}{% else %}0{% endif %}%;"></div>
+                                {% endif %}
+                                
+                                {% if item.by_adjustment and item.by_adjustment > 0 %}
+                                <div class="bg-red-600 h-2.5 
+                                    {% if (not item.by_prescription or item.by_prescription == 0) and (not item.by_service or item.by_service == 0) and (not item.by_procedure or item.by_procedure == 0) %}rounded-l-full{% endif %} 
+                                    rounded-r-full" 
+                                    style="width: {{ item.by_adjustment }}%; 
+                                    margin-left: {% if item.by_prescription or item.by_service or item.by_procedure %}{% if item.by_prescription %}{{ item.by_prescription }}{% else %}0{% endif %}{% if item.by_service %}+{{ item.by_service }}{% else %}+0{% endif %}{% if item.by_procedure %}+{{ item.by_procedure }}{% else %}+0{% endif %}{% else %}0{% endif %}%;"></div>
+                                {% endif %}
+                            </div>
+                            <div class="flex text-xs justify-between mt-1">
+                                {% if item.by_prescription > 0 %}
+                                <span class="text-blue-600 dark:text-blue-400">Rx: {{ item.by_prescription }}%</span>
+                                {% endif %}
+                                
+                                {% if item.by_service > 0 %}
+                                <span class="text-purple-600 dark:text-purple-400">Srv: {{ item.by_service }}%</span>
+                                {% endif %}
+                                
+                                {% if item.by_procedure > 0 %}
+                                <span class="text-green-600 dark:text-green-400">Proc: {{ item.by_procedure }}%</span>
+                                {% endif %}
+                                
+                                {% if item.by_adjustment > 0 %}
+                                <span class="text-red-600 dark:text-red-400">Adj: {{ item.by_adjustment }}%</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        <div class="mt-4">
+            {{ pagination(pagination_info) }}
+        </div>
+        {% else %}
+        <div class="text-center py-6">
+            <div class="text-gray-500 dark:text-gray-400">
+                <i class="fas fa-box-open text-4xl mb-3"></i>
+                <p>No consumption data found for the selected filters</p>
+                <p class="text-sm mt-2">Try adjusting your search criteria or time period</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Consumption by Category -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4">Consumption by Category</h2>
+            <div id="category-chart" class="h-64"></div>
+        </div>
+        
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4">Consumption by Type</h2>
+            <div id="type-chart" class="h-64"></div>
+        </div>
+    </div>
+
+    <!-- Top Consumed Items Table -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+        <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4">Top Consumed Items</h2>
+        
+        {% if top_consumed_items %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full table-auto">
+                <thead>
+                    <tr class="bg-gray-100 dark:bg-gray-700">
+                        <th class="px-4 py-2 text-left">Rank</th>
+                        <th class="px-4 py-2 text-left">Medicine Name</th>
+                        <th class="px-4 py-2 text-left">Category</th>
+                        <th class="px-4 py-2 text-right">Quantity</th>
+                        <th class="px-4 py-2 text-right">Value</th>
+                        <th class="px-4 py-2 text-right">% of Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in top_consumed_items %}
+                    <tr class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ loop.index }}</td>
+                        <td class="px-4 py-3">
+                            <div class="font-medium text-gray-800 dark:text-gray-200">{{ item.medicine_name }}</div>
+                        </td>
+                        <td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ item.category }}</td>
+                        <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{{ item.quantity }}</td>
+                        <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{{ item.value|currencyformat }}</td>
+                        <td class="px-4 py-3 text-right">
+                            <div class="flex items-center justify-end">
+                                <span class="mr-2 text-gray-700 dark:text-gray-300">{{ item.percentage }}%</span>
+                                <div class="w-16 bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                    <div class="bg-blue-600 h-2.5 rounded-full" style="width: {{ item.percentage }}%;"></div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-6">
+            <div class="text-gray-500 dark:text-gray-400">
+                <p>No top consumption data available</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Consumption trend chart
+    if (document.getElementById('consumption-chart')) {
+        const consumptionCtx = document.getElementById('consumption-chart').getContext('2d');
+        const isDarkMode = document.querySelector('html').classList.contains('dark');
+        const textColor = isDarkMode ? '#D1D5DB' : '#4B5563';
+        const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+        
+        const consumptionChart = new Chart(consumptionCtx, {
+            type: 'line',
+            data: {
+                labels: {{ consumption_trend_dates|tojson if consumption_trend_dates else '[]'|safe }},
+                datasets: [{
+                    label: 'Daily Consumption',
+                    data: {{ consumption_trend_values|tojson if consumption_trend_values else '[]'|safe }},
+                    borderColor: '#4F46E5',
+                    backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            color: textColor
+                        }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            color: gridColor
+                        },
+                        ticks: {
+                            color: textColor
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: gridColor
+                        },
+                        ticks: {
+                            color: textColor
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Category chart (Pie)
+    if (document.getElementById('category-chart')) {
+        const categoryCtx = document.getElementById('category-chart').getContext('2d');
+        const isDarkMode = document.querySelector('html').classList.contains('dark');
+        const textColor = isDarkMode ? '#D1D5DB' : '#4B5563';
+        
+        const categoryChart = new Chart(categoryCtx, {
+            type: 'pie',
+            data: {
+                labels: {{ category_labels|tojson if category_labels else '[]'|safe }},
+                datasets: [{
+                    data: {{ category_values|tojson if category_values else '[]'|safe }},
+                    backgroundColor: [
+                        'rgba(79, 70, 229, 0.7)',
+                        'rgba(16, 185, 129, 0.7)',
+                        'rgba(245, 158, 11, 0.7)',
+                        'rgba(239, 68, 68, 0.7)',
+                        'rgba(139, 92, 246, 0.7)',
+                        'rgba(6, 182, 212, 0.7)',
+                        'rgba(236, 72, 153, 0.7)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'right',
+                        labels: {
+                            color: textColor
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.raw || 0;
+                                const total = context.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+                                const percentage = Math.round((value / total) * 100);
+                                return label + ': ' + value + ' (' + percentage + '%)';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Type chart (Bar)
+    if (document.getElementById('type-chart')) {
+        const typeCtx = document.getElementById('type-chart').getContext('2d');
+        const isDarkMode = document.querySelector('html').classList.contains('dark');
+        const textColor = isDarkMode ? '#D1D5DB' : '#4B5563';
+        const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+        
+        const typeChart = new Chart(typeCtx, {
+            type: 'bar',
+            data: {
+                labels: {{ type_labels|tojson if type_labels else '[]'|safe }},
+                datasets: [{
+                    label: 'Consumption by Type',
+                    data: {{ type_values|tojson if type_values else '[]'|safe }},
+                    backgroundColor: [
+                        'rgba(79, 70, 229, 0.7)',
+                        'rgba(16, 185, 129, 0.7)',
+                        'rgba(245, 158, 11, 0.7)',
+                        'rgba(239, 68, 68, 0.7)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.dataset.label || '';
+                                const value = context.raw || 0;
+                                return label + ': ' + value;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            color: gridColor
+                        },
+                        ticks: {
+                            color: textColor
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: gridColor
+                        },
+                        ticks: {
+                            color: textColor
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Export button click handler
+    if (document.getElementById('export-report')) {
+        document.getElementById('export-report').addEventListener('click', function() {
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.append('export', 'csv');
+            window.location.href = currentUrl.toString();
+        });
+    }
+});
+</script>
+{% endblock %}

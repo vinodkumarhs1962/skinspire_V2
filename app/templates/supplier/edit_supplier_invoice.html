@@ -1,0 +1,1050 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/supplier.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    
+    <!-- Flash messages section -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+        <div class="bg-{{ 'green' if category == 'success' else 'red' if category == 'error' else 'blue' }}-100 border-l-4 border-{{ 'green' if category == 'success' else 'red' if category == 'error' else 'blue' }}-500 text-{{ 'green' if category == 'success' else 'red' if category == 'error' else 'blue' }}-700 p-4 mb-6" role="alert">
+            <p>{{ message }}</p>
+        </div>
+        {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">{{ page_title }}</h1>
+        <a href="{{ url_for('supplier_views.view_supplier_invoice', invoice_id=request.view_args.invoice_id) }}" 
+           class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-white font-semibold py-2 px-4 rounded inline-flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+            </svg>
+            Back to Invoice
+        </a>
+    </div>
+
+    <form id="supplier-invoice-edit-form" method="POST" class="invoice-container">
+        {{ form.csrf_token }}
+        
+        <!-- Compact Invoice Header -->
+        <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 mb-6">
+            <!-- Row 1: Invoice Number, Supplier and Invoice Date -->
+            <div class="flex gap-4 mb-4">
+                <!-- Invoice Number -->
+                <div class="w-48">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">
+                        Invoice Number <span class="text-red-500">*</span>
+                    </label>
+                    {{ form.supplier_invoice_number(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", required=true) }}
+                    {% if form.supplier_invoice_number.errors %}
+                        <p class="text-red-500 text-xs italic">{{ form.supplier_invoice_number.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                
+                <!-- Supplier Selection -->
+                <div class="flex-grow">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">
+                        Supplier <span class="text-red-500">*</span>
+                    </label>
+                    {{ form.supplier_id(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", required=true) }}
+                    {% if form.supplier_id.errors %}
+                        <p class="text-red-500 text-xs italic">{{ form.supplier_id.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                
+                <!-- Invoice Date -->
+                <div class="w-48">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">
+                        Invoice Date <span class="text-red-500">*</span>
+                    </label>
+                    {{ form.invoice_date(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", required=true) }}
+                    {% if form.invoice_date.errors %}
+                        <p class="text-red-500 text-xs italic">{{ form.invoice_date.errors[0] }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Row 2: Additional fields -->
+            <div class="flex justify-between gap-4 mb-4">
+                <div class="w-40">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">Due Date</label>
+                    {{ form.due_date(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                </div>
+                <div class="w-40">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">Place of Supply <span class="text-red-500">*</span></label>
+                    {{ form.place_of_supply(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", required=true) }}
+                </div>
+                <div class="w-56">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">Supplier GSTIN</label>
+                    {{ form.supplier_gstin(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                </div>
+                <div class="w-28">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">Currency</label>
+                    {{ form.currency_code(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                </div>
+                <div class="w-32">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">Exchange Rate</label>
+                    {{ form.exchange_rate(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", step="0.000001") }}
+                </div>
+            </div>
+            
+            <!-- Row 3: Checkboxes -->
+            <div class="flex gap-6">
+                <div class="flex items-center">
+                    {{ form.reverse_charge(class="form-checkbox mr-2") }}
+                    <label class="text-sm text-gray-700 dark:text-gray-300">Reverse Charge</label>
+                </div>
+                <div class="flex items-center">
+                    {{ form.is_interstate(class="form-checkbox mr-2", id="is_interstate") }}
+                    <label class="text-sm text-gray-700 dark:text-gray-300">Interstate</label>
+                </div>
+                <div class="flex items-center">
+                    {{ form.itc_eligible(class="form-checkbox mr-2") }}
+                    <label class="text-sm text-gray-700 dark:text-gray-300">ITC Eligible</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- HYBRID LINE ITEMS SECTION -->
+        <div class="line-items-section">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-white">Items</h2>
+                <div class="text-sm text-gray-600 dark:text-gray-400">
+                    <span class="mr-4">Existing Items: <span id="existing-items-count">{{ form.line_items|length }}</span></span>
+                    <span>New Items: <span id="new-items-count">0</span></span>
+                </div>
+            </div>
+            
+            <!-- SECTION 1: EXISTING ITEMS TABLE (Edit/Delete Only) -->
+            <div class="invoice-table-wrapper mb-6">
+                <h3 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-2">Existing Items (Edit/Delete)</h3>
+                <table class="invoice-table w-full">
+                    <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs">
+                            <th class="px-2 py-2 text-center font-medium uppercase">#</th>
+                            <th class="px-2 py-2 text-left font-medium uppercase">Medicine</th>
+                            <th class="px-2 py-2 text-left font-medium uppercase">Batch</th>
+                            <th class="px-2 py-2 text-right font-medium uppercase">Qty</th>
+                            <th class="px-2 py-2 text-right font-medium uppercase">Rate</th>
+                            <th class="px-2 py-2 text-right font-medium uppercase">MRP</th>
+                            <th class="px-2 py-2 text-right font-medium uppercase">Disc%</th>
+                            <th class="px-2 py-2 text-center font-medium uppercase">Free</th>
+                            <th class="px-2 py-2 text-right font-medium uppercase">GST</th>
+                            <th class="px-2 py-2 text-right font-medium uppercase">Total</th>
+                            <th class="px-2 py-2 text-center font-medium uppercase">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-xs" id="existing-items-tbody">
+                        {% for line_form in form.line_items %}
+                        <tr class="existing-line-item-row border-b dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700" data-line-index="{{ loop.index0 }}" data-item-type="existing">
+                            <!-- # Column -->
+                            <td class="px-2 py-2 text-center">
+                                <span class="line-number text-sm text-gray-600 font-medium">{{ loop.index }}</span>
+                            </td>
+                            
+                            <!-- Medicine Column (readonly) -->
+                            <td class="px-2 py-2">
+                                {{ line_form.medicine_id() }}
+                                {{ line_form.medicine_name(class="form-input text-xs w-full border rounded px-2 py-1 bg-gray-100", readonly=true) }}
+                                {{ line_form.hsn_code() }}
+                                {{ line_form.gst_rate() }}
+                                {{ line_form.units_per_pack() }}
+                            </td>
+                            
+                            <!-- Batch Column (editable) -->
+                            <td class="px-2 py-2">
+                                {{ line_form.batch_number(class="batch-number form-input text-xs w-full border rounded px-2 py-1", maxlength="20") }}
+                                {% if line_form.batch_number.errors %}
+                                    <div class="text-red-500 text-xs mt-1">{{ line_form.batch_number.errors[0] }}</div>
+                                {% endif %}
+                                <div class="mt-1">
+                                    {{ line_form.expiry_date(class="expiry-date form-input text-xs w-full border rounded px-1 py-1", type="date") }}
+                                    {% if line_form.expiry_date.errors %}
+                                        <div class="text-red-500 text-xs mt-1">{{ line_form.expiry_date.errors[0] }}</div>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            
+                            <!-- Quantity Column (editable) -->
+                            <td class="px-2 py-2">
+                                {{ line_form.quantity(class="quantity form-input text-xs w-full text-right border rounded px-2 py-1", step="0.01", min="0.01") }}
+                                {% if line_form.quantity.errors %}
+                                    <div class="text-red-500 text-xs mt-1">{{ line_form.quantity.errors[0] }}</div>
+                                {% endif %}
+                            </td>
+                            
+                            <!-- Rate Column (editable) -->
+                            <td class="px-2 py-2">
+                                {{ line_form.pack_purchase_price(class="pack-price form-input text-xs w-full text-right border rounded px-2 py-1", step="0.01", min="0") }}
+                                {% if line_form.pack_purchase_price.errors %}
+                                    <div class="text-red-500 text-xs mt-1">{{ line_form.pack_purchase_price.errors[0] }}</div>
+                                {% endif %}
+                            </td>
+                            
+                            <!-- MRP Column (editable) -->
+                            <td class="px-2 py-2">
+                                {{ line_form.pack_mrp(class="mrp form-input text-xs w-full text-right border rounded px-2 py-1", step="0.01", min="0") }}
+                                {% if line_form.pack_mrp.errors %}
+                                    <div class="text-red-500 text-xs mt-1">{{ line_form.pack_mrp.errors[0] }}</div>
+                                {% endif %}
+                            </td>
+                            
+                            <!-- Discount Column -->
+                            <td class="px-2 py-2">
+                                {{ line_form.discount_percent(class="discount-percent form-input text-xs w-full text-right border rounded px-2 py-1", step="0.1", min="0", max="100") }}
+                            </td>
+                            
+                            <!-- Free Item Column -->
+                            <td class="px-2 py-2 text-center">
+                                <label class="inline-flex items-center justify-center">
+                                    {{ line_form.is_free_item(class="is-free-item form-checkbox text-xs rounded") }}
+                                    <span class="ml-1 text-xs hidden sm:inline">Free</span>
+                                </label>
+                            </td>
+                            
+                            <!-- GST Column (calculated display) -->
+                            <td class="px-2 py-2">
+                                <div class="text-xs text-gray-600 font-medium gst-display">{{ line_form.gst_rate.data or 0 }}%</div>
+                                <div class="text-xs text-gray-500 mt-1 leading-tight gst-breakdown"></div>
+                            </td>
+                            
+                            <!-- Total Column (calculated display) -->
+                            <td class="px-2 py-2 text-right">
+                                <div class="line-total font-medium text-sm">0.00</div>
+                                <div class="text-xs text-gray-500 gst-details mt-1 leading-tight"></div>
+                            </td>
+                            
+                            <!-- Action Column (Delete Button) -->
+                            <td class="px-2 py-2 text-center">
+                                <button type="button" class="delete-existing-item text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300" 
+                                        onclick="deleteExistingItem({{ loop.index0 }})" title="Delete Item">
+                                    <i class="fas fa-trash text-sm"></i>
+                                </button>
+                                <!-- Hidden field to mark for deletion -->
+                                <input type="hidden" name="line_items-{{ loop.index0 }}-delete" value="false" class="delete-flag">
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <!-- Footer with totals -->
+                    <tfoot class="bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm">
+                        <tr class="border-t-2 border-gray-300 dark:border-gray-600">
+                            <td colspan="10" class="px-2 py-2 text-right font-medium">Subtotal:</td>
+                            <td class="px-2 py-2 text-right font-medium" id="subtotal">0.00</td>
+                        </tr>
+                        <tr class="cgst-row">
+                            <td colspan="10" class="px-2 py-2 text-right font-medium">CGST:</td>
+                            <td class="px-2 py-2 text-right font-medium" id="total-cgst">0.00</td>
+                        </tr>
+                        <tr class="sgst-row">
+                            <td colspan="10" class="px-2 py-2 text-right font-medium">SGST:</td>
+                            <td class="px-2 py-2 text-right font-medium" id="total-sgst">0.00</td>
+                        </tr>
+                        <tr class="igst-row hidden">
+                            <td colspan="10" class="px-2 py-2 text-right font-medium">IGST:</td>
+                            <td class="px-2 py-2 text-right font-medium" id="total-igst">0.00</td>
+                        </tr>
+                        <tr class="border-t border-gray-400 dark:border-gray-500">
+                            <td colspan="10" class="px-2 py-2 text-right font-bold">Grand Total:</td>
+                            <td class="px-2 py-2 text-right font-bold text-lg" id="grand-total">0.00</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            
+            <!-- SECTION 2: ADD NEW ITEMS (Reuse Create Invoice Form) -->
+            <div class="new-items-section mt-8">
+                <div class="bg-blue-50 dark:bg-blue-900 rounded-lg p-4">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-medium text-blue-800 dark:text-blue-200">Add New Items</h3>
+                        <button type="button" id="toggle-add-section" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200">
+                            <i class="fas fa-plus mr-1"></i> Add Item
+                        </button>
+                    </div>
+                    
+                    <!-- Add Item Form (Hidden by default) -->
+                    <div id="add-item-form" class="hidden">
+                        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 border border-blue-200 dark:border-blue-700">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Medicine</label>
+                                    <select id="new-medicine-id" class="form-select w-full">
+                                        <option value="">Select Medicine</option>
+                                        {% for medicine in medicines %}
+                                        <option value="{{ medicine.medicine_id }}" 
+                                                data-name="{{ medicine.medicine_name }}"
+                                                data-hsn="{{ medicine.hsn_code or '' }}"
+                                                data-gst="{{ medicine.gst_rate or 0 }}"
+                                                data-mrp="{{ medicine.cost_price or 0 }}">
+                                            {{ medicine.medicine_name }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Batch Number</label>
+                                    <input type="text" id="new-batch-number" class="form-input w-full" maxlength="20">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expiry Date</label>
+                                    <input type="date" id="new-expiry-date" class="form-input w-full">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quantity</label>
+                                    <input type="number" id="new-quantity" class="form-input w-full" step="0.01" min="0.01">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Rate</label>
+                                    <input type="number" id="new-pack-price" class="form-input w-full" step="0.01" min="0">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">MRP</label>
+                                    <input type="number" id="new-pack-mrp" class="form-input w-full" step="0.01" min="0">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Discount %</label>
+                                    <input type="number" id="new-discount-percent" class="form-input w-full" step="0.1" min="0" max="100" value="0">
+                                </div>
+                                
+                                <div class="flex items-center pt-6">
+                                    <input type="checkbox" id="new-is-free-item" class="form-checkbox mr-2">
+                                    <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Free Item</label>
+                                </div>
+                            </div>
+                            
+                            <div class="flex justify-end space-x-2">
+                                <button type="button" id="cancel-add-item" class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded text-sm">
+                                    Cancel
+                                </button>
+                                <button type="button" id="add-new-item" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded text-sm">
+                                    <i class="fas fa-plus mr-1"></i> Add Item
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- New Items Table (Hidden by default) -->
+                    <div id="new-items-table" class="hidden mt-4">
+                        <h4 class="text-md font-medium text-blue-700 dark:text-blue-300 mb-2">New Items to Add</h4>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-xs">
+                                <thead class="bg-blue-100 dark:bg-blue-800">
+                                    <tr class="text-blue-700 dark:text-blue-300">
+                                        <th class="px-2 py-1 text-left">#</th>
+                                        <th class="px-2 py-1 text-left">Medicine</th>
+                                        <th class="px-2 py-1 text-left">Batch</th>
+                                        <th class="px-2 py-1 text-right">Qty</th>
+                                        <th class="px-2 py-1 text-right">Rate</th>
+                                        <th class="px-2 py-1 text-right">Total</th>
+                                        <th class="px-2 py-1 text-center">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="new-items-tbody" class="bg-white dark:bg-gray-700">
+                                    <!-- New items will be added here dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Information section -->
+        <div class="mb-6">
+            <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Additional Information</h3>
+                <div>
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2">Internal Notes</label>
+                    {{ form.notes(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline h-24") }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="text-right">
+            <p class="text-sm text-gray-600 dark:text-gray-400 italic mb-3">
+                Note: Only unpaid invoices without recorded payments can be edited.
+            </p>
+            <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded focus:outline-none focus:shadow-outline">
+                Update Invoice
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="{{ url_for('static', filename='js/components/form_handler.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let currentSupplierId = '';
+    let currentSupplierStateCode = '';
+    let newItemsCounter = 0;
+    let newItemsData = []; // Store new items data
+    
+    // =============================================================================
+    // EXISTING ITEMS FUNCTIONALITY (Edit Only)
+    // =============================================================================
+    
+    // Supplier info handling
+    const supplierSelect = document.getElementById('supplier_id');
+    if (supplierSelect) {
+        supplierSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            if (this.value) {
+                currentSupplierId = this.value;
+                currentSupplierStateCode = selectedOption.getAttribute('data-state') || '';
+                recalculateAllLines();
+            }
+        });
+    }
+    
+    // Interstate checkbox handling
+    const isInterstateCheckbox = document.getElementById('is_interstate');
+    if (isInterstateCheckbox) {
+        isInterstateCheckbox.addEventListener('change', function() {
+            updateGstRows(this.checked);
+            recalculateAllLines();
+        });
+    }
+    
+    // Free item handling for existing items
+    document.querySelectorAll('.existing-line-item-row .is-free-item').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            handleFreeItemToggle(this);
+        });
+    });
+    
+    // Input change handlers for existing items
+    document.querySelectorAll('.existing-line-item-row .quantity, .existing-line-item-row .pack-price, .existing-line-item-row .discount-percent, .existing-line-item-row .batch-number, .existing-line-item-row .expiry-date').forEach(input => {
+        input.addEventListener('input', debounce(() => {
+            const row = input.closest('tr');
+            calculateRowTotal(row);
+        }, 300));
+        
+        input.addEventListener('blur', () => {
+            const row = input.closest('tr');
+            validateLineItem(row);
+        });
+    });
+    
+    // =============================================================================
+    // DELETE EXISTING ITEMS FUNCTIONALITY
+    // =============================================================================
+    
+    window.deleteExistingItem = function(index) {
+        const row = document.querySelector(`tr[data-line-index="${index}"]`);
+        if (row && confirm('Are you sure you want to delete this item?')) {
+            // Mark as deleted (hidden) instead of removing from DOM
+            row.style.display = 'none';
+            row.querySelector('.delete-flag').value = 'true';
+            
+            // Update counters
+            updateItemCounts();
+            updateTotalsDisplay();
+        }
+    };
+    
+    // =============================================================================
+    // ADD NEW ITEMS FUNCTIONALITY  
+    // =============================================================================
+    
+    // Toggle add section
+    document.getElementById('toggle-add-section').addEventListener('click', function() {
+        const addForm = document.getElementById('add-item-form');
+        const button = this;
+        
+        if (addForm.classList.contains('hidden')) {
+            addForm.classList.remove('hidden');
+            button.innerHTML = '<i class="fas fa-minus mr-1"></i> Hide';
+        } else {
+            addForm.classList.add('hidden');
+            button.innerHTML = '<i class="fas fa-plus mr-1"></i> Add Item';
+        }
+    });
+    
+    // Cancel add item
+    document.getElementById('cancel-add-item').addEventListener('click', function() {
+        clearAddItemForm();
+        document.getElementById('add-item-form').classList.add('hidden');
+        document.getElementById('toggle-add-section').innerHTML = '<i class="fas fa-plus mr-1"></i> Add Item';
+    });
+    
+    // Medicine selection for new items
+    document.getElementById('new-medicine-id').addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        if (selectedOption.value) {
+            // Auto-populate medicine details
+            document.getElementById('new-pack-price').value = selectedOption.getAttribute('data-mrp') || '';
+            document.getElementById('new-pack-mrp').value = selectedOption.getAttribute('data-mrp') || '';
+        }
+    });
+    
+    // Free item handling for new items
+    document.getElementById('new-is-free-item').addEventListener('change', function() {
+        const priceField = document.getElementById('new-pack-price');
+        const discountField = document.getElementById('new-discount-percent');
+        
+        if (this.checked) {
+            priceField.value = '0';
+            priceField.readOnly = true;
+            priceField.classList.add('bg-gray-100');
+            discountField.value = '0';
+            discountField.readOnly = true;
+            discountField.classList.add('bg-gray-100');
+        } else {
+            priceField.readOnly = false;
+            priceField.classList.remove('bg-gray-100');
+            discountField.readOnly = false;
+            discountField.classList.remove('bg-gray-100');
+        }
+    });
+    
+    // Add new item
+    document.getElementById('add-new-item').addEventListener('click', function() {
+        if (validateNewItemForm()) {
+            addNewItemToTable();
+            clearAddItemForm();
+            updateItemCounts();
+            updateTotalsDisplay();
+        }
+    });
+    
+    // =============================================================================
+    // HELPER FUNCTIONS
+    // =============================================================================
+    
+    function validateNewItemForm() {
+        const medicineId = document.getElementById('new-medicine-id').value;
+        const batchNumber = document.getElementById('new-batch-number').value.trim();
+        const expiryDate = document.getElementById('new-expiry-date').value;
+        const quantity = parseFloat(document.getElementById('new-quantity').value) || 0;
+        const price = parseFloat(document.getElementById('new-pack-price').value) || 0;
+        const isFree = document.getElementById('new-is-free-item').checked;
+        
+        // Clear previous errors
+        document.querySelectorAll('.new-item-error').forEach(error => error.remove());
+        
+        let hasError = false;
+        
+        if (!medicineId) {
+            showNewItemError('new-medicine-id', 'Please select a medicine');
+            hasError = true;
+        }
+        
+        if (!batchNumber) {
+            showNewItemError('new-batch-number', 'Batch number is required');
+            hasError = true;
+        }
+        
+        if (!expiryDate) {
+            showNewItemError('new-expiry-date', 'Expiry date is required');
+            hasError = true;
+        }
+        
+        if (quantity <= 0) {
+            showNewItemError('new-quantity', 'Quantity must be greater than 0');
+            hasError = true;
+        }
+        
+        if (!isFree && price <= 0) {
+            showNewItemError('new-pack-price', 'Price must be greater than 0 for non-free items');
+            hasError = true;
+        }
+        
+        return !hasError;
+    }
+    
+    function showNewItemError(fieldId, message) {
+        const field = document.getElementById(fieldId);
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'new-item-error text-red-500 text-xs mt-1';
+        errorDiv.textContent = message;
+        field.parentNode.appendChild(errorDiv);
+        field.classList.add('border-red-500');
+    }
+    
+    function addNewItemToTable() {
+        const medicineSelect = document.getElementById('new-medicine-id');
+        const selectedOption = medicineSelect.options[medicineSelect.selectedIndex];
+        
+        const newItem = {
+            medicine_id: medicineSelect.value,
+            medicine_name: selectedOption.getAttribute('data-name'),
+            hsn_code: selectedOption.getAttribute('data-hsn') || '',
+            gst_rate: parseFloat(selectedOption.getAttribute('data-gst')) || 0,
+            batch_number: document.getElementById('new-batch-number').value.trim(),
+            expiry_date: document.getElementById('new-expiry-date').value,
+            quantity: parseFloat(document.getElementById('new-quantity').value),
+            pack_purchase_price: parseFloat(document.getElementById('new-pack-price').value) || 0,
+            pack_mrp: parseFloat(document.getElementById('new-pack-mrp').value) || 0,
+            units_per_pack: 1,
+            discount_percent: parseFloat(document.getElementById('new-discount-percent').value) || 0,
+            is_free_item: document.getElementById('new-is-free-item').checked
+        };
+        
+        // Add to data array
+        newItemsData.push(newItem);
+        
+        // Create table row
+        const tbody = document.getElementById('new-items-tbody');
+        const row = document.createElement('tr');
+        row.className = 'border-b dark:border-gray-600';
+        row.setAttribute('data-new-item-index', newItemsCounter);
+        
+        // Calculate total for display
+        const lineTotal = calculateNewItemTotal(newItem);
+        
+        row.innerHTML = `
+            <td class="px-2 py-1">${newItemsCounter + 1}</td>
+            <td class="px-2 py-1">
+                <div class="font-medium">${newItem.medicine_name}</div>
+                <div class="text-xs text-gray-500">HSN: ${newItem.hsn_code}</div>
+                ${newItem.is_free_item ? '<span class="inline-block px-1 py-0.5 text-xs bg-green-100 text-green-800 rounded">Free</span>' : ''}
+            </td>
+            <td class="px-2 py-1">
+                <div>${newItem.batch_number}</div>
+                <div class="text-xs text-gray-500">Exp: ${newItem.expiry_date}</div>
+            </td>
+            <td class="px-2 py-1 text-right">${newItem.quantity}</td>
+            <td class="px-2 py-1 text-right">${newItem.pack_purchase_price.toFixed(2)}</td>
+            <td class="px-2 py-1 text-right font-medium">${lineTotal.toFixed(2)}</td>
+            <td class="px-2 py-1 text-center">
+                <button type="button" onclick="deleteNewItem(${newItemsCounter})" class="text-red-600 hover:text-red-800 text-sm">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        
+        tbody.appendChild(row);
+        
+        // Show the table
+        document.getElementById('new-items-table').classList.remove('hidden');
+        
+        newItemsCounter++;
+    }
+    
+    function calculateNewItemTotal(item) {
+        // Simple calculation for display - will be recalculated server-side
+        const baseAmount = item.quantity * item.pack_purchase_price;
+        const discountAmount = baseAmount * (item.discount_percent / 100);
+        const taxableAmount = baseAmount - discountAmount;
+        const gstAmount = taxableAmount * (item.gst_rate / 100);
+        return taxableAmount + gstAmount;
+    }
+    
+    window.deleteNewItem = function(index) {
+        const row = document.querySelector(`tr[data-new-item-index="${index}"]`);
+        if (row && confirm('Are you sure you want to remove this item?')) {
+            row.remove();
+            
+            // Remove from data array
+            newItemsData = newItemsData.filter((_, i) => i !== index);
+            
+            // Update counters and totals
+            updateItemCounts();
+            updateTotalsDisplay();
+            
+            // Hide table if no items
+            if (newItemsData.length === 0) {
+                document.getElementById('new-items-table').classList.add('hidden');
+            }
+        }
+    };
+    
+    function clearAddItemForm() {
+        document.getElementById('new-medicine-id').value = '';
+        document.getElementById('new-batch-number').value = '';
+        document.getElementById('new-expiry-date').value = '';
+        document.getElementById('new-quantity').value = '';
+        document.getElementById('new-pack-price').value = '';
+        document.getElementById('new-pack-mrp').value = '';
+        document.getElementById('new-discount-percent').value = '0';
+        document.getElementById('new-is-free-item').checked = false;
+        
+        // Reset price field state
+        const priceField = document.getElementById('new-pack-price');
+        priceField.readOnly = false;
+        priceField.classList.remove('bg-gray-100');
+        
+        // Clear errors
+        document.querySelectorAll('.new-item-error').forEach(error => error.remove());
+        document.querySelectorAll('#add-item-form .border-red-500').forEach(field => {
+            field.classList.remove('border-red-500');
+        });
+    }
+    
+    function updateItemCounts() {
+        const existingCount = document.querySelectorAll('.existing-line-item-row:not([style*="display: none"])').length;
+        const newCount = newItemsData.length;
+        
+        document.getElementById('existing-items-count').textContent = existingCount;
+        document.getElementById('new-items-count').textContent = newCount;
+    }
+    
+    // =============================================================================
+    // EXISTING CALCULATION FUNCTIONS (Updated for new structure)
+    // =============================================================================
+    
+    function handleFreeItemToggle(checkbox) {
+        const row = checkbox.closest('tr');
+        const packPrice = row.querySelector('.pack-price');
+        const discountPercent = row.querySelector('.discount-percent');
+        
+        if (checkbox.checked) {
+            packPrice.value = '0';
+            packPrice.readOnly = true;
+            packPrice.classList.add('bg-gray-100', 'dark:bg-gray-600');
+            
+            discountPercent.value = '0';
+            discountPercent.readOnly = true;
+            discountPercent.classList.add('bg-gray-100', 'dark:bg-gray-600');
+            
+            row.classList.add('bg-green-50', 'dark:bg-green-900');
+        } else {
+            packPrice.readOnly = false;
+            packPrice.classList.remove('bg-gray-100', 'dark:bg-gray-600');
+            
+            discountPercent.readOnly = false;
+            discountPercent.classList.remove('bg-gray-100', 'dark:bg-gray-600');
+            
+            row.classList.remove('bg-green-50', 'dark:bg-green-900');
+        }
+        
+        calculateRowTotal(row);
+    }
+    
+    // GST calculation function (existing)
+    async function calculateRowTotal(row) {
+        try {
+            const quantity = parseFloat(row.querySelector('.quantity')?.value) || 0;
+            const unitRate = parseFloat(row.querySelector('.pack-price')?.value) || 0;
+            const gstRate = parseFloat(row.querySelector('input[name*="gst_rate"]')?.value) || 0;
+            const discountPercent = parseFloat(row.querySelector('.discount-percent')?.value) || 0;
+            const isFreeItem = row.querySelector('.is-free-item')?.checked || false;
+            
+            if (quantity === 0 || (unitRate === 0 && !isFreeItem)) {
+                clearRowDisplay(row);
+                updateTotalsDisplay();
+                return;
+            }
+            
+            // Use preview API for calculations
+            const response = await fetch('/supplier/api/po/preview-gst', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify({
+                    quantity: quantity,
+                    unit_rate: unitRate,
+                    gst_rate: gstRate,
+                    discount_percent: discountPercent,
+                    is_free_item: isFreeItem,
+                    conversion_factor: 1,
+                    supplier_state_code: currentSupplierStateCode
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                updateRowDisplay(row, data.calculations);
+            } else {
+                clearRowDisplay(row);
+            }
+            
+            updateTotalsDisplay();
+            
+        } catch (error) {
+            console.error('GST calculation error:', error);
+            clearRowDisplay(row);
+        }
+    }
+    
+    function validateLineItem(row) {
+        const batchInput = row.querySelector('.batch-number');
+        const expiryInput = row.querySelector('.expiry-date');
+        const quantity = parseFloat(row.querySelector('.quantity')?.value) || 0;
+        
+        // Clear previous validation errors
+        row.querySelectorAll('.validation-error').forEach(error => error.remove());
+        
+        let hasError = false;
+        
+        if (quantity > 0) {
+            // Batch number validation
+            if (!batchInput.value.trim()) {
+                showValidationError(batchInput, 'Batch number is required');
+                hasError = true;
+            }
+            
+            // Expiry date validation
+            if (!expiryInput.value) {
+                showValidationError(expiryInput, 'Expiry date is required');
+                hasError = true;
+            }
+        }
+        
+        return !hasError;
+    }
+    
+    function showValidationError(input, message) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'validation-error text-red-500 text-xs mt-1';
+        errorDiv.textContent = message;
+        input.parentNode.appendChild(errorDiv);
+        input.classList.add('border-red-500');
+    }
+    
+    function updateRowDisplay(row, calculations) {
+        row.querySelector('.line-total').textContent = calculations.line_total.toFixed(2);
+        
+        const gstBreakdown = row.querySelector('.gst-breakdown');
+        if (calculations.is_interstate) {
+            gstBreakdown.textContent = `IGST:  Rs.${calculations.igst_amount.toFixed(2)}`;
+        } else {
+            gstBreakdown.textContent = `C: Rs.${calculations.cgst_amount.toFixed(2)} S: Rs.${calculations.sgst_amount.toFixed(2)}`;
+        }
+        
+        const gstDetails = row.querySelector('.gst-details');
+        gstDetails.textContent = `Base:  Rs.${calculations.base_amount.toFixed(2)} | GST:  Rs.${calculations.total_gst_amount.toFixed(2)}`;
+    }
+    
+    function clearRowDisplay(row) {
+        row.querySelector('.line-total').textContent = '0.00';
+        row.querySelector('.gst-breakdown').textContent = '';
+        row.querySelector('.gst-details').textContent = '';
+    }
+    
+    async function updateTotalsDisplay() {
+        try {
+            const lineItems = collectLineItemsForAPI();
+            
+            if (lineItems.length === 0) {
+                updateTotalElements(0, 0, 0, 0, 0);
+                return;
+            }
+            
+            const response = await fetch('/supplier/api/po/preview-totals', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify({
+                    line_items: lineItems,
+                    supplier_state_code: currentSupplierStateCode
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                const totals = data.totals;
+                const isInterstate = totals.is_interstate;
+                
+                if (isInterstate) {
+                    updateTotalElements(totals.total_taxable_amount, 0, 0, totals.total_gst_amount, totals.grand_total);
+                } else {
+                    const cgst = totals.total_gst_amount / 2;
+                    const sgst = totals.total_gst_amount / 2;
+                    updateTotalElements(totals.total_taxable_amount, cgst, sgst, 0, totals.grand_total);
+                }
+            }
+            
+        } catch (error) {
+            console.error('Totals calculation error:', error);
+        }
+    }
+    
+    function updateTotalElements(subtotal, cgst, sgst, igst, grandTotal) {
+        document.getElementById('subtotal').textContent = subtotal.toFixed(2);
+        document.getElementById('total-cgst').textContent = cgst.toFixed(2);
+        document.getElementById('total-sgst').textContent = sgst.toFixed(2);
+        document.getElementById('total-igst').textContent = igst.toFixed(2);
+        document.getElementById('grand-total').textContent = grandTotal.toFixed(2);
+    }
+    
+    function updateGstRows(isInterstate) {
+        const cgstRows = document.querySelectorAll('.cgst-row');
+        const sgstRows = document.querySelectorAll('.sgst-row');
+        const igstRows = document.querySelectorAll('.igst-row');
+        
+        cgstRows.forEach(row => {
+            if (isInterstate) {
+                row.classList.add('hidden');
+            } else {
+                row.classList.remove('hidden');
+            }
+        });
+        
+        sgstRows.forEach(row => {
+            if (isInterstate) {
+                row.classList.add('hidden');
+            } else {
+                row.classList.remove('hidden');
+            }
+        });
+        
+        igstRows.forEach(row => {
+            if (isInterstate) {
+                row.classList.remove('hidden');
+            } else {
+                row.classList.add('hidden');
+            }
+        });
+    }
+    
+    function collectLineItemsForAPI() {
+        const existingRows = document.querySelectorAll('.existing-line-item-row:not([style*="display: none"])');
+        const lineItems = [];
+        
+        // Collect existing items
+        existingRows.forEach(row => {
+            const quantity = parseFloat(row.querySelector('.quantity')?.value) || 0;
+            if (quantity > 0) {
+                lineItems.push({
+                    quantity: quantity,
+                    unit_rate: parseFloat(row.querySelector('.pack-price')?.value) || 0,
+                    gst_rate: parseFloat(row.querySelector('input[name*="gst_rate"]')?.value) || 0,
+                    discount_percent: parseFloat(row.querySelector('.discount-percent')?.value) || 0,
+                    is_free_item: row.querySelector('.is-free-item')?.checked || false,
+                    conversion_factor: 1
+                });
+            }
+        });
+        
+        // Add new items
+        newItemsData.forEach(item => {
+            lineItems.push({
+                quantity: item.quantity,
+                unit_rate: item.pack_purchase_price,
+                gst_rate: item.gst_rate,
+                discount_percent: item.discount_percent,
+                is_free_item: item.is_free_item,
+                conversion_factor: 1
+            });
+        });
+        
+        return lineItems;
+    }
+    
+    function recalculateAllLines() {
+        document.querySelectorAll('.existing-line-item-row').forEach(row => {
+            if (row.style.display !== 'none') {
+                calculateRowTotal(row);
+            }
+        });
+    }
+    
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+    
+    function getCSRFToken() {
+        return document.querySelector('input[name="csrf_token"]')?.value || '';
+    }
+    
+    // =============================================================================
+    // FORM SUBMISSION HANDLING
+    // =============================================================================
+    
+    // Form submission: add new items as hidden fields
+    document.getElementById('supplier-invoice-edit-form').addEventListener('submit', function(e) {
+        let hasValidationErrors = false;
+        
+        // Validate existing line items
+        document.querySelectorAll('.existing-line-item-row:not([style*="display: none"])').forEach(row => {
+            const quantity = parseFloat(row.querySelector('.quantity')?.value) || 0;
+            if (quantity > 0) {
+                if (!validateLineItem(row)) {
+                    hasValidationErrors = true;
+                }
+            }
+        });
+        
+        if (hasValidationErrors) {
+            e.preventDefault();
+            alert('Please fix the validation errors before submitting.');
+            return false;
+        }
+        
+        // Add new items as hidden fields
+        addNewItemsToForm();
+    });
+    
+    function addNewItemsToForm() {
+        // Remove existing new item fields
+        document.querySelectorAll('input[name^="new_item_"]').forEach(field => field.remove());
+        
+        newItemsData.forEach((item, index) => {
+            const fields = {
+                [`new_item_${index}_medicine_id`]: item.medicine_id,
+                [`new_item_${index}_medicine_name`]: item.medicine_name,
+                [`new_item_${index}_hsn_code`]: item.hsn_code,
+                [`new_item_${index}_gst_rate`]: item.gst_rate,
+                [`new_item_${index}_batch_number`]: item.batch_number,
+                [`new_item_${index}_expiry_date`]: item.expiry_date,
+                [`new_item_${index}_quantity`]: item.quantity,
+                [`new_item_${index}_pack_purchase_price`]: item.pack_purchase_price,
+                [`new_item_${index}_pack_mrp`]: item.pack_mrp,
+                [`new_item_${index}_units_per_pack`]: item.units_per_pack,
+                [`new_item_${index}_discount_percent`]: item.discount_percent,
+                [`new_item_${index}_is_free_item`]: item.is_free_item
+            };
+            
+            Object.entries(fields).forEach(([name, value]) => {
+                const hiddenField = document.createElement('input');
+                hiddenField.type = 'hidden';
+                hiddenField.name = name;
+                hiddenField.value = value;
+                document.getElementById('supplier-invoice-edit-form').appendChild(hiddenField);
+            });
+        });
+        
+        // Add count field
+        const countField = document.createElement('input');
+        countField.type = 'hidden';
+        countField.name = 'new_items_count';
+        countField.value = newItemsData.length;
+        document.getElementById('supplier-invoice-edit-form').appendChild(countField);
+    }
+    
+    // Initialize calculations on page load
+    setTimeout(() => {
+        // Set initial interstate state
+        if (isInterstateCheckbox) {
+            updateGstRows(isInterstateCheckbox.checked);
+        }
+        updateItemCounts();
+        recalculateAllLines();
+    }, 100);
+});
+</script>
+{% endblock %}

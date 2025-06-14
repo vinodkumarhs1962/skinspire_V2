@@ -1,0 +1,232 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}Supplier Details{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Supplier Details</h1>
+        <div class="flex space-x-2">
+            <a href="{{ url_for('supplier_views.supplier_list') }}" class="btn-secondary">
+                Back to Suppliers
+            </a>
+            <a href="{{ url_for('supplier_views.edit_supplier', supplier_id=supplier.supplier_id) }}" class="btn-primary">
+                Edit
+            </a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Basic Information -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700 dark:text-white">Basic Information</h2>
+            <div class="space-y-3">
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Supplier Name:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.supplier_name }}</div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Category:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.supplier_category or '-' }}</div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Status:</div>
+                    <div class="col-span-2 text-sm">
+                        {% if supplier.status == 'active' %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100">
+                                Active
+                            </span>
+                        {% elif supplier.status == 'inactive' %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-200">
+                                Inactive
+                            </span>
+                        {% elif supplier.status == 'blacklisted' %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100">
+                                Blacklisted
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Payment Terms:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.payment_terms or '-' }}</div>
+                </div>
+                <!-- NEW: Branch Information -->
+                {% if supplier.get('branch_name') %}
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Branch:</div>
+                    <div class="col-span-2">
+                        {% set branch_name = supplier.branch_name %}
+                        {% include 'components/branch/branch_indicator.html' %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Contact Information -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700 dark:text-white">Contact Information</h2>
+            <div class="space-y-3">
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Contact Person:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.contact_person_name or '-' }}</div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Phone:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.contact_info.phone if supplier.contact_info and supplier.contact_info.phone else '-' }}</div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Mobile:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.contact_info.mobile if supplier.contact_info and supplier.contact_info.mobile else '-' }}</div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Email:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.email or '-' }}</div>
+                </div>
+            </div>
+
+            <h3 class="text-lg font-semibold mt-6 mb-3 text-gray-700 dark:text-white">Manager</h3>
+            <div class="space-y-3">
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Manager Name:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.manager_name or '-' }}</div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Phone:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.manager_contact_info.phone if supplier.manager_contact_info and supplier.manager_contact_info.phone else '-' }}</div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Mobile:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.manager_contact_info.mobile if supplier.manager_contact_info and supplier.manager_contact_info.mobile else '-' }}</div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Email:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.manager_contact_info.email if supplier.manager_contact_info and supplier.manager_contact_info.email else '-' }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Address Information -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700 dark:text-white">Address</h2>
+            <div class="space-y-3">
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Address Line 1:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.supplier_address.address_line1 if supplier.supplier_address else '-' }}</div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Address Line 2:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.supplier_address.address_line2 if supplier.supplier_address else '-' }}</div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">City:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.supplier_address.city if supplier.supplier_address else '-' }}</div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">State:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.supplier_address.state if supplier.supplier_address else '-' }}</div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Country:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.supplier_address.country if supplier.supplier_address else '-' }}</div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">PIN Code:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.supplier_address.pincode if supplier.supplier_address else '-' }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Financial Information -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700 dark:text-white">GST Information</h2>
+            <div class="space-y-3">
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">GSTIN:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.gst_registration_number or '-' }}</div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">PAN:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.pan_number or '-' }}</div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Tax Type:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.tax_type|title if supplier.tax_type else '-' }}</div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">State Code:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.state_code or '-' }}</div>
+                </div>
+            </div>
+
+            <h3 class="text-lg font-semibold mt-6 mb-3 text-gray-700 dark:text-white">Bank Details</h3>
+            <div class="space-y-3">
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Account Name:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.bank_details.account_name if supplier.bank_details else '-' }}</div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Account Number:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.bank_details.account_number if supplier.bank_details else '-' }}</div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Bank Name:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.bank_details.bank_name if supplier.bank_details else '-' }}</div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">IFSC Code:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.bank_details.ifsc_code if supplier.bank_details else '-' }}</div>
+                </div>
+                <div class="grid grid-cols-3">
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Branch:</div>
+                    <div class="col-span-2 text-sm text-gray-900 dark:text-white">{{ supplier.bank_details.branch if supplier.bank_details else '-' }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Additional Information -->
+    <div class="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-semibold mb-4 text-gray-700 dark:text-white">Additional Information</h2>
+        <div class="space-y-3">
+            <div class="grid grid-cols-6">
+                <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Remarks:</div>
+                <div class="col-span-5 text-sm text-gray-900 dark:text-white">{{ supplier.remarks or '-' }}</div>
+            </div>
+            <div class="grid grid-cols-6">
+                <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Created At:</div>
+                <div class="col-span-5 text-sm text-gray-900 dark:text-white">{{ supplier.created_at.strftime('%d-%m-%Y %H:%M') }}</div>
+            </div>
+            <div class="grid grid-cols-6">
+                <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Last Updated:</div>
+                <div class="col-span-5 text-sm text-gray-900 dark:text-white">{{ supplier.updated_at.strftime('%d-%m-%Y %H:%M') }}</div>
+            </div>
+            <div class="grid grid-cols-6">
+                <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Created By:</div>
+                <div class="col-span-5 text-sm text-gray-900 dark:text-white">{{ supplier.created_by or '-' }}</div>
+            </div>
+            <div class="grid grid-cols-6">
+                <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Updated By:</div>
+                <div class="col-span-5 text-sm text-gray-900 dark:text-white">{{ supplier.updated_by or '-' }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="mt-6 flex flex-wrap gap-4">
+        <a href="{{ url_for('supplier_views.payment_history', supplier_id=supplier.supplier_id) }}" class="btn-secondary">
+            Payment History
+        </a>
+        <a href="{{ url_for('supplier_views.purchase_order_list', supplier_id=supplier.supplier_id) }}" class="btn-secondary">
+            Purchase Orders
+        </a>
+        <a href="{{ url_for('supplier_views.supplier_invoice_list', supplier_id=supplier.supplier_id) }}" class="btn-secondary">
+            Invoices
+        </a>
+        <a href="{{ url_for('supplier_views.pending_invoices', supplier_id=supplier.supplier_id) }}" class="btn-secondary">
+            Pending Payments
+        </a>
+    </div>
+</div>
+{% endblock %}

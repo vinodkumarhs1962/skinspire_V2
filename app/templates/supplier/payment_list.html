@@ -1,0 +1,541 @@
+{% extends "layouts/dashboard.html" %}
+{% from "components/alerts.html" import alert %}
+{% from "components/badges.html" import payment_status_badge %}
+{% from "components/tables.html" import sortable_header, pagination, table_toolbar, empty_state %}
+
+{% block title %}Supplier Payment History{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <!-- Header Section -->
+    <div class="flex flex-col md:flex-row items-start justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Supplier Payment History</h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">
+                Track and manage supplier payments across all branches
+            </p>
+        </div>
+        <div class="mt-4 md:mt-0 space-x-2">
+            <a href="{{ url_for('supplier_views.create_payment') }}" class="btn-primary">
+                <i class="fas fa-plus mr-2"></i> Record Payment
+            </a>
+            <button onclick="exportPayments()" class="btn-secondary">
+                <i class="fas fa-download mr-2"></i> Export
+            </button>
+        </div>
+    </div>
+    
+    <!-- Summary Cards -->
+    {% if summary %}
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <p class="text-sm text-gray-500 dark:text-gray-400">Total Payments</p>
+            <h3 class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ summary.total_count or 0 }}</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">For selected period</p>
+        </div>
+        
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <p class="text-sm text-gray-500 dark:text-gray-400">Total Amount</p>
+            <h3 class="text-2xl font-bold text-green-600 dark:text-green-400">
+                Rs. {{ "{:,.2f}".format(summary.total_amount or 0) }}
+            </h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">For selected period</p>
+        </div>
+        
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <p class="text-sm text-gray-500 dark:text-gray-400">Pending Approval</p>
+            <h3 class="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{{ summary.pending_approval or 0 }}</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Need attention</p>
+        </div>
+        
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <p class="text-sm text-gray-500 dark:text-gray-400">Approved</p>
+            <h3 class="text-2xl font-bold text-green-600 dark:text-green-400">{{ summary.approved or 0 }}</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Completed</p>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Filter Section -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+        <form method="GET" action="{{ url_for('supplier_views.payment_list') }}" class="p-4">
+            <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                
+                <!-- Search -->
+                <div class="lg:col-span-2">
+                    <label for="search" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fas fa-search text-gray-400"></i>
+                        </div>
+                        <input type="text" id="search" name="search" value="{{ filters.search or '' }}" 
+                               placeholder="Supplier name, reference..." 
+                               class="pl-10 w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                    </div>
+                </div>
+                
+                <!-- Supplier Filter -->
+                <div>
+                    <label for="supplier_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Supplier</label>
+                    <select id="supplier_id" name="supplier_id" class="form-select w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <option value="">All Suppliers</option>
+                        <!-- Add supplier options dynamically -->
+                    </select>
+                </div>
+                
+                <!-- Payment Method Filter -->
+                <div>
+                    <label for="payment_method" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Payment Method</label>
+                    <select id="payment_method" name="payment_method" class="form-select w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <option value="">All Methods</option>
+                        <option value="cash" {% if filters.payment_method == 'cash' %}selected{% endif %}>Cash</option>
+                        <option value="cheque" {% if filters.payment_method == 'cheque' %}selected{% endif %}>Cheque</option>
+                        <option value="bank_transfer" {% if filters.payment_method == 'bank_transfer' %}selected{% endif %}>Bank Transfer</option>
+                        <option value="upi" {% if filters.payment_method == 'upi' %}selected{% endif %}>UPI</option>
+                        <option value="mixed" {% if filters.payment_method == 'mixed' %}selected{% endif %}>Mixed</option>
+                    </select>
+                </div>
+                
+                <!-- Status Filter -->
+                <div>
+                    <label for="status" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                    <select id="status" name="status" class="form-select w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <option value="">All Status</option>
+                        <option value="pending" {% if filters.status == 'pending' %}selected{% endif %}>Pending</option>
+                        <option value="approved" {% if filters.status == 'approved' %}selected{% endif %}>Approved</option>
+                        <option value="rejected" {% if filters.status == 'rejected' %}selected{% endif %}>Rejected</option>
+                    </select>
+                </div>
+                
+                <!-- Filter Buttons -->
+                <div class="flex items-end space-x-2">
+                    <button type="submit" class="btn-primary w-full">
+                        <i class="fas fa-filter mr-2"></i> Filter
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Date Range -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div>
+                    <label for="start_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
+                    <input type="date" id="start_date" name="start_date" value="{{ filters.start_date or '' }}" 
+                           class="form-input w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                </div>
+                <div>
+                    <label for="end_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
+                    <input type="date" id="end_date" name="end_date" value="{{ filters.end_date or '' }}" 
+                           class="form-input w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Payment History Table -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-between items-center">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Payment History</h2>
+            <div class="text-sm text-gray-600 dark:text-gray-400">
+                {% if payments %}
+                    Showing {{ payments|length }} of {{ total }} payments
+                {% else %}
+                    No payments found
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if payments %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full table-auto">
+                <thead>
+                    <tr class="bg-gray-50 dark:bg-gray-700 text-xs uppercase">
+                        {{ sortable_header('payment_date', 'Date', filters.sort, filters.order) }}
+                        <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">Supplier</th>
+                        <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">Method</th>
+                        <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">Details</th>
+                        {{ sortable_header('amount', 'Amount', filters.sort, filters.order) }}
+                        <th class="px-4 py-2 text-center text-gray-500 dark:text-gray-300">Status</th>
+                        <th class="px-4 py-2 text-center text-gray-500 dark:text-gray-300">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for payment in payments %}
+                        {% set cash_exists = payment.cash_amount and payment.cash_amount > 0 %}
+                        {% set cheque_exists = payment.cheque_amount and payment.cheque_amount > 0 %}
+                        {% set bank_exists = payment.bank_transfer_amount and payment.bank_transfer_amount > 0 %}
+                        {% set upi_exists = payment.upi_amount and payment.upi_amount > 0 %}
+                        {% set total_methods = (1 if cash_exists else 0) + (1 if cheque_exists else 0) + (1 if bank_exists else 0) + (1 if upi_exists else 0) %}
+                        
+                        {% if total_methods > 1 %}
+                            <!-- Mixed Payment: Show each method as separate row -->
+                            {% set row_counter = [] %}
+                            
+                            {% if cash_exists %}
+                            <tr class="border-b dark:border-gray-700 bg-green-50 dark:bg-green-900/20">
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    {% if row_counter|length == 0 %}
+                                        {{ payment.payment_date.strftime('%d/%m/%Y') if payment.payment_date is not string else payment.payment_date }}
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    {% if row_counter|length == 0 %}
+                                        <div class="font-medium">{{ payment.supplier_name or 'N/A' }}</div>
+                                        {% if payment.reference_no %}
+                                        <div class="text-xs text-gray-500">Ref: {{ payment.reference_no }}</div>
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
+                                        <i class="fas fa-money-bill-wave mr-1"></i> Cash
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    Cash payment
+                                </td>
+                                <td class="px-4 py-3 text-right font-medium text-gray-800 dark:text-gray-200">
+                                    Rs. {{ "%.2f"|format(payment.cash_amount|float) }}
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    {% if row_counter|length == 0 %}
+                                    <span class="px-2 py-1 text-xs rounded-full 
+                                               {% if payment.workflow_status == 'approved' %}bg-green-100 text-green-800
+                                               {% elif payment.workflow_status == 'pending_approval' %}bg-yellow-100 text-yellow-800
+                                               {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                        {{ payment.workflow_status.replace('_', ' ').title() if payment.workflow_status else 'Completed' }}
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    {% if row_counter|length == 0 %}
+                                    <div class="flex justify-center space-x-1">
+                                        <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) }}" 
+                                           class="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors">
+                                            <i class="fas fa-eye mr-1"></i>View
+                                        </a>
+                                        {% if payment.workflow_status not in ['approved', 'rejected'] %}
+                                        <a href="{{ url_for('supplier_views.edit_payment', payment_id=payment.payment_id) }}" 
+                                           class="inline-flex items-center px-2 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors">
+                                            <i class="fas fa-edit mr-1"></i>Edit
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {{ row_counter.append(1) or "" }}
+                            {% endif %}
+
+                            {% if cheque_exists %}
+                            <tr class="border-b dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20">
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    {% if row_counter|length == 0 %}
+                                        {{ payment.payment_date.strftime('%d/%m/%Y') if payment.payment_date is not string else payment.payment_date }}
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    {% if row_counter|length == 0 %}
+                                        <div class="font-medium">{{ payment.supplier_name or 'N/A' }}</div>
+                                        {% if payment.reference_no %}
+                                        <div class="text-xs text-gray-500">Ref: {{ payment.reference_no }}</div>
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
+                                        <i class="fas fa-money-check mr-1"></i> Cheque
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    {% if payment.cheque_number %}Cheque #{{ payment.cheque_number }}{% else %}Cheque payment{% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-right font-medium text-gray-800 dark:text-gray-200">
+                                    Rs. {{ "%.2f"|format(payment.cheque_amount|float) }}
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    {% if row_counter|length == 0 %}
+                                    <span class="px-2 py-1 text-xs rounded-full 
+                                               {% if payment.workflow_status == 'approved' %}bg-green-100 text-green-800
+                                               {% elif payment.workflow_status == 'pending_approval' %}bg-yellow-100 text-yellow-800
+                                               {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                        {{ payment.workflow_status.replace('_', ' ').title() if payment.workflow_status else 'Completed' }}
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    {% if row_counter|length == 0 %}
+                                    <div class="flex justify-center space-x-1">
+                                        <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) }}" 
+                                           class="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors">
+                                            <i class="fas fa-eye mr-1"></i>View
+                                        </a>
+                                        {% if payment.workflow_status not in ['approved', 'rejected'] %}
+                                        <a href="{{ url_for('supplier_views.edit_payment', payment_id=payment.payment_id) }}" 
+                                           class="inline-flex items-center px-2 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors">
+                                            <i class="fas fa-edit mr-1"></i>Edit
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {{ row_counter.append(1) or "" }}
+                            {% endif %}
+
+                            {% if bank_exists %}
+                            <tr class="border-b dark:border-gray-700 bg-purple-50 dark:bg-purple-900/20">
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    {% if row_counter|length == 0 %}
+                                        {{ payment.payment_date.strftime('%d/%m/%Y') if payment.payment_date is not string else payment.payment_date }}
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    {% if row_counter|length == 0 %}
+                                        <div class="font-medium">{{ payment.supplier_name or 'N/A' }}</div>
+                                        {% if payment.reference_no %}
+                                        <div class="text-xs text-gray-500">Ref: {{ payment.reference_no }}</div>
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-800">
+                                        <i class="fas fa-university mr-1"></i> Bank Transfer
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    {% if payment.bank_reference_number %}Ref: {{ payment.bank_reference_number }}{% else %}Bank transfer{% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-right font-medium text-gray-800 dark:text-gray-200">
+                                    Rs. {{ "%.2f"|format(payment.bank_transfer_amount|float) }}
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    {% if row_counter|length == 0 %}
+                                    <span class="px-2 py-1 text-xs rounded-full 
+                                               {% if payment.workflow_status == 'approved' %}bg-green-100 text-green-800
+                                               {% elif payment.workflow_status == 'pending_approval' %}bg-yellow-100 text-yellow-800
+                                               {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                        {{ payment.workflow_status.replace('_', ' ').title() if payment.workflow_status else 'Completed' }}
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    {% if row_counter|length == 0 %}
+                                    <div class="flex justify-center space-x-1">
+                                        <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) }}" 
+                                           class="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors">
+                                            <i class="fas fa-eye mr-1"></i>View
+                                        </a>
+                                        {% if payment.workflow_status not in ['approved', 'rejected'] %}
+                                        <a href="{{ url_for('supplier_views.edit_payment', payment_id=payment.payment_id) }}" 
+                                           class="inline-flex items-center px-2 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors">
+                                            <i class="fas fa-edit mr-1"></i>Edit
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {{ row_counter.append(1) or "" }}
+                            {% endif %}
+
+                            {% if upi_exists %}
+                            <tr class="border-b dark:border-gray-700 bg-orange-50 dark:bg-orange-900/20">
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    {% if row_counter|length == 0 %}
+                                        {{ payment.payment_date.strftime('%d/%m/%Y') if payment.payment_date is not string else payment.payment_date }}
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    {% if row_counter|length == 0 %}
+                                        <div class="font-medium">{{ payment.supplier_name or 'N/A' }}</div>
+                                        {% if payment.reference_no %}
+                                        <div class="text-xs text-gray-500">Ref: {{ payment.reference_no }}</div>
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-orange-100 text-orange-800">
+                                        <i class="fas fa-mobile-alt mr-1"></i> UPI
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    {% if payment.upi_transaction_id %}ID: {{ payment.upi_transaction_id }}{% else %}UPI payment{% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-right font-medium text-gray-800 dark:text-gray-200">
+                                    Rs. {{ "%.2f"|format(payment.upi_amount|float) }}
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    {% if row_counter|length == 0 %}
+                                    <span class="px-2 py-1 text-xs rounded-full 
+                                               {% if payment.workflow_status == 'approved' %}bg-green-100 text-green-800
+                                               {% elif payment.workflow_status == 'pending_approval' %}bg-yellow-100 text-yellow-800
+                                               {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                        {{ payment.workflow_status.replace('_', ' ').title() if payment.workflow_status else 'Completed' }}
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    {% if row_counter|length == 0 %}
+                                    <div class="flex justify-center space-x-1">
+                                        <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) }}" 
+                                           class="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors">
+                                            <i class="fas fa-eye mr-1"></i>View
+                                        </a>
+                                        {% if payment.workflow_status not in ['approved', 'rejected'] %}
+                                        <a href="{{ url_for('supplier_views.edit_payment', payment_id=payment.payment_id) }}" 
+                                           class="inline-flex items-center px-2 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors">
+                                            <i class="fas fa-edit mr-1"></i>Edit
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {{ row_counter.append(1) or "" }}
+                            {% endif %}
+
+                        {% else %}
+                            <!-- Single Payment Method - Show appropriate label -->
+                            <tr class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    {{ payment.payment_date.strftime('%d/%m/%Y') if payment.payment_date is not string else payment.payment_date }}
+                                </td>
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    <div class="font-medium">{{ payment.supplier_name or 'N/A' }}</div>
+                                    {% if payment.reference_no %}
+                                    <div class="text-xs text-gray-500">Ref: {{ payment.reference_no }}</div>
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    {% if cash_exists %}
+                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
+                                            <i class="fas fa-money-bill-wave mr-1"></i> Cash
+                                        </span>
+                                    {% elif cheque_exists %}
+                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
+                                            <i class="fas fa-money-check mr-1"></i> Cheque
+                                        </span>
+                                    {% elif bank_exists %}
+                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-800">
+                                            <i class="fas fa-university mr-1"></i> Bank Transfer
+                                        </span>
+                                    {% elif upi_exists %}
+                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-orange-100 text-orange-800">
+                                            <i class="fas fa-mobile-alt mr-1"></i> UPI
+                                        </span>
+                                    {% else %}
+                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-800">
+                                            <i class="fas fa-question mr-1"></i> Unknown
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                    {% if cash_exists %}
+                                        Cash payment
+                                    {% elif cheque_exists %}
+                                        {% if payment.cheque_number %}Cheque #{{ payment.cheque_number }}{% else %}Cheque payment{% endif %}
+                                    {% elif bank_exists %}
+                                        {% if payment.bank_reference_number %}Ref: {{ payment.bank_reference_number }}{% else %}Bank transfer{% endif %}
+                                    {% elif upi_exists %}
+                                        {% if payment.upi_transaction_id %}ID: {{ payment.upi_transaction_id }}{% else %}UPI payment{% endif %}
+                                    {% else %}
+                                        Payment details
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-right font-medium text-gray-800 dark:text-gray-200">
+                                    Rs. {{ "%.2f"|format(payment.amount|float) }}
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    <span class="px-2 py-1 text-xs rounded-full 
+                                               {% if payment.workflow_status == 'approved' %}bg-green-100 text-green-800
+                                               {% elif payment.workflow_status == 'pending_approval' %}bg-yellow-100 text-yellow-800
+                                               {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                        {{ payment.workflow_status.replace('_', ' ').title() if payment.workflow_status else 'Completed' }}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    <div class="flex justify-center space-x-1">
+                                        <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) }}" 
+                                           class="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors">
+                                            <i class="fas fa-eye mr-1"></i>View
+                                        </a>
+                                        {% if payment.workflow_status not in ['approved', 'rejected'] %}
+                                        <a href="{{ url_for('supplier_views.edit_payment', payment_id=payment.payment_id) }}" 
+                                           class="inline-flex items-center px-2 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors">
+                                            <i class="fas fa-edit mr-1"></i>Edit
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="bg-gray-100 dark:bg-gray-600 font-semibold">
+                        <td colspan="4" class="px-4 py-3 text-right text-gray-800 dark:text-gray-200">
+                            <strong>Total Payments:</strong>
+                        </td>
+                        <td class="px-4 py-3 text-right text-gray-800 dark:text-gray-200">
+                            <strong>Rs. {{ "%.2f"|format(payments|sum(attribute='amount')|default(0)|float) }}</strong>
+                        </td>
+                        <td colspan="2" class="px-4 py-3 text-center text-gray-600 dark:text-gray-400">
+                            <small>{{ payments|length }} payment(s)</small>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if total > per_page %}
+        {{ pagination(page, per_page, total, 'supplier_views.payment_list', filters) }}
+        {% endif %}
+        
+        {% else %}
+        <!-- Empty State -->
+        {{ empty_state(
+            title="No payments found",
+            description="Try adjusting your filters or create a new payment.",
+            action_url=url_for('supplier_views.create_payment'),
+            action_label="Record Payment"
+        ) }}
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function exportPayments() {
+    // Construct URL with current filters
+    const url = new URL('{{ url_for("supplier_views.export_payments") }}', window.location.origin);
+    const searchParams = new URLSearchParams(window.location.search);
+    
+    for (const [key, value] of searchParams) {
+        if (value) {
+            url.searchParams.set(key, value);
+        }
+    }
+    
+    // Trigger download
+    window.location.href = url.toString();
+}
+
+// Auto-submit form when filters change
+document.addEventListener('DOMContentLoaded', function() {
+    const filterSelects = document.querySelectorAll('#payment_method, #status, #supplier_id');
+    filterSelects.forEach(select => {
+        select.addEventListener('change', function() {
+            this.form.submit();
+        });
+    });
+    
+    // Auto-submit on date change
+    const dateInputs = document.querySelectorAll('#start_date, #end_date');
+    dateInputs.forEach(input => {
+        input.addEventListener('change', function() {
+            this.form.submit();
+        });
+    });
+});
+</script>
+{% endblock %}

@@ -27,10 +27,9 @@ def setup_test_environment():
     Environment.set_environment('testing')
     logger.info(f"Environment set to: {current_env}")
     
-    # Set critical environment variables for testing if not already set
-    if not os.environ.get('TEST_DATABASE_URL'):
-        os.environ['TEST_DATABASE_URL'] = 'postgresql://skinspire_admin:Skinspire123$@localhost:5432/skinspire_test'
-        logger.info("Set TEST_DATABASE_URL for testing database")
+    # Set critical environment variables for testing to use DEV database
+    os.environ['TEST_DATABASE_URL'] = os.environ.get('DEV_DATABASE_URL')
+    logger.info("Using DEV_DATABASE_URL for testing")
         
     os.environ['USE_NESTED_TRANSACTIONS'] = 'False'
     logger.info("Disabled nested transactions for testing")

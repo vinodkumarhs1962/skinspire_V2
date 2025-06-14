@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="csrf-token" content="{{ csrf_token() }}">
+        <title>Invoice #{{ invoice.invoice_number }} - SkinSpire Clinic</title>
+        <!-- Replace the inline styles with centralized CSS -->
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/components/invoice.css') }}">
+    </head>
+<body>
+    <div class="no-print" style="padding: 10px; background-color: #f8f9fa; text-align: center; margin: 0;">
+        <button onclick="window.print()" style="padding: 5px 10px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">
+            Print Invoice
+        </button>
+        <button onclick="window.close()" style="padding: 5px 10px; background-color: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">
+            Close
+        </button>
+        <button onclick="sendEmail()" style="padding: 5px 10px; background-color: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">
+            Send Email
+        </button>
+        <button onclick="sendWhatsApp()" style="padding: 5px 10px; background-color: #25D366; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">
+            Send WhatsApp
+        </button>
+    </div>
+    
+    <div class="print-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">
+                SkinSpire Clinic
+            </div>
+            <div class="hospital-info">
+                <div>{{ hospital.name }}</div>
+                <div>{{ hospital.address }}</div>
+                <div>Phone: {{ hospital.phone }}</div>
+                <div>Email: {{ hospital.email }}</div>
+                {% if invoice.is_gst_invoice %}
+                <div>GSTIN: {{ hospital.gst_registration_number }}</div>
+                {% endif %}
+                {% if hospital.pharmacy_registration_number %}
+                <div>Pharmacy Reg: {{ hospital.pharmacy_registration_number }} 
+                    {% if hasattr(hospital, 'pharmacy_registration_valid_until') and hospital.pharmacy_registration_valid_until %}
+                    (Valid until: {{ hospital.pharmacy_registration_valid_until.strftime('%d-%b-%Y') }})
+                    {% elif hasattr(hospital, 'pharmacy_reg_valid_until') and hospital.pharmacy_reg_valid_until %}
+                    (Valid until: {{ hospital.pharmacy_reg_valid_until.strftime('%d-%b-%Y') }})
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Invoice Title -->
+        <div class="invoice-title">
+            {{ "TAX INVOICE" if invoice.is_gst_invoice else "INVOICE" }}
+        </div>
+        
+        <!-- Invoice Metadata -->
+        <div class="invoice-meta">
+            <div class="meta-section">
+                <div class="meta-title">Patient Details:</div>
+                {% if patient %}
+                <div>Name: {{ patient.name }}</div>
+                <div>MRN: {{ patient.mrn }}</div>
+                {% if patient.contact_info and patient.contact_info.phone %}
+                <div>Phone: {{ patient.contact_info.phone }}</div>
+                {% endif %}
+                {% else %}
+                <div>Patient information not available</div>
+                {% endif %}
+            </div>
+            
+            <div class="meta-section">
+                <div class="meta-title">Invoice Details:</div>
+                <div>Invoice #: {{ invoice.invoice_number }}</div>
+                <div>Date: {{ invoice.invoice_date.strftime('%d-%b-%Y') }}</div>
+                <div>Type: {{ invoice.invoice_type }}</div>
+                {% if invoice.is_interstate %}
+                <div>Supply Type: Interstate</div>
+                {% else %}
+                <div>Supply Type: Intrastate</div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Currency Note -->
+        <div class="currency-note">
+            Amounts are in {{ invoice.currency_code }}
+        </div>
+        
+<!-- Line Items Tables with fixed calculations -->
+
+<!-- Determine if we have any items of each type -->
+{% set service_items = [] %}
+{% set medicine_items = [] %}
+
+{% for item in invoice.line_items %}
+    {% if item.item_type in ['Service', 'Package'] %}
+        {% set _ = service_items.append(item) %}
+    {% elif item.item_type in ['Medicine', 'Prescription'] %}
+        {% set _ = medicine_items.append(item) %}
+    {% endif %}
+{% endfor %}
+
+<!-- Services and Packages Table (only shown if there are service items) -->
+{% if service_items %}
+<div style="margin-bottom: 15px;">
+    <div style="font-weight: bold; margin-bottom: 5px;">Services & Packages:</div>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 5%;">S. No.</th>
+                <th class="item-description" style="width: 35%;">Item Description</th>
+                {% if invoice.is_gst_invoice %}
+                <th style="width: 10%;">SAC Code</th>
+                {% endif %}
+                <th style="width: 7%;">Qty</th>
+                <th style="width: 5%;">UOM</th>
+                <th style="width: 10%;">Price</th>
+                {% if invoice.total_discount > 0 %}
+                <th style="width: 10%;">Discount</th>
+                {% endif %}
+                {% if invoice.is_gst_invoice %}
+                <th style="width: 10%;">GST Amount</th>
+                {% endif %}
+                <th style="width: 12%;">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in service_items %}
+                <tr>
+                    <td class="text-center">{{ loop.index }}</td>
+                    <td class="item-description">
+                        {{ item.item_name }}
+                        {% if item.included_in_consultation %}
+                            <div style="font-size: 10px; font-style: italic;">
+                                Included in consultation
+                            </div>
+                        {% endif %}
+                    </td>
+                    {% if invoice.is_gst_invoice %}
+                    <td class="text-center">{{ item.hsn_sac_code or '-' }}</td>
+                    {% endif %}
+                    <td class="text-center">{{ item.quantity }}</td>
+                    <td class="text-center">{{ item.uom or 'Nos' }}</td>
+                    <td>{{ "%.2f"|format(item.unit_price) }}</td>
+                    {% if invoice.total_discount > 0 %}
+                    <td>
+                        {% if item.discount_amount > 0 %}
+                            {{ item.discount_percent|int }}% ({{ "%.2f"|format(item.discount_amount) }})
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    {% endif %}
+                    {% if invoice.is_gst_invoice %}
+                    <td>
+                        {{ item.gst_rate|int }}% 
+                        ({{ "%.2f"|format(item.cgst_amount + item.sgst_amount + item.igst_amount) }})
+                    </td>
+                    {% endif %}
+                    <td>{{ "%.2f"|format(item.line_total) }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Medicines and Prescriptions Table (only shown if there are medicine items) -->
+{% if medicine_items %}
+<div style="margin-bottom: 15px;">
+    <div style="font-weight: bold; margin-bottom: 5px;">Medicines & Prescriptions:</div>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 5%;">S. No.</th>
+                <th class="item-description" style="width: 30%;">Item Description</th>
+                {% if invoice.is_gst_invoice %}
+                <th style="width: 8%;">HSN Code</th>
+                {% endif %}
+                <th style="width: 7%;">Qty</th>
+                <th style="width: 5%;">UOM</th>
+                <th style="width: 10%;">Batch</th>
+                <th style="width: 10%;">Expiry</th>
+                <th style="width: 10%;">MRP</th>
+                {% if invoice.total_discount > 0 %}
+                <th style="width: 8%;">Discount</th>
+                {% endif %}
+                {% if invoice.is_gst_invoice %}
+                <th style="width: 8%;">GST Amount</th>
+                {% endif %}
+                <th style="width: 12%;">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in medicine_items %}
+                <tr>
+                    <td class="text-center">{{ loop.index }}</td>
+                    <td class="item-description">
+                        {{ item.item_name }}
+                        {% if item.included_in_consultation %}
+                            <div style="font-size: 10px; font-style: italic;">
+                                Included in consultation
+                            </div>
+                        {% endif %}
+                    </td>
+                    {% if invoice.is_gst_invoice %}
+                    <td class="text-center">{{ item.hsn_sac_code or '-' }}</td>
+                    {% endif %}
+                    <td class="text-center">{{ item.quantity }}</td>
+                    <td class="text-center">{{ item.uom or 'Nos' }}</td>
+                    <td class="text-center">{{ item.batch or '-' }}</td>
+                    <td class="text-center">
+                        {% if item.expiry_date %}
+                            {% if item.expiry_date is string %}{{ item.expiry_date }}{% else %}{{ item.expiry_date.strftime('%d-%b-%Y') }}{% endif %}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>{{ "%.2f"|format(item.unit_price) }}</td>
+                    {% if invoice.total_discount > 0 %}
+                    <td>
+                        {% if item.discount_amount > 0 %}
+                            {{ item.discount_percent|int }}% ({{ "%.2f"|format(item.discount_amount) }})
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    {% endif %}
+                    {% if invoice.is_gst_invoice %}
+                    <td>
+                        {{ item.gst_rate|int }}% 
+                        ({{ "%.2f"|format(item.cgst_amount + item.sgst_amount + item.igst_amount) }})
+                    </td>
+                    {% endif %}
+                    <td>{{ "%.2f"|format(item.line_total) }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Display message if no items -->
+{% if not service_items and not medicine_items %}
+<div style="text-align: center; padding: 20px; color: #666;">
+    No line items available
+</div>
+{% endif %}
+
+        
+        <!-- Total Section -->
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <tr>
+                <td colspan="2" style="border: 1px solid #ddd; background-color: #f9f9f9; padding: 8px; width: 100%;">
+                    <strong>Amount in Words:</strong> INR {{ amount_in_words }} only
+                </td>
+            </tr>
+            <tr>
+                <td style="text-align: right; padding: 5px; width: 70%;">Subtotal:</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">{{ "%.2f"|format(invoice.total_amount) }}</td>
+            </tr>
+            
+            {% if invoice.total_discount > 0 %}
+            <tr>
+                <td style="text-align: right; padding: 5px; width: 70%;">Total Discount:</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">{{ "%.2f"|format(invoice.total_discount) }}</td>
+            </tr>
+            {% endif %}
+            
+            {% if invoice.is_gst_invoice %}
+            <tr>
+                <td style="text-align: right; padding: 5px; width: 70%;">Taxable Value:</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">{{ "%.2f"|format(invoice.total_taxable_value) }}</td>
+            </tr>
+            
+            {% if not invoice.is_interstate %}
+            <tr>
+                <td style="text-align: right; padding: 5px; width: 70%;">CGST:</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">{{ "%.2f"|format(invoice.total_cgst_amount) }}</td>
+            </tr>
+            <tr>
+                <td style="text-align: right; padding: 5px; width: 70%;">SGST:</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">{{ "%.2f"|format(invoice.total_sgst_amount) }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td style="text-align: right; padding: 5px; width: 70%;">IGST:</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">{{ "%.2f"|format(invoice.total_igst_amount) }}</td>
+            </tr>
+            {% endif %}
+            {% endif %}
+            
+            <tr style="font-weight: bold; border-top: 1px solid #333;">
+                <td style="text-align: right; padding: 5px; width: 70%;">GRAND TOTAL:</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">{{ "%.2f"|format(invoice.grand_total) }}</td>
+            </tr>
+            
+            {% if invoice.paid_amount > 0 %}
+            <tr>
+                <td style="text-align: right; padding: 5px; width: 70%;">Paid Amount:</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">{{ "%.2f"|format(invoice.paid_amount) }}</td>
+            </tr>
+            {% endif %}
+            
+            <!-- Always show Balance Due row, with different classes based on value -->
+            {% if invoice.balance_due > 0 %}
+            <tr class="balance-due-row" style="font-weight: bold; color: #d32f2f;">
+            {% else %}
+            <tr class="balance-due-row" style="font-weight: bold;">
+            {% endif %}
+                <td style="text-align: right; padding: 5px; width: 70%;">Balance Due:</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">{{ "%.2f"|format(invoice.balance_due) }}</td>
+            </tr>
+        </table>
+          
+        <!-- Payment Information -->
+        <div class="payment-info">
+            <div style="font-weight: bold; margin-bottom: 5px;">Payment Information:</div>
+            {% if invoice.payments and invoice.payments|length > 0 %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Mode</th>
+                            <th>Reference</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for payment in invoice.payments %}
+                            {% if payment.refunded_amount < payment.total_amount %}
+                                <tr>
+                                    <td>{{ payment.payment_date.strftime('%d-%b-%Y') }}</td>
+                                    <td>
+                                        {% if payment.cash_amount > 0 %}Cash{% endif %}
+                                        {% if payment.credit_card_amount > 0 %}{% if payment.cash_amount > 0 %}, {% endif %}Credit Card{% endif %}
+                                        {% if payment.debit_card_amount > 0 %}{% if payment.cash_amount > 0 or payment.credit_card_amount > 0 %}, {% endif %}Debit Card{% endif %}
+                                        {% if payment.upi_amount > 0 %}{% if payment.cash_amount > 0 or payment.credit_card_amount > 0 or payment.debit_card_amount > 0 %}, {% endif %}UPI{% endif %}
+                                    </td>
+                                    <td>
+                                        {% if payment.reference_number %}
+                                            {{ payment.reference_number }}
+                                        {% elif payment.card_number_last4 %}
+                                            {{ payment.card_type }} ({{ payment.card_number_last4 }})
+                                        {% elif payment.upi_id %}
+                                            {{ payment.upi_id }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ "%.2f"|format(payment.total_amount - payment.refunded_amount) }}</td>
+                                </tr>
+                            {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p>No payments recorded yet.</p>
+            {% endif %}
+        </div>
+
+        
+        <!-- GST Summary Table with Backend Calculations -->
+        {% if invoice.is_gst_invoice %}
+        <div class="gst-details">
+            <div style="font-weight: bold; margin-bottom: 5px;">GST Summary:</div>
+            <table class="tax-summary">
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th>Taxable Value</th>
+                        <th>GST Rate</th>
+                        {% if not invoice.is_interstate %}
+                        <th>CGST Amount</th>
+                        <th>SGST Amount</th>
+                        {% else %}
+                        <th>IGST Amount</th>
+                        {% endif %}
+                        <th>Total Tax</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Display tax groups from backend calculations -->
+                    {% for rate, values in invoice.tax_groups.items() %}
+                        <tr>
+                            <td>GST {{ rate }}%</td>
+                            <td>{{ "%.2f"|format(values.taxable_value) }}</td>
+                            <td>{{ rate }}%</td>
+                            {% if not invoice.is_interstate %}
+                            <td>{{ "%.2f"|format(values.cgst_amount) }}</td>
+                            <td>{{ "%.2f"|format(values.sgst_amount) }}</td>
+                            {% else %}
+                            <td>{{ "%.2f"|format(values.igst_amount) }}</td>
+                            {% endif %}
+                            <td>{{ "%.2f"|format(values.cgst_amount + values.sgst_amount + values.igst_amount) }}</td>
+                        </tr>
+                    {% endfor %}
+                    
+                    <!-- Display totals row using the accumulated totals from backend -->
+                    <tr style="font-weight: bold;">
+                        <td>Total</td>
+                        <td>{{ "%.2f"|format(invoice.total_taxable) }}</td>
+                        <td></td>
+                        {% if not invoice.is_interstate %}
+                        <td>{{ "%.2f"|format(invoice.total_cgst) }}</td>
+                        <td>{{ "%.2f"|format(invoice.total_sgst) }}</td>
+                        {% else %}
+                        <td>{{ "%.2f"|format(invoice.total_igst) }}</td>
+                        {% endif %}
+                        <td>{{ "%.2f"|format(invoice.total_cgst + invoice.total_sgst + invoice.total_igst) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+        
+        <!-- Terms & Conditions -->
+        <div class="terms">
+            <div style="font-weight: bold; margin-bottom: 5px;">Terms & Conditions:</div>
+            <ol style="margin: 0; padding-left: 15px;">
+                <li>All payments are non-refundable except as per the clinic's cancellation policy.</li>
+                <li>Payments are due immediately upon receipt of invoice unless otherwise specified.</li>
+                <li>This is a computer-generated invoice and does not require physical signature.</li>
+                {% if invoice.is_gst_invoice %}
+                <li>GST calculation as per current rates applicable.</li>
+                <li>Subject to local jurisdiction.</li>
+                {% endif %}
+            </ol>
+        </div>
+        
+        <!-- Authorized Signature -->
+        <div class="authorized-signature">
+            <div style="margin-bottom: 30px;">
+                For {{ hospital.name if hospital else "SkinSpire Clinic" }}
+            </div>
+            <div>
+                Authorized Signatory
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer no-print">
+            <div style="text-align: center;">
+                {{ hospital.name if hospital else "SkinSpire Clinic" }}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function sendEmail() {
+            // Visual feedback that email is being sent
+            const button = document.querySelector('button[onclick="sendEmail()"]');
+            if (button) button.textContent = "Sending...";
+            
+            // Create form with CSRF token
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/invoice/{{ invoice.invoice_id }}/send-email';
+            
+            // Add CSRF token from meta
+            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = token;
+            form.appendChild(csrfInput);
+            
+            document.body.appendChild(form);
+            form.submit();
+        }
+        
+        function sendWhatsApp() {
+            // Visual feedback that WhatsApp message is being sent
+            const button = document.querySelector('button[onclick="sendWhatsApp()"]');
+            if (button) button.textContent = "Sending...";
+            
+            // Create form with CSRF token
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/invoice/{{ invoice.invoice_id }}/send-whatsapp';
+            
+            // Add CSRF token from meta
+            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = token;
+            form.appendChild(csrfInput);
+            
+            document.body.appendChild(form);
+            form.submit();
+        }
+        
+        // Additional measures to prevent browser print headers/footers
+        window.onbeforeprint = function() {
+            // Add extra style to force remove any headers/footers
+            const style = document.createElement('style');
+            style.innerHTML = `
+                @page { 
+                    margin: 10mm !important;
+                    padding: 0 !important;
+                }
+                html, body {
+                    height: auto !important;
+                    width: auto !important;
+                }
+                html::before, html::after, body::before, body::after {
+                    content: none !important;
+                    display: none !important;
+                }
+            `;
+            document.head.appendChild(style);
+        };
+    </script>
+    <!-- Add this script near the end of the file, before closing </body> tag -->
+    <script>
+        window.onbeforeprint = function() {
+            // Force fix for total section
+            const totalSection = document.querySelector('.total-section');
+            if (totalSection) {
+                totalSection.style.display = 'block';
+                totalSection.style.width = '180mm';
+                totalSection.style.minWidth = '180mm';
+                totalSection.style.maxWidth = '180mm';
+                totalSection.style.margin = '20px 0';
+                totalSection.style.position = 'relative';
+                totalSection.style.boxSizing = 'border-box';
+                totalSection.style.overflow = 'visible';
+                totalSection.style.pageBreakInside = 'avoid';
+            }
+            
+            const amountInWords = document.querySelector('.amount-in-words');
+            if (amountInWords) {
+                amountInWords.style.display = 'block';
+                amountInWords.style.width = '180mm';
+                amountInWords.style.minWidth = '180mm';
+                amountInWords.style.maxWidth = '180mm';
+                amountInWords.style.margin = '0 0 10px 0';
+                amountInWords.style.padding = '8px';
+                amountInWords.style.position = 'relative';
+                amountInWords.style.boxSizing = 'border-box';
+                amountInWords.style.wordWrap = 'break-word';
+                amountInWords.style.overflow = 'visible';
+            }
+            
+            const totals = document.querySelector('.totals');
+            if (totals) {
+                totals.style.display = 'block';
+                totals.style.width = '180mm';
+                totals.style.minWidth = '180mm';
+                totals.style.maxWidth = '180mm';
+                totals.style.margin = '0';
+                totals.style.padding = '0';
+                totals.style.position = 'relative';
+                totals.style.boxSizing = 'border-box';
+                totals.style.overflow = 'visible';
+            }
+            
+            const totalRows = document.querySelectorAll('.total-row');
+            totalRows.forEach(row => {
+                row.style.display = 'flex';
+                row.style.width = '180mm';
+                row.style.minWidth = '180mm';
+                row.style.maxWidth = '180mm';
+                row.style.margin = '0';
+                row.style.padding = '3px 0';
+                row.style.position = 'relative';
+                row.style.boxSizing = 'border-box';
+                row.style.overflow = 'visible';
+                
+                // Set styles for label and value divs
+                const columns = row.querySelectorAll('div');
+                if (columns.length >= 2) {
+                    // Label column
+                    columns[0].style.display = 'inline-block';
+                    columns[0].style.width = '108mm';
+                    columns[0].style.minWidth = '108mm';
+                    columns[0].style.maxWidth = '108mm';
+                    columns[0].style.margin = '0';
+                    columns[0].style.paddingRight = '10px';
+                    columns[0].style.textAlign = 'right';
+                    columns[0].style.boxSizing = 'border-box';
+                    columns[0].style.position = 'relative';
+                    columns[0].style.float = 'left';
+                    
+                    // Value column
+                    columns[1].style.display = 'inline-block';
+                    columns[1].style.width = '72mm';
+                    columns[1].style.minWidth = '72mm';
+                    columns[1].style.maxWidth = '72mm';
+                    columns[1].style.margin = '0';
+                    columns[1].style.paddingRight = '5px';
+                    columns[1].style.textAlign = 'right';
+                    columns[1].style.boxSizing = 'border-box';
+                    columns[1].style.position = 'relative';
+                    columns[1].style.float = 'right';
+                }
+            });
+            
+            // Add page setup styles
+            const style = document.createElement('style');
+            style.innerHTML = `
+                @page {
+                    size: A4 portrait;
+                    margin: 15mm !important;
+                }
+                
+                html, body {
+                    width: 210mm !important;
+                    height: 297mm !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    overflow: hidden !important;
+                }
+                
+                .print-container {
+                    width: 180mm !important;
+                    margin: 0 auto !important;
+                    padding: 0 !important;
+                    box-sizing: border-box !important;
+                    overflow: visible !important;
+                }
+                
+                /* Hide any potential header/footer elements */
+                header, footer, .header-text, .footer-text, .no-print {
+                    display: none !important;
+                    visibility: hidden !important;
+                }
+            `;
+            document.head.appendChild(style);
+        };
+    </script>
+</body>
+</html>

@@ -8,6 +8,15 @@
             "username": "skinspire_admin",
             "database": "skinspire_test",
             "name": "test database"
+        },
+        {
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 5432,
+            "driver": "PostgreSQL",
+            "name": "Dev Database 1",
+            "database": "skinspire_dev",
+            "username": "skinspire_admin"
         }
     ],
     "python.defaultInterpreterPath": "C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe",

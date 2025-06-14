@@ -4,6 +4,7 @@ from __future__ import annotations
 
 # At the very top of app/__init__.py, before other imports
 import os
+import sys
 import logging
 # Set up logging early
 logging.basicConfig(level=logging.INFO)
@@ -55,6 +56,8 @@ from flask_login import LoginManager, current_user
 from .security.bridge import initialize_security
 from app.views.test import test_bp
 from pathlib import Path
+from app.utils.filters import format_currency, dateformat, datetimeformat, timeago, register_filters
+
 
 # Try to load settings, with improved error handling
 try:
@@ -83,9 +86,26 @@ def create_app() -> Flask:
         # Create the Flask application instance
         app = Flask(__name__)
         
+        setup_unicode_logging()
+        
         # Configure logging first to ensure proper error tracking
         app.logger.setLevel(logging.INFO)
         
+        # Add file logging for the application
+        logs_dir = os.path.join(app.root_path, 'logs')
+        os.makedirs(logs_dir, exist_ok=True)
+        
+        # Create a file handler for application logs
+        log_file_path = os.path.join(logs_dir, 'app.log')
+        file_handler = logging.FileHandler(log_file_path)
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        ))
+        
+        # Add the file handler to the app logger
+        app.logger.addHandler(file_handler)
+
         # Get database URL - use centralized Environment if available
         if ENVIRONMENT_MODULE_AVAILABLE:
             try:
@@ -116,6 +136,12 @@ def create_app() -> Flask:
         
         # Add hasattr to Jinja globals
         app.jinja_env.globals['hasattr'] = hasattr
+        
+        # Add currency formatting filter to Jinja
+        # app.jinja_env.filters['format_currency'] = format_currency
+        # app.jinja_env.filters['dateformat'] = dateformat
+        # app.jinja_env.filters['datetimeformat'] = datetimeformat
+        # app.jinja_env.filters['timeago'] = timeago
 
         # Exempt API endpoints from CSRF
         csrf.exempt(r"/api/*")
@@ -137,9 +163,8 @@ def create_app() -> Flask:
         from app.services.menu_service import register_menu_context_processor
         register_menu_context_processor(app)
 
-        # Register admin views
-        from app.views.admin_views import admin_views_bp
-        app.register_blueprint(admin_views_bp)
+        # Register util filters
+        register_filters(app)
 
         # Initialize Redis session management if available
         if hasattr(settings, 'REDIS_URL') and settings.REDIS_URL:
@@ -152,6 +177,19 @@ def create_app() -> Flask:
             except Exception as e:
                 app.logger.warning(f"Redis connection failed: {str(e)}")
         
+        try:
+            from app.services.posting_config_service import validate_posting_configuration
+            config_errors = validate_posting_configuration()
+            if config_errors:
+                app.logger.warning("Enhanced posting configuration issues found:")
+                for error in config_errors:
+                    app.logger.warning(f"  - {error}")
+            else:
+                app.logger.info("Enhanced posting configuration validated successfully")
+        except Exception as e:
+            app.logger.warning(f"Could not validate posting configuration: {str(e)}")
+
+
         # Register view blueprints (for frontend)
         register_view_blueprints(app)
         
@@ -180,6 +218,23 @@ def create_app() -> Flask:
                 # Add authorization header to environment
                 if 'HTTP_AUTHORIZATION' not in request.environ:
                     request.environ['HTTP_AUTHORIZATION'] = f'Bearer {auth_token}'
+        
+        
+        # Add built-in functions to Jinja2 template context
+        @app.template_global()
+        def min_func(a, b):
+            """Min function for Jinja templates"""
+            return min(a, b)
+        
+        @app.template_global()
+        def max_func(a, b):
+            """Max function for Jinja templates"""
+            return max(a, b)
+        
+        # Make built-in min/max available in templates
+        app.jinja_env.globals['min'] = min
+        app.jinja_env.globals['max'] = max
+        
         
         app.logger.info("Application initialization completed successfully")
         def optional_database_cleanup():
@@ -213,6 +268,14 @@ def create_app() -> Flask:
         logging.error(f"Failed to create application: {str(e)}")
         raise
  
+def format_currency(value):
+    """Format a value as currency for Jinja templates"""
+    if value is None:
+        return " Rs.0.00"
+    try:
+        return f" Rs.{float(value):,.2f}"
+    except (ValueError, TypeError):
+        return " Rs.0.00"
    
 def register_view_blueprints(app: Flask) -> None:
     """Register frontend view blueprints"""
@@ -223,6 +286,59 @@ def register_view_blueprints(app: Flask) -> None:
         from app.views.auth_views import auth_views_bp
         view_blueprints.append(auth_views_bp)
         
+        # Import verification views blueprint
+        from app.views.verification_views import verification_views_bp
+        view_blueprints.append(verification_views_bp)
+
+        # Import admin views blueprint
+        from app.views.admin_views import admin_views_bp
+        view_blueprints.append(admin_views_bp)
+        
+        # Import new GL, inventory, and supplier blueprints
+        try:
+            # GL views
+            from app.views.gl_views import gl_views_bp
+            view_blueprints.append(gl_views_bp)
+            app.logger.info("Successfully imported GL views blueprint")
+            
+            # Inventory views
+            from app.views.inventory_views import inventory_views_bp
+            view_blueprints.append(inventory_views_bp)
+            app.logger.info("Successfully imported inventory views blueprint")
+            
+            # Supplier views
+
+            # Debug the import
+            app.logger.info("Attempting to import supplier views...")
+            try:
+                app.logger.info("Attempting to import supplier views...")
+                from app.views import supplier_views
+                app.logger.info(f"supplier_views module: {supplier_views}")
+                
+                from app.views.supplier_views import supplier_views_bp
+                app.logger.info(f"supplier_views_bp: {supplier_views_bp}")
+                
+                view_blueprints.append(supplier_views_bp)
+                app.logger.info("Successfully imported supplier views blueprint")
+            except Exception as e:
+                app.logger.error(f"Supplier views blueprint could not be loaded: {type(e).__name__}: {str(e)}")
+                import traceback
+                app.logger.error(traceback.format_exc())
+
+            # from app.views.supplier_views import supplier_views_bp
+            # view_blueprints.append(supplier_views_bp)
+            # app.logger.info("Successfully imported supplier views blueprint")
+        except ImportError as e:
+            app.logger.warning(f"One or more new module blueprints could not be loaded: {str(e)}")
+
+            # Import billing views blueprint
+        try:
+            from app.views.billing_views import billing_views_bp
+            view_blueprints.append(billing_views_bp)
+            app.logger.info("Successfully imported billing views blueprint")
+        except ImportError as e:
+            app.logger.warning(f"Billing views blueprint could not be loaded: {str(e)}")
+
         # Import other view blueprints as they're developed
         # from app.views.user_views import user_views_bp
         # view_blueprints.append(user_views_bp)
@@ -241,6 +357,14 @@ def register_view_blueprints(app: Flask) -> None:
         except Exception as e:
             app.logger.error(f"Failed to register view blueprint {getattr(blueprint, 'name', 'unknown')}: {str(e)}")
 
+    # Debug: Check if supplier blueprint is actually registered
+    if 'supplier_views' in app.blueprints:
+        app.logger.info("supplier_views blueprint is registered")
+        app.logger.info(f"  URL prefix: {app.blueprints['supplier_views'].url_prefix}")
+    else:
+        app.logger.error("supplier_views blueprint is NOT registered")
+        app.logger.error(f"  Registered blueprints: {list(app.blueprints.keys())}")
+
 def register_api_blueprints(app: Flask) -> None:
     """Register API blueprints"""
     blueprints = []
@@ -254,6 +378,16 @@ def register_api_blueprints(app: Flask) -> None:
     except ImportError as e:
         app.logger.warning(f"Core blueprints could not be loaded: {str(e)}")
     
+    # Register verification API blueprints
+    try:
+        from .api.routes.verification import verification_api
+        from .api.routes.approval import approval_api
+        app.logger.info("Successfully imported verification blueprints")
+        blueprints.extend([verification_api, approval_api])
+        app.logger.info("Added verification blueprints to registration list")
+    except ImportError as e:
+        app.logger.warning(f"Verification blueprints could not be loaded: {str(e)}")
+
     # Register security blueprints
     try:
         app.logger.info("Attempting to import security blueprints...")
@@ -264,6 +398,39 @@ def register_api_blueprints(app: Flask) -> None:
     except ImportError as e:
         app.logger.warning(f"Security blueprints could not be loaded: {str(e)}")
     
+    # Register new API blueprints for GL, inventory, and supplier
+    try:
+        # GL API
+        from .api.routes.gl import gl_api_bp
+        blueprints.append(gl_api_bp)
+        app.logger.info("Added GL API blueprint to registration list")
+    except ImportError as e:
+        app.logger.warning(f"GL API blueprint could not be loaded: {str(e)}")
+        
+    try:
+        # Inventory API
+        from .api.routes.inventory import inventory_api_bp
+        blueprints.append(inventory_api_bp)
+        app.logger.info("Added inventory API blueprint to registration list")
+    except ImportError as e:
+        app.logger.warning(f"Inventory API blueprint could not be loaded: {str(e)}")
+        
+    try:
+        # Supplier API
+        from .api.routes.supplier import supplier_api_bp
+        blueprints.append(supplier_api_bp)
+        app.logger.info("Added supplier API blueprint to registration list")
+    except ImportError as e:
+        app.logger.warning(f"Supplier API blueprint could not be loaded: {str(e)}")
+    
+    try:
+        # Billing API
+        from .api.routes.billing import billing_api_bp
+        blueprints.append(billing_api_bp)
+        app.logger.info("Added billing API blueprint to registration list")
+    except ImportError as e:
+        app.logger.warning(f"Billing API blueprint could not be loaded: {str(e)}")
+
     # Register each blueprint
     for blueprint in blueprints:
         if blueprint is None:
@@ -291,4 +458,23 @@ def register_error_handlers(app: Flask) -> None:
         if request.path.startswith('/api/'):
             return {"error": "Internal server error"}, 500
         # For frontend routes, render an error template
-        return render_template('errors/500.html'), 500  
+        return render_template('errors/500.html'), 500
+    
+def setup_unicode_logging():
+    """
+    SIMPLE: Initialize Unicode logging support
+    """
+    from app.utils.unicode_logging import setup_unicode_logging as _setup_unicode_logging
+    
+    # Set up Unicode logging with logs directory
+    logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'logs')
+    success = _setup_unicode_logging(logs_dir)
+    
+    if success:
+        logger = logging.getLogger(__name__)
+        logger.info("✅ Unicode logging initialized")
+    else:
+        logger = logging.getLogger(__name__)
+        logger.warning("⚠️ Unicode logging fallback active")
+    
+    return success

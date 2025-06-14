@@ -32,7 +32,7 @@ INFO:__main__:Using DATABASE SERVICE for tests
 INFO:__main__:Added coverage reporting: tests/test_security/test_setup_verification.py --cov=tests --cov-report=term      
 INFO:__main__:Executing main test command: pytest tests/test_security/test_setup_verification.py -v
 INFO:__main__:Test execution completed in 1.30 seconds
-INFO:__main__:✅ Environment setup verification passed
+INFO:__main__:[OK] Environment setup verification passed
 INFO:__main__:Verifying database setup...
 INFO:__main__:Database connection successful. Version: PostgreSQL 17.2 on x86_64-windows, compiled by msvc-19.42.34435, 64-bit
 INFO:__main__:Running tests: tests/test_db_setup.py
@@ -41,7 +41,7 @@ INFO:__main__:Using DATABASE SERVICE for tests
 INFO:__main__:Added coverage reporting: tests/test_db_setup.py --cov=tests --cov-report=term
 INFO:__main__:Executing main test command: pytest tests/test_db_setup.py -v
 INFO:__main__:Test execution completed in 1.54 seconds
-INFO:__main__:✅ Database verification passed
+INFO:__main__:[OK] Database verification passed
 INFO:__main__:Verifying encryption functionality...
 INFO:__main__:Running tests: tests/test_security/test_encryption.py
 INFO:__main__:Running in INTEGRATION mode
@@ -49,7 +49,7 @@ INFO:__main__:Using DATABASE SERVICE for tests
 INFO:__main__:Added coverage reporting: tests/test_security/test_encryption.py --cov=tests --cov-report=term
 INFO:__main__:Executing main test command: pytest tests/test_security/test_encryption.py -v
 INFO:__main__:Test execution completed in 1.35 seconds
-INFO:__main__:✅ Encryption verification passed
+INFO:__main__:[OK] Encryption verification passed
 INFO:__main__:Verifying authentication functionality...
 INFO:__main__:Running tests: tests/test_security/test_authentication.py
 INFO:__main__:Running in INTEGRATION mode
@@ -57,7 +57,7 @@ INFO:__main__:Using DATABASE SERVICE for tests
 INFO:__main__:Added coverage reporting: tests/test_security/test_authentication.py --cov=tests --cov-report=term
 INFO:__main__:Executing main test command: pytest tests/test_security/test_authentication.py -v
 INFO:__main__:Test execution completed in 2.92 seconds
-INFO:__main__:✅ Authentication verification passed
+INFO:__main__:[OK] Authentication verification passed
 INFO:__main__:Verifying user management...
 INFO:__main__:Running tests: tests/test_security/test_user_management.py
 INFO:__main__:Running in INTEGRATION mode
@@ -65,7 +65,7 @@ INFO:__main__:Using DATABASE SERVICE for tests
 INFO:__main__:Added coverage reporting: tests/test_security/test_user_management.py --cov=tests --cov-report=term
 INFO:__main__:Executing main test command: pytest tests/test_security/test_user_management.py -v
 INFO:__main__:Test execution completed in 2.22 seconds
-INFO:__main__:✅ User management verification passed in 2.23s
+INFO:__main__:[OK] User management verification passed in 2.23s
 INFO:__main__:Verifying authorization...
 INFO:__main__:Pre-test diagnostic: 101 roles, 88 modules in database
 INFO:__main__:Running tests: tests/test_security/test_authorization.py
@@ -74,7 +74,7 @@ INFO:__main__:Using DATABASE SERVICE for tests
 INFO:__main__:Added coverage reporting: tests/test_security/test_authorization.py --cov=tests --cov-report=term
 INFO:__main__:Executing main test command: pytest tests/test_security/test_authorization.py -v
 INFO:__main__:Test execution completed in 1.32 seconds
-INFO:__main__:✅ Authorization verification passed
+INFO:__main__:[OK] Authorization verification passed
 INFO:__main__:Verifying frontend authentication views...
 INFO:__main__:Running tests: tests/test_security/test_auth_views.py
 INFO:__main__:Running in INTEGRATION mode
@@ -82,7 +82,7 @@ INFO:__main__:Using DATABASE SERVICE for tests
 INFO:__main__:Added coverage reporting: tests/test_security/test_auth_views.py --cov=tests --cov-report=term
 INFO:__main__:Executing main test command: pytest tests/test_security/test_auth_views.py -v
 INFO:__main__:Test execution completed in 5.43 seconds
-INFO:__main__:✅ Authentication views verification passed
+INFO:__main__:[OK] Authentication views verification passed
 INFO:__main__:Verifying end-to-end authentication flow...
 INFO:__main__:Running tests: tests/test_security/test_auth_end_to_end.py
 INFO:__main__:Running in INTEGRATION mode
@@ -90,7 +90,7 @@ INFO:__main__:Using DATABASE SERVICE for tests
 INFO:__main__:Added coverage reporting: tests/test_security/test_auth_end_to_end.py --cov=tests --cov-report=term
 INFO:__main__:Executing main test command: pytest tests/test_security/test_auth_end_to_end.py -v
 INFO:__main__:Test execution completed in 9.79 seconds
-INFO:__main__:✅ End-to-end authentication verification passed
+INFO:__main__:[OK] End-to-end authentication verification passed
 INFO:__main__:Verifying authentication UI components...
 INFO:__main__:Running tests: tests/test_security/test_auth_ui.py
 INFO:__main__:Running in INTEGRATION mode
@@ -98,7 +98,7 @@ INFO:__main__:Using DATABASE SERVICE for tests
 INFO:__main__:Added coverage reporting: tests/test_security/test_auth_ui.py --cov=tests --cov-report=term
 INFO:__main__:Executing main test command: pytest tests/test_security/test_auth_ui.py -v
 INFO:__main__:Test execution completed in 1.35 seconds
-INFO:__main__:✅ Authentication UI verification passed
+INFO:__main__:[OK] Authentication UI verification passed
 INFO:__main__:Verifying authentication flow...
 INFO:__main__:Running tests: tests/test_security/test_auth_flow.py
 INFO:__main__:Running in INTEGRATION mode
@@ -106,7 +106,7 @@ INFO:__main__:Using DATABASE SERVICE for tests
 INFO:__main__:Added coverage reporting: tests/test_security/test_auth_flow.py --cov=tests --cov-report=term
 INFO:__main__:Executing main test command: pytest tests/test_security/test_auth_flow.py -v
 INFO:__main__:Test execution completed in 13.84 seconds
-INFO:__main__:✅ Authentication flow verification passed
+INFO:__main__:[OK] Authentication flow verification passed
 INFO:__main__:Verifying complete authentication system...
 INFO:__main__:This could take a few minutes. Please be patient...
 INFO:__main__:Running tests: tests/test_security/test_auth_system.py
@@ -132,7 +132,7 @@ ERROR:__main__:ERROR: not found: C:\Users\vinod\AppData\Local\Programs\Skinspire
 INFO:__main__:Added coverage reporting: tests/test_security/test_auth_system.py --cov=tests --cov-report=term
 INFO:__main__:Executing main test command: pytest tests/test_security/test_auth_system.py -v
 INFO:__main__:Test execution completed in 8.35 seconds
-INFO:__main__:✅ Complete authentication system verification passed
+INFO:__main__:[OK] Complete authentication system verification passed
 INFO:__main__:All verifications completed in 49.56 seconds
 INFO:__main__:Results saved to verification_status.json
 
@@ -146,17 +146,17 @@ Failed: 0
 Total Execution Time: 49.56 seconds
 
 Component Status:
-  ✅ Setup Verification: PASS in 1.30s (2 passed, 0 failed, 0 skipped)
-  ✅ Database: PASS in 1.54s (7 passed, 0 failed, 0 skipped)
-  ✅ Encryption: PASS in 1.35s (3 passed, 0 failed, 0 skipped)
-  ✅ Authentication: PASS in 2.92s (12 passed, 0 failed, 0 skipped)
-  ✅ User Management: PASS in 2.22s (4 passed, 0 failed, 0 skipped)
-  ✅ Authorization: PASS in 1.32s (1 passed, 0 failed, 0 skipped)
-  ✅ Auth Views: PASS in 5.43s (5 passed, 0 failed, 0 skipped)
-  ✅ Auth End To End: PASS in 9.79s (1 passed, 0 failed, 1 skipped)
-  ✅ Auth Ui: PASS in 1.35s (4 passed, 0 failed, 0 skipped)
-  ✅ Auth Flow: PASS in 13.84s (3 passed, 0 failed, 1 skipped)
-  ✅ Auth System: PASS in 8.35s (12 passed, 0 failed, 0 skipped)
+  [OK] Setup Verification: PASS in 1.30s (2 passed, 0 failed, 0 skipped)
+  [OK] Database: PASS in 1.54s (7 passed, 0 failed, 0 skipped)
+  [OK] Encryption: PASS in 1.35s (3 passed, 0 failed, 0 skipped)
+  [OK] Authentication: PASS in 2.92s (12 passed, 0 failed, 0 skipped)
+  [OK] User Management: PASS in 2.22s (4 passed, 0 failed, 0 skipped)
+  [OK] Authorization: PASS in 1.32s (1 passed, 0 failed, 0 skipped)
+  [OK] Auth Views: PASS in 5.43s (5 passed, 0 failed, 0 skipped)
+  [OK] Auth End To End: PASS in 9.79s (1 passed, 0 failed, 1 skipped)
+  [OK] Auth Ui: PASS in 1.35s (4 passed, 0 failed, 0 skipped)
+  [OK] Auth Flow: PASS in 13.84s (3 passed, 0 failed, 1 skipped)
+  [OK] Auth System: PASS in 8.35s (12 passed, 0 failed, 0 skipped)
 =================================================
 
 (skinspire_v2_env) C:\Users\vinod\AppData\Local\Programs\Skinspire Repository\skinspire_v2>python scripts/test_db_features.py

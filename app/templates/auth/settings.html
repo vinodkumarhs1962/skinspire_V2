@@ -28,6 +28,8 @@
                     </div>
                 </div>
             {% endfor %}
+            <!-- ADD: Admin Banner Component -->
+            {% include 'components/branch/branch_indicator.html' %}
         {% endif %}
     {% endwith %}
 
@@ -325,6 +327,118 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+        <!-- ADD: Branch Information Component -->
+        {% include 'components/branch/branch_info_display.html' %}
+    </div>
+</div>
+
+
+<!-- Verification Section to be added to settings.html -->
+<div class="mt-8 bg-white rounded-lg shadow overflow-hidden">
+    <div class="px-4 py-5 sm:px-6 bg-gray-50">
+        <h3 class="text-lg leading-6 font-medium text-gray-900">
+            Account Verification
+        </h3>
+        <p class="mt-1 max-w-2xl text-sm text-gray-500">
+            Verify your contact information to secure your account.
+        </p>
+    </div>
+    
+    <div class="border-t border-gray-200 px-4 py-5 sm:p-6">
+        <div class="space-y-4">
+            <!-- Phone Verification -->
+            <div class="flex items-start">
+                <div class="flex-shrink-0">
+                    {% if current_user.is_phone_verified %}
+                        <svg class="h-6 w-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    {% else %}
+                        <svg class="h-6 w-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                    {% endif %}
+                </div>
+                <div class="ml-3 flex-1">
+                    <div class="flex justify-between">
+                        <p class="text-base font-medium text-gray-900">Phone Verification</p>
+                        {% if current_user.is_phone_verified %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Verified
+                            </span>
+                        {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                Not Verified
+                            </span>
+                        {% endif %}
+                    </div>
+                    <p class="mt-1 text-sm text-gray-500">
+                        {% if current_user.is_phone_verified %}
+                            Your phone number {{ current_user.phone }} has been verified.
+                        {% else %}
+                            Verify your phone number to receive important notifications and secure your account.
+                        {% endif %}
+                    </p>
+                    {% if not current_user.is_phone_verified %}
+                        <div class="mt-2">
+                            <a href="{{ url_for('verification_views.verify_phone') }}" class="inline-flex items-center px-3 py-1.5 border border-blue-300 shadow-sm text-sm font-medium rounded-md text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                Verify Phone
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Email Verification -->
+            <div class="flex items-start">
+                <div class="flex-shrink-0">
+                    {% if current_user.is_email_verified %}
+                        <svg class="h-6 w-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    {% else %}
+                        <svg class="h-6 w-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                    {% endif %}
+                </div>
+                <div class="ml-3 flex-1">
+                    <div class="flex justify-between">
+                        <p class="text-base font-medium text-gray-900">Email Verification</p>
+                        {% if current_user.is_email_verified %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Verified
+                            </span>
+                        {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                Not Verified
+                            </span>
+                        {% endif %}
+                    </div>
+                    <p class="mt-1 text-sm text-gray-500">
+                        {% if current_user.is_email_verified %}
+                            Your email address {{ current_user.email }} has been verified.
+                        {% else %}
+                            Verify your email address to receive important notifications and secure your account.
+                        {% endif %}
+                    </p>
+                    {% if not current_user.is_email_verified %}
+                        <div class="mt-2">
+                            <a href="{{ url_for('verification_views.verify_email') }}" class="inline-flex items-center px-3 py-1.5 border border-blue-300 shadow-sm text-sm font-medium rounded-md text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                Verify Email
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Full Verification Status -->
+            <div class="mt-4 pt-4 border-t border-gray-200">
+                <a href="{{ url_for('verification_views.verification_status') }}" class="text-sm font-medium text-blue-600 hover:text-blue-500">
+                    View complete verification status
+                </a>
             </div>
         </div>
     </div>

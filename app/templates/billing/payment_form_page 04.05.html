@@ -1,0 +1,300 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Record Payment{% endblock %}
+
+{% from "billing/payment_form.html" import payment_form as payment_form_macro %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Record Payment</h1>
+        <a href="{{ url_for('billing_views.view_invoice', invoice_id=invoice.invoice_id) }}" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-white font-semibold py-2 px-4 rounded inline-flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+            </svg>
+            Back to Invoice
+        </a>
+    </div>
+
+    <div style="background-color: #eee; padding: 10px; margin-bottom: 10px; display: none;">
+        <p>Debug Info:</p>
+        <p>Invoice Balance Due: {{ invoice.balance_due }}</p>
+        <p>Invoice Type: {{ invoice.__class__.__name__ }}</p>
+        <p>Invoice Dict: {{ invoice|tojson }}</p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left sidebar: Patient info and related invoices -->
+        <div>
+            <!-- Patient Details - MOVED TO TOP -->
+            {% if patient %}
+            <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Patient Details</h2>
+                <table class="w-full">
+                    <tr>
+                        <td class="py-2 text-gray-600 dark:text-gray-400">Name:</td>
+                        <td class="py-2 text-gray-900 dark:text-white font-medium">{{ patient.name }}</td>
+                    </tr>
+                    <tr>
+                        <td class="py-2 text-gray-600 dark:text-gray-400">MRN:</td>
+                        <td class="py-2 text-gray-900 dark:text-white font-medium">{{ patient.mrn }}</td>
+                    </tr>
+                    {% if patient.contact_info and patient.contact_info.phone %}
+                    <tr>
+                        <td class="py-2 text-gray-600 dark:text-gray-400">Phone:</td>
+                        <td class="py-2 text-gray-900 dark:text-white font-medium">{{ patient.contact_info.phone }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+            {% endif %}
+            
+            <!-- Invoice Details - UPDATED TO SHOW ALL INVOICES -->
+            <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Invoice Details</h2>
+                
+                {% if related_invoices and related_invoices|length > 0 %}
+                    <!-- Show current invoice and related invoices -->
+                    <div class="mb-4">
+                        <table class="min-w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700">
+                            <thead>
+                                <tr class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                                    <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Invoice Number</th>
+                                    <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Type</th>
+                                    <th class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-right">Balance Due</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Current invoice -->
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">
+                                        {{ invoice.invoice_number }} (Current)
+                                    </td>
+                                    <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">
+                                        {{ invoice.invoice_type }}
+                                    </td>
+                                    <td class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-right">
+                                        {{ invoice.currency_code }} {{ "%.2f"|format(invoice.balance_due|float) }}
+                                    </td>
+                                </tr>
+                                
+                                <!-- Related invoices -->
+                                {% for related in related_invoices %}
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">
+                                        {{ related.invoice_number }}
+                                    </td>
+                                    <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">
+                                        {{ related.invoice_type }}
+                                    </td>
+                                    <td class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-right">
+                                        {{ invoice.currency_code }} {{ "%.2f"|format(related.balance_due|float) }}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr class="bg-gray-100 dark:bg-gray-800 font-bold">
+                                    <td class="py-2 px-4 border-t border-r border-gray-300 dark:border-gray-700" colspan="2">Total Balance Due:</td>
+                                    <td class="py-2 px-4 border-t border-gray-300 dark:border-gray-700 text-right">
+                                        {{ invoice.currency_code }} {{ "%.2f"|format(total_balance_due|float) }}
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                {% else %}
+                    <!-- Single invoice display -->
+                    <div class="mb-4">
+                        <table class="w-full">
+                            <tr>
+                                <td class="py-2 text-gray-600 dark:text-gray-400">Invoice Number:</td>
+                                <td class="py-2 text-gray-900 dark:text-white font-medium">{{ invoice.invoice_number }}</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2 text-gray-600 dark:text-gray-400">Date:</td>
+                                <td class="py-2 text-gray-900 dark:text-white font-medium">{{ invoice.invoice_date.strftime('%d-%b-%Y') }}</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2 text-gray-600 dark:text-gray-400">Total Amount:</td>
+                                <td class="py-2 text-gray-900 dark:text-white font-medium">{{ invoice.currency_code }} {{ "%.2f"|format(invoice.grand_total|float) }}</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2 text-gray-600 dark:text-gray-400">Paid Amount:</td>
+                                <td class="py-2 text-green-600 dark:text-green-400 font-medium">{{ invoice.currency_code }} {{ "%.2f"|format(invoice.paid_amount|float) }}</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2 text-gray-600 dark:text-gray-400">Balance Due:</td>
+                                <td class="py-2 text-red-600 dark:text-red-400 font-bold">{{ invoice.currency_code }} {{ "%.2f"|format(invoice.balance_due|float) }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                {% endif %}
+            </div>
+            
+            <!-- Placeholder sections moved to bottom of sidebar -->
+            <div id="advance-payment-info" class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6 hidden">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Advance Payment</h2>
+                <div class="text-center p-4 text-gray-600 dark:text-gray-400">
+                    <p>Advance payment feature will be available soon.</p>
+                </div>
+            </div>
+            
+            <div id="loyalty-points-info" class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 hidden">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Loyalty Points</h2>
+                <div class="text-center p-4 text-gray-600 dark:text-gray-400">
+                    <p>Loyalty points feature will be available soon.</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right content: Payment form -->
+        <div class="lg:col-span-2">
+            <!-- Multi-invoice payment flag if enabled -->
+            {% if pay_all %}
+                <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-6" role="alert">
+                    <p class="font-bold">Multi-Invoice Payment</p>
+                    <p>You are recording a payment for multiple related invoices.</p>
+                </div>
+                <input type="hidden" name="pay_all" value="true" form="payment-form">
+                
+                <!-- List of related invoices to pay -->
+                {% if related_invoices and related_invoices|length > 0 %}
+                <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Invoices to Pay</h2>
+                    <div class="mb-4">
+                        <input type="hidden" id="original_total_balance_due" value="{{ total_balance_due }}">
+                        <table class="min-w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700">
+                            <thead>
+                                <tr class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                                    <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Select</th>
+                                    <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Invoice Number</th>
+                                    <th class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-right">Balance Due</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Current invoice -->
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">
+                                        <input type="checkbox" name="invoice_ids" value="{{ invoice.invoice_id }}" checked class="form-checkbox h-5 w-5 text-blue-600 invoice-selector" id="invoice-{{ invoice.invoice_id }}" data-balance="{{ invoice.balance_due }}">
+                                    </td>
+                                    <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">
+                                        <label for="invoice-{{ invoice.invoice_id }}" class="cursor-pointer">
+                                            {{ invoice.invoice_number }} (Current)
+                                        </label>
+                                    </td>
+                                    <td class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-right">
+                                        {{ invoice.currency_code }} {{ "%.2f"|format(invoice.balance_due|float) }}
+                                    </td>
+                                </tr>
+                                
+                                <!-- Related invoices -->
+                                {% for related in related_invoices %}
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">
+                                        <input type="checkbox" name="invoice_ids" value="{{ related.invoice_id }}" checked class="form-checkbox h-5 w-5 text-blue-600 invoice-selector" id="invoice-{{ related.invoice_id }}" data-balance="{{ related.balance_due }}">
+                                    </td>
+                                    <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">
+                                        <label for="invoice-{{ related.invoice_id }}" class="cursor-pointer">
+                                            {{ related.invoice_number }}
+                                        </label>
+                                    </td>
+                                    <td class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-right">
+                                        {{ invoice.currency_code }} {{ "%.2f"|format(related.balance_due|float) }}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr class="bg-gray-100 dark:bg-gray-800 font-bold">
+                                    <td class="py-2 px-4 border-t border-r border-gray-300 dark:border-gray-700" colspan="2">Total Selected Balance:</td>
+                                    <td class="py-2 px-4 border-t border-gray-300 dark:border-gray-700 text-right" id="selected-balance-display">
+                                        {{ invoice.currency_code }} {{ "%.2f"|format(total_balance_due|float) }}
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
+            {% endif %}
+            
+            <!-- Pass the payment form -->
+            <div id="payment-form-container" data-balance-due="{{ invoice.balance_due|float }}">
+                {{ payment_form_macro(payment_form, invoice, url_for('billing_views.record_invoice_payment', invoice_id=invoice.invoice_id)) }}
+            </div>
+        </div>
+    </div>
+</div>
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Get all invoice checkboxes
+    const invoiceSelectors = document.querySelectorAll('.invoice-selector');
+    const selectedBalanceDisplay = document.getElementById('selected-balance-display');
+    const totalBalanceBlue = document.getElementById('total-payment-amount').parentNode.parentNode;
+    const originalTotalBalance = document.getElementById('original_total_balance_due');
+    const currencyCode = "{{ invoice.currency_code }}";
+    
+    // Function to update the total balance due based on selected invoices
+    function updateSelectedBalance() {
+        let totalSelectedBalance = 0;
+        
+        // Sum up selected invoice balances
+        invoiceSelectors.forEach(function(checkbox) {
+            if (checkbox.checked) {
+                const balance = parseFloat(checkbox.getAttribute('data-balance')) || 0;
+                totalSelectedBalance += balance;
+            }
+        });
+        
+        // Update the display in the table
+        if (selectedBalanceDisplay) {
+            selectedBalanceDisplay.textContent = currencyCode + ' ' + totalSelectedBalance.toFixed(2);
+        }
+        
+        // Update the blue balance due card
+        if (totalBalanceBlue) {
+            const balanceLabel = totalBalanceBlue.querySelector('.text-blue-800.dark\\:text-blue-300.font-bold');
+            if (balanceLabel) {
+                balanceLabel.textContent = currencyCode + ' ' + totalSelectedBalance.toFixed(2);
+            }
+        }
+    }
+    
+    // Add change event listeners to all checkboxes
+    invoiceSelectors.forEach(function(checkbox) {
+        checkbox.addEventListener('change', updateSelectedBalance);
+    });
+    
+    // Initialize on page load
+    updateSelectedBalance();
+    
+    // NEW CODE: Fix for balance due display in single invoice payment
+    // Only run this if there are no invoice selectors (i.e., single invoice payment)
+    if (invoiceSelectors.length === 0) {
+        // Get the balance due from the data attribute
+        const paymentFormContainer = document.getElementById('payment-form-container');
+        if (paymentFormContainer) {
+            const balanceDue = parseFloat(paymentFormContainer.dataset.balanceDue) || 0;
+            
+            console.log("Payment form page setting balance due:", balanceDue);
+            
+            // Force set the balance due in the display element
+            const balanceDueDisplay = document.getElementById('balance-due-display');
+            if (balanceDueDisplay) {
+                balanceDueDisplay.textContent = currencyCode + ' ' + balanceDue.toFixed(2);
+            }
+            
+            // Force set the balance due in the hidden field
+            const hiddenBalanceField = document.getElementById('selected-balance-hidden');
+            if (hiddenBalanceField) {
+                hiddenBalanceField.value = balanceDue.toFixed(2);
+            }
+        }
+    }
+});
+</script>
+{% endblock %}
+{% endblock %}

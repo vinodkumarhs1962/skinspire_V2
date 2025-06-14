@@ -261,16 +261,16 @@ pythonCopy#!/usr/bin/env python
         # 2025-03-04 17:10:44,256 - INFO - Running tests: tests/test_security/test_setup_ver
 
         #                                                                                 rification.py
-        # 2025-03-04 17:10:46,114 - INFO - ✅ Environment setup verification passed
+        # 2025-03-04 17:10:46,114 - INFO - [OK] Environment setup verification passed
         # 2025-03-04 17:10:46,115 - INFO - Verifying database setup...
         # 2025-03-04 17:10:46,116 - INFO - Running tests: tests/test_db_setup.py
-        # 2025-03-04 17:10:48,477 - INFO - ✅ Database verification passed
+        # 2025-03-04 17:10:48,477 - INFO - [OK] Database verification passed
         # 2025-03-04 17:10:48,477 - INFO - Verifying encryption functionality...
         # 2025-03-04 17:10:48,478 - INFO - Running tests: tests/test_security/test_encryption.py
-        # 2025-03-04 17:10:50,938 - INFO - ✅ Encryption verification passed
+        # 2025-03-04 17:10:50,938 - INFO - [OK] Encryption verification passed
         # 2025-03-04 17:10:50,938 - INFO - Verifying authentication functionality...
         # 2025-03-04 17:10:50,939 - INFO - Running tests: tests/test_security/test_authentication.py
-        # 2025-03-04 17:10:55,827 - INFO - ✅ Authentication verification passed
+        # 2025-03-04 17:10:55,827 - INFO - [OK] Authentication verification passed
         # 2025-03-04 17:10:55,831 - INFO - Results saved to verification_status.json
 
         # ============= VERIFICATION SUMMARY =============
@@ -280,10 +280,10 @@ pythonCopy#!/usr/bin/env python
         # Failed: 0
 
         # Component Status:
-        # ✅ Setup Verification: PASS (2 passed, 0 failed)
-        # ✅ Database: PASS (5 passed, 0 failed)
-        # ✅ Encryption: PASS (3 passed, 0 failed)
-        # ✅ Authentication: PASS (12 passed, 0 failed)
+        # [OK] Setup Verification: PASS (2 passed, 0 failed)
+        # [OK] Database: PASS (5 passed, 0 failed)
+        # [OK] Encryption: PASS (3 passed, 0 failed)
+        # [OK] Authentication: PASS (12 passed, 0 failed)
         # =================================================
 
 import os
@@ -417,9 +417,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ Database verification passed")
+            logger.info("[OK] Database verification passed")
         else:
-            logger.error("❌ Database verification failed")
+            logger.error("[NO] Database verification failed")
             
         return results
 
@@ -434,9 +434,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ Encryption verification passed")
+            logger.info("[OK] Encryption verification passed")
         else:
-            logger.error("❌ Encryption verification failed")
+            logger.error("[NO] Encryption verification failed")
             
         return results
 
@@ -451,9 +451,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ Authentication verification passed")
+            logger.info("[OK] Authentication verification passed")
         else:
-            logger.error("❌ Authentication verification failed")
+            logger.error("[NO] Authentication verification failed")
             
         return results
 
@@ -468,9 +468,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ Environment setup verification passed")
+            logger.info("[OK] Environment setup verification passed")
         else:
-            logger.error("❌ Environment setup verification failed")
+            logger.error("[NO] Environment setup verification failed")
             
         return results
     
@@ -485,9 +485,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ User management verification passed")
+            logger.info("[OK] User management verification passed")
         else:
-            logger.error("❌ User management verification failed")
+            logger.error("[NO] User management verification failed")
             
         return results
     
@@ -502,9 +502,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ Authorization verification passed")
+            logger.info("[OK] Authorization verification passed")
         else:
-            logger.error("❌ Authorization verification failed")
+            logger.error("[NO] Authorization verification failed")
             
         return results
     
@@ -569,7 +569,7 @@ class SystemVerifier:
         
         print("\nComponent Status:")
         for component, result in self.results["components"].items():
-            status_icon = "✅" if result["status"] == "PASS" else "❌"
+            status_icon = "[OK]" if result["status"] == "PASS" else "[NO]"
             component_name = component.replace("_", " ").title()
             passed = result["details"]["passed"]
             failed = result["details"]["failed"]
@@ -748,9 +748,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ Database verification passed")
+            logger.info("[OK] Database verification passed")
         else:
-            logger.error("❌ Database verification failed")
+            logger.error("[NO] Database verification failed")
             
         return results
 
@@ -765,9 +765,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ Encryption verification passed")
+            logger.info("[OK] Encryption verification passed")
         else:
-            logger.error("❌ Encryption verification failed")
+            logger.error("[NO] Encryption verification failed")
             
         return results
 
@@ -782,9 +782,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ Authentication verification passed")
+            logger.info("[OK] Authentication verification passed")
         else:
-            logger.error("❌ Authentication verification failed")
+            logger.error("[NO] Authentication verification failed")
             
         return results
 
@@ -799,9 +799,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ Environment setup verification passed")
+            logger.info("[OK] Environment setup verification passed")
         else:
-            logger.error("❌ Environment setup verification failed")
+            logger.error("[NO] Environment setup verification failed")
             
         return results
     
@@ -816,9 +816,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ User management verification passed")
+            logger.info("[OK] User management verification passed")
         else:
-            logger.error("❌ User management verification failed")
+            logger.error("[NO] User management verification failed")
             
         return results
     
@@ -833,9 +833,9 @@ class SystemVerifier:
         }
         
         if results["exit_code"] == 0:
-            logger.info("✅ Authorization verification passed")
+            logger.info("[OK] Authorization verification passed")
         else:
-            logger.error("❌ Authorization verification failed")
+            logger.error("[NO] Authorization verification failed")
             
         return results
     
@@ -900,7 +900,7 @@ class SystemVerifier:
         
         print("\nComponent Status:")
         for component, result in self.results["components"].items():
-            status_icon = "✅" if result["status"] == "PASS" else "❌"
+            status_icon = "[OK]" if result["status"] == "PASS" else "[NO]"
             component_name = component.replace("_", " ").title()
             passed = result["details"]["passed"]
             failed = result["details"]["failed"]

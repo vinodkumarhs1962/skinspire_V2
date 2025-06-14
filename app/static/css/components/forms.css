@@ -1,0 +1,121 @@
+/* app/static/css/components/forms.css */
+
+/* Basic Form Styles */
+.form-container {
+  @apply p-4 bg-white dark:bg-gray-800 shadow rounded-lg;
+}
+
+.form-group {
+  @apply mb-4;
+}
+
+.form-label {
+  @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  @apply appearance-none block w-full px-3 py-2 border border-gray-300 dark:border-gray-700 
+         rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-600
+         focus:outline-none focus:ring-blue-500 focus:border-blue-500
+         bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100;
+}
+
+.form-input-sm {
+  @apply py-1 text-sm;
+}
+
+.form-checkbox {
+  @apply rounded border-gray-300 dark:border-gray-700 text-blue-600 
+         focus:ring-blue-500 h-4 w-4 mr-2;
+}
+
+.form-button {
+  @apply inline-flex justify-center py-2 px-4 border border-transparent shadow-sm 
+         text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 
+         focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500;
+}
+
+.form-button-sm {
+  @apply py-1 px-3 text-xs;
+}
+
+.form-button-secondary {
+  @apply bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white;
+}
+
+/* Error Styles */
+.form-error {
+  @apply mt-1 text-xs text-red-500 dark:text-red-400;
+}
+
+.input-error {
+  @apply border-red-500 dark:border-red-400 focus:ring-red-500 focus:border-red-500;
+}
+
+/* Form Layout */
+.form-grid {
+  @apply grid gap-4;
+}
+
+.form-grid-cols-2 {
+  @apply grid-cols-1 md:grid-cols-2;
+}
+
+.form-grid-cols-3 {
+  @apply grid-cols-1 md:grid-cols-3;
+}
+
+/* Autocomplete Components */
+.autocomplete-container {
+  @apply relative;
+}
+
+.autocomplete-results {
+  @apply absolute z-10 mt-1 w-full bg-white dark:bg-gray-700 shadow-lg rounded-md py-1 overflow-auto 
+         max-h-60 border border-gray-300 dark:border-gray-600;
+}
+
+.autocomplete-result {
+  @apply px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer;
+}
+
+/* Date Inputs */
+.date-picker {
+  @apply relative;
+}
+
+.date-picker-calendar {
+  @apply absolute mt-1 z-20 bg-white dark:bg-gray-800 rounded-md shadow-lg p-2 border 
+         border-gray-300 dark:border-gray-700;
+}
+
+/* File Inputs */
+.file-input-container {
+  @apply relative border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-6 
+         text-center hover:border-gray-400 dark:hover:border-gray-600 transition-colors;
+}
+
+.file-input {
+  @apply absolute inset-0 w-full h-full opacity-0 cursor-pointer;
+}
+
+.file-input-label {
+  @apply text-sm text-gray-500 dark:text-gray-400;
+}
+
+.file-preview {
+  @apply mt-4 grid grid-cols-2 md:grid-cols-3 gap-2;
+}
+
+/* Responsive Form Layouts */
+@media (max-width: 640px) {
+  .form-grid {
+    @apply grid-cols-1;
+  }
+  
+  .form-button {
+    @apply w-full;
+  }
+}

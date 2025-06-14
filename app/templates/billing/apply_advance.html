@@ -1,0 +1,126 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Apply Advance Payment{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Apply Advance Payment</h1>
+        <a href="{{ url_for('billing_views.view_invoice', invoice_id=invoice.invoice_id) }}" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-white font-semibold py-2 px-4 rounded inline-flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+            </svg>
+            Back to Invoice
+        </a>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left Column: Patient & Invoice Info -->
+        <div>
+            <!-- Patient Info Card -->
+            <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Patient Details</h2>
+                <div class="mb-4">
+                    <p class="text-gray-600 dark:text-gray-400 text-sm">Name:</p>
+                    <p class="font-medium text-gray-800 dark:text-white">{{ patient.name }}</p>
+                </div>
+                <div class="mb-4">
+                    <p class="text-gray-600 dark:text-gray-400 text-sm">MRN:</p>
+                    <p class="font-medium text-gray-800 dark:text-white">{{ patient.mrn }}</p>
+                </div>
+                {% if patient.contact_info and patient.contact_info.phone %}
+                <div class="mb-4">
+                    <p class="text-gray-600 dark:text-gray-400 text-sm">Phone:</p>
+                    <p class="font-medium text-gray-800 dark:text-white">{{ patient.contact_info.phone }}</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Invoice Summary Card -->
+            <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Invoice Details</h2>
+                <div class="mb-4">
+                    <p class="text-gray-600 dark:text-gray-400 text-sm">Invoice Number:</p>
+                    <p class="font-medium text-gray-800 dark:text-white">{{ invoice.invoice_number }}</p>
+                </div>
+                <div class="mb-4">
+                    <p class="text-gray-600 dark:text-gray-400 text-sm">Date:</p>
+                    <p class="font-medium text-gray-800 dark:text-white">{{ invoice.invoice_date.strftime('%d-%b-%Y') }}</p>
+                </div>
+                <div class="mb-4">
+                    <p class="text-gray-600 dark:text-gray-400 text-sm">Total Amount:</p>
+                    <p class="font-medium text-gray-800 dark:text-white">{{ invoice.currency_code }} {{ "%.2f"|format(invoice.grand_total|float) }}</p>
+                </div>
+                <div class="mb-4">
+                    <p class="text-gray-600 dark:text-gray-400 text-sm">Paid Amount:</p>
+                    <p class="font-medium text-green-600 dark:text-green-400">{{ invoice.currency_code }} {{ "%.2f"|format(invoice.paid_amount|float) }}</p>
+                </div>
+                <div class="mb-4">
+                    <p class="text-gray-600 dark:text-gray-400 text-sm">Balance Due:</p>
+                    <p class="font-medium text-red-600 dark:text-red-400">{{ invoice.currency_code }} {{ "%.2f"|format(invoice.balance_due|float) }}</p>
+                </div>
+                <div class="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <p class="text-gray-700 dark:text-gray-300 text-sm">Available Advance:</p>
+                    <p class="font-bold text-blue-600 dark:text-blue-400 text-xl">{{ invoice.currency_code }} {{ "%.2f"|format(advance_balance|float) }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Apply Advance Form -->
+        <div class="lg:col-span-2">
+            <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Apply Advance Payment</h2>
+                
+                <form id="apply-advance-form" method="POST">
+                    {{ form.csrf_token }}
+                    {{ form.invoice_id(class="hidden") }}
+                    
+                    <div class="mb-6">
+                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ form.amount.id }}">
+                            Amount to Apply
+                        </label>
+                        {{ form.amount(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            Maximum available: {{ invoice.currency_code }} {{ "%.2f"|format(advance_balance|float) }}
+                        </p>
+                        {% if form.amount.errors %}
+                            <p class="text-red-500 text-xs italic">{{ form.amount.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ form.notes.id }}">
+                            Notes
+                        </label>
+                        {{ form.notes(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline h-24") }}
+                        {% if form.notes.errors %}
+                            <p class="text-red-500 text-xs italic">{{ form.notes.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg mb-6">
+                        <p class="text-yellow-800 dark:text-yellow-300 flex items-center mb-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                            </svg>
+                            Important
+                        </p>
+                        <p class="text-sm text-yellow-700 dark:text-yellow-400">
+                            This will apply the specified amount from the patient's advance payment balance to this invoice. This action cannot be undone.
+                        </p>
+                    </div>
+                    
+                    <div class="flex justify-end">
+                        <a href="{{ url_for('billing_views.view_invoice', invoice_id=invoice.invoice_id) }}" class="bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-2 px-4 rounded mr-2">
+                            Cancel
+                        </a>
+                        <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                            Apply Advance Payment
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

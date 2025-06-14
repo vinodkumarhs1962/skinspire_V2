@@ -1,0 +1,917 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}Create Supplier Invoice{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Create Supplier Invoice</h1>
+        <div>
+            <a href="{{ url_for('supplier_views.supplier_invoice_list') }}" class="btn-secondary">
+                Back to Invoices
+            </a>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+        <form method="POST" id="supplierInvoiceForm">
+            {{ form.csrf_token }}
+            
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-white">Supplier & Invoice Information</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label for="supplier_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Supplier
+                        </label>
+                        {{ form.supplier_id(class="form-select w-full", required="required") }}
+                        {% if form.supplier_id.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.supplier_id.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Purchase Order field with data attributes -->
+                    <div>
+                        <label for="po_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Purchase Order (Optional)
+                        </label>
+                        <select id="po_id" name="po_id" class="form-select w-full">
+                            <option value="">Select Purchase Order</option>
+                            {% for po_id, po_label in form.po_id.choices[1:] %}
+                                <option value="{{ po_id }}" data-supplier-id="{{ po_suppliers.get(po_id, '') }}">
+                                    {{ po_label }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        {% if form.po_id.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.po_id.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="supplier_invoice_number" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Supplier Invoice Number
+                        </label>
+                        {{ form.supplier_invoice_number(class="form-input w-full", required="required") }}
+                        {% if form.supplier_invoice_number.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.supplier_invoice_number.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="invoice_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Invoice Date
+                        </label>
+                        {{ form.invoice_date(class="form-input w-full", type="date", required="required") }}
+                        {% if form.invoice_date.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.invoice_date.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="due_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Due Date
+                        </label>
+                        {{ form.due_date(class="form-input w-full", type="date") }}
+                        {% if form.due_date.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.due_date.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="supplier_gstin" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Supplier GSTIN
+                        </label>
+                        {{ form.supplier_gstin(class="form-input w-full") }}
+                        {% if form.supplier_gstin.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.supplier_gstin.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="place_of_supply" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Place of Supply (State Code)
+                        </label>
+                        {{ form.place_of_supply(class="form-input w-full", required="required") }}
+                        {% if form.place_of_supply.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.place_of_supply.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="flex items-center">
+                        <div class="flex items-center h-5">
+                            {{ form.reverse_charge(class="form-checkbox") }}
+                        </div>
+                        <label for="reverse_charge" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Reverse Charge
+                        </label>
+                        {% if form.reverse_charge.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.reverse_charge.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="flex items-center">
+                        <div class="flex items-center h-5">
+                            {{ form.itc_eligible(class="form-checkbox") }}
+                        </div>
+                        <label for="itc_eligible" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                            ITC Eligible
+                        </label>
+                        {% if form.itc_eligible.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.itc_eligible.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-white">Line Items</h2>
+                
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 mb-3">
+                        <thead class="bg-gray-50 dark:bg-gray-700">
+                            <tr>
+                                <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Medicine
+                                </th>
+                                <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Batch
+                                </th>
+                                <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Expiry
+                                </th>
+                                <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Qty
+                                </th>
+                                <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Pack Price
+                                </th>
+                                <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Pack MRP
+                                </th>
+                                <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Units/Pack
+                                </th>
+                                <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Disc %
+                                </th>
+                                <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    GST %
+                                </th>
+                                <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Amount
+                                </th>
+                                <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Actions
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="lineItemsContainer" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                            <!-- Line items will be added here dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="flex justify-between mt-2">
+                    <button type="button" id="addLineItem" class="btn-secondary">
+                        Add Item
+                    </button>
+                    
+                    <div class="text-right">
+                        <div class="flex justify-end">
+                            <div class="w-48 grid grid-cols-2 gap-2 text-sm">
+                                <div class="text-right font-medium text-gray-700 dark:text-white">Subtotal:</div>
+                                <div id="subtotal" class="text-right text-gray-700 dark:text-white">0.00</div>
+                                
+                                <div class="text-right font-medium text-gray-700 dark:text-white">CGST:</div>
+                                <div id="cgstTotal" class="text-right text-gray-700 dark:text-white">0.00</div>
+                                
+                                <div class="text-right font-medium text-gray-700 dark:text-white">SGST:</div>
+                                <div id="sgstTotal" class="text-right text-gray-700 dark:text-white">0.00</div>
+                                
+                                <div class="text-right font-medium text-gray-700 dark:text-white">IGST:</div>
+                                <div id="igstTotal" class="text-right text-gray-700 dark:text-white">0.00</div>
+                                
+                                <div class="text-right font-medium text-gray-700 dark:text-white text-base pt-2">Total:</div>
+                                <div id="grandTotal" class="text-right text-gray-700 dark:text-white font-bold text-base pt-2">0.00</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hidden fields to store line item data for submission -->
+            {{ form.medicine_ids }}
+            {{ form.medicine_names }}
+            {{ form.quantities }}
+            {{ form.pack_purchase_prices }}
+            {{ form.pack_mrps }}
+            {{ form.units_per_packs }}
+            {{ form.is_free_items }}
+            {{ form.referenced_line_ids }}
+            {{ form.discount_percents }}
+            {{ form.pre_gst_discounts }}
+            {{ form.hsn_codes }}
+            {{ form.gst_rates }}
+            {{ form.cgst_rates }}
+            {{ form.sgst_rates }}
+            {{ form.igst_rates }}
+            {{ form.batch_numbers }}
+            {{ form.manufacturing_dates }}
+            {{ form.expiry_dates }}
+            {{ form.item_itc_eligibles }}
+
+            <div class="flex justify-end space-x-4 mt-6">
+                <a href="{{ url_for('supplier_views.supplier_invoice_list') }}" class="btn-secondary">
+                    Cancel
+                </a>
+                <button type="submit" class="btn-primary">
+                    Create Invoice
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Medicine selector modal -->
+    <div id="medicineModal" class="fixed inset-0 bg-gray-500 bg-opacity-75 hidden z-50 flex items-center justify-center">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl mx-4 w-full max-w-3xl">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Select Medicine</h3>
+            </div>
+            <div class="p-6">
+                <div class="mb-4">
+                    <label for="medicineSearch" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Search Medicine
+                    </label>
+                    <input type="text" id="medicineSearch" class="form-input w-full" placeholder="Type to search...">
+                </div>
+                
+                <div class="overflow-y-auto max-h-64 mb-4">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-700">
+                            <tr>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Medicine
+                                </th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Category
+                                </th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    HSN Code
+                                </th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Actions
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="medicineSearchResults" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                            <!-- Search results will be added here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                <button type="button" id="closeModal" class="btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        let lineItemCount = 0;
+        const medicineModal = document.getElementById('medicineModal');
+        const addLineItemBtn = document.getElementById('addLineItem');
+        console.log("Add line item button found:", !!addLineItemBtn);
+        const closeModalBtn = document.getElementById('closeModal');
+        const medicineSearch = document.getElementById('medicineSearch');
+        const medicineSearchResults = document.getElementById('medicineSearchResults');
+        const lineItemsContainer = document.getElementById('lineItemsContainer');
+        let currentLineItemIndex = null;
+        
+        // Hidden form fields for storing line item data
+        const medicineIds = document.getElementById('medicine_ids');
+        const medicineNames = document.getElementById('medicine_names');
+        const quantities = document.getElementById('quantities');
+        const packPurchasePrices = document.getElementById('pack_purchase_prices');
+        const packMrps = document.getElementById('pack_mrps');
+        const unitsPerPacks = document.getElementById('units_per_packs');
+        const isFreeItems = document.getElementById('is_free_items');
+        const referencedLineIds = document.getElementById('referenced_line_ids');
+        const discountPercents = document.getElementById('discount_percents');
+        const preGstDiscounts = document.getElementById('pre_gst_discounts');
+        const hsnCodes = document.getElementById('hsn_codes');
+        const gstRates = document.getElementById('gst_rates');
+        const cgstRates = document.getElementById('cgst_rates');
+        const sgstRates = document.getElementById('sgst_rates');
+        const igstRates = document.getElementById('igst_rates');
+        const batchNumbers = document.getElementById('batch_numbers');
+        const manufacturingDates = document.getElementById('manufacturing_dates');
+        const expiryDates = document.getElementById('expiry_dates');
+        const itemItcEligibles = document.getElementById('item_itc_eligibles');
+        
+        // Initialize arrays for line item data
+        const lineItems = {
+            medicineIds: [],
+            medicineNames: [],
+            quantities: [],
+            packPurchasePrices: [],
+            packMrps: [],
+            unitsPerPacks: [],
+            isFreeItems: [],
+            referencedLineIds: [],
+            discountPercents: [],
+            preGstDiscounts: [],
+            hsnCodes: [],
+            gstRates: [],
+            cgstRates: [],
+            sgstRates: [],
+            igstRates: [],
+            batchNumbers: [],
+            manufacturingDates: [],
+            expiryDates: [],
+            itemItcEligibles: []
+        };
+        
+        // Add line item button click handler
+        addLineItemBtn.addEventListener('click', function() {
+            currentLineItemIndex = null;
+            openMedicineModal();
+        });
+        
+        // Close modal button click handler
+        closeModalBtn.addEventListener('click', function() {
+            closeMedicineModal();
+        });
+        
+        // Medicine search input handler
+        medicineSearch.addEventListener('input', function() {
+            searchMedicines(this.value);
+        });
+        
+        // Function to open medicine selection modal
+        function openMedicineModal() {
+            medicineModal.classList.remove('hidden');
+            medicineSearch.value = '';
+            medicineSearchResults.innerHTML = '';
+            medicineSearch.focus();
+        }
+        
+        // Function to close medicine selection modal
+        function closeMedicineModal() {
+            medicineModal.classList.add('hidden');
+        }
+        
+        // Function to search medicines
+        function searchMedicines(term) {
+            if (term.length < 2) {
+                medicineSearchResults.innerHTML = '<tr><td colspan="4" class="px-4 py-2 text-sm text-center text-gray-500 dark:text-gray-400">Type at least 2 characters to search</td></tr>';
+                return;
+            }
+            
+            // AJAX call to search medicines
+            fetch(`/api/medicines?term=${encodeURIComponent(term)}`)
+                .then(response => response.json())
+                .then(data => {
+                    medicineSearchResults.innerHTML = '';
+                    
+                    if (data.medicines && data.medicines.length > 0) {
+                        data.medicines.forEach(medicine => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td class="px-4 py-2 text-sm text-gray-900 dark:text-white">${medicine.text}</td>
+                                <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">${medicine.category || '-'}</td>
+                                <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">${medicine.hsn_code || '-'}</td>
+                                <td class="px-4 py-2 text-sm">
+                                    <button type="button" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300">
+                                        Select
+                                    </button>
+                                </td>
+                            `;
+                            
+                            // Add click handler for select button
+                            row.querySelector('button').addEventListener('click', function() {
+                                selectMedicine(medicine);
+                            });
+                            
+                            medicineSearchResults.appendChild(row);
+                        });
+                    } else {
+                        medicineSearchResults.innerHTML = '<tr><td colspan="4" class="px-4 py-2 text-sm text-center text-gray-500 dark:text-gray-400">No medicines found</td></tr>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error searching medicines:', error);
+                    medicineSearchResults.innerHTML = '<tr><td colspan="4" class="px-4 py-2 text-sm text-center text-red-500">Error searching medicines</td></tr>';
+                });
+        }
+        
+        // Function to select a medicine and add it to the line items
+        function selectMedicine(medicine) {
+            closeMedicineModal();
+            
+            if (currentLineItemIndex !== null) {
+                // Editing existing line item
+                updateLineItem(currentLineItemIndex, medicine);
+            } else {
+                // Adding new line item
+                addLineItem(medicine);
+            }
+            
+            updateTotals();
+        }
+        
+        // Function to add a new line item
+        function addLineItem(medicine) {
+            const index = lineItemCount++;
+            const today = new Date().toISOString().split('T')[0];
+            
+            const tr = document.createElement('tr');
+            tr.id = `line-item-${index}`;
+            tr.className = index % 2 === 0 ? '' : 'bg-gray-50 dark:bg-gray-700';
+            tr.innerHTML = `
+                <td class="px-3 py-2 text-sm font-medium text-gray-900 dark:text-white">
+                    <div class="medicine-name">${medicine.text}</div>
+                    <input type="hidden" class="medicine-id" value="${medicine.id}">
+                    <input type="hidden" class="hsn-code" value="${medicine.hsn_code || ''}">
+                </td>
+                <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">
+                    <input type="text" class="form-input w-full batch-number" value="">
+                </td>
+                <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">
+                    <input type="date" class="form-input w-full expiry-date" value="" min="${today}">
+                </td>
+                <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">
+                    <input type="number" class="form-input w-20 quantity" min="0.01" step="0.01" value="1">
+                </td>
+                <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">
+                    <input type="number" class="form-input w-24 pack-purchase-price" min="0.01" step="0.01" value="${medicine.purchase_price || 0}">
+                </td>
+                <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">
+                    <input type="number" class="form-input w-24 pack-mrp" min="0.01" step="0.01" value="${medicine.mrp || 0}">
+                </td>
+                <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">
+                    <input type="number" class="form-input w-20 units-per-pack" min="1" step="1" value="1">
+                </td>
+                <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">
+                    <input type="number" class="form-input w-16 discount-percent" min="0" max="100" step="0.01" value="0">
+                </td>
+                <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">
+                    <input type="number" class="form-input w-16 gst-rate" min="0" max="100" step="0.01" value="${medicine.gst_rate || 0}">
+                    <input type="hidden" class="cgst-rate" value="${medicine.cgst_rate || 0}">
+                    <input type="hidden" class="sgst-rate" value="${medicine.sgst_rate || 0}">
+                    <input type="hidden" class="igst-rate" value="${medicine.igst_rate || 0}">
+                </td>
+                <td class="px-3 py-2 text-sm font-medium text-gray-900 dark:text-white line-total">
+                    0.00
+                </td>
+                <td class="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+                    <button type="button" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 delete-line">
+                        Delete
+                    </button>
+                </td>
+            `;
+            
+            // Add event listeners for line item inputs
+            tr.querySelector('.quantity').addEventListener('input', function() {
+                updateLineItemTotal(index);
+            });
+            
+            tr.querySelector('.pack-purchase-price').addEventListener('input', function() {
+                updateLineItemTotal(index);
+            });
+            
+            tr.querySelector('.discount-percent').addEventListener('input', function() {
+                updateLineItemTotal(index);
+            });
+            
+            tr.querySelector('.gst-rate').addEventListener('input', function() {
+                // Update GST components based on place of supply
+                updateGstComponents(index);
+                updateLineItemTotal(index);
+            });
+            
+            tr.querySelector('.delete-line').addEventListener('click', function() {
+                deleteLineItem(index);
+            });
+            
+            lineItemsContainer.appendChild(tr);
+            
+            // Initialize line item data in our arrays
+            lineItems.medicineIds[index] = medicine.id;
+            lineItems.medicineNames[index] = medicine.text;
+            lineItems.quantities[index] = 1;
+            lineItems.packPurchasePrices[index] = medicine.purchase_price || 0;
+            lineItems.packMrps[index] = medicine.mrp || 0;
+            lineItems.unitsPerPacks[index] = 1;
+            lineItems.isFreeItems[index] = false;
+            lineItems.referencedLineIds[index] = '';
+            lineItems.discountPercents[index] = 0;
+            lineItems.preGstDiscounts[index] = true;
+            lineItems.hsnCodes[index] = medicine.hsn_code || '';
+            lineItems.gstRates[index] = medicine.gst_rate || 0;
+            lineItems.cgstRates[index] = medicine.cgst_rate || 0;
+            lineItems.sgstRates[index] = medicine.sgst_rate || 0;
+            lineItems.igstRates[index] = medicine.igst_rate || 0;
+            lineItems.batchNumbers[index] = '';
+            lineItems.manufacturingDates[index] = '';
+            lineItems.expiryDates[index] = '';
+            lineItems.itemItcEligibles[index] = true;
+            
+            updateGstComponents(index);
+            updateLineItemTotal(index);
+        }
+        
+        // Function to update an existing line item
+        function updateLineItem(index, medicine) {
+            const tr = document.getElementById(`line-item-${index}`);
+            
+            tr.querySelector('.medicine-name').textContent = medicine.text;
+            tr.querySelector('.medicine-id').value = medicine.id;
+            tr.querySelector('.hsn-code').value = medicine.hsn_code || '';
+            
+            // Update line item data in our arrays
+            lineItems.medicineIds[index] = medicine.id;
+            lineItems.medicineNames[index] = medicine.text;
+            lineItems.hsnCodes[index] = medicine.hsn_code || '';
+            lineItems.gstRates[index] = medicine.gst_rate || 0;
+            lineItems.cgstRates[index] = medicine.cgst_rate || 0;
+            lineItems.sgstRates[index] = medicine.sgst_rate || 0;
+            lineItems.igstRates[index] = medicine.igst_rate || 0;
+            
+            // Update GST inputs
+            tr.querySelector('.gst-rate').value = medicine.gst_rate || 0;
+            tr.querySelector('.cgst-rate').value = medicine.cgst_rate || 0;
+            tr.querySelector('.sgst-rate').value = medicine.sgst_rate || 0;
+            tr.querySelector('.igst-rate').value = medicine.igst_rate || 0;
+            
+            updateGstComponents(index);
+            updateLineItemTotal(index);
+        }
+        
+        // Function to delete a line item
+        function deleteLineItem(index) {
+            const tr = document.getElementById(`line-item-${index}`);
+            if (tr) {
+                tr.remove();
+                
+                // Remove line item data from our arrays
+                lineItems.medicineIds[index] = null;
+                lineItems.medicineNames[index] = null;
+                lineItems.quantities[index] = null;
+                lineItems.packPurchasePrices[index] = null;
+                lineItems.packMrps[index] = null;
+                lineItems.unitsPerPacks[index] = null;
+                lineItems.isFreeItems[index] = null;
+                lineItems.referencedLineIds[index] = null;
+                lineItems.discountPercents[index] = null;
+                lineItems.preGstDiscounts[index] = null;
+                lineItems.hsnCodes[index] = null;
+                lineItems.gstRates[index] = null;
+                lineItems.cgstRates[index] = null;
+                lineItems.sgstRates[index] = null;
+                lineItems.igstRates[index] = null;
+                lineItems.batchNumbers[index] = null;
+                lineItems.manufacturingDates[index] = null;
+                lineItems.expiryDates[index] = null;
+                lineItems.itemItcEligibles[index] = null;
+                
+                updateTotals();
+            }
+        }
+        
+        // Function to update GST components based on place of supply
+        function updateGstComponents(index) {
+            const tr = document.getElementById(`line-item-${index}`);
+            const placeOfSupply = document.getElementById('place_of_supply').value;
+            const hospitalStateCode = '{{ hospital_state_code }}'; // Passed from the server via context
+            
+            // Get values from the form
+            const gstRate = parseFloat(tr.querySelector('.gst-rate').value) || 0;
+            
+            // Update CGST, SGST, and IGST based on place of supply
+            if (placeOfSupply && placeOfSupply === hospitalStateCode) {
+                // Intrastate transaction: Split GST into CGST and SGST
+                const halfGst = gstRate / 2;
+                tr.querySelector('.cgst-rate').value = halfGst.toFixed(2);
+                tr.querySelector('.sgst-rate').value = halfGst.toFixed(2);
+                tr.querySelector('.igst-rate').value = '0.00';
+                
+                // Update our arrays
+                lineItems.cgstRates[index] = halfGst;
+                lineItems.sgstRates[index] = halfGst;
+                lineItems.igstRates[index] = 0;
+            } else {
+                // Interstate transaction: Use IGST
+                tr.querySelector('.cgst-rate').value = '0.00';
+                tr.querySelector('.sgst-rate').value = '0.00';
+                tr.querySelector('.igst-rate').value = gstRate.toFixed(2);
+                
+                // Update our arrays
+                lineItems.cgstRates[index] = 0;
+                lineItems.sgstRates[index] = 0;
+                lineItems.igstRates[index] = gstRate;
+            }
+            
+            // Update our main GST rate array
+            lineItems.gstRates[index] = gstRate;
+        }
+        
+        // Function to update a line item's total
+        function updateLineItemTotal(index) {
+            const tr = document.getElementById(`line-item-${index}`);
+            
+            // Get values from the form
+            const quantity = parseFloat(tr.querySelector('.quantity').value) || 0;
+            const packPrice = parseFloat(tr.querySelector('.pack-purchase-price').value) || 0;
+            const discountPercent = parseFloat(tr.querySelector('.discount-percent').value) || 0;
+            const cgstRate = parseFloat(tr.querySelector('.cgst-rate').value) || 0;
+            const sgstRate = parseFloat(tr.querySelector('.sgst-rate').value) || 0;
+            const igstRate = parseFloat(tr.querySelector('.igst-rate').value) || 0;
+            
+            // Calculate line total
+            const subTotal = quantity * packPrice;
+            const discountAmount = (subTotal * discountPercent) / 100;
+            const taxableAmount = subTotal - discountAmount;
+            
+            const cgstAmount = (taxableAmount * cgstRate) / 100;
+            const sgstAmount = (taxableAmount * sgstRate) / 100;
+            const igstAmount = (taxableAmount * igstRate) / 100;
+            const gstAmount = cgstAmount + sgstAmount + igstAmount;
+            
+            const total = taxableAmount + gstAmount;
+            
+            // Update display
+            tr.querySelector('.line-total').textContent = total.toFixed(2);
+            
+            // Update our arrays
+            lineItems.quantities[index] = quantity;
+            lineItems.packPurchasePrices[index] = packPrice;
+            lineItems.discountPercents[index] = discountPercent;
+            
+            // Also update batch number and expiry
+            lineItems.batchNumbers[index] = tr.querySelector('.batch-number').value;
+            lineItems.expiryDates[index] = tr.querySelector('.expiry-date').value;
+            lineItems.unitsPerPacks[index] = parseFloat(tr.querySelector('.units-per-pack').value) || 1;
+            lineItems.packMrps[index] = parseFloat(tr.querySelector('.pack-mrp').value) || 0;
+            
+            updateTotals();
+        }
+        
+        // Function to update invoice totals
+        function updateTotals() {
+            let subtotal = 0;
+            let cgstTotal = 0;
+            let sgstTotal = 0;
+            let igstTotal = 0;
+            let grandTotal = 0;
+            
+            for (let index = 0; index < lineItemCount; index++) {
+                if (lineItems.medicineIds[index] === null) continue; // Skip deleted line items
+                
+                const tr = document.getElementById(`line-item-${index}`);
+                if (!tr) continue;
+                
+                // Get values
+                const quantity = parseFloat(tr.querySelector('.quantity').value) || 0;
+                const packPrice = parseFloat(tr.querySelector('.pack-purchase-price').value) || 0;
+                const discountPercent = parseFloat(tr.querySelector('.discount-percent').value) || 0;
+                const cgstRate = parseFloat(tr.querySelector('.cgst-rate').value) || 0;
+                const sgstRate = parseFloat(tr.querySelector('.sgst-rate').value) || 0;
+                const igstRate = parseFloat(tr.querySelector('.igst-rate').value) || 0;
+                
+                // Calculate values
+                const subTotal = quantity * packPrice;
+                const discountAmount = (subTotal * discountPercent) / 100;
+                const taxableAmount = subTotal - discountAmount;
+                
+                const cgstAmount = (taxableAmount * cgstRate) / 100;
+                const sgstAmount = (taxableAmount * sgstRate) / 100;
+                const igstAmount = (taxableAmount * igstRate) / 100;
+                
+                // Add to totals
+                subtotal += taxableAmount;
+                cgstTotal += cgstAmount;
+                sgstTotal += sgstAmount;
+                igstTotal += igstAmount;
+            }
+            
+            grandTotal = subtotal + cgstTotal + sgstTotal + igstTotal;
+            
+            // Update display
+            document.getElementById('subtotal').textContent = subtotal.toFixed(2);
+            document.getElementById('cgstTotal').textContent = cgstTotal.toFixed(2);
+            document.getElementById('sgstTotal').textContent = sgstTotal.toFixed(2);
+            document.getElementById('igstTotal').textContent = igstTotal.toFixed(2);
+            document.getElementById('grandTotal').textContent = grandTotal.toFixed(2);
+        }
+        
+        // Function to prepare form data for submission
+        function prepareFormData() {
+            // Filter out null values (deleted line items)
+            const validIndices = lineItems.medicineIds.map((id, index) => id !== null ? index : null).filter(index => index !== null);
+            
+            // Update hidden form fields with prepared data
+            medicineIds.value = validIndices.map(index => lineItems.medicineIds[index]).join(',');
+            medicineNames.value = validIndices.map(index => lineItems.medicineNames[index]).join(',');
+            quantities.value = validIndices.map(index => lineItems.quantities[index]).join(',');
+            packPurchasePrices.value = validIndices.map(index => lineItems.packPurchasePrices[index]).join(',');
+            packMrps.value = validIndices.map(index => lineItems.packMrps[index]).join(',');
+            unitsPerPacks.value = validIndices.map(index => lineItems.unitsPerPacks[index]).join(',');
+            isFreeItems.value = validIndices.map(index => lineItems.isFreeItems[index]).join(',');
+            referencedLineIds.value = validIndices.map(index => lineItems.referencedLineIds[index]).join(',');
+            discountPercents.value = validIndices.map(index => lineItems.discountPercents[index]).join(',');
+            preGstDiscounts.value = validIndices.map(index => lineItems.preGstDiscounts[index]).join(',');
+            hsnCodes.value = validIndices.map(index => lineItems.hsnCodes[index]).join(',');
+            gstRates.value = validIndices.map(index => lineItems.gstRates[index]).join(',');
+            cgstRates.value = validIndices.map(index => lineItems.cgstRates[index]).join(',');
+            sgstRates.value = validIndices.map(index => lineItems.sgstRates[index]).join(',');
+            igstRates.value = validIndices.map(index => lineItems.igstRates[index]).join(',');
+            batchNumbers.value = validIndices.map(index => lineItems.batchNumbers[index]).join(',');
+            manufacturingDates.value = validIndices.map(index => lineItems.manufacturingDates[index] || '').join(',');
+            expiryDates.value = validIndices.map(index => lineItems.expiryDates[index]).join(',');
+            itemItcEligibles.value = validIndices.map(index => lineItems.itemItcEligibles[index]).join(',');
+        }
+        
+        // Form submission handler
+        document.getElementById('supplierInvoiceForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Check if at least one line item exists
+            const validLineItemCount = lineItems.medicineIds.filter(id => id !== null).length;
+            if (validLineItemCount === 0) {
+                alert('Please add at least one item to the invoice');
+                return;
+            }
+            
+            // Validate required fields
+            const lineItemElements = document.querySelectorAll('#lineItemsContainer tr');
+            let isValid = true;
+            
+            lineItemElements.forEach(row => {
+                const index = row.id.split('-').pop();
+                if (lineItems.medicineIds[index] === null) return; // Skip deleted line items
+                
+                const batchNumber = row.querySelector('.batch-number').value;
+                const expiryDate = row.querySelector('.expiry-date').value;
+                
+                if (!batchNumber) {
+                    row.querySelector('.batch-number').classList.add('border-red-500');
+                    isValid = false;
+                } else {
+                    row.querySelector('.batch-number').classList.remove('border-red-500');
+                }
+                
+                if (!expiryDate) {
+                    row.querySelector('.expiry-date').classList.add('border-red-500');
+                    isValid = false;
+                } else {
+                    row.querySelector('.expiry-date').classList.remove('border-red-500');
+                }
+            });
+            
+            if (!isValid) {
+                alert('Please fill in all required fields');
+                return;
+            }
+            
+            // Prepare form data
+            prepareFormData();
+            
+            // Submit the form
+            this.submit();
+        });
+        
+        // Initialize place of supply change handler
+        document.getElementById('place_of_supply').addEventListener('change', function() {
+            // Update GST components for all line items
+            for (let index = 0; index < lineItemCount; index++) {
+                if (lineItems.medicineIds[index] === null) continue; // Skip deleted line items
+                updateGstComponents(index);
+                updateLineItemTotal(index);
+            }
+        });
+        
+        // Supplier GSTIN autofill when supplier selected
+        document.getElementById('supplier_id').addEventListener('change', function() {
+            const supplierId = this.value;
+            if (supplierId) {
+                fetch(`/api/supplier/${supplierId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.gst_registration_number) {
+                            document.getElementById('supplier_gstin').value = data.gst_registration_number;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching supplier details:', error);
+                    });
+            }
+        });
+        
+        // Purchase order selection handler to load PO items
+        document.getElementById('po_id').addEventListener('change', function() {
+            const poId = this.value;
+            if (poId) {
+                fetch(`/api/purchase-order/${poId}/items`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.items && data.items.length > 0) {
+                            // Clear existing line items
+                            lineItemsContainer.innerHTML = '';
+                            lineItemCount = 0;
+                            
+                            // Reset line item arrays
+                            Object.keys(lineItems).forEach(key => {
+                                lineItems[key] = [];
+                            });
+                            
+                            // Add PO items as line items
+                            data.items.forEach(item => {
+                                const medicine = {
+                                    id: item.medicine_id,
+                                    text: item.medicine_name,
+                                    hsn_code: item.hsn_code,
+                                    purchase_price: item.pack_purchase_price,
+                                    mrp: item.pack_mrp,
+                                    gst_rate: item.gst_rate,
+                                    cgst_rate: item.cgst_rate,
+                                    sgst_rate: item.sgst_rate,
+                                    igst_rate: item.igst_rate
+                                };
+                                addLineItem(medicine);
+                                
+                                // Update quantity to match PO
+                                const index = lineItemCount - 1;
+                                const tr = document.getElementById(`line-item-${index}`);
+                                tr.querySelector('.quantity').value = item.units;
+                                tr.querySelector('.units-per-pack').value = item.units_per_pack;
+                                
+                                // Update line item arrays
+                                lineItems.quantities[index] = item.units;
+                                lineItems.unitsPerPacks[index] = item.units_per_pack;
+                                
+                                updateLineItemTotal(index);
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching PO items:', error);
+                    });
+            }
+        });
+    });
+
+    // Filter POs by supplier
+    document.addEventListener('DOMContentLoaded', function() {
+        const supplierSelect = document.getElementById('supplier_id');
+        const poSelect = document.getElementById('po_id');
+        
+        if (supplierSelect && poSelect) {
+            // Store all POs for filtering
+            const allPOs = Array.from(poSelect.options).map(option => {
+                return {
+                    value: option.value,
+                    text: option.text,
+                    supplierId: option.getAttribute('data-supplier-id') // We'll add this attribute
+                };
+            });
+            
+            // Filter POs when supplier changes
+            supplierSelect.addEventListener('change', function() {
+                const selectedSupplierId = this.value;
+                
+                // Clear current options
+                poSelect.innerHTML = '';
+                
+                // Add empty option
+                const emptyOption = document.createElement('option');
+                emptyOption.value = '';
+                emptyOption.text = 'Select Purchase Order';
+                poSelect.add(emptyOption);
+                
+                // Add filtered options
+                if (selectedSupplierId) {
+                    const filteredPOs = allPOs.filter(po => po.supplierId === selectedSupplierId || po.value === '');
+                    filteredPOs.forEach(po => {
+                        if (po.value !== '') { // Skip the empty option
+                            const option = document.createElement('option');
+                            option.value = po.value;
+                            option.text = po.text;
+                            option.setAttribute('data-supplier-id', po.supplierId);
+                            poSelect.add(option);
+                        }
+                    });
+                }
+            });
+            
+            // Initial filtering if supplier is already selected
+            if (supplierSelect.value) {
+                supplierSelect.dispatchEvent(new Event('change'));
+            }
+        }
+    });
+</script>
+{% endblock %}

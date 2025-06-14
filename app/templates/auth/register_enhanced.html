@@ -1,0 +1,229 @@
+<!-- app/templates/auth/register_enhanced.html -->
+
+{% extends 'layouts/public.html' %}
+
+{% block title %}Register{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full bg-white rounded-lg shadow-md overflow-hidden">
+        <div class="px-6 py-8">
+            <h2 class="text-center text-3xl font-extrabold text-gray-900 mb-6">
+                Create Your Account
+            </h2>
+            
+            <form method="POST" action="{{ url_for('auth_views.register_enhanced') }}" class="mt-8 space-y-6">
+                {{ form.csrf_token }}
+                
+                <div class="rounded-md shadow-sm space-y-4">
+                    <!-- User Type -->
+                    <div>
+                        {{ form.user_type.label(class="block text-sm font-medium text-gray-700") }}
+                        {{ form.user_type(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500") }}
+                        {% if form.user_type.errors %}
+                            {% for error in form.user_type.errors %}
+                                <p class="text-red-500 text-xs italic">{{ error }}</p>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Personal Information -->
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                        <div>
+                            {{ form.title.label(class="block text-sm font-medium text-gray-700") }}
+                            {{ form.title(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500") }}
+                            {% if form.title.errors %}
+                                {% for error in form.title.errors %}
+                                    <p class="text-red-500 text-xs italic">{{ error }}</p>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                        <div class="sm:col-span-2">
+                            {{ form.first_name.label(class="block text-sm font-medium text-gray-700") }}
+                            {{ form.first_name(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500") }}
+                            {% if form.first_name.errors %}
+                                {% for error in form.first_name.errors %}
+                                    <p class="text-red-500 text-xs italic">{{ error }}</p>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div>
+                        {{ form.last_name.label(class="block text-sm font-medium text-gray-700") }}
+                        {{ form.last_name(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500") }}
+                        {% if form.last_name.errors %}
+                            {% for error in form.last_name.errors %}
+                                <p class="text-red-500 text-xs italic">{{ error }}</p>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Contact Information -->
+                    <div>
+                        {{ form.phone.label(class="block text-sm font-medium text-gray-700") }}
+                        {{ form.phone(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500", placeholder="Phone number (will be your username)") }}
+                        {% if form.phone.errors %}
+                            {% for error in form.phone.errors %}
+                                <p class="text-red-500 text-xs italic">{{ error }}</p>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        {{ form.email.label(class="block text-sm font-medium text-gray-700") }}
+                        {{ form.email(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500") }}
+                        {% if form.email.errors %}
+                            {% for error in form.email.errors %}
+                                <p class="text-red-500 text-xs italic">{{ error }}</p>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Hospital Selection (shown for staff) -->
+                    <div id="hospital-selection" class="hidden">
+                        {{ form.hospital_id.label(class="block text-sm font-medium text-gray-700") }}
+                        {{ form.hospital_id(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500") }}
+                        {% if form.hospital_id.errors %}
+                            {% for error in form.hospital_id.errors %}
+                                <p class="text-red-500 text-xs italic">{{ error }}</p>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Branch Selection (shown for staff after hospital selection) -->
+                    <div id="branch-selection" class="hidden">
+                        {{ form.branch_id.label(class="block text-sm font-medium text-gray-700") }}
+                        {{ form.branch_id(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500") }}
+                        {% if form.branch_id.errors %}
+                            {% for error in form.branch_id.errors %}
+                                <p class="text-red-500 text-xs italic">{{ error }}</p>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Password -->
+                    <div>
+                        {{ form.password.label(class="block text-sm font-medium text-gray-700") }}
+                        {{ form.password(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500") }}
+                        {% if form.password.errors %}
+                            {% for error in form.password.errors %}
+                                <p class="text-red-500 text-xs italic">{{ error }}</p>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        {{ form.confirm_password.label(class="block text-sm font-medium text-gray-700") }}
+                        {{ form.confirm_password(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500") }}
+                        {% if form.confirm_password.errors %}
+                            {% for error in form.confirm_password.errors %}
+                                <p class="text-red-500 text-xs italic">{{ error }}</p>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Staff Approval Notice -->
+                <div id="staff-approval-notice" class="hidden rounded-md bg-blue-50 p-4 mb-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-blue-700">
+                                Staff accounts require approval before activation. After registration, you'll be asked to provide additional information for the approval process.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <button type="submit" class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        Register
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 text-center">
+            <p class="text-sm text-gray-600">
+                Already have an account?
+                <a href="{{ url_for('auth_views.login') }}" class="font-medium text-blue-600 hover:text-blue-500">
+                    Sign in
+                </a>
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const userTypeSelect = document.getElementById('user_type');
+        const hospitalSelection = document.getElementById('hospital-selection');
+        const branchSelection = document.getElementById('branch-selection');
+        const staffApprovalNotice = document.getElementById('staff-approval-notice');
+        const hospitalSelect = document.getElementById('hospital_id');
+        const branchSelect = document.getElementById('branch_id');
+        
+        // Toggle hospital/branch selection based on user type
+        userTypeSelect.addEventListener('change', function() {
+            if (this.value === 'staff') {
+                hospitalSelection.classList.remove('hidden');
+                staffApprovalNotice.classList.remove('hidden');
+            } else {
+                hospitalSelection.classList.add('hidden');
+                branchSelection.classList.add('hidden');
+                staffApprovalNotice.classList.add('hidden');
+            }
+        });
+        
+        // Populate branches when hospital is selected
+        hospitalSelect.addEventListener('change', function() {
+            if (this.value) {
+                // Show branch selection
+                branchSelection.classList.remove('hidden');
+                
+                // Fetch branches for the selected hospital
+                fetch(`{{ url_for('auth_views.register_enhanced') }}?hospital_id=${this.value}`, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Clear current options
+                    branchSelect.innerHTML = '';
+                    
+                    // Add branches
+                    data.branches.forEach(branch => {
+                        const option = document.createElement('option');
+                        option.value = branch.id;
+                        option.textContent = branch.name;
+                        branchSelect.appendChild(option);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching branches:', error);
+                });
+            } else {
+                branchSelection.classList.add('hidden');
+            }
+        });
+        
+        // Initial check on page load
+        if (userTypeSelect.value === 'staff') {
+            hospitalSelection.classList.remove('hidden');
+            staffApprovalNotice.classList.remove('hidden');
+            
+            if (hospitalSelect.value) {
+                branchSelection.classList.remove('hidden');
+            }
+        }
+    });
+</script>
+{% endblock %}

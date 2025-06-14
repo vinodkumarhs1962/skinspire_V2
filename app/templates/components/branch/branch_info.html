@@ -1,0 +1,126 @@
+<!-- Smart Branch Information Display -->
+{% set superuser_ids = ['7777777777', 'admin', 'superuser'] %}
+{% set is_superuser = current_user.user_id in superuser_ids %}
+{% set is_multi_branch = branch_context and branch_context.get('is_multi_branch_user', False) %}
+{% set show_info = is_superuser or is_multi_branch %}
+
+{% if show_info %}
+<div class="bg-white shadow overflow-hidden sm:rounded-lg">
+    <div class="px-4 py-5 sm:px-6 border-b {{ 'bg-purple-50' if is_superuser else 'bg-blue-50' }}">
+        <h3 class="text-lg font-medium text-gray-900">
+            {% if is_superuser %}
+                <i class="fas fa-crown mr-2 text-purple-600"></i>Administrator Access
+            {% else %}
+                <i class="fas fa-code-branch mr-2 text-blue-600"></i>Branch Access Information
+            {% endif %}
+        </h3>
+        <p class="mt-1 text-sm text-gray-500">
+            {% if is_superuser %}
+                Administrative privileges with unrestricted system access
+            {% else %}
+                Your current branch access permissions and assignments
+            {% endif %}
+        </p>
+    </div>
+    
+    <div class="px-4 py-5 sm:p-6">
+        {% if is_superuser %}
+            <!-- Superuser Information -->
+            <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+                <div class="flex items-start">
+                    <i class="fas fa-shield-alt text-purple-600 mt-1 mr-3"></i>
+                    <div>
+                        <h4 class="text-sm font-medium text-purple-800">Administrator Account</h4>
+                        <p class="text-sm text-purple-700 mt-1">
+                            User ID: <code class="bg-purple-100 px-1 rounded">{{ current_user.user_id }}</code> has unrestricted access to:
+                        </p>
+                        <ul class="text-sm text-purple-700 mt-2 space-y-1">
+                            <li>• All branches and locations</li>
+                            <li>• All system features and data</li>
+                            <li>• Cross-branch reporting and analytics</li>
+                            <li>• Administrative functions</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Available Branches for Admin -->
+            {% if branches %}
+            <div>
+                <h4 class="text-sm font-medium text-gray-900 mb-3">System Branches ({{ branches|length }})</h4>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {% for branch in branches %}
+                    <div class="flex items-center justify-between p-2 bg-purple-50 rounded border border-purple-200">
+                        <span class="text-sm text-gray-700">{{ branch.name }}</span>
+                        <span class="text-xs text-purple-600">Admin</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            
+        {% else %}
+            <!-- Regular Multi-Branch User Information -->
+            <div class="space-y-4">
+                <!-- Assigned Branch -->
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-900">Assigned Branch</h4>
+                        <p class="text-sm text-gray-500">Your primary work location</p>
+                    </div>
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                        <i class="fas fa-home mr-1"></i>
+                        {{ branch_context.assigned_branch_name or 'Not Assigned' }}
+                    </span>
+                </div>
+                
+                <!-- Access Level -->
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-900">Access Level</h4>
+                        <p class="text-sm text-gray-500">Your permission scope</p>
+                    </div>
+                    {% if branch_context.can_cross_branch %}
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                            <i class="fas fa-globe mr-1"></i>Cross-Branch Access
+                        </span>
+                    {% else %}
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
+                            <i class="fas fa-map-marker-alt mr-1"></i>Branch-Specific
+                        </span>
+                    {% endif %}
+                </div>
+                
+                <!-- Accessible Branches -->
+                {% if branch_context.accessible_branches|length > 1 %}
+                <div>
+                    <h4 class="text-sm font-medium text-gray-900 mb-2">Accessible Branches ({{ branch_context.accessible_branches|length }})</h4>
+                    <div class="grid grid-cols-2 gap-2">
+                        {% for branch in branch_context.accessible_branches %}
+                        <div class="flex items-center justify-between p-2 bg-blue-50 rounded">
+                            <span class="text-sm text-gray-700">{{ branch.name }}</span>
+                            {% if branch.branch_id == branch_context.assigned_branch_id %}
+                            <i class="fas fa-star text-yellow-500" title="Your assigned branch"></i>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        {% endif %}
+        
+        <!-- Help/Contact Section -->
+        <div class="mt-6 {{ 'bg-purple-50 border-purple-200' if is_superuser else 'bg-blue-50 border-blue-200' }} border rounded p-3">
+            <p class="text-sm {{ 'text-purple-700' if is_superuser else 'text-blue-700' }}">
+                <i class="fas fa-info-circle mr-1"></i>
+                {% if is_superuser %}
+                    Administrator account with system-wide privileges.
+                {% else %}
+                    Need changes to your branch access? Contact your system administrator.
+                {% endif %}
+            </p>
+        </div>
+    </div>
+</div>
+{% endif %}

@@ -1,0 +1,829 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}Create Supplier Invoice{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <!-- Header Section -->
+    <div class="flex flex-col md:flex-row items-start justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Create Supplier Invoice</h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">Create a new invoice for inventory procurement</p>
+        </div>
+        <div class="mt-4 md:mt-0">
+            <a href="{{ url_for('supplier_views.supplier_invoice_list') }}" class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i> Back to Invoices
+            </a>
+        </div>
+        <div class="mt-4 md:mt-0">
+            <!-- Add this back button -->
+            <a href="{{ url_for('supplier_views.purchase_order_list') }}" class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i> Back to Purchase Orders
+            </a>
+        </div>
+    </div>
+
+    <!-- Form Errors Alert -->
+    {% if form.errors %}
+    <div class="mb-6">
+        <div class="bg-red-50 border-l-4 border-red-400 p-4" role="alert">
+            <p class="font-medium">There were errors in your submission. Please check the form and try again.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Main Form -->
+    <form method="POST" id="supplierInvoiceForm" class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+        {{ form.csrf_token }}
+        
+        <div class="mb-6">
+            <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-white">Supplier & Invoice Information</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label for="supplier_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Supplier
+                    </label>
+                    <select id="supplier_id" name="supplier_id" class="form-select w-full" required>
+                        <option value="">Select Supplier</option>
+                        {% for supplier_id, supplier_name in form.supplier_id.choices[1:] %}
+                            <option value="{{ supplier_id }}" {% if form.supplier_id.data == supplier_id %}selected{% endif %}>
+                                {{ supplier_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    {% if form.supplier_id.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ form.supplier_id.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                
+                <!-- ADD: Branch Selector Component -->
+                <div>
+                    {% include 'components/branch/branch_selector.html' %}
+                </div>
+
+                <div>
+                    <!-- In create_supplier_invoice.html, modify the PO field -->
+                    <div {% if not has_po_data %}class="hidden"{% endif %}>
+                        <label for="po_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Purchase Order (Optional)
+                        </label>
+                        <select id="po_id" name="po_id" class="form-select w-full">
+                            <option value="">Select Purchase Order</option>
+                            {% for po_id, po_label in form.po_id.choices[1:] %}
+                                <option value="{{ po_id }}" 
+                                        data-supplier-id="{{ po_suppliers.get(po_id, '') }}"
+                                        {% if form.po_id.data == po_id %}selected{% endif %}>
+                                    {{ po_label }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        {% if form.po_id.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.po_id.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- PO Lines Loading Button -->
+                    <!-- <div class="mt-2">
+                        <button type="submit" name="load_po_lines" value="1" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400">
+                            <i class="fas fa-sync-alt mr-1"></i> Load PO Items
+                        </button>
+                    </div> -->
+                </div>
+                
+                <div>
+                    <label for="supplier_invoice_number" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Supplier Invoice Number
+                    </label>
+                    {{ form.supplier_invoice_number(class="form-input w-full", required="required") }}
+                    {% if form.supplier_invoice_number.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ form.supplier_invoice_number.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="invoice_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Invoice Date
+                    </label>
+                    {{ form.invoice_date(class="form-input w-full", type="date", required="required") }}
+                    {% if form.invoice_date.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ form.invoice_date.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="due_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Due Date
+                    </label>
+                    {{ form.due_date(class="form-input w-full", type="date") }}
+                    {% if form.due_date.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ form.due_date.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="supplier_gstin" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Supplier GSTIN
+                    </label>
+                    {{ form.supplier_gstin(class="form-input w-full") }}
+                    {% if form.supplier_gstin.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ form.supplier_gstin.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="place_of_supply" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Place of Supply (State Code)
+                    </label>
+                    {{ form.place_of_supply(class="form-input w-full", required="required") }}
+                    {% if form.place_of_supply.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ form.place_of_supply.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                
+                <div class="flex items-center mt-6">
+                    <div class="flex items-center h-5">
+                        {{ form.reverse_charge(class="form-checkbox") }}
+                    </div>
+                    <label for="reverse_charge" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Reverse Charge
+                    </label>
+                    {% if form.reverse_charge.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ form.reverse_charge.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                
+                <div class="flex items-center mt-6">
+                    <div class="flex items-center h-5">
+                        {{ form.is_interstate(class="form-checkbox", id="is_interstate") }}
+                    </div>
+                    <label for="is_interstate" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Interstate
+                    </label>
+                    {% if form.is_interstate.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ form.is_interstate.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                
+                <div class="flex items-center mt-6">
+                    <div class="flex items-center h-5">
+                        {{ form.itc_eligible(class="form-checkbox") }}
+                    </div>
+                    <label for="itc_eligible" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                        ITC Eligible
+                    </label>
+                    {% if form.itc_eligible.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ form.itc_eligible.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="currency_code" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Currency
+                    </label>
+                    {{ form.currency_code(class="form-select w-full") }}
+                    {% if form.currency_code.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ form.currency_code.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                
+                <div id="exchange-rate-container" class="{% if form.currency_code.data == 'INR' %}hidden{% endif %}">
+                    <label for="exchange_rate" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Exchange Rate
+                    </label>
+                    {{ form.exchange_rate(class="form-input w-full", type="number", min="0.000001", step="0.000001") }}
+                    {% if form.exchange_rate.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ form.exchange_rate.errors[0] }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Line Items Section -->
+        <div id="line-items-section" class="mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-white">Line Items</h2>
+
+                <!-- Add this Clear All button -->
+                <a href="{{ request.path }}?clear_items=1" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded text-sm">
+                    <i class="fas fa-trash-alt mr-1"></i> Clear All Items
+                </a>
+            </div>
+            
+            <!-- Line Item Form -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-4">
+                <h3 class="text-md font-semibold text-gray-700 dark:text-gray-300 mb-3" id="line-item-form-title">
+                    Add New Item
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div>
+                        <label for="medicine_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Medicine
+                        </label>
+                        {{ line_item_form.medicine_id(class="form-select w-full") }}
+                        {% if line_item_form.medicine_id.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ line_item_form.medicine_id.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="batch_number" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Batch Number
+                        </label>
+                        {{ line_item_form.batch_number(class="form-input w-full") }}
+                        {% if line_item_form.batch_number.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ line_item_form.batch_number.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="expiry_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Expiry Date
+                        </label>
+                        {{ line_item_form.expiry_date(class="form-input w-full", type="date") }}
+                        {% if line_item_form.expiry_date.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ line_item_form.expiry_date.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="quantity" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Quantity
+                        </label>
+                        {{ line_item_form.quantity(class="form-input w-full", type="number", step="0.01", min="0.01") }}
+                        {% if line_item_form.quantity.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ line_item_form.quantity.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="pack_purchase_price" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Pack Purchase Price
+                        </label>
+                        {{ line_item_form.pack_purchase_price(class="form-input w-full", type="number", step="0.01", min="0.01") }}
+                        {% if line_item_form.pack_purchase_price.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ line_item_form.pack_purchase_price.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="pack_mrp" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Pack MRP
+                        </label>
+                        {{ line_item_form.pack_mrp(class="form-input w-full", type="number", step="0.01", min="0.01") }}
+                        {% if line_item_form.pack_mrp.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ line_item_form.pack_mrp.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="units_per_pack" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Units Per Pack
+                        </label>
+                        {{ line_item_form.units_per_pack(class="form-input w-full", type="number", step="0.01", min="1") }}
+                        {% if line_item_form.units_per_pack.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ line_item_form.units_per_pack.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="discount_percent" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Discount %
+                        </label>
+                        {{ line_item_form.discount_percent(class="form-input w-full", type="number", step="0.01", min="0", max="100") }}
+                        {% if line_item_form.discount_percent.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ line_item_form.discount_percent.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="flex items-center pt-6">
+                        {{ line_item_form.is_free_item(class="form-checkbox mr-2") }}
+                        <label for="is_free_item" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Free Item
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end">
+                    <button type="button" id="cancel-edit-button" style="display: none;" 
+                            class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded mr-2">
+                        Cancel
+                    </button>
+                    <button type="submit" name="add_line_item" value="1" id="add-update-button"
+                            class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
+                        </svg>
+                        Add Item
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Line Items Table -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-700">
+                            <tr>
+                                <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    #
+                                </th>
+                                <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Item
+                                </th>
+                                <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Batch
+                                </th>
+                                <th scope="col" class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Qty
+                                </th>
+                                <th scope="col" class="px-3 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Unit Price
+                                </th>
+                                <th scope="col" class="px-3 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Disc %
+                                </th>
+                                <th scope="col" class="px-3 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider gst-column">
+                                    GST
+                                </th>
+                                <th scope="col" class="px-3 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Total
+                                </th>
+                                <th scope="col" class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Action
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="line-items-container" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                            {% if line_items %}
+                                {% for item in line_items %}
+                                <tr class="{{ 'bg-green-50 dark:bg-green-900' if item.is_free_item else '' }}">
+                                    <td class="px-3 py-2 text-sm text-gray-900 dark:text-white text-center">
+                                        {{ loop.index }}
+                                    </td>
+                                    <td class="px-3 py-2">
+                                        <div class="font-medium text-gray-800 dark:text-white flex items-center">
+                                            {{ item.medicine_name }}
+                                            {% if item.is_free_item %}
+                                            <span class="ml-2 px-1.5 py-0.5 rounded text-xs bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200">
+                                                Free
+                                            </span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                                            HSN: {{ item.hsn_code or 'N/A' }}
+                                        </div>
+                                    </td>
+                                    <td class="px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
+                                        {% if item.batch_number == '[ENTER BATCH #]' %}
+                                            <div class="text-red-500 font-bold">{{ item.batch_number }}</div>
+                                        {% else %}
+                                            <div>{{ item.batch_number }}</div>
+                                        {% endif %}
+                                        
+                                        {% if item.expiry_date == 'YYYY-MM-DD' %}
+                                            <div class="text-xs text-red-500 font-bold">Exp: {{ item.expiry_date }}</div>
+                                        {% else %}
+                                            <div class="text-xs text-gray-500 dark:text-gray-400">Exp: {{ item.expiry_date }}</div>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-3 py-2 text-sm text-center text-gray-700 dark:text-gray-300">
+                                        {{ item.units }}
+                                    </td>
+                                    <td class="px-3 py-2 text-sm text-right text-gray-700 dark:text-gray-300">
+                                        {{ item.pack_purchase_price|currencyformat }}
+                                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                                            MRP: {{ item.pack_mrp|currencyformat }}
+                                        </div>
+                                    </td>
+                                    <td class="px-3 py-2 text-sm text-right text-gray-700 dark:text-gray-300">
+                                        {{ item.discount_percent }}%
+                                    </td>
+                                    <td class="px-3 py-2 text-sm text-right text-gray-700 dark:text-gray-300">
+                                        {{ item.gst_rate }}%
+                                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                                            {{ item.total_gst|currencyformat }}
+                                        </div>
+                                    </td>
+                                    <td class="px-3 py-2 text-sm text-right font-medium text-gray-800 dark:text-gray-200">
+                                        {{ item.line_total|currencyformat }}
+                                    </td>
+                                    <td class="px-3 py-2 text-sm text-center">
+                                        <div class="flex justify-center space-x-6">
+                                            <!-- Edit Button -->
+                                            <button type="button" 
+                                                    class="edit-line-item text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 text-lg p-1"
+                                                    data-index="{{ loop.index0 }}"
+                                                    data-medicine-id="{{ item.medicine_id }}"
+                                                    data-medicine-name="{{ item.medicine_name }}"
+                                                    data-units="{{ item.units }}"
+                                                    data-pack-price="{{ item.pack_purchase_price }}"
+                                                    data-pack-mrp="{{ item.pack_mrp }}"
+                                                    data-units-per-pack="{{ item.units_per_pack }}"
+                                                    data-batch-number="{{ item.batch_number }}"
+                                                    data-expiry-date="{{ item.expiry_date or '' }}"
+                                                    data-discount-percent="{{ item.discount_percent }}"
+                                                    data-is-free-item="{{ item.is_free_item|lower }}">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            
+                                            <!-- Delete Button -->
+                                            <button type="submit" 
+                                                    name="remove_line_item" 
+                                                    value="{{ loop.index0 }}" 
+                                                    class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 text-lg p-1">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr id="no-items-row">
+                                    <td colspan="9" class="px-3 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                        No items added yet. Use the form above to add items.
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                        <tfoot class="bg-gray-50 dark:bg-gray-700">
+                            <!-- Calculate totals from line_items -->
+                            {% set subtotal = 0 %}
+                            {% set total_cgst = 0 %}
+                            {% set total_sgst = 0 %}
+                            {% set total_igst = 0 %}
+                            {% set total_gst = 0 %}
+                            {% set grand_total = 0 %}
+                            
+                            {% for item in line_items %}
+                                {% set subtotal = subtotal + item.taxable_amount %}
+                                {% set total_cgst = total_cgst + item.cgst %}
+                                {% set total_sgst = total_sgst + item.sgst %}
+                                {% set total_igst = total_igst + item.igst %}
+                                {% set total_gst = total_gst + item.total_gst %}
+                                {% set grand_total = grand_total + item.line_total %}
+                            {% endfor %}
+                            
+                            <tr>
+                                <td colspan="7" class="px-3 py-2 text-right text-sm font-medium text-gray-700 dark:text-gray-300">Subtotal:</td>
+                                <td class="px-3 py-2 text-right text-sm font-medium text-gray-700 dark:text-gray-300" id="subtotal">
+                                     Rs. {{ "%.2f"|format(subtotal) }}
+                                </td>
+                                <td></td>
+                            </tr>
+                            <tr class="cgst-row {% if form.is_interstate.data %}hidden{% endif %}">
+                                <td colspan="7" class="px-3 py-2 text-right text-sm font-medium text-gray-700 dark:text-gray-300">CGST:</td>
+                                <td class="px-3 py-2 text-right text-sm font-medium text-gray-700 dark:text-gray-300" id="total-cgst">
+                                     Rs. {{ "%.2f"|format(total_cgst) }}
+                                </td>
+                                <td></td>
+                            </tr>
+                            <tr class="sgst-row {% if form.is_interstate.data %}hidden{% endif %}">
+                                <td colspan="7" class="px-3 py-2 text-right text-sm font-medium text-gray-700 dark:text-gray-300">SGST:</td>
+                                <td class="px-3 py-2 text-right text-sm font-medium text-gray-700 dark:text-gray-300" id="total-sgst">
+                                     Rs. {{ "%.2f"|format(total_sgst) }}
+                                </td>
+                                <td></td>
+                            </tr>
+                            <tr class="igst-row {% if not form.is_interstate.data %}hidden{% endif %}">
+                                <td colspan="7" class="px-3 py-2 text-right text-sm font-medium text-gray-700 dark:text-gray-300">IGST:</td>
+                                <td class="px-3 py-2 text-right text-sm font-medium text-gray-700 dark:text-gray-300" id="total-igst">
+                                     Rs. {{ "%.2f"|format(total_igst) }}
+                                </td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td colspan="7" class="px-3 py-2 text-right text-sm font-bold text-gray-800 dark:text-white">Grand Total:</td>
+                                <td class="px-3 py-2 text-right text-sm font-bold text-gray-800 dark:text-white" id="grand-total">
+                                     Rs. {{ "%.2f"|format(grand_total) }}
+                                </td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                </table>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Additional Information -->
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="{{ form.notes.id }}">
+                Notes
+            </label>
+            {{ form.notes(class="form-textarea w-full h-24") }}
+            {% if form.notes.errors %}
+                <p class="text-red-500 text-xs mt-1">{{ form.notes.errors[0] }}</p>
+            {% endif %}
+        </div>
+
+        <!-- Submit Button -->
+        <div class="flex justify-end">
+            <button type="submit" name="submit_invoice" value="1" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded focus:outline-none focus:shadow-outline">
+                Create Invoice
+            </button>
+        </div>
+        <!-- Debug Information - Add this right here -->
+        <div class="mt-6 bg-gray-100 p-4 rounded text-xs font-mono">
+            <h3 class="text-sm mb-2">Debug Info:</h3>
+            <pre>{{ line_items|tojson(indent=2) }}</pre>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    // Minimal JavaScript - just what's needed for basic functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        // DOM Elements
+        const supplierSelect = document.getElementById('supplier_id');
+        const poSelect = document.getElementById('po_id');
+        const currencySelect = document.getElementById('currency_code');
+        const exchangeRateContainer = document.getElementById('exchange-rate-container');
+        const isInterstateCheckbox = document.getElementById('is_interstate');
+        const medicineSelect = document.getElementById('medicine_id');
+        
+        // Store PO -> Supplier mapping for reference
+        const poSuppliers = {};
+        {% for po_id, supplier_id in po_suppliers.items() %}
+            poSuppliers['{{ po_id }}'] = '{{ supplier_id }}';
+        {% endfor %}
+        
+        // PO-Supplier filtering
+        if (supplierSelect && poSelect) {
+            // Filter POs when supplier changes
+            supplierSelect.addEventListener('change', function() {
+                const selectedSupplierId = this.value;
+                
+                // Save current options
+                const allOptions = Array.from(poSelect.options);
+                
+                // Clear current options except first empty option
+                while (poSelect.options.length > 1) {
+                    poSelect.remove(1);
+                }
+                
+                // Add filtered options
+                if (selectedSupplierId) {
+                    allOptions.forEach(option => {
+                        if (option.value !== '' && poSuppliers[option.value] === selectedSupplierId) {
+                            poSelect.add(option.cloneNode(true));
+                        }
+                    });
+                    
+                    // Update interstate checkbox based on supplier state
+                    fetch(`/supplier/api/suppliers/${selectedSupplierId}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.state_code) {
+                                const hospitalStateCode = '{{ hospital_state_code }}';
+                                const isInterstate = data.state_code !== hospitalStateCode;
+                                if (isInterstateCheckbox) {
+                                    isInterstateCheckbox.checked = isInterstate;
+                                    updateGstRows(isInterstate);
+                                }
+                            }
+                        })
+                        .catch(error => console.error('Error fetching supplier details:', error));
+                }
+            });
+        }
+        
+        // Currency change handler
+        if (currencySelect && exchangeRateContainer) {
+            currencySelect.addEventListener('change', function() {
+                if (this.value === 'INR') {
+                    exchangeRateContainer.classList.add('hidden');
+                    document.getElementById('exchange_rate').value = '1.000000';
+                } else {
+                    exchangeRateContainer.classList.remove('hidden');
+                }
+            });
+        }
+        
+        // Interstate checkbox change handler
+        if (isInterstateCheckbox) {
+            isInterstateCheckbox.addEventListener('change', function() {
+                updateGstRows(this.checked);
+            });
+        }
+        
+        // Auto-populate medicine details
+        // Auto-populate medicine details
+        if (medicineSelect) {
+            medicineSelect.addEventListener('change', function() {
+                const medicineId = this.value;
+                if (medicineId) {
+                    fetch(`/supplier/api/medicines/${medicineId}`)
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error('Medicine details not found');
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            if (data) {
+                                const packPurchasePrice = document.getElementById('pack_purchase_price');
+                                const packMrp = document.getElementById('pack_mrp');
+                                
+                                if (packPurchasePrice) packPurchasePrice.value = data.purchase_price || '';
+                                if (packMrp) packMrp.value = data.mrp || '';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error fetching medicine details:', error);
+                            // Optionally show an error message to the user
+                        });
+                }
+            });
+        }
+        
+        // Helper function to update GST rows display
+        function updateGstRows(isInterstate) {
+            const cgstRows = document.querySelectorAll('.cgst-row');
+            const sgstRows = document.querySelectorAll('.sgst-row');
+            const igstRows = document.querySelectorAll('.igst-row');
+            
+            cgstRows.forEach(row => {
+                if (isInterstate) {
+                    row.classList.add('hidden');
+                } else {
+                    row.classList.remove('hidden');
+                }
+            });
+            
+            sgstRows.forEach(row => {
+                if (isInterstate) {
+                    row.classList.add('hidden');
+                } else {
+                    row.classList.remove('hidden');
+                }
+            });
+            
+            igstRows.forEach(row => {
+                if (isInterstate) {
+                    row.classList.remove('hidden');
+                } else {
+                    row.classList.add('hidden');
+                }
+            });
+        }
+        
+        // Initialize on page load
+        if (isInterstateCheckbox) {
+            updateGstRows(isInterstateCheckbox.checked);
+        }
+    });
+
+    // Function to populate line item form for editing
+    function editLineItem(index, medicineId, medicineName, units, packPrice, packMrp, unitsPerPack, batchNumber, expiryDate, discountPercent, isFreeItem) {
+        // Set the medicine dropdown - first find the option with the right value and select it
+        const medicineSelect = document.getElementById('medicine_id');
+        for (let i = 0; i < medicineSelect.options.length; i++) {
+            if (medicineSelect.options[i].value === medicineId) {
+                medicineSelect.selectedIndex = i;
+                break;
+            }
+        }
+        
+        // Set the numeric values
+        document.getElementById('quantity').value = units;
+        document.getElementById('pack_purchase_price').value = packPrice;
+        document.getElementById('pack_mrp').value = packMrp;
+        document.getElementById('units_per_pack').value = unitsPerPack;
+        document.getElementById('discount_percent').value = discountPercent;
+        
+        // Set batch and expiry, replace placeholder values with empty strings
+        document.getElementById('batch_number').value = 
+            (batchNumber === '[ENTER BATCH #]') ? '' : batchNumber;
+        
+        // Handle expiry date properly (it needs to be in YYYY-MM-DD format for the date input)
+        let expiry = (expiryDate === 'YYYY-MM-DD') ? '' : expiryDate;
+        document.getElementById('expiry_date').value = expiry;
+        
+        // Set the checkbox
+        document.getElementById('is_free_item').checked = (isFreeItem === 'true');
+        
+        // Create a hidden input to store the index being edited
+        let editIndexInput = document.getElementById('edit_line_index');
+        if (!editIndexInput) {
+            editIndexInput = document.createElement('input');
+            editIndexInput.type = 'hidden';
+            editIndexInput.id = 'edit_line_index';
+            editIndexInput.name = 'edit_line_index';
+            document.getElementById('supplierInvoiceForm').appendChild(editIndexInput);
+        }
+        editIndexInput.value = index;
+        
+        // Change the Add Item button text to Update Item
+        const addButton = document.querySelector('button[name="add_line_item"]');
+        addButton.textContent = 'Update Item';
+        
+        // Scroll to the form section
+        document.querySelector('#line-items-section').scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+        });
+    }
+
+    // Initialize the cancel button functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        const cancelButton = document.getElementById('cancel-edit-button');
+        const addUpdateButton = document.getElementById('add-update-button');
+        const formTitle = document.getElementById('line-item-form-title');
+        
+        // Cancel button resets the form
+        if (cancelButton) {
+            cancelButton.addEventListener('click', function() {
+                // Reset form
+                document.getElementById('supplierInvoiceForm').reset();
+                
+                // Remove the edit index
+                const editIndexInput = document.getElementById('edit_line_index');
+                if (editIndexInput) {
+                    editIndexInput.value = '';
+                }
+                
+                // Reset button text and title
+                addUpdateButton.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
+                    </svg>
+                    Add Item
+                `;
+                formTitle.textContent = 'Add New Item';
+                
+                // Hide the cancel button
+                cancelButton.style.display = 'none';
+            });
+        }
+    });
+</script>
+<script>
+    // Add to the existing script at the end (don't replace anything)
+    
+    // Add logging for form submission
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM fully loaded - adding form submission logging');
+        
+        // Check if the add item button exists
+        const addItemButton = document.querySelector('button[name="add_line_item"]');
+        console.log('Add item button exists:', !!addItemButton);
+        
+        // Log form submission
+        const form = document.getElementById('supplierInvoiceForm');
+        if (form) {
+            console.log('Found form, adding submission listener');
+            form.addEventListener('submit', function(e) {
+                // Get the button that was clicked
+                const submitter = e.submitter;
+                console.log('Form submission detected from:', submitter ? submitter.name : 'unknown');
+                
+                // If it's the add item button, log more details
+                if (submitter && submitter.name === 'add_line_item') {
+                    console.log('Add Line Item submission');
+                    console.log('Medicine ID:', document.getElementById('medicine_id').value);
+                    console.log('Quantity:', document.getElementById('quantity').value);
+                    console.log('Batch Number:', document.getElementById('batch_number').value);
+                }
+            });
+        }
+    });
+</script>
+<script>
+    // Check if Font Awesome is available, if not, load it
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!document.querySelector('link[href*="fontawesome"]') && 
+            !document.querySelector('script[src*="fontawesome"]')) {
+            console.log('Font Awesome not detected, loading it now');
+            var link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css';
+            document.head.appendChild(link);
+        }
+    });
+    // Add event listeners for edit buttons
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.edit-line-item').forEach(button => {
+            button.addEventListener('click', function() {
+                const data = this.dataset;
+                editLineItem(
+                    parseInt(data.index),
+                    data.medicineId,
+                    data.medicineName,
+                    parseFloat(data.units),
+                    parseFloat(data.packPrice),
+                    parseFloat(data.packMrp),
+                    parseFloat(data.unitsPerPack),
+                    data.batchNumber,
+                    data.expiryDate,
+                    parseFloat(data.discountPercent),
+                    data.isFreeItem === 'true'
+                );
+            });
+        });
+    });
+</script>
+{% endblock %}

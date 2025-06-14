@@ -1,0 +1,246 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}Low Stock Report{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Low Stock Report</h1>
+        <div>
+            <a href="{{ url_for('inventory_views.inventory_list') }}" class="btn-secondary">
+                Back to Inventory
+            </a>
+        </div>
+    </div>
+
+    <div class="mb-6 bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+        <div class="flex items-center justify-between">
+            <div class="text-lg font-semibold text-gray-700 dark:text-white">Items Below Safety Stock Level</div>
+            <div class="flex space-x-2">
+                <button id="printReport" class="btn-secondary">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                    </svg>
+                    Print
+                </button>
+                <button id="exportCsv" class="btn-secondary">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Export CSV
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Medicine
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Category
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Current Stock
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Safety Level
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Shortage
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Preferred Supplier
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Actions
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for item in items %}
+                    <tr class="{% if loop.index % 2 == 0 %}bg-gray-50 dark:bg-gray-700{% endif %} {% if item.current_stock == 0 %}bg-red-50 dark:bg-red-900{% endif %}">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                            {{ item.medicine_name }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {{ item.medicine_category }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            <span class="{% if item.current_stock == 0 %}text-red-600 dark:text-red-400 font-semibold{% endif %}">
+                                {{ item.current_stock }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {{ item.safety_stock }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            <span class="text-red-600 dark:text-red-400 font-semibold">
+                                {{ item.safety_stock - item.current_stock }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {% if item.preferred_supplier %}
+                                {{ item.preferred_supplier.supplier_name }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {% if item.preferred_supplier %}
+                                <a href="#" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 generate-po" data-medicine-id="{{ item.medicine_id }}" data-supplier-id="{{ item.preferred_supplier.supplier_id }}">
+                                    Generate PO
+                                </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500 dark:text-gray-300">
+                            No low stock items found.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="mt-6 flex justify-between">
+        <div class="flex space-x-4">
+            <a href="{{ url_for('inventory_views.expiring_stock') }}" class="btn-secondary">
+                Expiring Items
+            </a>
+            <a href="{{ url_for('inventory_views.inventory_movement') }}" class="btn-secondary">
+                Stock Movement
+            </a>
+        </div>
+        <a href="{{ url_for('supplier_views.add_purchase_order') }}" class="btn-primary">
+            Create Purchase Order
+        </a>
+    </div>
+</div>
+
+<!-- Generate PO Modal -->
+<div id="generatePoModal" class="fixed inset-0 bg-gray-500 bg-opacity-75 hidden z-50 flex items-center justify-center">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl mx-4 w-full max-w-md">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Generate Purchase Order</h3>
+        </div>
+        <div class="p-6">
+            <p class="text-gray-700 dark:text-gray-300 mb-4">Do you want to create a new purchase order for this item?</p>
+            <form id="generatePoForm" method="GET" action="{{ url_for('supplier_views.add_purchase_order') }}">
+                <input type="hidden" name="medicine_id" id="medicineIdInput">
+                <input type="hidden" name="supplier_id" id="supplierIdInput">
+                
+                <div class="mb-4">
+                    <label for="quantityInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Quantity to Order
+                    </label>
+                    <input type="number" id="quantityInput" name="quantity" class="form-input w-full" min="1" required>
+                </div>
+                
+                <div class="flex justify-end space-x-3">
+                    <button type="button" id="cancelGeneratePo" class="btn-secondary">Cancel</button>
+                    <button type="submit" class="btn-primary">Create PO</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Generate PO Modal functionality
+        const generatePoModal = document.getElementById('generatePoModal');
+        const generatePoForm = document.getElementById('generatePoForm');
+        const medicineIdInput = document.getElementById('medicineIdInput');
+        const supplierIdInput = document.getElementById('supplierIdInput');
+        const quantityInput = document.getElementById('quantityInput');
+        const cancelGeneratePoBtn = document.getElementById('cancelGeneratePo');
+        const generatePoButtons = document.querySelectorAll('.generate-po');
+        
+        generatePoButtons.forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                const medicineId = this.getAttribute('data-medicine-id');
+                const supplierId = this.getAttribute('data-supplier-id');
+                
+                medicineIdInput.value = medicineId;
+                supplierIdInput.value = supplierId;
+                quantityInput.value = ''; // Clear previous value
+                
+                generatePoModal.classList.remove('hidden');
+                quantityInput.focus();
+            });
+        });
+        
+        cancelGeneratePoBtn.addEventListener('click', function() {
+            generatePoModal.classList.add('hidden');
+        });
+        
+        // Close modal when clicking outside
+        generatePoModal.addEventListener('click', function(e) {
+            if (e.target === generatePoModal) {
+                generatePoModal.classList.add('hidden');
+            }
+        });
+        
+        // Print functionality
+        document.getElementById('printReport').addEventListener('click', function() {
+            window.print();
+        });
+        
+        // Export CSV functionality
+        document.getElementById('exportCsv').addEventListener('click', function() {
+            // Get table data
+            const table = document.querySelector('table');
+            const rows = table.querySelectorAll('tbody tr');
+            
+            // Create CSV content
+            let csvContent = 'Medicine,Category,Current Stock,Safety Level,Shortage,Preferred Supplier\n';
+            
+            rows.forEach(row => {
+                if (!row.querySelector('td[colspan]')) { // Skip empty state row
+                    const cells = row.querySelectorAll('td');
+                    const rowData = [
+                        cells[0].innerText.trim(), // Medicine
+                        cells[1].innerText.trim(), // Category
+                        cells[2].innerText.trim(), // Current Stock
+                        cells[3].innerText.trim(), // Safety Level
+                        cells[4].innerText.trim(), // Shortage
+                        cells[5].innerText.trim()  // Preferred Supplier
+                    ];
+                    
+                    // Escape commas and quotes in CSV
+                    const escapedRowData = rowData.map(cell => {
+                        if (cell.includes(',') || cell.includes('"')) {
+                            return `"${cell.replace(/"/g, '""')}"`;
+                        }
+                        return cell;
+                    });
+                    
+                    csvContent += escapedRowData.join(',') + '\n';
+                }
+            });
+            
+            // Create and trigger download
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'low_stock_report.csv');
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+    });
+</script>
+{% endblock %}

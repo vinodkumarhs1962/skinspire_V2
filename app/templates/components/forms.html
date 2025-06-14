@@ -1,0 +1,136 @@
+{# components/forms.html - Basic form macros for payment forms #}
+
+{# Input field macro - Simplified without **kwargs #}
+{% macro input_field(field, label=None, placeholder=None, required=False, class="", type=None, step=None, min=None, max=None) %}
+<div class="mb-4">
+    {% if label %}
+    <label for="{{ field.id }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+        {{ label }}
+        {% if required %}<span class="text-red-500">*</span>{% endif %}
+    </label>
+    {% endif %}
+    
+    {% set field_class = "form-input w-full rounded-md shadow-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 focus:border-indigo-500 focus:ring-indigo-500 " + class %}
+    
+    {{ field(class=field_class, 
+             placeholder=placeholder,
+             type=type,
+             step=step,
+             min=min,
+             max=max) }}
+    
+    {% if field.errors %}
+        {% for error in field.errors %}
+            <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+        {% endfor %}
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# Select field macro #}
+{% macro select_field(field, label=None, required=False, class="") %}
+<div class="mb-4">
+    {% if label %}
+    <label for="{{ field.id }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+        {{ label }}
+        {% if required %}<span class="text-red-500">*</span>{% endif %}
+    </label>
+    {% endif %}
+    
+    {{ field(class="form-select w-full rounded-md shadow-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 focus:border-indigo-500 focus:ring-indigo-500 " + class) }}
+    
+    {% if field.errors %}
+        {% for error in field.errors %}
+            <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+        {% endfor %}
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# Date field macro #}
+{% macro date_field(field, label=None, required=False, class="") %}
+<div class="mb-4">
+    {% if label %}
+    <label for="{{ field.id }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+        {{ label }}
+        {% if required %}<span class="text-red-500">*</span>{% endif %}
+    </label>
+    {% endif %}
+    
+    {{ field(class="form-input w-full rounded-md shadow-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 focus:border-indigo-500 focus:ring-indigo-500 " + class) }}
+    
+    {% if field.errors %}
+        {% for error in field.errors %}
+            <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+        {% endfor %}
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# Textarea field macro #}
+{% macro textarea_field(field, label=None, placeholder=None, required=False, rows=3, class="") %}
+<div class="mb-4">
+    {% if label %}
+    <label for="{{ field.id }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+        {{ label }}
+        {% if required %}<span class="text-red-500">*</span>{% endif %}
+    </label>
+    {% endif %}
+    
+    {{ field(class="form-textarea w-full rounded-md shadow-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 focus:border-indigo-500 focus:ring-indigo-500 " + class,
+             rows=rows,
+             placeholder=placeholder) }}
+    
+    {% if field.errors %}
+        {% for error in field.errors %}
+            <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+        {% endfor %}
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# Checkbox field macro #}
+{% macro checkbox_field(field, label=None, description=None, class="") %}
+<div class="mb-4">
+    <div class="flex items-start">
+        <div class="flex items-center h-5">
+            {{ field(class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded " + class) }}
+        </div>
+        {% if label %}
+        <div class="ml-3 text-sm">
+            <label for="{{ field.id }}" class="font-medium text-gray-700 dark:text-gray-300">{{ label }}</label>
+            {% if description %}
+            <p class="text-gray-500 dark:text-gray-400">{{ description }}</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+    
+    {% if field.errors %}
+        {% for error in field.errors %}
+            <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+        {% endfor %}
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# File field macro #}
+{% macro file_field(field, label=None, accept=None, required=False, class="") %}
+<div class="mb-4">
+    {% if label %}
+    <label for="{{ field.id }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+        {{ label }}
+        {% if required %}<span class="text-red-500">*</span>{% endif %}
+    </label>
+    {% endif %}
+    
+    {{ field(class="form-input w-full rounded-md shadow-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 focus:border-indigo-500 focus:ring-indigo-500 " + class,
+             accept=accept) }}
+    
+    {% if field.errors %}
+        {% for error in field.errors %}
+            <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+        {% endfor %}
+    {% endif %}
+</div>
+{% endmacro %}

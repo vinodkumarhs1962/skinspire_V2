@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+
+{% block title %}Batch Management{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <div class="flex flex-col md:flex-row justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold dark:text-gray-100">Batch Management</h1>
+        <div class="flex space-x-2 mt-4 md:mt-0">
+            <a href="{{ url_for('inventory_views.stock_list') }}" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-md text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+                <i class="fas fa-arrow-left mr-2"></i> Back to Stock
+            </a>
+            <a href="{{ url_for('inventory_views.add_batch') }}" class="px-4 py-2 bg-blue-600 dark:bg-blue-700 rounded-md text-white hover:bg-blue-700 dark:hover:bg-blue-800 transition">
+                <i class="fas fa-plus mr-2"></i> Add New Batch
+            </a>
+        </div>
+    </div>
+
+    <!-- Medicine Selection -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+        <form method="GET" action="{{ url_for('inventory_views.batch_management') }}" id="medicine-form">
+            <div class="flex flex-col md:flex-row md:items-end gap-4">
+                <div class="flex-grow">
+                    <label for="medicine_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select Medicine</label>
+                    <select id="medicine_id" name="medicine_id" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50" required>
+                        <option value="">-- Select Medicine --</option>
+                        {% for medicine in medicines %}
+                        <option value="{{ medicine.medicine_id }}" {% if selected_medicine and selected_medicine.medicine_id == medicine.medicine_id %}selected{% endif %}>
+                            {{ medicine.medicine_name }} ({{ medicine.dosage_form }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <button type="submit" class="w-full px-4 py-2 bg-blue-600 dark:bg-blue-700 rounded-md text-white hover:bg-blue-700 dark:hover:bg-blue-800 transition">
+                        <i class="fas fa-check mr-2"></i> Select
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    {% if selected_medicine %}
+    <!-- Medicine Details -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow mb-6">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Medicine Details</h2>
+        </div>
+        <div class="p-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Medicine Name</p>
+                    <p class="text-lg font-semibold text-gray-800 dark:text-gray-100">{{ selected_medicine.medicine_name }}</p>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Category</p>
+                    <p class="text-lg font-semibold text-gray-800 dark:text-gray-100">{{ selected_medicine.category_name }}</p>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Current Stock</p>
+                    <p class="text-lg font-semibold text-gray-800 dark:text-gray-100">{{ selected_medicine.current_stock }}</p>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Manufacturer</p>
+                    <p class="text-lg font-semibold text-gray-800 dark:text-gray-100">{{ selected_medicine.manufacturer_name }}</p>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">HSN Code</p>
+                    <p class="text-lg font-semibold text-gray-800 dark:text-gray-100">{{ selected_medicine.hsn_code or 'N/A' }}</p>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Safety Stock</p>
+                    <p class="text-lg font-semibold text-gray-800 dark:text-gray-100">{{ selected_medicine.safety_stock }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Batch List -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Batch Details</h2>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Batch No</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Expiry Date</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Days Left</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Current Stock</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">MRP ( Rs.)</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Purchase Price ( Rs.)</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Location</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {% if batches %}
+                        {% for batch in batches %}
+                        <tr class="{% if batch.days_left <= 30 %}bg-red-50 dark:bg-red-900/20{% elif batch.days_left <= 60 %}bg-yellow-50 dark:bg-yellow-900/20{% elif batch.days_left <= 90 %}bg-blue-50 dark:bg-blue-900/20{% endif %}">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                                {{ batch.batch }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                {{ batch.expiry.strftime('%Y-%m-%d') }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                                {% if batch.days_left <= 30 %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                                {% elif batch.days_left <= 60 %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
+                                {% elif batch.days_left <= 90 %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
+                                {% else %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200{% endif %}">
+                                {{ batch.days_left }} days
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                {{ batch.current_stock }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                {{ batch.pack_mrp }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                {{ batch.pack_purchase_price }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                {{ batch.location }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <div class="flex space-x-2">
+                                    <a href="{{ url_for('inventory_views.edit_batch', batch_id=batch.stock_id) }}" class="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <a href="{{ url_for('inventory_views.adjust_stock', stock_id=batch.stock_id) }}" class="text-green-600 dark:text-green-400 hover:text-green-900 dark:hover:text-green-300">
+                                        <i class="fas fa-exchange-alt"></i>
+                                    </a>
+                                    <a href="{{ url_for('inventory_views.batch_history', batch=batch.batch, medicine_id=selected_medicine.medicine_id) }}" class="text-purple-600 dark:text-purple-400 hover:text-purple-900 dark:hover:text-purple-300">
+                                        <i class="fas fa-history"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="8" class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500 dark:text-gray-400">
+                                No batches found for this medicine.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Batch Movement History -->
+    {% if recent_movements %}
+    <div class="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Recent Batch Movements</h2>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Batch</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Transaction Type</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Quantity</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Reference</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Created By</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for movement in recent_movements %}
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {{ movement.transaction_date.strftime('%Y-%m-%d %H:%M') }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {{ movement.batch }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                            {% if 'purchase' in movement.stock_type.lower() %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                            {% elif 'sale' in movement.stock_type.lower() or 'issue' in movement.stock_type.lower() %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
+                            {% elif 'adjust' in movement.stock_type.lower() %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
+                            {% elif 'return' in movement.stock_type.lower() %}bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200
+                            {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200{% endif %}">
+                            {{ movement.stock_type }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            <span class="{% if movement.units > 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                                {{ movement.units }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {% if movement.bill_id %}
+                                <a href="{{ url_for('billing_views.view_invoice', invoice_id=movement.bill_id) }}" class="text-blue-600 dark:text-blue-400 hover:underline">
+                                    Invoice
+                                </a>
+                            {% elif movement.po_id %}
+                                <a href="{{ url_for('supplier_views.view_purchase_order', po_id=movement.po_id) }}" class="text-blue-600 dark:text-blue-400 hover:underline">
+                                    PO
+                                </a>
+                            {% else %}
+                                {{ movement.reason or '-' }}
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {{ movement.created_by }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700 text-right">
+            <a href="{{ url_for('inventory_views.stock_movement', medicine_id=selected_medicine.medicine_id) }}" class="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300">
+                View all movements <i class="fas fa-arrow-right ml-1"></i>
+            </a>
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Auto-submit form when medicine selection changes
+        document.getElementById('medicine_id').addEventListener('change', function() {
+            document.getElementById('medicine-form').submit();
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,433 @@
+{% extends "layouts/dashboard.html" %}
+{% from 'components/forms/macros.html' import input_field, select_field, date_field, submit_button %}
+
+{% block title %}GSTR-2A Report (Inward Supplies){% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <!-- Header section with title and filters -->
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold mb-4 dark:text-gray-200">GSTR-2A Report (Inward Supplies)</h1>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+            <form id="gstr2aForm" method="GET" action="{{ url_for('gl_views.gstr2a_report') }}" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {{ select_field(form.month, class="w-full", label_class="dark:text-gray-300") }}
+                {{ select_field(form.year, class="w-full", label_class="dark:text-gray-300") }}
+                {{ select_field(form.branch_id, class="w-full", label_class="dark:text-gray-300") }}
+                {{ select_field(form.format_type, class="w-full", label_class="dark:text-gray-300") }}
+                <div class="md:col-span-4 flex justify-end space-x-2 mt-4">
+                    <button type="button" id="printReportBtn" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md">
+                        <i class="fas fa-print mr-2"></i>Print
+                    </button>
+                    <button type="button" id="exportJsonBtn" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md">
+                        <i class="fas fa-file-code mr-2"></i>Export JSON
+                    </button>
+                    <button type="button" id="exportExcelBtn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md">
+                        <i class="fas fa-file-excel mr-2"></i>Export Excel
+                    </button>
+                    {{ submit_button('Generate', class="bg-blue-600 hover:bg-blue-700 text-white") }}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Report content -->
+    {% if report_data %}
+    <div id="reportContent" class="bg-white dark:bg-gray-800 rounded-lg shadow">
+        <!-- Hospital details header -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700 text-center">
+            <h2 class="text-xl font-bold mb-1 dark:text-gray-200">{{ hospital.name }}</h2>
+            <p class="text-gray-600 dark:text-gray-400">{{ hospital.address }}</p>
+            <p class="text-gray-600 dark:text-gray-400">GSTIN: {{ hospital.gst_registration_number }}</p>
+            <h3 class="text-lg font-bold mt-4 mb-1 dark:text-gray-200">GSTR-2A Report (Inward Supplies)</h3>
+            <p class="text-gray-600 dark:text-gray-400">Period: {{ report_period }}</p>
+            {% if branch %}
+            <p class="text-gray-600 dark:text-gray-400">Branch: {{ branch.name }}</p>
+            {% endif %}
+        </div>
+
+        <!-- Summary Section -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-bold mb-4 dark:text-gray-200">Summary</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-700">
+                    <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-700">
+                            <th class="p-3 text-left dark:text-gray-300">Section</th>
+                            <th class="p-3 text-left dark:text-gray-300">Description</th>
+                            <th class="p-3 text-right dark:text-gray-300">Total Taxable Value</th>
+                            <th class="p-3 text-right dark:text-gray-300">Integrated Tax</th>
+                            <th class="p-3 text-right dark:text-gray-300">Central Tax</th>
+                            <th class="p-3 text-right dark:text-gray-300">State/UT Tax</th>
+                            <th class="p-3 text-right dark:text-gray-300">Cess</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">3</td>
+                            <td class="p-3 dark:text-gray-300">B2B Invoices</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.b2b.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.b2b.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.b2b.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.b2b.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.b2b.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">4</td>
+                            <td class="p-3 dark:text-gray-300">Imports (Goods)</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.import_goods.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.import_goods.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.import_goods.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.import_goods.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.import_goods.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">5</td>
+                            <td class="p-3 dark:text-gray-300">Imports (Services)</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.import_services.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.import_services.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.import_services.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.import_services.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.import_services.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">6</td>
+                            <td class="p-3 dark:text-gray-300">Credit/Debit Notes</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.credit_debit_notes.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.credit_debit_notes.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.credit_debit_notes.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.credit_debit_notes.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.credit_debit_notes.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">9</td>
+                            <td class="p-3 dark:text-gray-300">TDS Credits</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.tds_credits.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.tds_credits.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.tds_credits.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.tds_credits.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.tds_credits.cess|format_currency }}</td>
+                        </tr>
+                        <tr class="font-bold bg-gray-50 dark:bg-gray-700">
+                            <td class="p-3 dark:text-gray-300" colspan="2">Total</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.total.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.total.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.total.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.total.sgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ report_data.summary.total.cess|format_currency }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- B2B Invoices Section -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-bold mb-4 dark:text-gray-200">3. B2B Invoices</h3>
+            
+            <!-- Tabs for different supplier categories -->
+            <div class="mb-4 border-b border-gray-200 dark:border-gray-700">
+                <ul class="flex flex-wrap -mb-px" id="supplierTypeTab" role="tablist">
+                    <li class="mr-2" role="presentation">
+                        <button class="inline-block p-4 border-b-2 border-transparent rounded-t-lg hover:text-blue-600 hover:border-blue-600 dark:hover:text-blue-400" id="registered-tab" data-tabs-target="#registered" type="button" role="tab" aria-controls="registered" aria-selected="true">
+                            Registered Suppliers
+                        </button>
+                    </li>
+                    <li class="mr-2" role="presentation">
+                        <button class="inline-block p-4 border-b-2 border-transparent rounded-t-lg hover:text-blue-600 hover:border-blue-600 dark:hover:text-blue-400" id="composition-tab" data-tabs-target="#composition" type="button" role="tab" aria-controls="composition" aria-selected="false">
+                            Composition Suppliers
+                        </button>
+                    </li>
+                    <li class="mr-2" role="presentation">
+                        <button class="inline-block p-4 border-b-2 border-transparent rounded-t-lg hover:text-blue-600 hover:border-blue-600 dark:hover:text-blue-400" id="unregistered-tab" data-tabs-target="#unregistered" type="button" role="tab" aria-controls="unregistered" aria-selected="false">
+                            Unregistered Suppliers
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            
+            <div id="supplierTypeContent">
+                <!-- Registered Suppliers Tab Content -->
+                <div class="hidden" id="registered" role="tabpanel" aria-labelledby="registered-tab">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-700">
+                            <thead>
+                                <tr class="bg-gray-100 dark:bg-gray-700">
+                                    <th class="p-3 text-left dark:text-gray-300">GSTIN of Supplier</th>
+                                    <th class="p-3 text-left dark:text-gray-300">Trade Name</th>
+                                    <th class="p-3 text-left dark:text-gray-300">Invoice Number</th>
+                                    <th class="p-3 text-left dark:text-gray-300">Invoice Date</th>
+                                    <th class="p-3 text-right dark:text-gray-300">Invoice Value</th>
+                                    <th class="p-3 text-left dark:text-gray-300">Place of Supply</th>
+                                    <th class="p-3 text-right dark:text-gray-300">Taxable Value</th>
+                                    <th class="p-3 text-right dark:text-gray-300">IGST</th>
+                                    <th class="p-3 text-right dark:text-gray-300">CGST</th>
+                                    <th class="p-3 text-right dark:text-gray-300">SGST</th>
+                                    <th class="p-3 text-center dark:text-gray-300">Eligibility</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for invoice in report_data.b2b_invoices.registered %}
+                                <tr class="border-b dark:border-gray-700">
+                                    <td class="p-3 dark:text-gray-300">{{ invoice.gstin }}</td>
+                                    <td class="p-3 dark:text-gray-300">{{ invoice.trade_name }}</td>
+                                    <td class="p-3 dark:text-gray-300">{{ invoice.invoice_number }}</td>
+                                    <td class="p-3 dark:text-gray-300">{{ invoice.invoice_date }}</td>
+                                    <td class="p-3 text-right dark:text-gray-300">{{ invoice.invoice_value|format_currency }}</td>
+                                    <td class="p-3 dark:text-gray-300">{{ invoice.place_of_supply }}</td>
+                                    <td class="p-3 text-right dark:text-gray-300">{{ invoice.taxable_value|format_currency }}</td>
+                                    <td class="p-3 text-right dark:text-gray-300">{{ invoice.igst|format_currency }}</td>
+                                    <td class="p-3 text-right dark:text-gray-300">{{ invoice.cgst|format_currency }}</td>
+                                    <td class="p-3 text-right dark:text-gray-300">{{ invoice.sgst|format_currency }}</td>
+                                    <td class="p-3 text-center dark:text-gray-300">
+                                        {% if invoice.eligible_for_itc %}
+                                        <span class="px-2 py-1 rounded bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Eligible</span>
+                                        {% else %}
+                                        <span class="px-2 py-1 rounded bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">Ineligible</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Composition Suppliers Tab Content -->
+                <div class="hidden" id="composition" role="tabpanel" aria-labelledby="composition-tab">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-700">
+                            <thead>
+                                <tr class="bg-gray-100 dark:bg-gray-700">
+                                    <th class="p-3 text-left dark:text-gray-300">GSTIN of Supplier</th>
+                                    <th class="p-3 text-left dark:text-gray-300">Trade Name</th>
+                                    <th class="p-3 text-left dark:text-gray-300">Invoice Number</th>
+                                    <th class="p-3 text-left dark:text-gray-300">Invoice Date</th>
+                                    <th class="p-3 text-right dark:text-gray-300">Invoice Value</th>
+                                    <th class="p-3 text-left dark:text-gray-300">Place of Supply</th>
+                                    <th class="p-3 text-right dark:text-gray-300">Taxable Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for invoice in report_data.b2b_invoices.composition %}
+                                <tr class="border-b dark:border-gray-700">
+                                    <td class="p-3 dark:text-gray-300">{{ invoice.gstin }}</td>
+                                    <td class="p-3 dark:text-gray-300">{{ invoice.trade_name }}</td>
+                                    <td class="p-3 dark:text-gray-300">{{ invoice.invoice_number }}</td>
+                                    <td class="p-3 dark:text-gray-300">{{ invoice.invoice_date }}</td>
+                                    <td class="p-3 text-right dark:text-gray-300">{{ invoice.invoice_value|format_currency }}</td>
+                                    <td class="p-3 dark:text-gray-300">{{ invoice.place_of_supply }}</td>
+                                    <td class="p-3 text-right dark:text-gray-300">{{ invoice.taxable_value|format_currency }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Unregistered Suppliers Tab Content -->
+                <div class="hidden" id="unregistered" role="tabpanel" aria-labelledby="unregistered-tab">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-700">
+                            <thead>
+                                <tr class="bg-gray-100 dark:bg-gray-700">
+                                    <th class="p-3 text-left dark:text-gray-300">Supplier Name</th>
+                                    <th class="p-3 text-left dark:text-gray-300">Invoice Number</th>
+                                    <th class="p-3 text-left dark:text-gray-300">Invoice Date</th>
+                                    <th class="p-3 text-right dark:text-gray-300">Invoice Value</th>
+                                    <th class="p-3 text-left dark:text-gray-300">Place of Supply</th>
+                                    <th class="p-3 text-right dark:text-gray-300">Taxable Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for invoice in report_data.b2b_invoices.unregistered %}
+                                <tr class="border-b dark:border-gray-700">
+                                    <td class="p-3 dark:text-gray-300">{{ invoice.supplier_name }}</td>
+                                    <td class="p-3 dark:text-gray-300">{{ invoice.invoice_number }}</td>
+                                    <td class="p-3 dark:text-gray-300">{{ invoice.invoice_date }}</td>
+                                    <td class="p-3 text-right dark:text-gray-300">{{ invoice.invoice_value|format_currency }}</td>
+                                    <td class="p-3 dark:text-gray-300">{{ invoice.place_of_supply }}</td>
+                                    <td class="p-3 text-right dark:text-gray-300">{{ invoice.taxable_value|format_currency }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Imports (Goods) Section -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-bold mb-4 dark:text-gray-200">4. Imports (Goods)</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-700">
+                    <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-700">
+                            <th class="p-3 text-left dark:text-gray-300">Bill of Entry Number</th>
+                            <th class="p-3 text-left dark:text-gray-300">Bill of Entry Date</th>
+                            <th class="p-3 text-right dark:text-gray-300">Bill of Entry Value</th>
+                            <th class="p-3 text-right dark:text-gray-300">Taxable Value</th>
+                            <th class="p-3 text-right dark:text-gray-300">IGST</th>
+                            <th class="p-3 text-right dark:text-gray-300">Cess</th>
+                            <th class="p-3 text-center dark:text-gray-300">Eligibility</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in report_data.import_goods %}
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">{{ item.bill_of_entry_number }}</td>
+                            <td class="p-3 dark:text-gray-300">{{ item.bill_of_entry_date }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ item.bill_of_entry_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ item.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ item.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ item.cess|format_currency }}</td>
+                            <td class="p-3 text-center dark:text-gray-300">
+                                {% if item.eligible_for_itc %}
+                                <span class="px-2 py-1 rounded bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Eligible</span>
+                                {% else %}
+                                <span class="px-2 py-1 rounded bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">Ineligible</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Credit/Debit Notes Section -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-bold mb-4 dark:text-gray-200">6. Credit/Debit Notes</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-700">
+                    <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-700">
+                            <th class="p-3 text-left dark:text-gray-300">GSTIN of Supplier</th>
+                            <th class="p-3 text-left dark:text-gray-300">Trade Name</th>
+                            <th class="p-3 text-left dark:text-gray-300">Note Type</th>
+                            <th class="p-3 text-left dark:text-gray-300">Note Number</th>
+                            <th class="p-3 text-left dark:text-gray-300">Note Date</th>
+                            <th class="p-3 text-right dark:text-gray-300">Note Value</th>
+                            <th class="p-3 text-right dark:text-gray-300">Taxable Value</th>
+                            <th class="p-3 text-right dark:text-gray-300">IGST</th>
+                            <th class="p-3 text-right dark:text-gray-300">CGST</th>
+                            <th class="p-3 text-right dark:text-gray-300">SGST</th>
+                            <th class="p-3 text-center dark:text-gray-300">Eligibility</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for note in report_data.credit_debit_notes %}
+                        <tr class="border-b dark:border-gray-700">
+                            <td class="p-3 dark:text-gray-300">{{ note.gstin }}</td>
+                            <td class="p-3 dark:text-gray-300">{{ note.trade_name }}</td>
+                            <td class="p-3 dark:text-gray-300">{{ note.note_type }}</td>
+                            <td class="p-3 dark:text-gray-300">{{ note.note_number }}</td>
+                            <td class="p-3 dark:text-gray-300">{{ note.note_date }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ note.note_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ note.taxable_value|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ note.igst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ note.cgst|format_currency }}</td>
+                            <td class="p-3 text-right dark:text-gray-300">{{ note.sgst|format_currency }}</td>
+                            <td class="p-3 text-center dark:text-gray-300">
+                                {% if note.eligible_for_itc %}
+                                <span class="px-2 py-1 rounded bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Eligible</span>
+                                {% else %}
+                                <span class="px-2 py-1 rounded bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">Ineligible</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Notes section -->
+        <div class="p-6 border-t border-gray-200 dark:border-gray-700">
+            <h4 class="font-bold mb-2 dark:text-gray-300">Notes:</h4>
+            <ol class="list-decimal list-inside text-sm dark:text-gray-400">
+                <li>This report is generated based on the inward supplies data for {{ report_period }}.</li>
+                <li>GSTR-2A is an auto-populated statement based on the information filed by your suppliers in their respective GSTR-1.</li>
+                <li>This report should be reconciled with your purchase records to ensure proper ITC claims.</li>
+                <li>All amounts are displayed in {{ hospital.default_currency|default('INR') }}.</li>
+                <li>ITC Eligibility is based on your configuration settings and should be verified before filing returns.</li>
+            </ol>
+        </div>
+        
+        <!-- Footer with report generation info -->
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-400 flex justify-between">
+            <span>Generated on: {{ now.strftime('%d %b, %Y %H:%M') }}</span>
+            <span>Generated by: {{ current_user.name }}</span>
+        </div>
+    </div>
+    {% else %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
+        <p class="text-gray-600 dark:text-gray-400">Select a period and generate the report to view the GSTR-2A data.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Tabs functionality
+    const tabs = document.querySelectorAll('[data-tabs-target]');
+    const tabContents = document.querySelectorAll('[role="tabpanel"]');
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const target = document.querySelector(tab.dataset.tabsTarget);
+            
+            tabContents.forEach(tc => {
+                tc.classList.add('hidden');
+            });
+            
+            tabs.forEach(t => {
+                t.setAttribute('aria-selected', false);
+                t.classList.remove('border-blue-600', 'text-blue-600', 'dark:text-blue-400', 'dark:border-blue-400');
+                t.classList.add('border-transparent');
+            });
+            
+            tab.setAttribute('aria-selected', true);
+            tab.classList.remove('border-transparent');
+            tab.classList.add('border-blue-600', 'text-blue-600', 'dark:text-blue-400', 'dark:border-blue-400');
+            target.classList.remove('hidden');
+        });
+    });
+    
+    // Set default active tab
+    if(tabs.length > 0) {
+        tabs[0].click();
+    }
+    
+    // Print report functionality
+    const printReportBtn = document.getElementById('printReportBtn');
+    if (printReportBtn) {
+        printReportBtn.addEventListener('click', function() {
+            window.print();
+        });
+    }
+    
+    // Export JSON functionality
+    const exportJsonBtn = document.getElementById('exportJsonBtn');
+    if (exportJsonBtn) {
+        exportJsonBtn.addEventListener('click', function() {
+            const formData = new FormData(document.getElementById('gstr2aForm'));
+            formData.append('export_format', 'json');
+            
+            window.location.href = "{{ url_for('gl_views.export_gstr2a') }}?" + new URLSearchParams(formData).toString();
+        });
+    }
+    
+    // Export Excel functionality
+    const exportExcelBtn = document.getElementById('exportExcelBtn');
+    if (exportExcelBtn) {
+        exportExcelBtn.addEventListener('click', function() {
+            const formData = new FormData(document.getElementById('gstr2aForm'));
+            formData.append('export_format', 'excel');
+            
+            window.location.href = "{{ url_for('gl_views.export_gstr2a') }}?" + new URLSearchParams(formData).toString();
+        });
+    }
+});

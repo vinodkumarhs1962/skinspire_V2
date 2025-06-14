@@ -1,0 +1,231 @@
+{% extends 'layouts/dashboard.html' %}
+{% from 'components/forms/field_macros.html' import form_field, patient_search_field, amount_field, submit_button %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Record Advance Payment</h1>
+        <a href="{{ url_for('billing_views.invoice_list') }}" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-white font-semibold py-2 px-4 rounded inline-flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+            </svg>
+            Back to Invoices
+        </a>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+        <form id="advance-payment-form" method="POST">
+            {{ form.csrf_token }}
+            
+            <!-- Patient Selection with simplified approach -->
+            {{ patient_search_field(form) }}
+            
+            <!-- Payment Date -->
+            {{ form_field(form.payment_date) }}
+
+            <!-- Payment Methods -->
+            <div class="mb-4">
+                <div class="font-semibold text-gray-700 dark:text-gray-300 mb-2">Payment Methods</div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {{ amount_field(form.cash_amount) }}
+                    {{ amount_field(form.credit_card_amount) }}
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    {{ amount_field(form.debit_card_amount) }}
+                    {{ amount_field(form.upi_amount) }}
+                </div>
+            </div>
+            
+            <!-- Card Details (conditionally shown) -->
+            <div id="card-details" class="mb-4 hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {{ form_field(form.card_number_last4) }}
+                    {{ form_field(form.card_type) }}
+                </div>
+            </div>
+            
+            <!-- UPI Details (conditionally shown) -->
+            <div id="upi-details" class="mb-4 hidden">
+                {{ form_field(form.upi_id) }}
+            </div>
+            
+            <!-- Reference Number -->
+            {{ form_field(form.reference_number) }}
+            
+            <!-- Notes -->
+            {{ form_field(form.notes, container_class="mb-6") }}
+            
+            <!-- Total Amount Display -->
+            <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg mb-4">
+                <div class="flex justify-between items-center">
+                    <span class="text-blue-800 dark:text-blue-300 font-semibold">Total Payment Amount:</span>
+                    <span class="text-blue-800 dark:text-blue-300 font-bold" id="total-payment-amount">INR 0.00</span>
+                </div>
+            </div>
+            
+            <!-- Submit Button -->
+            {{ submit_button("Record Advance Payment", url_for('billing_views.invoice_list')) }}
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="{{ url_for('static', filename='js/components/patient_search.js') }}"></script>
+<script src="{{ url_for('static', filename='js/components/form_handler.js') }}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize form handler
+        const formHandler = new FormHandler({
+            formSelector: '#advance-payment-form',
+            
+            // Configure patient search
+            patientSearchOptions: {
+                inputSelector: '#patient-search',
+                resultsSelector: '#patient-search-results',
+                patientIdField: 'patient_id',
+                searchEndpoint: '/invoice/web_api/patient/search?limit=20',
+                onSelect: function(patient) {
+                    // Update the patient info display
+                    const patientInfo = document.getElementById('selected-patient-info');
+                    const nameDisplay = document.getElementById('patient-name-display');
+                    const mrnDisplay = document.getElementById('patient-mrn-display');
+                    const contactDisplay = document.getElementById('patient-contact-display');
+                    
+                    if (nameDisplay) nameDisplay.textContent = patient.name;
+                    if (mrnDisplay) mrnDisplay.textContent = `MRN: ${patient.mrn || 'N/A'}`;
+                    if (contactDisplay) contactDisplay.textContent = patient.contact || '';
+                    if (patientInfo) patientInfo.classList.remove('hidden');
+                }
+            },
+            
+            // Configure field toggles
+            toggles: [
+                {
+                    trigger: '#{{ form.credit_card_amount.id }}, #{{ form.debit_card_amount.id }}',
+                    target: '#card-details',
+                    condition: function(triggerEls) {
+                        // Show card details if either credit or debit card amount > 0
+                        const creditAmount = parseFloat(document.getElementById('{{ form.credit_card_amount.id }}').value) || 0;
+                        const debitAmount = parseFloat(document.getElementById('{{ form.debit_card_amount.id }}').value) || 0;
+                        return creditAmount > 0 || debitAmount > 0;
+                    }
+                },
+                {
+                    trigger: '#{{ form.upi_amount.id }}',
+                    target: '#upi-details',
+                    condition: function(triggerEls) {
+                        const upiAmount = parseFloat(triggerEls[0].value) || 0;
+                        return upiAmount > 0;
+                    }
+                }
+            ],
+            
+            // Configure calculations
+            calculations: [
+                {
+                    inputs: [
+                        '#{{ form.cash_amount.id }}',
+                        '#{{ form.credit_card_amount.id }}',
+                        '#{{ form.debit_card_amount.id }}',
+                        '#{{ form.upi_amount.id }}'
+                    ],
+                    output: '#total-payment-amount',
+                    formula: function(inputs) {
+                        const total = inputs.reduce((sum, input) => 
+                            sum + (parseFloat(input.value) || 0), 0);
+                        return 'INR ' + total.toFixed(2);
+                    }
+                }
+            ],
+            
+            // Configure validations
+            validations: [
+                {
+                    field: '#patient_id',
+                    rules: [
+                        function(fieldEls) { return !!fieldEls[0].value; }
+                    ],
+                    message: 'Please select a patient'
+                },
+                {
+                    field: '#{{ form.payment_date.id }}',
+                    rules: [
+                        function(fieldEls) { return !!fieldEls[0].value; }
+                    ],
+                    message: 'Payment date is required'
+                },
+                {
+                    field: '.payment-amount',
+                    rules: [
+                        function(fieldEls) {
+                            // Check if at least one payment amount is greater than zero
+                            const totalAmount = 
+                                (parseFloat(document.getElementById('{{ form.cash_amount.id }}').value) || 0) +
+                                (parseFloat(document.getElementById('{{ form.credit_card_amount.id }}').value) || 0) +
+                                (parseFloat(document.getElementById('{{ form.debit_card_amount.id }}').value) || 0) +
+                                (parseFloat(document.getElementById('{{ form.upi_amount.id }}').value) || 0);
+                                
+                            return totalAmount > 0;
+                        }
+                    ],
+                    message: 'At least one payment method must have an amount'
+                },
+                {
+                    field: '#{{ form.card_number_last4.id }}',
+                    rules: [
+                        function(fieldEls) {
+                            // Only validate if card payment is selected
+                            const creditAmount = parseFloat(document.getElementById('{{ form.credit_card_amount.id }}').value) || 0;
+                            const debitAmount = parseFloat(document.getElementById('{{ form.debit_card_amount.id }}').value) || 0;
+                            
+                            if (creditAmount > 0 || debitAmount > 0) {
+                                return !!fieldEls[0].value && fieldEls[0].value.length === 4;
+                            }
+                            
+                            return true;
+                        }
+                    ],
+                    message: 'Please enter the last 4 digits of the card'
+                },
+                {
+                    field: '#{{ form.card_type.id }}',
+                    rules: [
+                        function(fieldEls) {
+                            // Only validate if card payment is selected
+                            const creditAmount = parseFloat(document.getElementById('{{ form.credit_card_amount.id }}').value) || 0;
+                            const debitAmount = parseFloat(document.getElementById('{{ form.debit_card_amount.id }}').value) || 0;
+                            
+                            if (creditAmount > 0 || debitAmount > 0) {
+                                return !!fieldEls[0].value;
+                            }
+                            
+                            return true;
+                        }
+                    ],
+                    message: 'Please select the card type'
+                },
+                {
+                    field: '#{{ form.upi_id.id }}',
+                    rules: [
+                        function(fieldEls) {
+                            // Only validate if UPI payment is selected
+                            const upiAmount = parseFloat(document.getElementById('{{ form.upi_amount.id }}').value) || 0;
+                            
+                            if (upiAmount > 0) {
+                                return !!fieldEls[0].value;
+                            }
+                            
+                            return true;
+                        }
+                    ],
+                    message: 'Please enter the UPI ID'
+                }
+            ]
+        });
+    });
+</script>
+{% endblock %}

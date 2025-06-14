@@ -1,0 +1,310 @@
+<!-- templates/components/branch/branch_selector.html -->
+<!-- UNIVERSAL BRANCH SELECTOR - Handles all user types and scenarios -->
+<!-- Replaces the existing branch_selector.html to work with all templates -->
+
+<!-- Auto-detect available context variables -->
+{% set has_branches = branches and branches|length > 0 %}
+{% set has_context = branch_context is defined and branch_context %}
+{% set show_selector = has_context and branch_context.get('show_branch_selector', false) %}
+{% set user_method = branch_context.get('method_used', 'unknown') if has_context else 'unknown' %}
+{% set is_admin = branch_context.get('is_admin', false) if has_context else false %}
+{% set can_cross_branch = branch_context.get('can_cross_branch', false) if has_context else false %}
+
+<!-- Debug Panel - Shows method and status
+<div class="mb-3 p-3 border rounded-lg text-xs {% if user_method == 'testing_bypass' %}bg-purple-50 border-purple-300{% elif user_method == 'rbac' %}bg-green-50 border-green-300{% elif 'staff' in user_method %}bg-blue-50 border-blue-300{% elif user_method == 'single_branch' %}bg-yellow-50 border-yellow-300{% else %}bg-gray-50 border-gray-300{% endif %}">
+    <div class="font-semibold mb-2 flex items-center">
+        <i class="fas fa-code-branch mr-2"></i>
+        Branch Selector
+        {% if user_method == 'testing_bypass' %}
+            <span class="ml-2 px-2 py-1 bg-purple-200 text-purple-800 rounded text-xs">TESTING</span>
+        {% elif user_method == 'rbac' %}
+            <span class="ml-2 px-2 py-1 bg-green-200 text-green-800 rounded text-xs">RBAC</span>
+        {% elif 'staff' in user_method %}
+            <span class="ml-2 px-2 py-1 bg-blue-200 text-blue-800 rounded text-xs">STAFF</span>
+        {% elif user_method == 'single_branch' %}
+            <span class="ml-2 px-2 py-1 bg-yellow-200 text-yellow-800 rounded text-xs">SINGLE</span>
+        {% else %}
+            <span class="ml-2 px-2 py-1 bg-gray-200 text-gray-800 rounded text-xs">{{ user_method|upper }}</span>
+        {% endif %}
+    </div>
+    
+    <div class="grid grid-cols-2 gap-4 text-xs">
+        <div>
+            <strong>User:</strong> {{ current_user.user_id if current_user else 'N/A' }}<br>
+            <strong>Method:</strong> {{ user_method }}<br>
+            <strong>Branches:</strong> {{ branches|length if has_branches else 0 }}
+        </div>
+        <div>
+            <strong>Admin:</strong> {{ '[OK]' if is_admin else '[NO]' }}<br>
+            <strong>Cross-Branch:</strong> {{ '[OK]' if can_cross_branch else '[NO]' }}<br>
+            <strong>Selector:</strong> {{ '[OK]' if show_selector else '[NO]' }}
+        </div>
+    </div>
+    
+    {% if has_context and branch_context.get('error') %}
+        <div class="mt-2 p-2 bg-red-100 border border-red-300 rounded text-red-700">
+            <i class="fas fa-exclamation-triangle mr-1"></i>
+            <strong>Error:</strong> {{ branch_context.error }}
+        </div>
+    {% endif %}
+</div> -->
+
+<!-- Branch Selection Logic -->
+{% if has_branches %}
+    
+    {% if show_selector %}
+        <!-- Multi-branch dropdown scenario -->
+        <div class="branch-selector-container">
+            <label for="branch_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <div class="flex items-center">
+                    <i class="fas fa-sitemap mr-2 text-gray-500"></i>
+                    <span>Branch</span>
+                    
+                    <!-- Required indicator -->
+                    {% if not can_cross_branch %}
+                        <span class="text-red-600 ml-1">*</span>
+                    {% endif %}
+                    
+                    <!-- User type indicators -->
+                    {% if user_method == 'testing_bypass' %}
+                        <span class="ml-2 px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">Testing Mode</span>
+                    {% elif is_admin %}
+                        <span class="ml-2 px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">Admin</span>
+                    {% elif user_method == 'rbac' %}
+                        <span class="ml-2 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">RBAC</span>
+                    {% elif 'staff' in user_method %}
+                        <span class="ml-2 px-2 py-1 bg-cyan-100 text-cyan-700 text-xs rounded-full">Staff</span>
+                    {% endif %}
+                    
+                    {% if can_cross_branch %}
+                        <span class="ml-2 px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded-full">Cross-Branch</span>
+                    {% endif %}
+                </div>
+            </label>
+            
+            <select id="branch_id" name="branch_id" class="form-select w-full" 
+                    {% if branches|length == 1 and not can_cross_branch %}disabled title="Only one branch available"{% endif %}>
+                
+                <!-- Dynamic empty option based on user type -->
+                {% if can_cross_branch %}
+                    <option value="">🌐 All Branches</option>
+                {% elif user_method == 'testing_bypass' %}
+                    <option value="">TESTING: Select Branch (Testing)</option>
+                {% elif is_admin %}
+                    <option value="">👑 Select Branch (Admin)</option>
+                {% elif user_method == 'rbac' %}
+                    <option value="">RBAC: Select Branch (RBAC)</option>
+                {% elif 'staff' in user_method %}
+                    <option value="">STAFF: Select Branch (Staff)</option>
+                {% else %}
+                    <option value="">📍 Select Branch</option>
+                {% endif %}
+                
+                <!-- Branch options with enhanced information -->
+                {% for branch in branches %}
+                    <option value="{{ branch.branch_id }}" 
+                            {% if default_branch_id and branch.branch_id == default_branch_id %}selected{% endif %}>
+                        {{ branch.name }}
+                        {% if default_branch_id and branch.branch_id == default_branch_id %}(Default){% endif %}
+                        
+                        <!-- Show RBAC permissions if available -->
+                        {% if user_method == 'rbac' and branch.permissions %}
+                            {% set perms = [] %}
+                            {% if branch.permissions.can_view %}{% set _ = perms.append('V') %}{% endif %}
+                            {% if branch.permissions.can_add %}{% set _ = perms.append('A') %}{% endif %}
+                            {% if branch.permissions.can_edit %}{% set _ = perms.append('E') %}{% endif %}
+                            {% if branch.permissions.can_delete %}{% set _ = perms.append('D') %}{% endif %}
+                            {% if perms %} [{{ perms|join('') }}]{% endif %}
+                        {% endif %}
+                    </option>
+                {% endfor %}
+            </select>
+            
+            <!-- Context-aware help text
+            <div class="mt-2 p-2 bg-gray-50 dark:bg-gray-700 rounded text-xs text-gray-600 dark:text-gray-400">
+                <i class="fas fa-info-circle mr-1"></i>
+                {% if user_method == 'testing_bypass' %}
+                    <strong>Testing Mode:</strong> You have unrestricted access to all {{ branches|length }} branch{{ 'es' if branches|length > 1 else '' }} for testing purposes.
+                {% elif user_method == 'rbac' %}
+                    <strong>RBAC Access:</strong> Your branch access is controlled by role-based permissions.
+                    {% if can_cross_branch %}You can work across multiple branches.{% endif %}
+                {% elif user_method == 'staff_admin' %}
+                    <strong>Staff Admin:</strong> You have administrative access to all {{ branches|length }} branch{{ 'es' if branches|length > 1 else '' }}.
+                {% elif user_method == 'staff_assigned' %}
+                    <strong>Staff Assignment:</strong> Your access is based on staff branch configuration.
+                {% else %}
+                    <strong>Branch Access:</strong> You can select from {{ branches|length }} available branch{{ 'es' if branches|length > 1 else '' }}.
+                {% endif %}
+            </div> -->
+            
+            <!-- Form validation errors -->
+            {% if form and form.branch_id and form.branch_id.errors %}
+                <div class="mt-2 p-2 bg-red-50 border border-red-200 rounded">
+                    <p class="text-red-600 text-xs">
+                        <i class="fas fa-exclamation-circle mr-1"></i>
+                        {{ form.branch_id.errors[0] }}
+                    </p>
+                </div>
+            {% endif %}
+        </div>
+        
+    {% else %}
+        <!-- Single branch or auto-assignment scenario -->
+        {% if default_branch_id %}
+            <input type="hidden" name="branch_id" value="{{ default_branch_id }}">
+            
+            <div class="branch-assignment-info p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                <div class="flex items-center text-sm">
+                    <i class="fas fa-map-marker-alt text-gray-500 mr-3"></i>
+                    <div class="flex-1">
+                        <div class="font-medium text-gray-900 dark:text-white">
+                            Branch: <span class="text-blue-600 dark:text-blue-400">{{ branches[0].name }}</span>
+                        </div>
+                        
+                        <div class="text-xs text-gray-500 mt-1">
+                            {% if user_method == 'testing_bypass' %}
+                                TESTING: Testing mode - Single branch assignment
+                            {% elif user_method == 'staff_assigned' %}
+                                STAFF: Assigned via your staff configuration
+                            {% elif user_method == 'single_branch' %}
+                                SINGLE: Auto-assigned (single branch hospital)
+                            {% elif user_method == 'rbac' %}
+                                RBAC: Access restricted by RBAC permissions
+                            {% else %}
+                                📍 Branch assignment via {{ user_method }}
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Show RBAC permissions for single branch -->
+                        {% if user_method == 'rbac' and branches[0].permissions %}
+                            <div class="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                                {% set perms = [] %}
+                                {% if branches[0].permissions.can_view %}{% set _ = perms.append('View') %}{% endif %}
+                                {% if branches[0].permissions.can_add %}{% set _ = perms.append('Add') %}{% endif %}
+                                {% if branches[0].permissions.can_edit %}{% set _ = perms.append('Edit') %}{% endif %}
+                                {% if branches[0].permissions.can_delete %}{% set _ = perms.append('Delete') %}{% endif %}
+                                RBAC: Permissions: {{ perms|join(', ') if perms else 'View Only' }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Status indicator -->
+                    <div class="text-green-500">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <!-- No branch assignment available -->
+            <div class="branch-error p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div class="flex items-start">
+                    <i class="fas fa-exclamation-triangle text-yellow-600 mr-3 mt-0.5"></i>
+                    <div class="flex-1">
+                        <div class="font-medium text-yellow-800">No Branch Assignment</div>
+                        <div class="text-xs text-yellow-700 mt-1">
+                            {% if user_method == 'staff_assigned' %}
+                                Your staff record has no branch assignment. Please contact your administrator.
+                            {% elif user_method == 'rbac' %}
+                                No RBAC permissions found for branch access. Please contact your administrator.
+                            {% else %}
+                                Branch access could not be determined. Please contact support.
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    {% endif %}
+    
+{% else %}
+    <!-- No branches available scenario -->
+    <div class="no-branches-error p-4 bg-red-50 border border-red-200 rounded-lg">
+        <div class="flex items-start">
+            <i class="fas fa-exclamation-circle text-red-600 mr-3 mt-1"></i>
+            <div class="flex-1">
+                <h4 class="text-sm font-medium text-red-800 mb-2">
+                    <i class="fas fa-building mr-1"></i>
+                    No Branch Access Available
+                </h4>
+                
+                {% if has_context and branch_context.get('error') %}
+                    <p class="text-sm text-red-700 mb-3">{{ branch_context.error }}</p>
+                {% endif %}
+                
+                <div class="text-xs text-red-600">
+                    <strong>What to do:</strong>
+                    <ul class="list-disc list-inside mt-2 space-y-1">
+                        {% if user_method == 'staff_assigned' %}
+                            <li>Contact HR to configure your staff branch assignment</li>
+                            <li>Verify your staff record is properly set up</li>
+                        {% elif user_method == 'rbac' %}
+                            <li>Contact IT to configure RBAC permissions for your role</li>
+                            <li>Verify that branch access is enabled for your user role</li>
+                        {% elif user_method in ['unknown', 'error'] %}
+                            <li>Contact IT support with your user ID: {{ current_user.user_id if current_user else 'N/A' }}</li>
+                            <li>The system could not determine your access level</li>
+                        {% else %}
+                            <li>Contact your administrator to set up branch access</li>
+                            <li>Verify that active branches exist in the system</li>
+                        {% endif %}
+                    </ul>
+                </div>
+                
+                <!-- Technical details for support -->
+                <details class="mt-3">
+                    <summary class="text-xs text-red-600 cursor-pointer hover:text-red-800">Technical Details</summary>
+                    <div class="mt-2 p-2 bg-red-100 rounded text-xs font-mono">
+                        User ID: {{ current_user.user_id if current_user else 'N/A' }}<br>
+                        Hospital ID: {{ current_user.hospital_id if current_user else 'N/A' }}<br>
+                        Access Method: {{ user_method }}<br>
+                        Context Available: {{ 'Yes' if has_context else 'No' }}<br>
+                        Branches Found: {{ branches|length if branches is defined else 'undefined' }}
+                    </div>
+                </details>
+            </div>
+        </div>
+    </div>
+{% endif %}
+
+<!-- Enhanced JavaScript for better UX -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const branchSelect = document.getElementById('branch_id');
+    if (branchSelect) {
+        // Enhanced change handler
+        branchSelect.addEventListener('change', function() {
+            const selectedText = this.options[this.selectedIndex].text;
+            const method = '{{ user_method }}';
+            
+            console.log(`Branch selected: ${this.value} (${selectedText}) via ${method}`);
+            
+            // Method-specific feedback
+            if (method === 'testing_bypass' && this.value) {
+                console.log('TESTING: Testing mode: Branch selection recorded');
+            } else if (method === 'rbac' && this.value) {
+                console.log('RBAC: RBAC mode: Permission-based branch selected');
+            }
+            
+            // Optional: Emit custom event for other scripts
+            window.dispatchEvent(new CustomEvent('branchChanged', {
+                detail: { branchId: this.value, branchName: selectedText, method: method }
+            }));
+        });
+        
+        // Auto-selection logic for single valid option
+        const validOptions = Array.from(branchSelect.options).filter(opt => opt.value !== '');
+        if (validOptions.length === 1) {
+            branchSelect.value = validOptions[0].value;
+            console.log('Auto-selected single available branch:', validOptions[0].text);
+        }
+        
+        // Keyboard navigation enhancement
+        branchSelect.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && this.value) {
+                e.preventDefault();
+                this.blur(); // Remove focus to show selection clearly
+            }
+        });
+    }
+});
+</script>

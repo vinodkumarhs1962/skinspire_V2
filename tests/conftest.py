@@ -15,9 +15,12 @@ from datetime import datetime, timezone
 import pytest
 from werkzeug.security import generate_password_hash
 from sqlalchemy import text
+from PIL import Image
+from werkzeug.datastructures import FileStorage
 
 # Set up logging
 logger = logging.getLogger(__name__)
+logo_logger = logging.getLogger('hospital_logo_tests')
 
 # Import the environment testing utilities
 from tests.test_environment import integration_flag
@@ -300,3 +303,60 @@ def logged_in_client(client, admin_user, monkeypatch):
         sess['auth_token'] = 'test_token_123'
     
     return client
+
+@pytest.fixture
+def logo_upload_data(test_hospital):
+    """
+    Prepare test logo upload data
+    
+    Args:
+        test_hospital: Fixture providing a test hospital
+    
+    Returns:
+        Dict with logo upload test data
+    """
+    # Create an in-memory test logo
+    test_image = Image.new('RGB', (400, 400), color='blue')
+    img_byte_arr = io.BytesIO()
+    test_image.save(img_byte_arr, format='PNG')
+    img_byte_arr.seek(0)
+    
+    logo_file = FileStorage(
+        stream=img_byte_arr, 
+        filename='test_logo.png', 
+        content_type='image/png'
+    )
+    
+    return {
+        'hospital_id': test_hospital.hospital_id,
+        'logo_file': logo_file,
+        'hospital': test_hospital
+    }
+
+# Additional hook for logo-related test reporting
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """
+    Hook to log additional information for logo upload tests
+    
+    Maintains compatibility with existing test infrastructure
+    """
+    outcome = yield
+    rep = outcome.get_result()
+    
+    # Check if this is a logo-related test
+    if 'logo' in item.keywords:
+        try:
+            if rep.failed:
+                logo_logger.error(f"Logo upload test failed: {item.name}")
+                logo_logger.error(f"Failure info: {call.excinfo}")
+                
+                # Optional: Log to standard logger as well
+                logger.error(f"Logo upload test failed: {item.name}")
+                logger.error(f"Failure info: {call.excinfo}")
+        except Exception as e:
+            # Ensure logging doesn't break test execution
+            logger.warning(f"Error in logo test reporting: {str(e)}")
+    
+    # Yield the original outcome to maintain existing behavior
+    return outcome

@@ -13,6 +13,7 @@ from datetime import date, datetime
 from flask import current_app
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.services.database_service import get_db_session, get_detached_copy
 from app.models.master import Staff, Patient
@@ -112,7 +113,12 @@ class ProfileService:
         
         if not staff:
             raise ValueError(f"Staff entity not found for user: {user.user_id}")
-            
+
+        # Check if employee_code is empty and would cause a unique constraint violation
+        if 'employee_code' in update_data and update_data['employee_code'] == '':
+            current_app.logger.info(f"Removing empty employee_code from update to avoid unique constraint violation")
+            del update_data['employee_code']  # Remove it from the update data entirely
+
         # Convert JSON strings to dictionaries if needed
         personal_info = staff.personal_info
         if isinstance(personal_info, str):
@@ -137,20 +143,44 @@ class ProfileService:
         # Update personal information
         if 'title' in update_data:
             personal_info['title'] = update_data['title']
+        
         if 'first_name' in update_data:
             personal_info['first_name'] = update_data['first_name']
+            # Also update dedicated field
+            staff.first_name = update_data['first_name']
         if 'last_name' in update_data:
             personal_info['last_name'] = update_data['last_name']
+            # Also update dedicated field
+            staff.last_name = update_data['last_name']
+        
+        # Update full_name if either first_name or last_name changed
+        if 'first_name' in update_data or 'last_name' in update_data:
+            # Get current values for any field not in update_data
+            first_name = update_data.get('first_name', personal_info.get('first_name', ''))
+            last_name = update_data.get('last_name', personal_info.get('last_name', ''))
+            
+            # Update full_name with SQL
+            session.execute(
+                text("UPDATE staff SET full_name = :full_name WHERE staff_id = :staff_id"),
+                {"full_name": f"{first_name} {last_name}".strip(), "staff_id": staff.staff_id}
+            )
+        
+        
         if 'date_of_birth' in update_data:
             personal_info['date_of_birth'] = update_data['date_of_birth']
         if 'gender' in update_data:
             personal_info['gender'] = update_data['gender']
         
+
+
         # Update contact information
         if 'email' in update_data:
             contact_info['email'] = update_data['email']
         if 'phone' in update_data:
-            contact_info['phone'] = update_data['phone']
+            # Log that we're ignoring the phone update
+            current_app.logger.info(f"Ignoring phone update attempt for user {user.user_id}")
+            # Keep the existing phone in contact_info, don't update it
+            update_data.pop('phone')
         if 'address' in update_data:
             contact_info['address'] = update_data['address']
         
@@ -159,7 +189,15 @@ class ProfileService:
             staff.specialization = update_data['specialization']
             professional_info['specialization'] = update_data['specialization']
         if 'employee_code' in update_data:
-            staff.employee_code = update_data['employee_code']
+            # Only update employee_code if it's not empty
+            if update_data['employee_code']:
+                staff.employee_code = update_data['employee_code']
+            # If it's empty, we shouldn't try to update it (to avoid unique constraint violation)
+            # Instead, we should keep the existing value or set it to NULL if allowed
+            elif staff.employee_code == '':
+                # If it's already empty and we're trying to save empty, we need to handle this
+                # The best approach is to not include it in the update at all
+                pass  # Skip updating employee_code if it's empty
         if 'qualifications' in update_data:
             professional_info['qualifications'] = update_data['qualifications']
         if 'certifications' in update_data:
@@ -237,8 +275,19 @@ class ProfileService:
             personal_info['title'] = update_data['title']
         if 'first_name' in update_data:
             personal_info['first_name'] = update_data['first_name']
+            patient.first_name = update_data['first_name']
         if 'last_name' in update_data:
             personal_info['last_name'] = update_data['last_name']
+            patient.last_name = update_data['last_name']
+        if 'first_name' in update_data or 'last_name' in update_data:
+            # Get current values for any field not in update_data
+            first_name = update_data.get('first_name', personal_info.get('first_name', ''))
+            last_name = update_data.get('last_name', personal_info.get('last_name', ''))
+            # Update full_name with SQL
+            session.execute(
+                text("UPDATE patients SET full_name = :full_name WHERE patient_id = :patient_id"),
+                {"full_name": f"{first_name} {last_name}".strip(), "patient_id": patient.patient_id}
+            )  
         if 'date_of_birth' in update_data:
             personal_info['date_of_birth'] = update_data['date_of_birth']
         if 'gender' in update_data:
@@ -250,7 +299,10 @@ class ProfileService:
         if 'email' in update_data:
             contact_info['email'] = update_data['email']
         if 'phone' in update_data:
-            contact_info['phone'] = update_data['phone']
+            # Log that we're ignoring the phone update
+            current_app.logger.info(f"Ignoring phone update attempt for user {user.user_id}")
+            # Keep the existing phone in contact_info, don't update it
+            update_data.pop('phone')
         if 'address' in update_data:
             contact_info['address'] = update_data['address']
         

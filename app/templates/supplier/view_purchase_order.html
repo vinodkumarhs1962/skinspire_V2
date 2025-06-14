@@ -1,0 +1,407 @@
+{% extends "layouts/dashboard.html" %}
+{% from "components/alerts.html" import alert %}
+{% from "components/badges.html" import status_badge %}
+
+{% block title %}Purchase Order Details{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <!-- Header Section - Supplier Info Horizontally Aligned -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-between">
+            <div class="flex-grow">
+                <div class="flex items-center justify-between mb-2">
+                    <h1 class="text-base font-medium text-gray-800 dark:text-gray-100">
+                        Purchase Order: {{ po.po_number }}
+                    </h1>
+                    <span class="text-sm text-gray-600 dark:text-gray-400">
+                        Date: {{ po.po_date.strftime('%Y-%m-%d') if po.po_date else 'N/A' }}
+                    </span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Supplier Details -->
+                    <div>
+                        <p class="text-lg font-bold text-gray-800 dark:text-gray-200">
+                            {% if supplier %}
+                                {{ supplier.supplier_name }}
+                            {% else %}
+                                Supplier information not available
+                            {% endif %}
+                        </p>
+                        {% if supplier %}
+                            <p class="text-sm text-gray-600 dark:text-gray-400">{{ supplier.contact_person_name or 'N/A' }}</p>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">{{ supplier.email or 'N/A' }}</p>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">GSTIN: {{ supplier.gst_registration_number or 'N/A' }}</p>
+                        {% endif %}
+                    </div>
+                    <!-- Address -->
+                    <div>
+                        {% if supplier and supplier.supplier_address %}
+                            <p class="text-sm text-gray-700 dark:text-gray-300">
+                                {% set address = supplier.supplier_address %}
+                                {{ address.get('address_line1', '') }}
+                                {% if address.get('address_line2') %}
+                                    <br>{{ address.get('address_line2', '') }}
+                                {% endif %}
+                                {% if address.get('city') and address.get('state') %}
+                                    <br>{{ address.get('city', '') }}, {{ address.get('state', '') }} {{ address.get('pincode', '') }}
+                                {% endif %}
+                            </p>
+                        {% else %}
+                            <p class="text-sm text-gray-600 dark:text-gray-400">Address not available</p>
+                        {% endif %}
+                    </div>
+                    <!-- Expected Delivery Info -->
+                    <div class="text-right">
+                        <p class="text-gray-700 dark:text-gray-300">Expected Delivery: 
+                            {% if po.expected_delivery_date %}
+                                {{ po.expected_delivery_date.strftime('%Y-%m-%d') }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </p>
+                        {% if po.quotation_id %}
+                            <p class="text-gray-700 dark:text-gray-300">Quotation: {{ po.quotation_id }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="mt-4 md:mt-0 flex items-center space-x-4">
+                <a href="{{ url_for('supplier_views.purchase_order_list') }}" class="btn-secondary flex items-center">
+                    <i class="fas fa-arrow-left mr-2"></i> Back
+                </a>
+                <div class="relative dropdown">
+                    <button type="button" class="btn-primary dropdown-toggle flex items-center">
+                        <i class="fas fa-cog mr-2"></i> Actions <i class="fas fa-chevron-down ml-2"></i>
+                    </button>
+                    <div class="dropdown-menu origin-top-right absolute left-0-0 mt-2 w-60 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 hidden z-10" style="min-width: 240px;">
+                        <div class="py-1" role="menu" aria-orientation="vertical">
+                            {% if po.status == 'draft' %}
+                            <a href="{{ url_for('supplier_views.edit_purchase_order', po_id=po.po_id) }}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600">
+                                <i class="fas fa-edit mr-2"></i> Edit Purchase Order
+                            </a>
+                            <a href="{{ url_for('supplier_views.approve_purchase_order', po_id=po.po_id) }}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600">
+                                <i class="fas fa-check-circle mr-2"></i> Approve Purchase Order
+                            </a>
+                            <hr class="my-1 border-gray-200 dark:border-gray-600">
+                            <a href="{{ url_for('supplier_views.cancel_purchase_order', po_id=po.po_id) }}" 
+                               onclick="return confirm('Are you sure you want to cancel this purchase order? This action cannot be undone.')"
+                               class="block px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-600">
+                                <i class="fas fa-times-circle mr-2"></i> Cancel Purchase Order
+                            </a>
+                            {% elif po.status == 'approved' %}
+                            <a href="{{ url_for('supplier_views.add_supplier_invoice', po_id=po.po_id) }}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600">
+                                <i class="fas fa-file-invoice mr-2"></i> Create Invoice
+                            </a>
+                            {% elif po.status == 'cancelled' %}
+                            <div class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+                                <i class="fas fa-info-circle mr-2"></i> No actions available for cancelled orders
+                            </div>
+                            {% endif %}
+                            
+                            <a href="{{ url_for('supplier_views.print_purchase_order', po_id=po.po_id) }}" 
+                               target="_blank" 
+                               rel="noopener noreferrer"
+                               onclick="window.open(this.href, 'print-window', 'width=800,height=600,scrollbars=yes,resizable=yes'); return false;"
+                               class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600">
+                                <i class="fas fa-print mr-2"></i> Print Purchase Order
+                            </a>
+                            
+                            <a href="{{ url_for('supplier_views.email_purchase_order', po_id=po.po_id) }}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600">
+                                <i class="fas fa-envelope mr-2"></i> Email to Supplier
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Combined Status & Timeline Card -->
+    <div class="mb-6">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <div class="flex flex-col md:flex-row justify-between mb-4">
+                <div class="flex items-center mb-4 md:mb-0">
+                    <span class="mr-3 text-gray-700 dark:text-gray-300">Status:</span>
+                    <span class="px-3 py-1 text-sm rounded-full 
+                        {% if po.status == 'approved' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300
+                        {% elif po.status == 'draft' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300
+                        {% elif po.status == 'cancelled' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300
+                        {% else %}bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300{% endif %}">
+                        {{ po.status|capitalize }}
+                    </span>
+                    
+                    {% if po.status == 'approved' and po.approved_by %}
+                    <span class="ml-4 text-gray-600 dark:text-gray-400 text-sm">
+                        <i class="fas fa-user mr-1"></i> Approved by: {{ po.approved_by }}
+                    </span>
+                    {% endif %}
+                </div>
+                
+                <div class="flex flex-col">
+                    <div class="text-right">
+                        <span class="text-gray-700 dark:text-gray-300">Total Amount:</span>
+                        <span class="ml-2 text-xl font-bold text-gray-800 dark:text-gray-100"> Rs. {{ "%.2f"|format(po.total_amount|float) }}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Timeline section -->
+            <div class="border-t border-gray-200 dark:border-gray-700 pt-4 mt-2">
+                <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-3">Order Timeline</h3>
+                <div class="relative">
+                    <!-- Timeline track -->
+                    <div class="border-l-2 border-gray-200 dark:border-gray-700 absolute h-full left-4 top-0"></div>
+                    
+                    <!-- Timeline items -->
+                    <ul class="space-y-12 relative z-10">
+                        <li class="ml-14">
+                            <div class="flex items-center">
+                                <div class="absolute left-1.5">
+                                    <span class="flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900 text-blue-500 dark:text-blue-300">
+                                        <i class="fas fa-plus-circle"></i>
+                                    </span>
+                                </div>
+                                <div>
+                                    <p class="font-medium text-gray-800 dark:text-gray-200 mb-1">Created</p>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                                        {% if po.created_at %}
+                                            {{ po.created_at.strftime('%Y-%m-%d %H:%M') if po.created_at is not string else po.created_at }}
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                        </li>
+                        
+                        {% if po.status == 'approved' %}
+                        <li class="ml-14">
+                            <div class="flex items-center">
+                                <div class="absolute left-1.5">
+                                    <span class="flex h-7 w-7 items-center justify-center rounded-full bg-green-100 dark:bg-green-900 text-green-500 dark:text-green-300">
+                                        <i class="fas fa-check-circle"></i>
+                                    </span>
+                                </div>
+                                <div>
+                                    <p class="font-medium text-gray-800 dark:text-gray-200 mb-1">Approved</p>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                                        {% if po.updated_at %}
+                                            {{ po.updated_at.strftime('%Y-%m-%d %H:%M') if po.updated_at is not string else po.updated_at }}
+                                        {% endif %}
+                                    </p>
+                                    {% if po.approved_by %}
+                                    <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">Approved by: {{ po.approved_by }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </li>
+                        {% endif %}
+                        
+                        {% if po.status == 'cancelled' %}
+                        <li class="ml-14">
+                            <div class="flex items-center">
+                                <div class="absolute left-1.5">
+                                    <span class="flex h-7 w-7 items-center justify-center rounded-full bg-red-100 dark:bg-red-900 text-red-500 dark:text-red-300">
+                                        <i class="fas fa-times-circle"></i>
+                                    </span>
+                                </div>
+                                <div>
+                                    <p class="font-medium text-gray-800 dark:text-gray-200 mb-1">Cancelled</p>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                                        {% if po.updated_at %}
+                                            {{ po.updated_at.strftime('%Y-%m-%d %H:%M') if po.updated_at is not string else po.updated_at }}
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+        <!-- Line Items Card -->
+        <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Order Items</h2>
+        </div>
+        
+        <div class="p-6">
+            <div class="overflow-x-auto">
+                <table class="min-w-full table-auto">
+                    <thead>
+                        <tr class="bg-gray-50 dark:bg-gray-700 text-xs uppercase">
+                            <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">Item</th>
+                            <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">Qty</th>
+                            <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">Unit Rate</th>
+                            <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">MRP</th>
+                            <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">Discount</th>
+                            <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">GST</th>
+                            <th class="px-4 py-2 text-right text-gray-500 dark:text-gray-300">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if po.line_items and po.line_items|length > 0 %}
+                            {% for line in po.line_items %}
+                            <tr class="border-b dark:border-gray-700">
+                                <td class="px-4 py-3">
+                                    <div class="font-medium text-gray-800 dark:text-gray-200">{{ line.medicine_name }}</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">HSN: {{ line.hsn_code or 'N/A' }}</div>
+                                    {% if line.units_per_pack and line.units_per_pack > 1 %}
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                                        Pack size: {{ line.units_per_pack }} units
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                    {{ "%.0f"|format(line.units|float) }}
+                                </td>
+                                <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                     Rs.{{ "%.2f"|format(line.pack_purchase_price|float) }}
+                                    {% if line.discount_percent and line.discount_percent > 0 %}
+                                    <div class="text-xs text-red-500">
+                                        -{{ "%.1f"|format(line.discount_percent|float) }}%
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                     Rs.{{ "%.2f"|format(line.pack_mrp|float) }}
+                                </td>
+                                <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                    {% if line.discount_amount and line.discount_amount > 0 %}
+                                     Rs.{{ "%.2f"|format(line.discount_amount|float) }}
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                    {{ "%.1f"|format(line.gst_rate|float) }}%
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                                         Rs.{{ "%.2f"|format(line.total_gst|float) }}
+                                    </div>
+                                    {% if line.cgst and line.sgst %}
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                                        C:{{ "%.2f"|format(line.cgst|float) }} S:{{ "%.2f"|format(line.sgst|float) }}
+                                    </div>
+                                    {% elif line.igst %}
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                                        I:{{ "%.2f"|format(line.igst|float) }}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-right font-medium text-gray-800 dark:text-gray-200">
+                                     Rs.{{ "%.2f"|format(line.line_total|float) }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="7" class="px-4 py-3 text-center text-gray-500 dark:text-gray-400">
+                                    No line items found for this purchase order.
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="bg-gray-50 dark:bg-gray-700">
+                            <td colspan="6" class="px-4 py-1 text-right font-semibold text-gray-700 dark:text-gray-300">Subtotal:</td>
+                            <td class="px-4 py-1 text-right text-gray-700 dark:text-gray-300">
+                                 Rs.{{ "%.2f"|format(po.calculated_subtotal|float) if po.calculated_subtotal else "0.00" }}
+                            </td>
+                        </tr>
+                        <tr class="bg-gray-50 dark:bg-gray-700">
+                            <td colspan="6" class="px-4 py-1 text-right font-semibold text-gray-700 dark:text-gray-300">Total GST:</td>
+                            <td class="px-4 py-1 text-right text-gray-700 dark:text-gray-300">
+                                 Rs.{{ "%.2f"|format(po.calculated_total_gst|float) if po.calculated_total_gst else "0.00" }}
+                            </td>
+                        </tr>
+                        <tr class="bg-gray-50 dark:bg-gray-700">
+                            <td colspan="6" class="px-4 py-1 text-right font-semibold text-gray-700 dark:text-gray-300">Grand Total:</td>
+                            <td class="px-4 py-1 text-right font-bold text-gray-800 dark:text-gray-200">
+                                 Rs.{{ "%.2f"|format(po.total_amount|float) }}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Additional Details Card -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Additional Details</h2>
+        </div>
+        
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {% if po.delivery_instructions %}
+                <div>
+                    <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">Delivery Instructions</h3>
+                    <p class="text-gray-700 dark:text-gray-300 whitespace-pre-line">{{ po.delivery_instructions }}</p>
+                </div>
+                {% endif %}
+                
+                {% if po.terms_conditions %}
+                <div>
+                    <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">Terms and Conditions</h3>
+                    <p class="text-gray-700 dark:text-gray-300 whitespace-pre-line">{{ po.terms_conditions }}</p>
+                </div>
+                {% endif %}
+                
+                {% if po.notes %}
+                <div>
+                    <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">Internal Notes</h3>
+                    <p class="text-gray-700 dark:text-gray-300 whitespace-pre-line">{{ po.notes }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Create New Button Row -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+        <div class="flex flex-wrap gap-2 justify-center">
+            <a href="{{ url_for('supplier_views.add_purchase_order') }}" class="btn-primary">
+                <i class="fas fa-plus mr-2"></i> New Purchase Order
+            </a>
+            
+            {% if po.status == 'approved' %}
+            <a href="{{ url_for('supplier_views.add_supplier_invoice', po_id=po.po_id) }}" class="btn-secondary">
+                <i class="fas fa-file-invoice mr-2"></i> Create Invoice
+            </a>
+            {% endif %}
+            
+            <a href="{{ url_for('supplier_views.supplier_list') }}" class="btn-secondary">
+                <i class="fas fa-truck mr-2"></i> Supplier List
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Simple dropdown toggle - no modal logic needed
+    const dropdownToggle = document.querySelector('.dropdown-toggle');
+    const dropdownMenu = document.querySelector('.dropdown-menu');
+    
+    if (dropdownToggle && dropdownMenu) {
+        dropdownToggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            dropdownMenu.classList.toggle('hidden');
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!dropdownToggle.contains(event.target) && !dropdownMenu.contains(event.target)) {
+                dropdownMenu.classList.add('hidden');
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
