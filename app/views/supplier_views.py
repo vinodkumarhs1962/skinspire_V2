@@ -5,6 +5,9 @@ from flask_login import login_required, current_user
 from datetime import datetime
 import uuid
 
+from app.utils.unicode_logging import get_unicode_safe_logger
+logger = get_unicode_safe_logger(__name__)
+
 from app.services.database_service import get_db_session
 from app.security.authorization.permission_validator import has_permission
 from app.models.master import Supplier, Medicine, Branch
@@ -30,6 +33,7 @@ from app.config import PAYMENT_CONFIG, DOCUMENT_CONFIG, POSTING_CONFIG
 
 from app.services.branch_service import populate_branch_choices_for_user
 from app.utils.form_helpers import populate_supplier_choices, populate_invoice_choices_for_supplier
+
 
 # ADD this helper function after the existing imports and before route definitions:
 def get_branch_context():
@@ -62,7 +66,7 @@ def supplier_list():
     if str(current_user.user_id) == '7777777777':
         # Testing user gets complete bypass - no branch filtering at all
         branch_uuid = None
-        current_app.logger.info("TESTING OVERRIDE: Setting branch_uuid to None for complete bypass")
+        logger.info("TESTING OVERRIDE: Setting branch_uuid to None for complete bypass")
         
         # Still get branch context for UI components (they handle their own display logic)
         try:
@@ -80,12 +84,12 @@ def supplier_list():
         branch_uuid, branch_context = get_branch_uuid_from_context_or_request()
 
     # Enhanced debug logging to confirm our fix
-    current_app.logger.info(f"=== BRANCH DEBUG START ===")
-    current_app.logger.info(f"User ID: {current_user.user_id} (type: {type(current_user.user_id)})")
-    current_app.logger.info(f"Branch UUID FINAL: {branch_uuid} (type: {type(branch_uuid)})")
-    current_app.logger.info(f"Branch context method FINAL: {branch_context.get('method') if branch_context else 'None'}")
-    current_app.logger.info(f"Is testing user: {str(current_user.user_id) == '7777777777'}")
-    current_app.logger.info(f"=== BRANCH DEBUG END ===")
+    logger.info(f"=== BRANCH DEBUG START ===")
+    logger.info(f"User ID: {current_user.user_id} (type: {type(current_user.user_id)})")
+    logger.info(f"Branch UUID FINAL: {branch_uuid} (type: {type(branch_uuid)})")
+    logger.info(f"Branch context method FINAL: {branch_context.get('method') if branch_context else 'None'}")
+    logger.info(f"Is testing user: {str(current_user.user_id) == '7777777777'}")
+    logger.info(f"=== BRANCH DEBUG END ===")
 
     # Import form locally to avoid circular imports (UNCHANGED)
     try:
@@ -272,20 +276,21 @@ def view_supplier(supplier_id):
 # Supplier Invoice Management - Using Controller
 @supplier_views_bp.route('/invoices', methods=['GET'])
 @login_required
-@require_web_branch_permission('supplier_invoice', 'view')  # NEW: Branch-aware decorator
+@require_web_branch_permission('supplier_invoice', 'view')
 def supplier_invoice_list():
-    """Display list of supplier invoices with filtering and branch awareness."""
-    # REMOVED: Manual permission check - decorator handles it now
-    # OLD: if not has_permission(current_user, 'supplier_invoice', 'view'):
+    """
+    Display list of supplier invoices - USES AUTHORITATIVE CALCULATIONS ONLY
+    REMOVED: All embedded calculation logic - now handled in service layer
+    """
     
-    # NEW: Get branch context from decorator
+    # Get branch context (unchanged)
     branch_uuid, branch_context = get_branch_uuid_from_context_or_request()
     
-    # Import form locally (UNCHANGED)
+    # Import form locally (unchanged)
     from app.forms.supplier_forms import SupplierInvoiceFilterForm
     form = SupplierInvoiceFilterForm()
     
-    # Existing filter parameters (UNCHANGED)
+    # Filter parameters (unchanged)
     invoice_number = request.args.get('invoice_number')
     supplier_id = request.args.get('supplier_id')
     po_id = request.args.get('po_id')
@@ -293,59 +298,72 @@ def supplier_invoice_list():
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     
-    # Existing pagination (UNCHANGED)
+    # Pagination (unchanged)
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     
     try:
-        # Import service locally (UNCHANGED)
-        from app.services.supplier_service import search_supplier_invoices
-        from app.services.supplier_service import search_suppliers
+        from app.services.supplier_service import search_supplier_invoices, search_suppliers
         
-        # UPDATED: Get suppliers for dropdown with branch filtering
+        # Get suppliers for dropdown (unchanged)
         supplier_result = search_suppliers(
             hospital_id=current_user.hospital_id,
             status='active',
-            branch_id=branch_uuid,  # NEW: Filter suppliers by branch
-            current_user_id=current_user.user_id,  # NEW: Pass user context
+            branch_id=branch_uuid,
+            current_user_id=current_user.user_id,
             page=1,
-            per_page=1000  # Get all active suppliers
+            per_page=1000
         )
         suppliers = supplier_result.get('suppliers', [])
         
-        # UPDATED: Service call now includes branch filtering and user context
+        # Parse dates (unchanged)
+        start_date_obj = None
+        end_date_obj = None
+        if start_date:
+            start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
+        if end_date:
+            end_date_obj = datetime.strptime(end_date, '%Y-%m-%d')
+        
+        # SEARCH INVOICES WITH AUTHORITATIVE CALCULATIONS
+        # No flags needed - authoritative calculations are now always applied
         result = search_supplier_invoices(
             hospital_id=current_user.hospital_id,
+            supplier_id=uuid.UUID(supplier_id) if supplier_id else None,
             invoice_number=invoice_number,
-            supplier_id=supplier_id,
-            po_id=po_id,
+            po_id=uuid.UUID(po_id) if po_id else None,
             payment_status=payment_status,
-            start_date=start_date,
-            end_date=end_date,
-            branch_id=branch_uuid,  # NEW: Pass branch filter
-            current_user_id=current_user.user_id,  # NEW: Pass user context
+            start_date=start_date_obj,
+            end_date=end_date_obj,
+            branch_id=branch_uuid,
+            current_user_id=current_user.user_id,
             page=page,
             per_page=per_page
         )
         
         invoices = result.get('invoices', [])
-        total = result.get('pagination', {}).get('total_count', 0)
+        total = result.get('total', 0)
         
-        # Existing summary calculations (UNCHANGED)
+        # 🎯 REMOVED: All embedded payment calculation logic
+        # Each invoice in the list now contains authoritative calculations:
+        # - payment_total (net effective payment)
+        # - balance_due (remaining balance)
+        # - payment_status (recalculated)
+        # - gross_payments, credit_adjustments, has_credit_notes
+        
+        # Calculate summary statistics using authoritative values
         total_invoices = len(invoices)
-        unpaid_amount = sum(float(invoice.get('balance_due', 0)) for invoice in invoices)
-        paid_amount = sum(float(invoice.get('payment_total', 0)) for invoice in invoices)
+        unpaid_amount = sum(float(inv.get('balance_due', 0)) for inv in invoices)
+        paid_amount = sum(float(inv.get('payment_total', 0)) for inv in invoices)
+        listed_total = sum(float(inv.get('total_amount', 0)) for inv in invoices)
         
-        listed_total = 0
-        for invoice in invoices:
-            if 'total_amount' in invoice and invoice['total_amount'] is not None:
-                try:
-                    listed_total += float(invoice['total_amount'])
-                except (ValueError, TypeError):
-                    current_app.logger.warning(f"Could not convert invoice total_amount to float: {invoice['total_amount']}")
+        # Log summary of calculations used
+        logger.info(f"Invoice list using authoritative calculations: "
+                               f"Total invoices={total_invoices}, "
+                               f"Total unpaid=₹{unpaid_amount:.2f}, "
+                               f"Total paid=₹{paid_amount:.2f}")
         
-        if invoices and len(invoices) > 0:
-            current_app.logger.info(f"First invoice structure keys: {list(invoices[0].keys())}")
+        if len(invoices) > 0:
+            logger.info(f"First invoice calculation method: {invoices[0].get('calculation_method', 'unknown')}")
 
         summary = {
             'total_invoices': total_invoices,
@@ -356,7 +374,7 @@ def supplier_invoice_list():
             
         return render_template(
             'supplier/supplier_invoice_list.html',
-            invoices=invoices,
+            invoices=invoices,  # Now contains authoritative calculations
             suppliers=suppliers,
             form=form,
             page=page,
@@ -365,6 +383,7 @@ def supplier_invoice_list():
             summary=summary,
             branch_context=getattr(g, 'branch_context', None) 
         )
+        
     except Exception as e:
         current_app.logger.error(f"Error in supplier_invoice_list: {str(e)}", exc_info=True)
         flash(f"Error retrieving supplier invoices: {str(e)}", "error")
@@ -376,6 +395,7 @@ def supplier_invoice_list():
             summary={'total_invoices': 0, 'unpaid_amount': 0, 'paid_amount': 0, 'listed_total': 0},
             branch_context=getattr(g, 'branch_context', None) 
         )
+
 
 
 @supplier_views_bp.route('/invoice/add', methods=['GET', 'POST'])
@@ -400,19 +420,20 @@ def add_supplier_invoice():
         
     return controller.handle_request()
 
-
 @supplier_views_bp.route('/invoice/view/<invoice_id>', methods=['GET'])
 @login_required
-@require_web_branch_permission('supplier_invoice', 'view', branch_source='entity')  # NEW: Entity-based branch detection
+@require_web_branch_permission('supplier_invoice', 'view', branch_source='entity')
 def view_supplier_invoice(invoice_id):
-    """View supplier invoice details with branch awareness."""
-    # REMOVED: Manual permission check - decorator handles it now
-    # OLD: if not has_permission(current_user, 'supplier_invoice', 'view'):
+    """
+    View supplier invoice details - USES AUTHORITATIVE CALCULATIONS ONLY
+    REMOVED: All embedded calculation logic - now handled in service layer
+    """
     
     try:
-        # Import service locally (UNCHANGED)
         from app.services.supplier_service import get_supplier_invoice_by_id, get_purchase_order_by_id
         
+        # GET INVOICE WITH AUTHORITATIVE CALCULATIONS
+        # No flags needed - authoritative calculations are now always applied
         invoice = get_supplier_invoice_by_id(
             invoice_id=uuid.UUID(invoice_id),
             hospital_id=current_user.hospital_id,
@@ -422,6 +443,24 @@ def view_supplier_invoice(invoice_id):
         if not invoice:
             flash("Supplier invoice not found", "error")
             return redirect(url_for('supplier_views.supplier_invoice_list'))
+        
+        # 🎯 REMOVED: All the complex embedded credit note calculation logic
+        # The invoice dict now contains authoritative calculations:
+        # - payment_total (net effective payment)
+        # - balance_due (remaining balance)
+        # - payment_status (recalculated)
+        # - gross_payments (total positive payments)
+        # - credit_adjustments (total credit note adjustments)
+        # - has_credit_notes (boolean indicator)
+        
+        # Log the authoritative calculation for verification
+        logger.info(f"Using authoritative calculation for invoice {invoice_id}: "
+                               f"Method={invoice.get('calculation_method')}, "
+                               f"Gross Payments={invoice.get('gross_payments')}, "
+                               f"Credit Adjustments={invoice.get('credit_adjustments')}, "
+                               f"Net Payment={invoice.get('payment_total')}, "
+                               f"Balance Due={invoice.get('balance_due')}, "
+                               f"Status={invoice.get('payment_status')}")
         
         # Rest of the function remains UNCHANGED (PO data, supplier extraction, etc.)
         po_data = None
@@ -434,7 +473,7 @@ def view_supplier_invoice(invoice_id):
                         ).first()
                         if po_header:
                             invoice['po_number'] = po_header.po_number
-                            current_app.logger.info(f"Added PO number {po_header.po_number} to invoice")
+                            logger.info(f"Added PO number {po_header.po_number} to invoice")
             except Exception as po_error:
                 current_app.logger.warning(f"Could not fetch PO number: {str(po_error)}")
         
@@ -460,41 +499,30 @@ def view_supplier_invoice(invoice_id):
         if 'line_items' in invoice:
             for line in invoice['line_items']:
                 units = float(line.get('units', 0))
-                price = float(line.get('pack_purchase_price', 0))
-                line_subtotal = units * price
-                subtotal_sum += line_subtotal
-                
-                if 'taxable_amount' in line and line['taxable_amount'] is not None:
-                    taxable_value = float(line['taxable_amount'])
-                else:
-                    discount = float(line.get('discount_amount', 0))
-                    taxable_value = line_subtotal - discount
-                
-                taxable_value_sum += taxable_value
+                rate = float(line.get('rate', 0))
+                subtotal_sum += units * rate
+                taxable_value_sum += float(line.get('taxable_value', 0))
         
-        invoice['calculated_subtotal'] = subtotal_sum
-        invoice['calculated_taxable_value'] = taxable_value_sum
-
-        # Calculate GST summary (UNCHANGED)
+        # Create GST summary (UNCHANGED)
         gst_summary = []
         if 'line_items' in invoice:
             gstin_groups = {}
             for line in invoice['line_items']:
-                key = (line.get('hsn_code', ''), line.get('gst_rate', 0))
+                key = line.get('supplier_gstin', 'No GSTIN')
                 if key not in gstin_groups:
                     gstin_groups[key] = {
-                        'hsn_code': key[0],
-                        'gst_rate': key[1],
+                        'supplier_gstin': key,
                         'taxable_value': 0,
-                        'cgst': 0,
-                        'sgst': 0,
-                        'igst': 0,
+                        'cgst': 0,        # ✅ CORRECT - Template expects this
+                        'sgst': 0,        # ✅ CORRECT - Template expects this
+                        'igst': 0,        # ✅ CORRECT - Template expects this
                         'total_gst': 0
                     }
+                
                 gstin_groups[key]['taxable_value'] += float(line.get('taxable_amount', 0))
-                gstin_groups[key]['cgst'] += float(line.get('cgst', 0))
-                gstin_groups[key]['sgst'] += float(line.get('sgst', 0))
-                gstin_groups[key]['igst'] += float(line.get('igst', 0))
+                gstin_groups[key]['cgst'] += float(line.get('cgst', 0))      # ✅ CORRECT
+                gstin_groups[key]['sgst'] += float(line.get('sgst', 0))      # ✅ CORRECT
+                gstin_groups[key]['igst'] += float(line.get('igst', 0))      # ✅ CORRECT
                 gstin_groups[key]['total_gst'] += float(line.get('total_gst', 0))
             
             gst_summary = list(gstin_groups.values())
@@ -502,7 +530,7 @@ def view_supplier_invoice(invoice_id):
         attachments = []
             
         enhanced_context = {
-            'invoice': invoice,
+            'invoice': invoice,  # Now contains authoritative payment calculations
             'supplier': supplier,
             'payments': payments,
             'gst_summary': gst_summary,
@@ -512,7 +540,7 @@ def view_supplier_invoice(invoice_id):
             'po_data': po_data,
             'branch_context': getattr(g, 'branch_context', None),
             
-            # NEW: Payment integration context
+            # Payment integration context (uses authoritative values)
             'can_create_payment': invoice.get('payment_status') != 'paid',
             'payment_url': url_for('supplier_views.record_payment', invoice_id=invoice.get('invoice_id')),
             'payment_config': PAYMENT_CONFIG,
@@ -520,10 +548,256 @@ def view_supplier_invoice(invoice_id):
         }
         
         return render_template('supplier/view_supplier_invoice.html', **enhanced_context)
+        
     except Exception as e:
         current_app.logger.error(f"Error in view_supplier_invoice: {str(e)}", exc_info=True)
         flash(f"Error retrieving supplier invoice details: {str(e)}", "error")
         return redirect(url_for('supplier_views.supplier_invoice_list'))
+
+# commented on 16.06.25 The code works for credit note feature.  However we are now rationalizing totals Hence new code is brought in.
+# @supplier_views_bp.route('/invoice/view/<invoice_id>', methods=['GET'])
+# @login_required
+# @require_web_branch_permission('supplier_invoice', 'view', branch_source='entity')  # NEW: Entity-based branch detection
+# def view_supplier_invoice(invoice_id):
+#     """View supplier invoice details with branch awareness."""
+#     # REMOVED: Manual permission check - decorator handles it now
+#     # OLD: if not has_permission(current_user, 'supplier_invoice', 'view'):
+    
+#     try:
+#         # Import service locally (UNCHANGED)
+#         from app.services.supplier_service import get_supplier_invoice_by_id, get_purchase_order_by_id
+        
+#         invoice = get_supplier_invoice_by_id(
+#             invoice_id=uuid.UUID(invoice_id),
+#             hospital_id=current_user.hospital_id,
+#             include_payments=True
+#         )
+        
+#         if not invoice:
+#             flash("Supplier invoice not found", "error")
+#             return redirect(url_for('supplier_views.supplier_invoice_list'))
+        
+#         # 🔥 ENHANCED CREDIT NOTE SEARCH - START 🔥
+#         if invoice and (not invoice.get('has_credit_notes') or not invoice.get('positive_payments_total')):
+#             logger.info(f"Calculating enhanced credit note fields for invoice {invoice_id}")
+            
+#             from app.services.database_service import get_db_session
+#             from app.models.transaction import SupplierPayment, SupplierInvoice
+#             from sqlalchemy import func, or_
+            
+#             with get_db_session(read_only=True) as session:
+#                 # DEBUG: Get ALL payments for this invoice first
+#                 all_payments = session.query(SupplierPayment).filter_by(
+#                     invoice_id=uuid.UUID(invoice_id)
+#                 ).all()
+                
+#                 logger.info(f"DEBUG: Found {len(all_payments)} payments linked to original invoice {invoice_id}")
+                
+#                 for payment in all_payments:
+#                     logger.info(f"DEBUG Payment: ID={payment.payment_id}, "
+#                                           f"Amount={payment.amount}, "
+#                                           f"Status={payment.workflow_status}, "
+#                                           f"Reference={payment.reference_no}")
+                
+#                 # NEW: Search for credit note invoices related to this invoice
+#                 invoice_number = invoice.get('supplier_invoice_number', '')
+#                 credit_note_invoices = session.query(SupplierInvoice).filter(
+#                     SupplierInvoice.hospital_id == current_user.hospital_id,
+#                     SupplierInvoice.is_credit_note == True,
+#                     or_(
+#                         SupplierInvoice.original_invoice_id == uuid.UUID(invoice_id),
+#                         SupplierInvoice.notes.like(f'%{invoice_number}%'),
+#                         SupplierInvoice.notes.like(f'%{invoice_id}%')
+#                     )
+#                 ).all()
+                
+#                 logger.info(f"DEBUG: Found {len(credit_note_invoices)} credit note invoices related to {invoice_id}")
+                
+#                 # NEW: Track unique credit payment IDs to avoid double-counting
+#                 found_credit_payment_ids = set()
+#                 credit_payments_total = 0
+                
+#                 for credit_invoice in credit_note_invoices:
+#                     logger.info(f"DEBUG Credit Note: {credit_invoice.supplier_invoice_number}, "
+#                                           f"Amount={credit_invoice.total_amount}, "
+#                                           f"Original_Invoice_ID={credit_invoice.original_invoice_id}")
+                    
+#                     # Get payments for this credit note
+#                     credit_payments = session.query(SupplierPayment).filter_by(
+#                         invoice_id=credit_invoice.invoice_id
+#                     ).all()
+                    
+#                     for cp in credit_payments:
+#                         logger.info(f"DEBUG Credit Payment: ID={cp.payment_id}, "
+#                                               f"Amount={cp.amount}, "
+#                                               f"Status={cp.workflow_status}, "
+#                                               f"Reference={cp.reference_no}")
+                        
+#                         # FIXED: Only count each credit payment once
+#                         if cp.amount < 0 and str(cp.payment_id) not in found_credit_payment_ids:
+#                             credit_payments_total += abs(float(cp.amount))
+#                             found_credit_payment_ids.add(str(cp.payment_id))
+                
+#                 # NEW: Also search by payment reference patterns (but avoid duplicates)
+#                 credit_payment_refs = session.query(SupplierPayment).filter(
+#                     SupplierPayment.hospital_id == current_user.hospital_id,
+#                     or_(
+#                         SupplierPayment.reference_no.like(f'%CN-ADJ%{invoice_number}%'),
+#                         SupplierPayment.reference_no.like(f'%CN-PAY%{invoice_number}%'),
+#                         SupplierPayment.notes.like(f'%{invoice_number}%'),
+#                         SupplierPayment.notes.like(f'%{invoice_id}%')
+#                     ),
+#                     SupplierPayment.amount < 0
+#                 ).all()
+                
+#                 logger.info(f"DEBUG: Found {len(credit_payment_refs)} credit payments by reference pattern")
+                
+#                 for cp in credit_payment_refs:
+#                     logger.info(f"DEBUG Credit Payment by Ref: ID={cp.payment_id}, "
+#                                           f"Amount={cp.amount}, "
+#                                           f"Invoice_ID={cp.invoice_id}, "
+#                                           f"Reference={cp.reference_no}")
+                    
+#                     # FIXED: Only count if not already found
+#                     if cp.amount < 0 and str(cp.payment_id) not in found_credit_payment_ids:
+#                         credit_payments_total += abs(float(cp.amount))
+#                         found_credit_payment_ids.add(str(cp.payment_id))
+                
+#                 # Calculate with corrected credit payments
+#                 positive_payments = session.query(func.sum(SupplierPayment.amount)).filter_by(
+#                     invoice_id=uuid.UUID(invoice_id),
+#                     workflow_status='approved'
+#                 ).filter(SupplierPayment.amount > 0).scalar() or 0
+                
+#                 positive_payments_total = float(positive_payments)
+#                 credit_adjustments = credit_payments_total  # Now correctly calculated
+#                 effective_payment = positive_payments_total - credit_adjustments
+                
+#                 total_amount = float(invoice.get('total_amount', 0))
+#                 balance_due = max(0, total_amount - effective_payment)
+                
+#                 # Add enhanced fields to invoice dict
+#                 invoice['positive_payments_total'] = positive_payments_total
+#                 invoice['credit_adjustments_total'] = credit_adjustments
+#                 invoice['has_credit_notes'] = credit_adjustments > 0
+#                 invoice['payment_total'] = effective_payment
+#                 invoice['balance_due'] = balance_due
+                
+#                 # Recalculate payment status based on net effective payments
+#                 if invoice.get('payment_status') != 'cancelled':
+#                     if effective_payment >= total_amount:
+#                         invoice['payment_status'] = 'paid'
+#                     elif effective_payment > 0:
+#                         invoice['payment_status'] = 'partial'
+#                     else:
+#                         invoice['payment_status'] = 'unpaid'
+                
+#                 logger.info(f"FINAL Enhanced calculation: Status={invoice['payment_status']}, "
+#                                       f"Positive={positive_payments_total}, Credits={credit_adjustments}, "
+#                                       f"Net={effective_payment}, Balance={balance_due}")
+#         # 🔥 ENHANCED CREDIT NOTE SEARCH - END 🔥
+
+#         # Rest of the function remains UNCHANGED (PO data, supplier extraction, etc.)
+#         po_data = None
+#         if invoice.get('po_id'):
+#             try:
+#                 if not invoice.get('po_number'):
+#                     with get_db_session(read_only=True) as po_session:
+#                         po_header = po_session.query(PurchaseOrderHeader).filter_by(
+#                             po_id=invoice.get('po_id')
+#                         ).first()
+#                         if po_header:
+#                             invoice['po_number'] = po_header.po_number
+#                             logger.info(f"Added PO number {po_header.po_number} to invoice")
+#             except Exception as po_error:
+#                 current_app.logger.warning(f"Could not fetch PO number: {str(po_error)}")
+        
+#         # Extract supplier from invoice data (UNCHANGED)
+#         supplier = {
+#             'supplier_id': invoice.get('supplier_id'),
+#             'supplier_name': invoice.get('supplier_name', ''),
+#             'supplier_address': invoice.get('supplier_address', {}),
+#             'contact_info': invoice.get('contact_info', {}),
+#             'gst_registration_number': invoice.get('supplier_gstin', ''),
+#             'pan_number': '',
+#             'tax_type': 'Regular',
+#             'supplier_category': ''
+#         }
+        
+#         # Get payments from invoice data (UNCHANGED)
+#         payments = invoice.get('payments', [])
+        
+#         # Calculate subtotal and taxable value (UNCHANGED)
+#         subtotal_sum = 0
+#         taxable_value_sum = 0
+        
+#         if 'line_items' in invoice:
+#             for line in invoice['line_items']:
+#                 units = float(line.get('units', 0))
+#                 price = float(line.get('pack_purchase_price', 0))
+#                 line_subtotal = units * price
+#                 subtotal_sum += line_subtotal
+                
+#                 if 'taxable_amount' in line and line['taxable_amount'] is not None:
+#                     taxable_value = float(line['taxable_amount'])
+#                 else:
+#                     discount = float(line.get('discount_amount', 0))
+#                     taxable_value = line_subtotal - discount
+                
+#                 taxable_value_sum += taxable_value
+        
+#         invoice['calculated_subtotal'] = subtotal_sum
+#         invoice['calculated_taxable_value'] = taxable_value_sum
+
+#         # Calculate GST summary (UNCHANGED)
+#         gst_summary = []
+#         if 'line_items' in invoice:
+#             gstin_groups = {}
+#             for line in invoice['line_items']:
+#                 key = (line.get('hsn_code', ''), line.get('gst_rate', 0))
+#                 if key not in gstin_groups:
+#                     gstin_groups[key] = {
+#                         'hsn_code': key[0],
+#                         'gst_rate': key[1],
+#                         'taxable_value': 0,
+#                         'cgst': 0,
+#                         'sgst': 0,
+#                         'igst': 0,
+#                         'total_gst': 0
+#                     }
+#                 gstin_groups[key]['taxable_value'] += float(line.get('taxable_amount', 0))
+#                 gstin_groups[key]['cgst'] += float(line.get('cgst', 0))
+#                 gstin_groups[key]['sgst'] += float(line.get('sgst', 0))
+#                 gstin_groups[key]['igst'] += float(line.get('igst', 0))
+#                 gstin_groups[key]['total_gst'] += float(line.get('total_gst', 0))
+            
+#             gst_summary = list(gstin_groups.values())
+        
+#         attachments = []
+            
+#         enhanced_context = {
+#             'invoice': invoice,
+#             'supplier': supplier,
+#             'payments': payments,
+#             'gst_summary': gst_summary,
+#             'attachments': attachments,
+#             'subtotal_sum': subtotal_sum,
+#             'taxable_value_sum': taxable_value_sum,
+#             'po_data': po_data,
+#             'branch_context': getattr(g, 'branch_context', None),
+            
+#             # NEW: Payment integration context
+#             'can_create_payment': invoice.get('payment_status') != 'paid',
+#             'payment_url': url_for('supplier_views.record_payment', invoice_id=invoice.get('invoice_id')),
+#             'payment_config': PAYMENT_CONFIG,
+#             'pending_amount': float(invoice.get('balance_due', 0))
+#         }
+        
+#         return render_template('supplier/view_supplier_invoice.html', **enhanced_context)
+#     except Exception as e:
+#         current_app.logger.error(f"Error in view_supplier_invoice: {str(e)}", exc_info=True)
+#         flash(f"Error retrieving supplier invoice details: {str(e)}", "error")
+#         return redirect(url_for('supplier_views.supplier_invoice_list'))
 
 @supplier_views_bp.route('/purchase-orders', methods=['GET'])
 @login_required
@@ -713,7 +987,7 @@ def view_purchase_order(po_id):
         
         cancel_form = PurchaseOrderCancelForm()
         
-        current_app.logger.info(f"Attempting to view PO with ID: {po_id}")
+        logger.info(f"Attempting to view PO with ID: {po_id}")
         
         try:
             po_id_uuid = uuid.UUID(po_id)
@@ -768,7 +1042,7 @@ def view_purchase_order(po_id):
                 'color': 'red'
             })
         
-        current_app.logger.info(f"PO {po.get('po_number')} totals: "
+        logger.info(f"PO {po.get('po_number')} totals: "
                                f"Subtotal={po.get('calculated_subtotal', 0)}, "
                                f"GST={po.get('calculated_total_gst', 0)}, "
                                f"Total={po.get('total_amount', 0)}")
@@ -1241,6 +1515,89 @@ def print_supplier_invoice(invoice_id):
         flash(f"Error printing invoice: {str(e)}", "error")
         return redirect(url_for('supplier_views.view_supplier_invoice', invoice_id=invoice_id))
 
+@supplier_views_bp.route('/payment/print/<payment_id>', methods=['GET'])
+@login_required
+@require_web_branch_permission('payment', 'view', branch_source='entity')
+def print_supplier_payment(payment_id):
+    """Print supplier payment receipt"""
+    try:
+        # Import necessary services
+        from app.services.supplier_service import get_supplier_payment_by_id, get_supplier_by_id
+        
+        # Get the payment data
+        payment = get_supplier_payment_by_id(
+            payment_id=uuid.UUID(payment_id),
+            hospital_id=current_user.hospital_id,
+            include_documents=True,
+            include_approvals=True
+        )
+        
+        if not payment:
+            flash("Payment not found", "error")
+            return redirect(url_for('supplier_views.payment_list'))
+        
+        # Get supplier details
+        supplier = None
+        if payment.get('supplier_id'):
+            try:
+                supplier = get_supplier_by_id(
+                    supplier_id=payment.get('supplier_id'),
+                    hospital_id=current_user.hospital_id
+                )
+            except Exception as supplier_error:
+                current_app.logger.error(f"Error getting supplier for print: {str(supplier_error)}")
+        
+        # Get invoice details if payment is linked to an invoice
+        invoice = None
+        if payment.get('invoice_id'):
+            try:
+                from app.services.supplier_service import get_supplier_invoice_by_id
+                invoice = get_supplier_invoice_by_id(
+                    invoice_id=payment.get('invoice_id'),
+                    hospital_id=current_user.hospital_id
+                )
+            except Exception as invoice_error:
+                current_app.logger.error(f"Error getting invoice for print: {str(invoice_error)}")
+        
+        # Get hospital info
+        hospital = None
+        try:
+            with get_db_session(read_only=True) as session:
+                from app.models.master import Hospital
+                hospital = session.query(Hospital).filter_by(
+                    hospital_id=current_user.hospital_id
+                ).first()
+        except Exception as hospital_error:
+            current_app.logger.error(f"Error getting hospital info: {str(hospital_error)}")
+        
+        # Get branch info
+        branch = None
+        if payment.get('branch_id'):
+            try:
+                with get_db_session(read_only=True) as session:
+                    from app.models.master import Branch
+                    branch = session.query(Branch).filter_by(
+                        branch_id=payment.get('branch_id')
+                    ).first()
+            except Exception as branch_error:
+                current_app.logger.error(f"Error getting branch info: {str(branch_error)}")
+        
+        return render_template(
+            'supplier/print_payment.html',
+            payment=payment,
+            supplier=supplier,
+            invoice=invoice,
+            hospital=hospital,
+            branch=branch,
+            logo_url=None
+        )
+        
+    except Exception as e:
+        current_app.logger.error(f"Error printing supplier payment: {str(e)}", exc_info=True)
+        flash(f"Error printing payment: {str(e)}", "error")
+        return redirect(url_for('supplier_views.view_payment', payment_id=payment_id))
+
+
 @supplier_views_bp.route('/purchase-order/email/<po_id>', methods=['GET'])
 @login_required
 def email_purchase_order(po_id):
@@ -1340,11 +1697,11 @@ def email_purchase_order(po_id):
 #             supplier_choices_dict = dict(form.supplier_id.choices)
 #             if supplier_id_str and supplier_id_str in supplier_choices_dict:
 #                 form.supplier_id.data = supplier_id_str
-#                 current_app.logger.info(f"SUCCESS: Set supplier: {supplier_choices_dict[supplier_id_str]}")
+#                 logger.info(f"SUCCESS: Set supplier: {supplier_choices_dict[supplier_id_str]}")
             
 #             # Set invoice
 #             form.invoice_id.data = str(invoice_id)
-#             current_app.logger.info(f"SUCCESS: Set invoice: {invoice.get('supplier_invoice_number', invoice_id)}")
+#             logger.info(f"SUCCESS: Set invoice: {invoice.get('supplier_invoice_number', invoice_id)}")
             
 #             # Set amount
 #             form.amount.data = float(amount_to_pay) if amount_to_pay else 0.0
@@ -1355,7 +1712,7 @@ def email_purchase_order(po_id):
 #                 branch_choices_dict = dict(form.branch_id.choices)
 #                 if branch_id_str in branch_choices_dict:
 #                     form.branch_id.data = branch_id_str
-#                     current_app.logger.info(f"SUCCESS: Set branch: {branch_choices_dict[branch_id_str]}")
+#                     logger.info(f"SUCCESS: Set branch: {branch_choices_dict[branch_id_str]}")
             
 #             # Set date and currency
 #             from datetime import date
@@ -1371,7 +1728,7 @@ def email_purchase_order(po_id):
 #             # Set default payment method
 #             form.payment_method.data = 'cash'
             
-#             current_app.logger.info(f"FORM PRE-POPULATED SUCCESSFULLY")
+#             logger.info(f"FORM PRE-POPULATED SUCCESSFULLY")
         
 #         # 🔧 ENHANCED FORM SUBMISSION WITH UUID CONVERSION
 #         if form.validate_on_submit():
@@ -1419,12 +1776,12 @@ def email_purchase_order(po_id):
 #                 }
                 
 #                 # Enhanced logging for debugging
-#                 current_app.logger.info(f"PAYMENT DATA READY:")
-#                 current_app.logger.info(f"  supplier_id: {type(payment_data['supplier_id'])} = {payment_data['supplier_id']}")
-#                 current_app.logger.info(f"  invoice_id: {type(payment_data['invoice_id'])} = {payment_data['invoice_id']}")
-#                 current_app.logger.info(f"  branch_id: {type(payment_data['branch_id'])} = {payment_data['branch_id']}")
-#                 current_app.logger.info(f"  amount: {payment_data['amount']}")
-#                 current_app.logger.info(f"  payment_method: {payment_data['payment_method']}")
+#                 logger.info(f"PAYMENT DATA READY:")
+#                 logger.info(f"  supplier_id: {type(payment_data['supplier_id'])} = {payment_data['supplier_id']}")
+#                 logger.info(f"  invoice_id: {type(payment_data['invoice_id'])} = {payment_data['invoice_id']}")
+#                 logger.info(f"  branch_id: {type(payment_data['branch_id'])} = {payment_data['branch_id']}")
+#                 logger.info(f"  amount: {payment_data['amount']}")
+#                 logger.info(f"  payment_method: {payment_data['payment_method']}")
                 
 #                 payment = record_supplier_payment(
 #                     hospital_id=current_user.hospital_id,
@@ -1608,7 +1965,7 @@ def edit_payment(payment_id):
 @login_required
 @require_web_branch_permission('payment', 'view')
 def payment_list():
-    """List supplier payments with enhanced filtering"""
+    """List supplier payments with enhanced filtering and supplier dropdown"""
     try:
         from app.forms.supplier_forms import PaymentSearchForm
         
@@ -1634,17 +1991,136 @@ def payment_list():
         except Exception as e:
             current_app.logger.warning(f"Error populating form choices: {str(e)}")
         
-        # Get filter parameters from request
-        filters = {
-            'supplier_id': request.args.get('supplier_id'),
-            'branch_id': request.args.get('branch_id'),
-            'workflow_status': request.args.get('workflow_status'),
-            'payment_method': request.args.get('payment_method'),
-            'start_date': request.args.get('start_date'),
-            'end_date': request.args.get('end_date'),
-            'min_amount': request.args.get('min_amount'),
-            'max_amount': request.args.get('max_amount')
-        }
+        # ===========================================
+        # NEW: GET SUPPLIERS FOR DROPDOWN
+        # ===========================================
+        suppliers = []
+        try:
+            from app.services.supplier_service import search_suppliers
+            
+            # Get branch context
+            branch_uuid, branch_context = get_branch_uuid_from_context_or_request()
+            
+            # Get all suppliers for dropdown
+            supplier_result = search_suppliers(
+                hospital_id=current_user.hospital_id,
+                branch_id=branch_uuid,
+                current_user_id=current_user.user_id,
+                page=1,
+                per_page=1000  # Get all suppliers for dropdown
+            )
+            
+            suppliers = supplier_result.get('suppliers', [])
+            logger.info(f"Loaded {len(suppliers)} suppliers for dropdown")
+            
+        except Exception as e:
+            current_app.logger.error(f"Error loading suppliers for dropdown: {str(e)}")
+            suppliers = []
+        
+        # ===========================================
+        # EXISTING FILTER LOGIC (keep as-is but enhance for dropdown)
+        # ===========================================
+        filters = {}
+        
+        # Enhanced supplier filtering - UPDATE to use supplier_id from dropdown
+        supplier_id = request.args.get('supplier_id')  # NEW: from dropdown
+        supplier_text = request.args.get('supplier')   # OLD: from text input (fallback)
+        supplier_search = request.args.get('supplier_search')  # OLD: fallback
+
+        if supplier_id and supplier_id.strip():
+            # NEW: Use supplier_id from dropdown
+            filters['supplier_id'] = supplier_id
+            logger.info(f"Using supplier_id filter: {supplier_id}")
+        elif supplier_search and supplier_search.strip():
+            # OLD: Fallback to text search
+            filters['supplier_name_search'] = supplier_search.strip()
+        elif supplier_text and supplier_text.strip():
+            # OLD: Fallback to text search
+            filters['supplier_name_search'] = supplier_text.strip()
+
+        # Enhanced payment method filtering - support multiple selections
+        payment_methods = request.args.getlist('payment_method')
+        payment_methods = [method.strip() for method in payment_methods if method.strip()]
+        if payment_methods:
+            filters['payment_methods'] = payment_methods  # Note: plural for multiple values
+        
+        # Enhanced status filtering - support multiple selections
+        statuses = request.args.getlist('status')
+        statuses = [status.strip() for status in statuses if status.strip()]
+        if statuses:
+            filters['statuses'] = statuses  # Note: plural for multiple values
+        
+        # Fallback to single value parameters for backward compatibility
+        if not payment_methods:
+            payment_method = request.args.get('payment_method')
+            if payment_method and payment_method.strip():
+                filters['payment_methods'] = [payment_method.strip()]
+        
+        if not statuses:
+            status = request.args.get('status')
+            workflow_status = request.args.get('workflow_status')
+            
+            if status and status.strip():
+                filters['statuses'] = [status.strip()]
+            elif workflow_status and workflow_status.strip():
+                filters['statuses'] = [workflow_status.strip()]
+        
+        # Status filtering - support both parameter name formats
+        workflow_status = request.args.get('workflow_status')
+        status = request.args.get('status')
+        
+        if workflow_status and workflow_status.strip():
+            filters['workflow_status'] = workflow_status
+        elif status and status.strip():
+            filters['workflow_status'] = status
+        
+        # Amount filtering - support both parameter name formats
+        min_amount = request.args.get('min_amount')
+        amount_min = request.args.get('amount_min')
+        
+        if min_amount and min_amount.strip():
+            try:
+                filters['min_amount'] = float(min_amount)
+            except ValueError:
+                pass
+        elif amount_min and amount_min.strip():
+            try:
+                filters['min_amount'] = float(amount_min)
+            except ValueError:
+                pass
+        
+        # Other parameters (keep as-is)
+        branch_id = request.args.get('branch_id')
+        if branch_id and branch_id.strip():
+            filters['branch_id'] = branch_id
+        
+        start_date = request.args.get('start_date')
+        if start_date and start_date.strip():
+            filters['start_date'] = start_date
+        
+        end_date = request.args.get('end_date')
+        if end_date and end_date.strip():
+            filters['end_date'] = end_date
+        
+        max_amount = request.args.get('max_amount')
+        if max_amount and max_amount.strip():
+            try:
+                filters['max_amount'] = float(max_amount)
+            except ValueError:
+                pass
+        
+        # REMOVED: reference_no (since field is hidden)
+        # reference_no = request.args.get('reference_no')
+        # if reference_no and reference_no.strip():
+        #     filters['reference_no'] = reference_no.strip()
+        
+        invoice_id = request.args.get('invoice_id')
+        if invoice_id and invoice_id.strip():
+            filters['invoice_id'] = invoice_id.strip()
+        
+        # Clean filters
+        filters = {k: v for k, v in filters.items() if v is not None and v != ''}
+        logger.info(f"Export filters: {filters}")
         
         # Pagination
         page = request.args.get('page', 1, type=int)
@@ -1653,11 +2129,19 @@ def payment_list():
         # Get branch context using existing helper
         branch_uuid, branch_context = get_branch_uuid_from_context_or_request()
         
-        # Search payments using service (will need to be implemented in supplier_service.py)
+        # Search payments using service
         try:
-            from app.services.supplier_service import search_supplier_payments
-            
-            result = search_supplier_payments(
+            from app.services.universal_supplier_service import EnhancedUniversalSupplierService
+            # ===========================================
+            # ADD DEBUG LOGGING BEFORE SEARCH
+            # ===========================================
+            logger.info(f"🔍 PAYMENT LIST DEBUG: Starting search")
+            logger.info(f"🔍 Hospital ID: {current_user.hospital_id}")
+            logger.info(f"🔍 Filters: {filters}")
+            logger.info(f"🔍 Branch UUID: {branch_uuid}")
+            logger.info(f"🔍 User ID: {current_user.user_id}")
+            enhanced_service = EnhancedUniversalSupplierService()
+            result = enhanced_service._search_supplier_payments_universal(
                 hospital_id=current_user.hospital_id,
                 filters=filters,
                 branch_id=branch_uuid,
@@ -1665,20 +2149,44 @@ def payment_list():
                 page=page,
                 per_page=per_page
             )
+            logger.info(f"🔍 SEARCH RESULT TYPE: {type(result)}")
+            logger.info(f"🔍 SEARCH RESULT KEYS: {result.keys() if isinstance(result, dict) else 'Not a dict'}")
             
             payments = result.get('payments', [])
             total = result.get('pagination', {}).get('total_count', 0)
-            summary = result.get('summary', {})
             
+            # ✅ FIX: Use summary from search results instead of empty dict
+            summary = result.get('summary', {})
+            # ===========================================
+            # ADD DEBUG LOGGING FOR SUMMARY
+            # ===========================================
+            logger.info(f"🔍 SUMMARY TYPE: {type(summary)}")
+            logger.info(f"🔍 SUMMARY CONTENT: {summary}")
+            logger.info(f"🔍 PAYMENTS COUNT: {len(payments)}")
+            logger.info(f"🔍 TOTAL COUNT: {total}")
+            
+            # Log each summary field specifically
+            if isinstance(summary, dict):
+                logger.info(f"🔍 summary.total_count: {summary.get('total_count', 'MISSING')}")
+                logger.info(f"🔍 summary.total_amount: {summary.get('total_amount', 'MISSING')}")
+                logger.info(f"🔍 summary.pending_count: {summary.get('pending_count', 'MISSING')}")
+                logger.info(f"🔍 summary.this_month_count: {summary.get('this_month_count', 'MISSING')}")
         except Exception as e:
             current_app.logger.error(f"Error searching payments: {str(e)}")
             payments = []
             total = 0
             summary = {}
         
+        # NEW: Prepare active filters for template
+        active_filters = {}
+        for key, value in request.args.items():
+            if key not in ['page', 'per_page'] and value and value.strip():
+                active_filters[key] = value.strip()
+
         return render_template(
             'supplier/payment_list.html',
             payments=payments,
+            suppliers=suppliers,  # NEW: Add suppliers for dropdown
             form=form,
             page=page,
             per_page=per_page,
@@ -1686,21 +2194,36 @@ def payment_list():
             summary=summary,
             branch_context=branch_context,
             filters=filters,
-            payment_config=PAYMENT_CONFIG
+            payment_config=PAYMENT_CONFIG,
+            # NEW: Pass filter state for form preservation
+            active_filters=active_filters,
+            request_args=request.args.to_dict()
         )
         
     except Exception as e:
         current_app.logger.error(f"Error in payment_list: {str(e)}", exc_info=True)
         flash(f"Error retrieving payments: {str(e)}", "error")
+        # ✅ FIX: Provide default summary instead of empty dict
+        default_summary = {
+            'total_count': 0,
+            'total_amount': 0.0,
+            'pending_count': 0,
+            'this_month_count': 0
+        }
         return render_template('supplier/payment_list.html', 
-                             payments=[], total=0, filters={}, payment_config=PAYMENT_CONFIG)
+                             payments=[], 
+                             suppliers=[],  # NEW: Empty suppliers list on error
+                             total=0, 
+                             filters={},
+                             summary=default_summary,  # ✅ Use default instead of empty 
+                             payment_config=PAYMENT_CONFIG)
 
 
 @supplier_views_bp.route('/payment/view/<payment_id>', methods=['GET'])
 @login_required
 @require_web_branch_permission('payment', 'view', branch_source='entity')
 def view_payment(payment_id):
-    """View payment details with documents and approval history"""
+    """View payment details with documents, approval history, and credit notes"""
     try:
         from app.services.supplier_service import get_supplier_payment_by_id
         
@@ -1714,6 +2237,36 @@ def view_payment(payment_id):
         if not payment:
             flash("Payment not found", "error")
             return redirect(url_for('supplier_views.payment_list'))
+
+        # ✅ ADD THIS ENHANCEMENT FOR CREDIT NOTES:
+        try:
+            from app.controllers.supplier_controller import enhance_payment_view_with_credits
+            
+            # Get enhanced payment data with credit note information
+            enhanced_payment = enhance_payment_view_with_credits(
+                payment_id=payment_id,
+                current_user_id=current_user.user_id,
+                hospital_id=current_user.hospital_id
+            )
+            
+            if enhanced_payment:
+                # Use enhanced payment data that includes credit note context
+                payment.update({
+                    'can_create_credit_note': enhanced_payment.get('can_create_credit_note', False),
+                    'existing_credit_notes': enhanced_payment.get('existing_credit_notes', []),
+                    'net_payment_amount': enhanced_payment.get('net_payment_amount', payment.get('amount', 0)),
+                    'total_credited': enhanced_payment.get('total_credited', 0),
+                    'create_credit_note_url': enhanced_payment.get('create_credit_note_url')
+                })
+        except Exception as e:
+            current_app.logger.warning(f"Could not load credit note data: {str(e)}")
+            # Continue with normal payment view if credit note enhancement fails
+            payment.update({
+                'can_create_credit_note': False,
+                'existing_credit_notes': [],
+                'net_payment_amount': payment.get('amount', 0),
+                'total_credited': 0
+            })
         
         # Get payment summary
         summary = {
@@ -1746,7 +2299,7 @@ def view_payment(payment_id):
             title=f'Payment {payment.get("reference_no", payment_id[:8])}',
             can_approve=_can_user_approve_payment(payment, current_user),
             payment_config=PAYMENT_CONFIG,
-            documents=documents  # FIXED: Pass documents to template
+            documents=documents
         )
         
     except Exception as e:
@@ -2574,7 +3127,7 @@ def get_invoice_choices_for_supplier(supplier_id):
 @supplier_views_bp.route('/invoice/<original_invoice_id>/credit-note', methods=['GET', 'POST'])
 @login_required
 @require_web_branch_permission('supplier_invoice', 'credit_note', branch_source='entity')
-def create_credit_note(original_invoice_id):
+def create_invoice_credit_note(original_invoice_id):  # ← RENAMED FUNCTION
     """Create credit note for paid invoice"""
     
     if request.method == 'POST':
@@ -2611,266 +3164,12 @@ def create_credit_note(original_invoice_id):
 # TESTING AND DEBUGGING ROUTES
 # ===============================================================================
 
-@supplier_views_bp.route('/test/config-check', methods=['GET'])
-@login_required
-def test_config_check():
-    """Check enhanced posting configuration and environment"""
-    try:
-        current_app.logger.info("🧪 CONFIG TEST: Checking configuration")
-        
-        # Import functions locally to avoid circular imports
-        from app.services.enhanced_posting_helper import check_enhanced_posting_config
-        from app.services.posting_config_service import is_enhanced_posting_enabled
-        import os
-        
-        # Check environment variables
-        env_vars = {
-            'ENABLE_ENHANCED_POSTING': os.getenv('ENABLE_ENHANCED_POSTING'),
-            'DEFAULT_AP_ACCOUNT': os.getenv('DEFAULT_AP_ACCOUNT'),
-            'DEFAULT_CASH_ACCOUNT': os.getenv('DEFAULT_CASH_ACCOUNT'),
-            'DEFAULT_BANK_ACCOUNT': os.getenv('DEFAULT_BANK_ACCOUNT'),
-            'DEFAULT_INVENTORY_ACCOUNT': os.getenv('DEFAULT_INVENTORY_ACCOUNT'),
-            'CGST_RECEIVABLE_ACCOUNT': os.getenv('CGST_RECEIVABLE_ACCOUNT'),
-            'SGST_RECEIVABLE_ACCOUNT': os.getenv('SGST_RECEIVABLE_ACCOUNT'),
-            'IGST_RECEIVABLE_ACCOUNT': os.getenv('IGST_RECEIVABLE_ACCOUNT'),
-        }
-        
-        # Check posting configuration
-        config = check_enhanced_posting_config()
-        
-        # Check if enhanced posting is enabled
-        enabled = is_enhanced_posting_enabled()
-        
-        # Check hospital and user context
-        user_context = {
-            'user_id': current_user.user_id,
-            'hospital_id': str(current_user.hospital_id),
-            'is_testing_user': str(current_user.user_id) == '7777777777'
-        }
-        
-        return jsonify({
-            'status': 'success',
-            'environment_variables': env_vars,
-            'posting_config': config,
-            'enhanced_posting_enabled': enabled,
-            'user_context': user_context,
-            'test_urls': {
-                'payment_posting': f'/supplier/test/payment-posting/6771c1da-7d56-48c2-8a88-25859c74a924',
-                'config_check': '/supplier/test/config-check'
-            }
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f"🧪 CONFIG TEST: Error: {str(e)}", exc_info=True)
-        import traceback
-        return jsonify({
-            'status': 'error',
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        }), 500
-
-
-@supplier_views_bp.route('/test/payment-posting/<payment_id>', methods=['GET'])
-@login_required
-def test_payment_posting(payment_id):
-    """Test enhanced payment posting functionality with detailed logging"""
-    try:
-        current_app.logger.info(f"🧪 PAYMENT TEST: Starting payment posting test for {payment_id}")
-        
-        # Import functions locally to avoid circular imports
-        from app.services.enhanced_posting_helper import EnhancedPostingHelper, check_enhanced_posting_config
-        
-        # Check configuration first
-        current_app.logger.info("🧪 PAYMENT TEST: Checking configuration")
-        config = check_enhanced_posting_config()
-        
-        # Test enhanced posting for existing payment
-        current_app.logger.info("🧪 PAYMENT TEST: Testing enhanced posting")
-        
-        with get_db_session() as session:
-            helper = EnhancedPostingHelper()
-            current_app.logger.info(f"🧪 PAYMENT TEST: Helper enabled: {helper.enabled}")
-            
-            # Use debug version if available
-            if hasattr(helper, 'create_enhanced_payment_posting_debug'):
-                current_app.logger.info("🧪 PAYMENT TEST: Using debug version of payment posting")
-                result = helper.create_enhanced_payment_posting_debug(
-                    uuid.UUID(payment_id),
-                    session,
-                    current_user.user_id
-                )
-            else:
-                current_app.logger.info("🧪 PAYMENT TEST: Using standard payment posting")
-                result = helper.create_enhanced_payment_posting(
-                    uuid.UUID(payment_id),
-                    session,
-                    current_user.user_id
-                )
-            
-            # Commit the session
-            session.commit()
-            current_app.logger.info("🧪 PAYMENT TEST: Session committed successfully")
-        
-        # Check if GL entries were created
-        gl_entries_check = []
-        try:
-            with get_db_session(read_only=True) as check_session:
-                from app.models.transaction import GLEntry
-                
-                gl_entries = check_session.query(GLEntry).filter_by(
-                    source_document_id=uuid.UUID(payment_id),
-                    source_document_type='SUPPLIER_PAYMENT'
-                ).all()
-                
-                for entry in gl_entries:
-                    gl_entries_check.append({
-                        'entry_id': str(entry.entry_id),
-                        'account_id': str(entry.account_id),
-                        'debit_amount': float(entry.debit_amount or 0),
-                        'credit_amount': float(entry.credit_amount or 0),
-                        'description': entry.description,
-                        'posting_reference': entry.posting_reference
-                    })
-                
-                current_app.logger.info(f"🧪 PAYMENT TEST: Found {len(gl_entries)} GL entries for payment")
-        
-        except Exception as gl_check_error:
-            current_app.logger.warning(f"🧪 PAYMENT TEST: Could not check GL entries: {str(gl_check_error)}")
-            gl_entries_check = []
-        
-        return jsonify({
-            'status': 'success',
-            'config': config,
-            'posting_result': result,
-            'test_payment_id': payment_id,
-            'gl_entries_found': len(gl_entries_check),
-            'gl_entries': gl_entries_check,
-            'user_context': {
-                'user_id': current_user.user_id,
-                'hospital_id': str(current_user.hospital_id)
-            }
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f"🧪 PAYMENT TEST: Payment posting test failed: {str(e)}", exc_info=True)
-        import traceback
-        return jsonify({
-            'status': 'error',
-            'error': str(e),
-            'traceback': traceback.format_exc(),
-            'test_payment_id': payment_id
-        }), 500
-
-
-@supplier_views_bp.route('/test/discover-accounts', methods=['GET'])
-@login_required
-def test_discover_accounts():
-    """Discover accounts in database and check posting configuration"""
-    try:
-        current_app.logger.info("🧪 DISCOVER TEST: Starting account discovery")
-        
-        # Import functions locally
-        from app.services.enhanced_posting_helper import check_enhanced_posting_config
-        from app.models.master import ChartOfAccounts
-        import os
-        
-        hospital_id = current_user.hospital_id
-        
-        # Check current configuration
-        config = check_enhanced_posting_config()
-        
-        # Get environment variables
-        env_vars = {
-            'ENABLE_ENHANCED_POSTING': os.getenv('ENABLE_ENHANCED_POSTING'),
-            'DEFAULT_AP_ACCOUNT': os.getenv('DEFAULT_AP_ACCOUNT'),
-            'DEFAULT_CASH_ACCOUNT': os.getenv('DEFAULT_CASH_ACCOUNT'),
-            'DEFAULT_BANK_ACCOUNT': os.getenv('DEFAULT_BANK_ACCOUNT'),
-            'DEFAULT_INVENTORY_ACCOUNT': os.getenv('DEFAULT_INVENTORY_ACCOUNT'),
-        }
-        
-        # Discover database accounts
-        accounts_found = {}
-        
-        with get_db_session(read_only=True) as session:
-            # Check for different account types
-            account_patterns = [
-                ('11%', 'Cash/Bank Accounts'),
-                ('21%', 'Accounts Payable'),
-                ('14%', 'Inventory Accounts'),
-                ('17%', 'GST Receivable Accounts')
-            ]
-            
-            for pattern, description in account_patterns:
-                accounts = session.query(ChartOfAccounts).filter(
-                    ChartOfAccounts.hospital_id == hospital_id,
-                    ChartOfAccounts.gl_account_no.like(pattern),
-                    ChartOfAccounts.is_active == True
-                ).order_by(ChartOfAccounts.gl_account_no).all()
-                
-                accounts_found[description] = [
-                    {
-                        'account_no': acc.gl_account_no,
-                        'account_name': acc.account_name,
-                        'account_type': acc.account_type
-                    }
-                    for acc in accounts
-                ]
-                
-                current_app.logger.info(f"🧪 DISCOVER TEST: {description}: {len(accounts)} found")
-        
-        # Check specific accounts used in configuration
-        specific_accounts_check = {}
-        accounts_to_check = [
-            env_vars.get('DEFAULT_AP_ACCOUNT'),
-            env_vars.get('DEFAULT_CASH_ACCOUNT'),
-            env_vars.get('DEFAULT_BANK_ACCOUNT'),
-            env_vars.get('DEFAULT_INVENTORY_ACCOUNT')
-        ]
-        
-        with get_db_session(read_only=True) as session:
-            for account_no in accounts_to_check:
-                if account_no:
-                    account = session.query(ChartOfAccounts).filter_by(
-                        hospital_id=hospital_id,
-                        gl_account_no=account_no,
-                        is_active=True
-                    ).first()
-                    
-                    specific_accounts_check[account_no] = {
-                        'exists': account is not None,
-                        'account_name': account.account_name if account else None,
-                        'account_type': account.account_type if account else None
-                    }
-        
-        return jsonify({
-            'status': 'success',
-            'hospital_id': str(hospital_id),
-            'environment_variables': env_vars,
-            'posting_config': config,
-            'accounts_by_category': accounts_found,
-            'specific_accounts_check': specific_accounts_check,
-            'user_context': {
-                'user_id': current_user.user_id,
-                'hospital_id': str(current_user.hospital_id)
-            }
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f"🧪 DISCOVER TEST: Error: {str(e)}", exc_info=True)
-        import traceback
-        return jsonify({
-            'status': 'error',
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        }), 500
-
-
 @supplier_views_bp.route('/test/payment-status/<payment_id>', methods=['GET'])
 @login_required
 def test_payment_status(payment_id):
     """Check payment status and related GL entries"""
     try:
-        current_app.logger.info(f"🧪 STATUS TEST: Checking payment status for {payment_id}")
+        logger.info(f"🧪 STATUS TEST: Checking payment status for {payment_id}")
         
         payment_info = {}
         gl_entries = []
@@ -2944,3 +3243,205 @@ def test_payment_status(payment_id):
             'error': str(e),
             'traceback': traceback.format_exc()
         }), 500
+    
+
+@supplier_views_bp.route('/payment/<payment_id>/credit-note', methods=['GET', 'POST'])
+@login_required
+def create_credit_note(payment_id):
+    """
+    Phase 1: Create credit note from supplier payment
+    Following your existing route patterns
+    UPDATED: Uses centralized creditnote_service
+    """
+    try:
+        # Check if credit note feature is enabled
+        from app.utils.credit_note_utils import is_credit_note_enabled, get_credit_note_permission
+        if not is_credit_note_enabled():
+            flash('Credit note functionality is not enabled', 'warning')
+            return redirect(url_for('supplier_views.view_payment', payment_id=payment_id))
+        
+        # Check basic permissions using your permission service
+        from app.services.permission_service import has_permission
+        
+        required_permission = get_credit_note_permission('CREATE')
+        if not has_permission(current_user, 'supplier', 'edit'):
+            flash('You do not have permission to create credit notes', 'error')
+            return redirect(url_for('supplier_views.view_payment', payment_id=payment_id))
+        
+        # Validate payment exists and user has access (your existing pattern)
+        # UPDATED: Import from creditnote_service
+        from app.services.credit_note_service import get_supplier_payment_by_id_with_credits
+        
+        payment = get_supplier_payment_by_id_with_credits(
+            payment_id=uuid.UUID(payment_id),
+            hospital_id=current_user.hospital_id,
+            current_user_id=current_user.user_id
+        )
+        
+        if not payment:
+            flash('Payment not found', 'error')
+            return redirect(url_for('supplier_views.payment_list'))
+        
+        # Check if user can access this payment's branch (your existing pattern)
+        from app.services.permission_service import has_branch_permission
+        if payment.get('branch_id') and not has_branch_permission(
+            current_user, 'supplier', 'edit', str(payment['branch_id'])
+        ):
+            flash('Access denied: You do not have permission for this branch', 'error')
+            return redirect(url_for('supplier_views.payment_list'))
+        
+        # Use credit note controller (following your controller delegation pattern)
+        from app.controllers.supplier_controller import SimpleCreditNoteController
+        
+        controller = SimpleCreditNoteController(payment_id)
+        return controller.handle_request()
+        
+    except ValueError as ve:
+        current_app.logger.warning(f"Validation error creating credit note: {str(ve)}")
+        flash(f"Error: {str(ve)}", 'error')
+        return redirect(url_for('supplier_views.view_payment', payment_id=payment_id))
+    except Exception as e:
+        current_app.logger.error(f"Error creating credit note for payment {payment_id}: {str(e)}")
+        flash(f"Error creating credit note: {str(e)}", 'error')
+        return redirect(url_for('supplier_views.view_payment', payment_id=payment_id))
+
+# SIMPLE HELPER ROUTE: Check if credit note can be created (AJAX endpoint)
+@supplier_views_bp.route('/payment/<payment_id>/can-create-credit-note')
+@login_required
+def can_create_credit_note(payment_id):
+    """
+    Simple AJAX endpoint to check if credit note can be created
+    Returns JSON response for dynamic UI updates - following your AJAX patterns
+    UPDATED: Uses centralized creditnote_service
+    """
+    try:
+        from flask import jsonify
+        from app.controllers.supplier_controller import can_user_create_credit_note
+        
+        can_create = can_user_create_credit_note(current_user, payment_id)
+        
+        # Get payment details if credit note can be created
+        if can_create:
+            # UPDATED: Import from creditnote_service
+            from app.services.credit_note_service import get_supplier_payment_by_id_with_credits
+            payment = get_supplier_payment_by_id_with_credits(
+                payment_id=uuid.UUID(payment_id),
+                hospital_id=current_user.hospital_id,
+                current_user_id=current_user.user_id
+            )
+            
+            return jsonify({
+                'can_create': True,
+                'available_amount': payment.get('net_payment_amount', 0) if payment else 0,
+                'create_url': url_for('supplier_views.create_credit_note', payment_id=payment_id)
+            })
+        else:
+            return jsonify({
+                'can_create': False,
+                'reason': 'Credit note cannot be created for this payment'
+            })
+            
+    except Exception as e:
+        current_app.logger.error(f"Error checking credit note availability: {str(e)}")
+        return jsonify({
+            'can_create': False,
+            'reason': 'Error checking credit note availability'
+        }), 500
+
+# ENHANCED: Credit note list route using centralized service
+@supplier_views_bp.route('/credit-notes')
+@login_required
+def credit_note_list():
+    """
+    Phase 1: Credit notes list with support for both types
+    Enhanced to show both invoice reversal and payment adjustment credit notes
+    UPDATED: Uses centralized creditnote_service
+    """
+    try:
+        from app.utils.credit_note_utils import is_credit_note_enabled, get_credit_note_permission
+        from app.services.permission_service import has_permission
+        
+        # Check if feature is enabled
+        if not is_credit_note_enabled():
+            flash('Credit note functionality is not enabled', 'warning')
+            return redirect(url_for('supplier_views.payment_list'))
+        
+        # Check permissions
+        view_permission = get_credit_note_permission('VIEW')
+        if not has_permission(current_user, view_permission):
+            flash('You do not have permission to view credit notes', 'error')
+            return redirect(url_for('supplier_views.payment_list'))
+        
+        # UPDATED: Import from creditnote_service
+        from app.services.credit_note_service import get_credit_notes_list, get_credit_note_summary
+        
+        # Get credit notes using centralized service
+        credit_notes = get_credit_notes_list(
+            hospital_id=current_user.hospital_id,
+            credit_note_type='all',  # Show both types
+            limit=50,
+            current_user_id=current_user.user_id
+        )
+        
+        # Get summary statistics
+        summary = get_credit_note_summary(
+            hospital_id=current_user.hospital_id,
+            current_user_id=current_user.user_id
+        )
+        
+        # Get menu items for navigation (following your menu pattern)
+        from app.utils.menu_utils import get_menu_items
+        
+        context = {
+            'credit_notes': credit_notes,
+            'total_count': summary.get('total_credit_notes', 0),
+            'total_amount': summary.get('total_credit_amount', 0),
+            'invoice_reversal_count': summary.get('invoice_reversal_count', 0),
+            'payment_adjustment_count': summary.get('payment_adjustment_count', 0),
+            'menu_items': get_menu_items(current_user)
+        }
+        
+        return render_template('supplier/credit_note_list_enhanced.html', **context)
+        
+    except Exception as e:
+        current_app.logger.error(f"Error loading credit notes list: {str(e)}")
+        flash(f"Error loading credit notes: {str(e)}", 'error')
+        return redirect(url_for('supplier_views.payment_list'))
+
+@supplier_views_bp.route('/payment/approve_universal/<payment_id>', methods=['POST'])
+@login_required
+@require_web_branch_permission('payment', 'approve', branch_source='entity')
+def approve_payment_universal(payment_id):
+    """Approve payment - universal engine version"""
+    # Use existing approve_supplier_payment service
+    # Redirect to universal_views.universal_detail_view
+
+@supplier_views_bp.route('/payment/reject_universal/<payment_id>', methods=['POST'])  
+@login_required
+@require_web_branch_permission('payment', 'approve', branch_source='entity')
+def reject_payment_universal(payment_id):
+    """Reject payment - universal engine version"""
+    # Use existing reject_supplier_payment service
+    # Redirect to universal_views.universal_detail_view
+
+@supplier_views_bp.route('/payment/reject/<payment_id>', methods=['GET', 'POST'])
+@login_required
+@require_web_branch_permission('payment', 'approve', branch_source='entity')
+def reject_payment(payment_id):
+    """Reject payment"""
+    try:
+        controller = PaymentApprovalController(payment_id=payment_id, action='reject')
+        return controller.handle_request()
+    except Exception as e:
+        current_app.logger.error(f"Error in reject_payment: {str(e)}", exc_info=True)
+        flash(f"Error rejecting payment: {str(e)}", "error")
+        return redirect(url_for('supplier_views.view_payment', payment_id=payment_id))
+
+
+@supplier_views_bp.route('/payment/universal_test')
+@login_required
+@require_web_branch_permission('payment', 'view')
+def payment_list_universal_test():
+    """Test universal engine payment list"""
+    return redirect(url_for('universal_views.universal_list_view', 
+                           entity_type='supplier_payments'))

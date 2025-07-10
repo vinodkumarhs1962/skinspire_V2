@@ -1,0 +1,2222 @@
+/* ==========================================
+   FILTER COMPONENTS
+   File: static/css/components/filters.css
+   Filter cards, panels, and controls
+   ========================================== */
+
+/* ==========================================
+   FILTER CARD BASE STYLES
+   ========================================== */
+
+.filter-card {
+    background: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    margin-bottom: 1.5rem !important;
+    overflow: hidden !important;
+}
+
+.dark .filter-card {
+    background: rgb(31 41 55) !important; /* gray-800 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* ==========================================
+   FILTER CARD HEADER
+   ========================================== */
+
+.filter-card-header {
+    padding: 1rem 1.5rem !important;
+    border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+}
+
+.dark .filter-card-header {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+.filter-card-title {
+    font-size: 1.125rem !important; /* text-lg */
+    font-weight: 600 !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+}
+
+.dark .filter-card-title {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.filter-toggle {
+    background: none !important;
+    border: none !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    cursor: pointer !important;
+    padding: 0.25rem !important;
+    border-radius: 0.25rem !important;
+    transition: all 0.15s ease-in-out !important;
+}
+
+.filter-toggle:hover {
+    color: rgb(55 65 81) !important; /* gray-700 */
+    background-color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.dark .filter-toggle {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.dark .filter-toggle:hover {
+    color: rgb(209 213 219) !important; /* gray-300 */
+    background-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* ==========================================
+   FILTER CARD BODY
+   ========================================== */
+
+.filter-card-body {
+    padding: 1.5rem !important;
+}
+
+.filter-card-body.collapsed {
+    display: none !important;
+}
+
+/* ==========================================
+   FILTER SECTIONS
+   ========================================== */
+
+.filter-section {
+    margin-bottom: 1.5rem !important;
+}
+
+.filter-section:last-child {
+    margin-bottom: 0 !important;
+}
+
+.filter-section-title {
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    margin-bottom: 0.75rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
+}
+
+.dark .filter-section-title {
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+/* ==========================================
+   FILTER GRID LAYOUTS
+   ========================================== */
+
+.filter-grid {
+    display: grid !important;
+    gap: 1rem !important;
+}
+
+.filter-grid-cols-1 {
+    grid-template-columns: 1fr !important;
+}
+
+.filter-grid-cols-2 {
+    grid-template-columns: repeat(2, 1fr) !important;
+}
+
+.filter-grid-cols-3 {
+    grid-template-columns: repeat(3, 1fr) !important;
+}
+
+.filter-grid-cols-4 {
+    grid-template-columns: repeat(4, 1fr) !important;
+}
+
+.filter-grid-cols-5 {
+    grid-template-columns: repeat(5, 1fr) !important;
+}
+
+/* Responsive filter grids */
+@media (max-width: 768px) {
+    .filter-grid-cols-2,
+    .filter-grid-cols-3,
+    .filter-grid-cols-4,
+    .filter-grid-cols-5 {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+    .filter-grid-cols-3,
+    .filter-grid-cols-4,
+    .filter-grid-cols-5 {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+@media (min-width: 1024px) and (max-width: 1280px) {
+    .filter-grid-cols-4,
+    .filter-grid-cols-5 {
+        grid-template-columns: repeat(3, 1fr) !important;
+    }
+}
+
+/* ==========================================
+   FILTER ACTIONS
+   ========================================== */
+
+.filter-actions {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    margin-top: 1.5rem !important;
+    padding-top: 1rem !important;
+    border-top: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    justify-content: space-between !important;
+}
+
+.filter-actions-left {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.75rem !important;
+    align-items: center !important;
+}
+
+.filter-actions-right {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+    align-items: center !important;
+}
+
+.filter-results-count {
+    font-size: 0.875rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+}
+
+.dark .filter-results-count {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.dark .filter-actions {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* Responsive filter actions */
+@media (max-width: 640px) {
+    .filter-actions {
+        gap: 0.5rem !important;
+    }
+    
+    .filter-actions .btn-primary,
+    .filter-actions .btn-secondary,
+    .filter-actions .btn-outline,
+    .filter-actions .btn-danger,
+    .filter-actions .btn-success,
+    .filter-actions .btn-warning {
+        flex: 1 !important;
+        min-width: 0 !important;
+        justify-content: center !important;
+    }
+}
+
+/* ==========================================
+   FILTER GROUP COMPONENTS
+   ========================================== */
+
+.filter-group {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+}
+
+.filter-group-horizontal {
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+}
+
+.filter-group-label {
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+.dark .filter-group-label {
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+/* ==========================================
+   FILTER CHIPS/TAGS
+   ========================================== */
+
+.filter-chips {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+    margin-bottom: 1rem !important;
+}
+
+.filter-chip {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    padding: 0.375rem 0.75rem !important;
+    background-color: rgb(99 102 241) !important; /* indigo-500 */
+    color: white !important;
+    border-radius: 9999px !important; /* fully rounded */
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+}
+
+.filter-chip-remove {
+    background: none !important;
+    border: none !important;
+    color: rgba(255, 255, 255, 0.8) !important;
+    cursor: pointer !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 1rem !important;
+    height: 1rem !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 0.75rem !important;
+    transition: color 0.15s ease-in-out !important;
+}
+
+.filter-chip-remove:hover {
+    color: white !important;
+    background-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Filter chip variants */
+.filter-chip.primary {
+    background-color: rgb(59 130 246) !important; /* blue-500 */
+}
+
+.filter-chip.success {
+    background-color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.filter-chip.warning {
+    background-color: rgb(245 158 11) !important; /* amber-500 */
+}
+
+.filter-chip.danger {
+    background-color: rgb(239 68 68) !important; /* red-500 */
+}
+
+/* ==========================================
+   FILTER SUMMARY
+   ========================================== */
+
+.filter-summary {
+    background-color: rgb(239 246 255) !important; /* blue-50 */
+    border: 1px solid rgb(147 197 253) !important; /* blue-200 */
+    border-radius: 0.5rem !important;
+    padding: 1rem !important;
+    margin-bottom: 1rem !important;
+}
+
+.dark .filter-summary {
+    background-color: rgba(30, 58, 138, 0.1) !important; /* blue-900/10 */
+    border-color: rgb(59 130 246) !important; /* blue-500 */
+}
+
+.filter-summary-text {
+    font-size: 0.875rem !important;
+    color: rgb(30 64 175) !important; /* blue-800 */
+    margin: 0 !important;
+}
+
+.dark .filter-summary-text {
+    color: rgb(147 197 253) !important; /* blue-300 */
+}
+
+/* ==========================================
+   QUICK FILTERS
+   ========================================== */
+
+.quick-filters {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+    margin-bottom: 1.5rem !important;
+}
+
+.quick-filter {
+    padding: 0.5rem 1rem !important;
+    border: 1px solid rgb(209 213 219) !important; /* gray-300 */
+    border-radius: 0.375rem !important;
+    background-color: white !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease-in-out !important;
+    text-decoration: none !important;
+}
+
+.quick-filter:hover {
+    border-color: rgb(99 102 241) !important; /* indigo-500 */
+    color: rgb(99 102 241) !important;
+    background-color: rgb(238 242 255) !important; /* indigo-50 */
+}
+
+.quick-filter.active {
+    background-color: rgb(99 102 241) !important; /* indigo-500 */
+    border-color: rgb(99 102 241) !important;
+    color: white !important;
+}
+
+.dark .quick-filter {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.dark .quick-filter:hover {
+    border-color: rgb(165 180 252) !important; /* indigo-300 */
+    color: rgb(165 180 252) !important;
+    background-color: rgba(67, 56, 202, 0.3) !important; /* indigo-800/30 */
+}
+
+.dark .quick-filter.active {
+    background-color: rgb(99 102 241) !important; /* indigo-500 */
+    border-color: rgb(99 102 241) !important;
+    color: white !important;
+}
+
+/* ==========================================
+   DATE RANGE FILTERS
+   ========================================== */
+
+.date-range-filter {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+}
+
+.date-range-separator {
+    color: rgb(107 114 128) !important; /* gray-500 */
+    font-weight: 500 !important;
+}
+
+.dark .date-range-separator {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+/* ==========================================
+   FILTER PRESETS
+   ========================================== */
+
+.filter-presets {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+    margin-bottom: 1rem !important;
+}
+
+.filter-preset {
+    padding: 0.375rem 0.75rem !important;
+    border: 1px solid rgb(209 213 219) !important; /* gray-300 */
+    border-radius: 0.25rem !important;
+    background-color: white !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease-in-out !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
+}
+
+.filter-preset:hover {
+    border-color: rgb(99 102 241) !important; /* indigo-500 */
+    color: rgb(99 102 241) !important;
+}
+
+.filter-preset.active {
+    background-color: rgb(99 102 241) !important; /* indigo-500 */
+    border-color: rgb(99 102 241) !important;
+    color: white !important;
+}
+
+.dark .filter-preset {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.dark .filter-preset:hover {
+    border-color: rgb(165 180 252) !important; /* indigo-300 */
+    color: rgb(165 180 252) !important;
+}
+
+.dark .filter-preset.active {
+    background-color: rgb(99 102 241) !important; /* indigo-500 */
+    border-color: rgb(99 102 241) !important;
+    color: white !important;
+}
+
+/* ==========================================
+   COLLAPSIBLE FILTER SECTIONS
+   ========================================== */
+
+.filter-section.collapsible {
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    border-radius: 0.375rem !important;
+    margin-bottom: 1rem !important;
+}
+
+.dark .filter-section.collapsible {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.filter-section-header {
+    padding: 0.75rem 1rem !important;
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    cursor: pointer !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    transition: background-color 0.15s ease-in-out !important;
+}
+
+.filter-section-header:hover {
+    background-color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.dark .filter-section-header {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.dark .filter-section-header:hover {
+    background-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.filter-section-content {
+    padding: 1rem !important;
+    transition: all 0.3s ease-in-out !important;
+}
+
+.filter-section-content.collapsed {
+    display: none !important;
+}
+
+.filter-section-chevron {
+    transition: transform 0.3s ease-in-out !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+}
+
+.filter-section-chevron.expanded {
+    transform: rotate(180deg) !important;
+}
+
+.dark .filter-section-chevron {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+/* ==========================================
+   HEALTHCARE SPECIFIC FILTERS
+   ========================================== */
+
+/* Patient status filter */
+.patient-status-filter {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)) !important;
+    gap: 0.5rem !important;
+}
+
+.patient-status-option {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    padding: 0.5rem !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    border-radius: 0.375rem !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease-in-out !important;
+}
+
+.patient-status-option:hover {
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+}
+
+.patient-status-option.selected {
+    background-color: rgb(238 242 255) !important; /* indigo-50 */
+    border-color: rgb(99 102 241) !important; /* indigo-500 */
+}
+
+.dark .patient-status-option {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.dark .patient-status-option:hover {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+.dark .patient-status-option.selected {
+    background-color: rgba(67, 56, 202, 0.3) !important; /* indigo-800/30 */
+    border-color: rgb(99 102 241) !important; /* indigo-500 */
+}
+
+/* Priority filter */
+.priority-filter {
+    display: flex !important;
+    gap: 0.5rem !important;
+    flex-wrap: wrap !important;
+}
+
+.priority-option {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.375rem !important;
+    padding: 0.375rem 0.75rem !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    border-radius: 9999px !important; /* fully rounded */
+    cursor: pointer !important;
+    font-size: 0.875rem !important;
+    transition: all 0.15s ease-in-out !important;
+}
+
+.priority-option.critical {
+    border-color: rgb(252 165 165) !important; /* red-200 */
+    background-color: rgb(254 242 242) !important; /* red-50 */
+    color: rgb(153 27 27) !important; /* red-800 */
+}
+
+.priority-option.high {
+    border-color: rgb(253 230 138) !important; /* yellow-200 */
+    background-color: rgb(255 251 235) !important; /* yellow-50 */
+    color: rgb(146 64 14) !important; /* yellow-800 */
+}
+
+.priority-option.medium {
+    border-color: rgb(147 197 253) !important; /* blue-200 */
+    background-color: rgb(239 246 255) !important; /* blue-50 */
+    color: rgb(30 64 175) !important; /* blue-800 */
+}
+
+.priority-option.low {
+    border-color: rgb(209 213 219) !important; /* gray-300 */
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+/* ==========================================
+   MOBILE RESPONSIVE ADJUSTMENTS
+   ========================================== */
+
+@media (max-width: 640px) {
+    .filter-card-body {
+        padding: 1rem !important;
+    }
+    
+    .filter-grid {
+        gap: 0.75rem !important;
+    }
+    
+    .date-range-filter {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+    
+    .date-range-separator {
+        text-align: center !important;
+        margin: 0.25rem 0 !important;
+    }
+    
+    .quick-filters,
+    .filter-presets {
+        gap: 0.375rem !important;
+    }
+    
+    .quick-filter,
+    .filter-preset {
+        font-size: 0.75rem !important;
+        padding: 0.375rem 0.75rem !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .data-table .supplier-name,
+    table .supplier-name {
+        max-width: 120px !important;
+    }
+    
+    .data-table .supplier-secondary,
+    table .supplier-secondary {
+        max-width: 120px !important;
+    }
+    
+    .data-table .supplier-column,
+    table .supplier-column {
+        min-width: 100px !important;
+        max-width: 150px !important;
+    }
+}
+
+/* ==========================================
+   STANDARD DATE FILTER SECTION
+   Default date range with built-in presets
+   ========================================== */
+
+.standard-date-filter {
+    margin-bottom: 1.5rem !important;
+    padding: 1rem !important;
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    border-radius: 0.5rem !important;
+}
+
+.dark .standard-date-filter {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.date-filter-title {
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    margin-bottom: 0.75rem !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+}
+
+.dark .date-filter-title {
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.date-filter-presets {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+    margin-bottom: 1rem !important;
+}
+
+.date-filter-preset {
+    padding: 0.375rem 0.75rem !important;
+    border: 1px solid rgb(209 213 219) !important; /* gray-300 */
+    border-radius: 0.375rem !important;
+    background-color: white !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease-in-out !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.375rem !important;
+}
+
+.date-filter-preset:hover {
+    border-color: rgb(99 102 241) !important; /* indigo-500 */
+    color: rgb(99 102 241) !important;
+    background-color: rgb(238 242 255) !important; /* indigo-50 */
+}
+
+.date-filter-preset[data-preset="financial_year"]:hover {
+    border-color: rgb(16 185 129) !important; /* emerald-500 */
+    color: rgb(16 185 129) !important;
+    background-color: rgb(209 250 229) !important; /* emerald-50 */
+}
+
+.date-filter-preset.active {
+    background-color: rgb(99 102 241) !important; /* indigo-500 */
+    border-color: rgb(99 102 241) !important;
+    color: white !important;
+}
+
+.dark .date-filter-preset {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.dark .date-filter-preset:hover {
+    border-color: rgb(165 180 252) !important; /* indigo-300 */
+    color: rgb(165 180 252) !important;
+    background-color: rgba(67, 56, 202, 0.3) !important; /* indigo-800/30 */
+}
+
+.dark .date-filter-preset.active {
+    background-color: rgb(99 102 241) !important; /* indigo-500 */
+    border-color: rgb(99 102 241) !important;
+    color: white !important;
+}
+
+.date-filter-inputs {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    flex-wrap: wrap !important;
+}
+
+.date-filter-inputs input[type="date"] {
+    flex: 1 !important;
+    min-width: 140px !important;
+}
+
+.date-filter-separator {
+    color: rgb(107 114 128) !important; /* gray-500 */
+    font-weight: 500 !important;
+    font-size: 0.875rem !important;
+}
+
+.dark .date-filter-separator {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+@media (max-width: 640px) {
+    .date-filter-inputs {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+    
+    .date-filter-separator {
+        text-align: center !important;
+        margin: 0.25rem 0 !important;
+    }
+    
+    .date-filter-presets {
+        gap: 0.375rem !important;
+    }
+    
+    .date-filter-preset {
+        font-size: 0.6875rem !important;
+        padding: 0.25rem 0.5rem !important;
+    }
+}
+
+/* ==========================================
+   STANDARD SEARCH INPUT SECTION
+   Default search with clear functionality
+   ========================================== */
+
+.standard-search-section {
+    margin-bottom: 1.5rem !important;
+}
+
+/* Enhanced search input styling */
+.search-input-container .form-input:focus {
+    outline: 2px solid rgb(59 130 246) !important;
+    outline-offset: -2px !important;
+    border-color: rgb(59 130 246) !important;
+}
+
+/* Ensure search input is visible and functional */
+.search-input-container .form-input {
+    background-color: white !important;
+    border: 1px solid rgb(209 213 219) !important;
+    border-radius: 0.375rem !important;
+    font-size: 0.875rem !important;
+    line-height: 1.25rem !important;
+}
+
+.dark .search-input-container .form-input {
+    background-color: rgb(55 65 81) !important;
+    border-color: rgb(75 85 99) !important;
+    color: white !important;
+}
+
+.search-input-container {
+    position: relative !important;
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+}
+
+.search-input-container .form-input {
+    padding-left: 2.5rem !important;
+    padding-right: 2.5rem !important;
+    width: 100% !important;
+    
+}
+
+.search-input-icon {
+    position: absolute !important;
+    left: 0.75rem !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    color: rgb(107 114 128) !important;
+    font-size: 0.875rem !important;
+    pointer-events: none !important;
+    z-index: 1 !important;
+}
+
+.search-input-clear {
+    position: absolute !important;
+    right: 0.75rem !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    color: rgb(107 114 128) !important;
+    background: none !important;
+    border: none !important;
+    cursor: pointer !important;
+    padding: 0.25rem !important;
+    border-radius: 0.25rem !important;
+    transition: color 0.15s ease-in-out !important;
+    z-index: 2 !important;
+}
+
+.search-input-clear:hover {
+    color: rgb(55 65 81) !important;
+}
+
+.search-input-clear.show {
+    display: block !important;
+}
+
+.dark .search-input-icon,
+.dark .search-input-clear {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.dark .search-input-clear:hover {
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+/* ==========================================
+   STANDARD FILTER LAYOUT TEMPLATE
+   Complete default filter screen layout
+   ========================================== */
+
+.standard-filter-layout .filter-card-body {
+    padding: 1.5rem !important;
+}
+
+.standard-filter-layout .standard-date-filter {
+    margin-bottom: 1.5rem !important;
+}
+
+.standard-filter-layout .standard-search-section {
+    margin-bottom: 1.5rem !important;
+}
+
+.standard-filter-layout .filter-grid {
+    margin-bottom: 1.5rem !important;
+}
+
+.standard-filter-layout .filter-actions {
+    margin-top: 1.5rem !important;
+    padding-top: 1.5rem !important;
+}
+
+/* Auto-responsive behavior for standard layout */
+.standard-filter-layout .filter-grid.auto-responsive {
+    display: grid !important;
+    gap: 1rem !important;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+}
+
+@media (min-width: 768px) {
+    .standard-filter-layout .filter-grid.auto-responsive {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important;
+    }
+}
+
+@media (min-width: 1024px) {
+    .standard-filter-layout .filter-grid.auto-responsive {
+        grid-template-columns: repeat(4, 1fr) !important;
+    }
+}
+
+@media (max-width: 640px) {
+    .standard-filter-layout .filter-actions {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.75rem !important;
+    }
+    
+    .standard-filter-layout .filter-actions-left,
+    .standard-filter-layout .filter-actions-right {
+        justify-content: center !important;
+        width: 100% !important;
+    }
+    
+    .standard-filter-layout .filter-actions .btn-primary,
+    .standard-filter-layout .filter-actions .btn-secondary,
+    .standard-filter-layout .filter-actions .btn-outline {
+        flex: 1 !important;
+        justify-content: center !important;
+    }
+}
+
+/* ==========================================
+   AUTO-LOADING FILTER STATE
+   Provides visual feedback during filter operations
+   ========================================== */
+
+.filter-loading {
+    position: relative !important;
+}
+
+.filter-loading::after {
+    content: "" !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    background-color: rgba(255, 255, 255, 0.8) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 10 !important;
+    border-radius: 0.5rem !important;
+}
+
+.dark .filter-loading::after {
+    background-color: rgba(31, 41, 55, 0.8) !important;
+}
+
+.filter-card.auto-submit {
+    transition: opacity 0.3s ease-in-out !important;
+}
+
+.filter-card.auto-submit.loading {
+    opacity: 0.7 !important;
+}
+
+.filter-auto-apply {
+    font-size: 0.75rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    font-style: italic !important;
+    margin-top: 0.5rem !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+}
+
+.dark .filter-auto-apply {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+/* Enhanced filter summary with better styling */
+.filter-summary.enhanced {
+    background: linear-gradient(135deg, rgb(239 246 255) 0%, rgb(219 234 254) 100%) !important;
+    border: 1px solid rgb(147 197 253) !important; /* blue-200 */
+    border-radius: 0.5rem !important;
+    padding: 1rem !important;
+    margin-bottom: 1rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+}
+
+.dark .filter-summary.enhanced {
+    background: linear-gradient(135deg, rgba(30, 58, 138, 0.2) 0%, rgba(59, 130, 246, 0.1) 100%) !important;
+    border-color: rgb(59 130 246) !important; /* blue-500 */
+}
+
+.filter-summary-text.enhanced {
+    font-size: 0.875rem !important;
+    color: rgb(30 64 175) !important; /* blue-800 */
+    margin: 0 !important;
+    font-weight: 500 !important;
+}
+
+.dark .filter-summary-text.enhanced {
+    color: rgb(147 197 253) !important; /* blue-300 */
+}
+
+/* =============================================================================
+   UNIVERSAL FILTER COMPONENTS - COMPLETE SOLUTION WITH HORIZONTAL LAYOUT
+   ============================================================================= */
+
+/* ==========================================
+   UNIVERSAL FILTER CARD - MAIN CONTAINER
+   ========================================== */
+
+.universal-filter-card {
+    background: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    margin-bottom: 1.5rem !important;
+    overflow: hidden !important;
+    position: relative !important;
+    animation: filterSlideIn 0.3s ease-out !important;
+}
+
+.dark .universal-filter-card {
+    background: rgb(31 41 55) !important; /* gray-800 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* ==========================================
+   UNIVERSAL FILTER CARD HEADER
+   ========================================== */
+
+.universal-filter-card-header {
+    padding: 1rem 1.5rem !important;
+    border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+}
+
+.dark .universal-filter-card-header {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+.universal-filter-card-title {
+    font-size: 1.125rem !important; /* text-lg */
+    font-weight: 600 !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+}
+
+.dark .universal-filter-card-title {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.universal-filter-results-count {
+    background-color: rgb(239 246 255) !important; /* blue-50 */
+    border: 1px solid rgb(191 219 254) !important; /* blue-200 */
+    border-radius: 0.375rem !important;
+    padding: 0.375rem 0.75rem !important;
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    color: rgb(30 64 175) !important; /* blue-800 */
+}
+
+.dark .universal-filter-results-count {
+    background-color: rgba(30, 58, 138, 0.2) !important;
+    border-color: rgb(59 130 246) !important; /* blue-500 */
+    color: rgb(147 197 253) !important; /* blue-300 */
+}
+
+/* ==========================================
+   UNIVERSAL FILTER CARD BODY
+   ========================================== */
+
+.universal-filter-card-body {
+    padding: 1.5rem !important;
+}
+
+/* ==========================================
+   UNIVERSAL DATE FILTER SECTION - TWO ROW LAYOUT (FULL WIDTH)
+   ========================================== */
+
+.universal-date-filter-section {
+    background-color: rgb(248 250 252) !important; /* slate-50 */
+    border: 1px solid rgb(226 232 240) !important; /* slate-200 */
+    border-radius: 0.5rem !important;
+    padding: 1.5rem !important;
+    margin-bottom: 1.5rem !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.dark .universal-date-filter-section {
+    background-color: rgb(30 41 59) !important; /* slate-800 */
+    border-color: rgb(71 85 105) !important; /* slate-600 */
+}
+
+.universal-date-filter-title {
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    color: rgb(51 65 85) !important; /* slate-700 */
+    margin-bottom: 1rem !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+}
+
+.dark .universal-date-filter-title {
+    color: rgb(203 213 225) !important; /* slate-300 */
+}
+
+.universal-date-filter-title i {
+    color: rgb(59 130 246) !important; /* blue-500 */
+}
+
+/* ==========================================
+   ROW 1: DATE PRESET BUTTONS (FULL WIDTH)
+   ========================================== */
+
+.universal-date-filter-presets-row {
+    display: flex !important;
+    gap: 0.75rem !important;
+    margin-bottom: 1rem !important;
+    flex-wrap: wrap !important;
+    justify-content: flex-start !important;
+    width: 100% !important;
+}
+
+.universal-date-filter-preset {
+    background: white !important;
+    border: 1px solid rgb(203 213 225) !important; /* slate-300 */
+    border-radius: 0.375rem !important;
+    padding: 0.75rem 1rem !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    color: rgb(71 85 105) !important; /* slate-600 */
+    cursor: pointer !important;
+    transition: all 0.15s ease-in-out !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    min-height: 2.5rem !important;
+    user-select: none !important;
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
+    flex: 1 !important;
+    justify-content: center !important;
+}
+
+.universal-date-filter-preset:hover {
+    background-color: rgb(241 245 249) !important; /* slate-100 */
+    border-color: rgb(148 163 184) !important; /* slate-400 */
+    transform: translateY(-1px) !important;
+}
+
+.universal-date-filter-preset.active {
+    background-color: rgb(59 130 246) !important; /* blue-500 */
+    border-color: rgb(59 130 246) !important;
+    color: white !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+    font-weight: 600 !important;
+}
+
+.universal-date-filter-preset[data-preset="financial_year"].active {
+    background-color: rgb(16 185 129) !important; /* emerald-500 */
+    border-color: rgb(16 185 129) !important;
+    color: white !important;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2) !important;
+}
+
+.universal-date-filter-preset[data-preset="financial_year"].active:hover {
+    background-color: rgb(5 150 105) !important; /* emerald-600 */
+    border-color: rgb(5 150 105) !important;
+}
+
+.universal-date-filter-preset.active:hover {
+    background-color: rgb(37 99 235) !important; /* blue-600 */
+    border-color: rgb(37 99 235) !important;
+}
+
+.universal-date-filter-preset:focus {
+    outline: 2px solid rgb(59 130 246) !important;
+    outline-offset: 2px !important;
+}
+
+.dark .universal-date-filter-preset {
+    background: rgb(51 65 85) !important; /* slate-700 */
+    border-color: rgb(100 116 139) !important; /* slate-500 */
+    color: rgb(203 213 225) !important; /* slate-300 */
+}
+
+.dark .universal-date-filter-preset:hover {
+    background-color: rgb(71 85 105) !important; /* slate-600 */
+    border-color: rgb(148 163 184) !important; /* slate-400 */
+}
+
+.dark .universal-date-filter-preset.active {
+    background-color: rgb(59 130 246) !important; /* blue-500 */
+    border-color: rgb(59 130 246) !important;
+    color: white !important;
+}
+
+/* ==========================================
+   ROW 2: DATE INPUT FIELDS (FULL WIDTH)
+   ========================================== */
+
+.universal-date-filter-inputs-row {
+    display: flex !important;
+    align-items: end !important;
+    gap: 1rem !important;
+    width: 100% !important;
+}
+
+.universal-date-input-group {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.25rem !important;
+}
+
+.universal-date-label {
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    margin: 0 !important;
+}
+
+.dark .universal-date-label {
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.universal-date-separator-container {
+    display: flex !important;
+    align-items: center !important;
+    padding-bottom: 0.5rem !important;
+    flex-shrink: 0 !important;
+}
+
+.universal-date-filter-separator {
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    color: rgb(100 116 139) !important; /* slate-500 */
+    padding: 0 0.5rem !important;
+    flex-shrink: 0 !important;
+}
+
+.dark .universal-date-filter-separator {
+    color: rgb(148 163 184) !important; /* slate-400 */
+}
+
+/* ==========================================
+   OTHER FILTERS SECTION (BELOW DATE FILTER)
+   ========================================== */
+
+.universal-other-filters-section {
+    margin-bottom: 1rem !important;
+}
+
+/* ==========================================
+   RESPONSIVE DESIGN FOR TWO-ROW LAYOUT
+   ========================================== */
+
+@media (max-width: 768px) {
+    .universal-date-filter-presets-row {
+        gap: 0.5rem !important;
+    }
+    
+    .universal-date-filter-preset {
+        flex: 1 1 calc(50% - 0.25rem) !important;
+        min-width: 120px !important;
+    }
+    
+    .universal-date-filter-inputs-row {
+        flex-direction: column !important;
+        gap: 1rem !important;
+    }
+    
+    .universal-date-separator-container {
+        order: 2 !important;
+        padding-bottom: 0 !important;
+        text-align: center !important;
+    }
+    
+    .universal-date-input-group:first-child {
+        order: 1 !important;
+    }
+    
+    .universal-date-input-group:last-child {
+        order: 3 !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .universal-date-filter-preset {
+        flex: 1 1 100% !important;
+        justify-content: center !important;
+    }
+    
+    .universal-date-filter-section {
+        padding: 1rem !important;
+    }
+}
+
+/* ==========================================
+   UNIVERSAL FILTER GRID - FIXED HORIZONTAL LAYOUT
+   ========================================== */
+
+.universal-filter-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+    gap: 1rem !important;
+    margin-bottom: 1rem !important;
+    width: 100% !important;
+}
+
+/* Force 4 columns on larger screens */
+@media (min-width: 1200px) {
+    .universal-filter-grid {
+        grid-template-columns: repeat(4, 1fr) !important;
+    }
+}
+
+/* 3 columns on medium screens */
+@media (min-width: 768px) and (max-width: 1199px) {
+    .universal-filter-grid {
+        grid-template-columns: repeat(3, 1fr) !important;
+    }
+}
+
+/* 2 columns on tablets */
+@media (min-width: 480px) and (max-width: 767px) {
+    .universal-filter-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 0.75rem !important;
+    }
+}
+
+/* 1 column on mobile */
+@media (max-width: 479px) {
+    .universal-filter-grid {
+        grid-template-columns: 1fr !important;
+        gap: 0.5rem !important;
+    }
+}
+
+/* ==========================================
+   UNIVERSAL FILTER SECTIONS
+   ========================================== */
+
+.universal-filter-section {
+    margin-bottom: 1.5rem !important;
+    animation: filterFadeIn 0.4s ease-out !important;
+}
+
+.universal-filter-section:last-child {
+    margin-bottom: 0 !important;
+}
+
+.universal-filter-section-title {
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    color: rgb(55 65 81) !important;
+    margin-bottom: 0.75rem !important;
+    padding-bottom: 0.5rem !important;
+    border-bottom: 1px solid rgb(229 231 235) !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+}
+
+.dark .universal-filter-section-title {
+    color: rgb(209 213 219) !important;
+    border-bottom-color: rgb(75 85 99) !important;
+}
+
+.universal-filter-section-title i {
+    color: rgb(59 130 246) !important;
+    font-size: 0.875rem !important;
+}
+
+.dark .universal-filter-section-title i {
+    color: rgb(147 197 253) !important;
+}
+
+/* ==========================================
+   UNIVERSAL FILTER ROW
+   ========================================== */
+
+.universal-filter-row {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+    gap: 1rem !important;
+    align-items: end !important;
+}
+
+@media (min-width: 1024px) {
+    .universal-filter-row {
+        grid-template-columns: repeat(4, 1fr) !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .universal-filter-row {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 0.75rem !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .universal-filter-row {
+        grid-template-columns: 1fr !important;
+        gap: 0.5rem !important;
+    }
+}
+
+/* ==========================================
+   UNIVERSAL FORM GROUPS - FIXED SPACING
+   ========================================== */
+
+.universal-form-group {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.25rem !important;
+    margin-bottom: 0 !important;
+    width: 100% !important;
+}
+
+.universal-form-group label,
+.universal-form-label {
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    margin: 0 !important;
+    display: block !important;
+}
+
+.dark .universal-form-group label,
+.dark .universal-form-label {
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.universal-form-group label.required::after,
+.universal-form-label.required::after {
+    content: "*" !important;
+    color: rgb(239 68 68) !important; /* red-500 */
+    margin-left: 0.25rem !important;
+}
+
+/* ==========================================
+   UNIVERSAL FORM INPUTS - ENHANCED STYLING
+   ========================================== */
+
+.universal-form-input {
+    border: 1px solid rgb(203 213 225) !important; /* slate-300 */
+    border-radius: 0.375rem !important;
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.875rem !important;
+    transition: all 0.15s ease-in-out !important;
+    background: white !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.universal-form-input:focus {
+    border-color: rgb(59 130 246) !important; /* blue-500 */
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    outline: none !important;
+}
+
+.universal-form-input:invalid {
+    border-color: rgb(239 68 68) !important; /* red-500 */
+}
+
+.dark .universal-form-input {
+    background: rgb(51 65 85) !important; /* slate-700 */
+    border-color: rgb(100 116 139) !important; /* slate-500 */
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.dark .universal-form-input:focus {
+    border-color: rgb(59 130 246) !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* ==========================================
+   UNIVERSAL FILTER AUTO-SUBMIT ENHANCEMENTS
+   ========================================== */
+
+.universal-filter-auto-submit {
+    transition: all 0.15s ease-in-out !important;
+    position: relative !important;
+}
+
+.universal-filter-auto-submit:focus {
+    transform: scale(1.005) !important;
+}
+
+.universal-filter-auto-submit.loading {
+    background-image: url("data:image/svg+xml,%3csvg width='20' height='20' xmlns='http://www.w3.org/2000/svg'%3e%3cg fill='none' fill-rule='evenodd'%3e%3cg transform='translate(1 1)' stroke='%23007bff' stroke-width='2'%3e%3ccircle stroke-opacity='.5' cx='9' cy='9' r='9'/%3e%3cpath d='m9 0a9 9 0 0 1 9 9'%3e%3canimateTransform attributeName='transform' type='rotate' from='0 9 9' to='360 9 9' dur='1s' repeatCount='indefinite'/%3e%3c/path%3e%3c/g%3e%3c/g%3e%3c/svg%3e") !important;
+    background-position: right 0.75rem center !important;
+    background-repeat: no-repeat !important;
+    background-size: 1rem 1rem !important;
+    padding-right: 2.5rem !important;
+}
+
+/* ==========================================
+   UNIVERSAL FILTER ACTIONS - GOLD STANDARD LAYOUT
+   ========================================== */
+
+.universal-filter-actions {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 1rem !important;
+    margin-top: 1.5rem !important;
+    padding-top: 1rem !important;
+    border-top: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    flex-wrap: wrap !important;
+}
+
+.dark .universal-filter-actions {
+    border-top-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.universal-filter-actions-left {
+    display: flex !important;
+    gap: 0.5rem !important;
+    align-items: center !important;
+}
+
+.universal-filter-actions-right {
+    display: flex !important;
+    gap: 0.5rem !important;
+    align-items: center !important;
+}
+
+@media (max-width: 768px) {
+    .universal-filter-actions {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 1rem !important;
+    }
+    
+    .universal-filter-actions-left,
+    .universal-filter-actions-right {
+        justify-content: center !important;
+    }
+}
+
+/* ==========================================
+   UNIVERSAL FILTER SUMMARY - ENHANCED
+   ========================================== */
+
+.universal-filter-summary {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(79, 70, 229, 0.05) 100%) !important;
+    border: 1px solid rgba(59, 130, 246, 0.2) !important;
+    border-radius: 0.5rem !important;
+    padding: 0.75rem 1rem !important;
+    margin-top: 1rem !important;
+    animation: filterSummaryFadeIn 0.3s ease-out !important;
+}
+
+.dark .universal-filter-summary {
+    background: linear-gradient(135deg, rgba(30, 58, 138, 0.2) 0%, rgba(59, 130, 246, 0.1) 100%) !important;
+    border-color: rgb(59 130 246) !important; /* blue-500 */
+}
+
+.universal-filter-summary-text {
+    font-size: 0.875rem !important;
+    color: rgb(30 64 175) !important; /* blue-800 */
+    margin: 0 !important;
+    font-weight: 500 !important;
+}
+
+.dark .universal-filter-summary-text {
+    color: rgb(147 197 253) !important; /* blue-300 */
+}
+
+/* ==========================================
+   UNIVERSAL ACTIVE FILTERS - FILTER TAGS
+   ========================================== */
+
+.universal-active-filters {
+    padding: 1rem !important;
+    margin-top: 1rem !important;
+    background-color: rgb(248 250 252) !important; /* slate-50 */
+    border: 1px solid rgb(226 232 240) !important; /* slate-200 */
+    border-radius: 0.5rem !important;
+}
+
+.dark .universal-active-filters {
+    background-color: rgb(30 41 59) !important; /* slate-800 */
+    border-color: rgb(71 85 105) !important; /* slate-600 */
+}
+
+.universal-active-filters-list {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 1.25rem !important;
+    margin-top: 0.5rem !important;
+}
+
+/* ==========================================
+   COLOR THE MAIN FILTER ICON
+   ========================================== */
+
+.universal-active-filters-label {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.375rem !important;
+    font-weight: 600 !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    margin-right: 0.5rem !important;
+}
+
+.universal-active-filters-label i {
+    color: rgb(59 130 246) !important; /* blue-500 - colored icon */
+    font-size: 0.875rem !important;
+}
+
+.dark .universal-active-filters-label {
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.dark .universal-active-filters-label i {
+    color: rgb(147 197 253) !important; /* blue-300 */
+}
+
+/* ==========================================
+   ENHANCE FILTER TAGS WITH PADDING
+   ========================================== */
+
+.universal-filter-tag {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.375rem !important; /* Space between label, value, and remove button */
+    background-color: rgb(219 234 254) !important; /* blue-100 */
+    color: rgb(30 64 175) !important; /* blue-800 */
+    padding: 0.375rem 0.75rem !important; /* More padding for better look */
+    border-radius: 0.5rem !important; /* Rounded corners */
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    border: 1px solid rgb(191 219 254) !important; /* blue-200 border */
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05) !important; /* Subtle shadow */
+    transition: all 0.15s ease-in-out !important;
+}
+
+.universal-filter-tag:hover {
+    background-color: rgb(191 219 254) !important; /* blue-200 on hover */
+    transform: translateY(-1px) !important;
+    box-shadow: 0 2px 4px 0 rgb(0 0 0 / 0.1) !important;
+}
+
+.dark .universal-filter-tag {
+    background-color: rgb(30 58 138) !important; /* blue-900 */
+    color: rgb(191 219 254) !important; /* blue-200 */
+    border-color: rgb(59 130 246) !important; /* blue-500 */
+}
+
+.dark .universal-filter-tag:hover {
+    background-color: rgb(37 99 235) !important; /* blue-600 */
+}
+
+/* ==========================================
+   ENHANCE FILTER TAG CONTENT SPACING
+   ========================================== */
+
+.universal-filter-tag .filter-name {
+    margin-right: 0.25rem !important;
+    font-weight: 600 !important;
+}
+
+.universal-filter-tag .filter-value {
+    font-weight: 500 !important;
+    margin-right: 0.25rem !important;
+}
+
+.universal-filter-remove {
+    background: rgb(239 68 68) !important; /* red-500 */
+    color: white !important;
+    border: none !important;
+    border-radius: 50% !important;
+    width: 1rem !important;
+    height: 1rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease-in-out !important;
+    margin-left: 0.25rem !important;
+}
+
+.universal-filter-remove:hover {
+    background: rgb(220 38 38) !important; /* red-600 */
+    transform: scale(1.1) !important;
+}
+
+.universal-filter-remove i {
+    font-size: 0.625rem !important; /* Very small X icon */
+}
+
+/* ==========================================
+   UNIVERSAL FILTER ANIMATIONS
+   ========================================== */
+
+@keyframes filterSlideIn {
+    from {
+        opacity: 0 !important;
+        transform: translateY(-10px) !important;
+    }
+    to {
+        opacity: 1 !important;
+        transform: translateY(0) !important;
+    }
+}
+
+@keyframes filterFadeIn {
+    from {
+        opacity: 0 !important;
+        transform: translateX(-10px) !important;
+    }
+    to {
+        opacity: 1 !important;
+        transform: translateX(0) !important;
+    }
+}
+
+@keyframes filterSummaryFadeIn {
+    from {
+        opacity: 0 !important;
+        transform: translateY(10px) !important;
+    }
+    to {
+        opacity: 1 !important;
+        transform: translateY(0) !important;
+    }
+}
+
+/* ==========================================
+   RESPONSIVE DESIGN ENHANCEMENTS - MOBILE FRIENDLY
+   ========================================== */
+
+@media (max-width: 640px) {
+    .universal-filter-card-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.75rem !important;
+    }
+    
+    .universal-filter-results-count {
+        align-self: stretch !important;
+        text-align: center !important;
+    }
+    
+    .universal-date-filter-inputs {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.5rem !important;
+    }
+    
+    .universal-date-filter-inputs input[type="date"] {
+        max-width: none !important;
+    }
+    
+    .universal-date-filter-separator {
+        text-align: center !important;
+        padding: 0.25rem 0 !important;
+    }
+    
+    .universal-date-filter-presets {
+        justify-content: center !important;
+    }
+}
+
+/* ==========================================
+   PERFORMANCE OPTIMIZATIONS
+   ========================================== */
+
+.universal-filter-card * {
+    box-sizing: border-box !important;
+}
+
+.universal-filter-card {
+    contain: layout style paint !important;
+}
+
+/* ==========================================
+   ACCESSIBILITY ENHANCEMENTS
+   ========================================== */
+
+.universal-filter-card [tabindex="0"]:focus {
+    outline: 2px solid rgb(59 130 246) !important;
+    outline-offset: 2px !important;
+}
+
+.universal-filter-card button:focus {
+    outline: 2px solid rgb(59 130 246) !important;
+    outline-offset: 2px !important;
+}
+
+/* ==========================================
+   UNIVERSAL FILTER FORM - FORCE VERTICAL LAYOUT
+   ========================================== */
+
+.universal-filter-form {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+    width: 100% !important;
+}
+
+/* ==========================================
+   UNIVERSAL FILTER CONTAINERS - PREVENT HORIZONTAL ALIGNMENT
+   ========================================== */
+
+.universal-date-filter-container {
+    width: 100% !important;
+    display: block !important;
+    margin-bottom: 0 !important;
+}
+
+.universal-other-filters-container {
+    width: 100% !important;
+    display: block !important;
+    margin-bottom: 0 !important;
+}
+
+/* ==========================================
+   OTHER FILTERS SECTION - CLEARLY SEPARATE
+   ========================================== */
+
+.universal-other-filters-section {
+    background-color: rgb(255 255 255) !important; /* white */
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    border-radius: 0.5rem !important;
+    padding: 1.25rem !important;
+    margin-bottom: 1rem !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    display: block !important;
+}
+
+.dark .universal-other-filters-section {
+    background-color: rgb(31 41 55) !important; /* gray-800 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* ==========================================
+   SECTION TITLES FOR CLARITY
+   ========================================== */
+
+.universal-other-filters-section::before {
+    content: "Additional Filters" !important;
+    display: block !important;
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    margin-bottom: 1rem !important;
+    padding-bottom: 0.5rem !important;
+    border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
+}
+
+.dark .universal-other-filters-section::before {
+    color: rgb(209 213 219) !important; /* gray-300 */
+    border-bottom-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* ==========================================
+   ENSURE NO FLEX INTERFERENCE
+   ========================================== */
+
+.universal-filter-card-body {
+    display: block !important;
+    width: 100% !important;
+}
+
+.universal-filter-card-body > * {
+    display: block !important;
+    width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}
+
+/* ==========================================
+   VISUAL HIERARCHY ENHANCEMENT
+   ========================================== */
+
+.universal-date-filter-section {
+    box-shadow: 0 2px 4px 0 rgb(0 0 0 / 0.05) !important;
+    position: relative !important;
+}
+
+.universal-date-filter-section::before {
+    content: "" !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    height: 3px !important;
+    background: linear-gradient(90deg, rgb(59 130 246), rgb(99 102 241)) !important;
+    border-radius: 0.75rem 0.75rem 0 0 !important;
+}
+
+.universal-other-filters-section {
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05) !important;
+}
+
+/* Enhanced active filter tags for financial year */
+.universal-active-filters-grid .universal-filter-tag-enhanced[data-filter="date_range"][data-value="financial_year"] {
+    background-color: rgb(209 250 229) !important; /* emerald-50 */
+    border-color: rgb(16 185 129) !important; /* emerald-500 */
+}
+
+.universal-active-filters-grid .universal-filter-tag-enhanced[data-filter="date_range"][data-value="financial_year"] .universal-filter-tag-label {
+    color: rgb(6 78 59) !important; /* emerald-900 */
+}
+
+.universal-active-filters-grid .universal-filter-tag-enhanced[data-filter="date_range"][data-value="financial_year"] .universal-filter-tag-value {
+    color: rgb(5 150 105) !important; /* emerald-600 */
+    font-weight: 600 !important;
+}
+
+.dark .universal-active-filters-grid .universal-filter-tag-enhanced[data-filter="date_range"][data-value="financial_year"] {
+    background-color: rgba(16, 185, 129, 0.2) !important;
+    border-color: rgb(16 185 129) !important;
+}
+
+/* ==========================================
+   UNIVERSAL NUMBER RANGE INPUTS
+   ========================================== */
+
+.universal-number-range-container {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+}
+
+.universal-range-input {
+    flex: 1 !important;
+    min-width: 0 !important;
+}
+
+.universal-range-separator {
+    font-size: 0.875rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+}
+
+.dark .universal-range-separator {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+/* ==========================================
+   APPLY FILTERS SECTION (when auto-submit disabled)
+   ========================================== */
+
+.universal-apply-filters-section {
+    margin-top: 1.5rem !important;
+    padding-top: 1rem !important;
+    border-top: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    display: flex !important;
+    gap: 0.75rem !important;
+    justify-content: flex-end !important;
+}
+
+.dark .universal-apply-filters-section {
+    border-top-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.universal-apply-filters-btn {
+    background-color: rgb(59 130 246) !important; /* blue-500 */
+    color: white !important;
+    border: none !important;
+    border-radius: 0.375rem !important;
+    padding: 0.75rem 1.5rem !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease-in-out !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+}
+
+.universal-apply-filters-btn:hover {
+    background-color: rgb(37 99 235) !important; /* blue-600 */
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 8px rgba(59, 130, 246, 0.2) !important;
+}
+
+.universal-apply-filters-btn:active {
+    transform: translateY(0) !important;
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2) !important;
+}
+
+.universal-apply-filters-btn:disabled {
+    background-color: rgb(156 163 175) !important; /* gray-400 */
+    cursor: not-allowed !important;
+    transform: none !important;
+}
+
+.universal-reset-filters-btn {
+    background-color: rgb(243 244 246) !important; /* gray-100 */
+    color: rgb(55 65 81) !important; /* gray-700 */
+    border: 1px solid rgb(209 213 219) !important; /* gray-300 */
+    border-radius: 0.375rem !important;
+    padding: 0.75rem 1.5rem !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease-in-out !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+}
+
+.universal-reset-filters-btn:hover {
+    background-color: rgb(229 231 235) !important; /* gray-200 */
+    border-color: rgb(156 163 175) !important; /* gray-400 */
+    transform: translateY(-1px) !important;
+}
+
+.dark .universal-reset-filters-btn {
+    background-color: rgb(51 65 85) !important; /* slate-700 */
+    color: rgb(209 213 219) !important; /* gray-300 */
+    border-color: rgb(100 116 139) !important; /* slate-500 */
+}
+
+.dark .universal-reset-filters-btn:hover {
+    background-color: rgb(71 85 105) !important; /* slate-600 */
+    border-color: rgb(148 163 184) !important; /* slate-400 */
+}
+
+/* ==========================================
+   ENHANCED FILTER GRID LAYOUT
+   ========================================== */
+
+.universal-filter-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)) !important;
+    gap: 1rem !important;
+    margin-bottom: 1rem !important;
+}
+
+@media (max-width: 768px) {
+    .universal-filter-grid {
+        grid-template-columns: 1fr !important;
+        gap: 0.75rem !important;
+    }
+    
+    .universal-apply-filters-section {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+    
+    .universal-apply-filters-btn,
+    .universal-reset-filters-btn {
+        justify-content: center !important;
+    }
+}
+
+/* ==========================================
+   AUTO-SUBMIT VISUAL FEEDBACK
+   ========================================== */
+
+.universal-filter-auto-submit:focus {
+    border-color: rgb(59 130 246) !important; /* blue-500 */
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+.universal-filter-auto-submit.loading {
+    position: relative !important;
+}
+
+.universal-filter-auto-submit.loading::after {
+    content: "" !important;
+    position: absolute !important;
+    right: 0.75rem !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 1rem !important;
+    height: 1rem !important;
+    border: 2px solid rgb(229 231 235) !important; /* gray-200 */
+    border-top-color: rgb(59 130 246) !important; /* blue-500 */
+    border-radius: 50% !important;
+    animation: spin 0.8s linear infinite !important;
+}
+
+@keyframes spin {
+    to {
+        transform: translateY(-50%) rotate(360deg) !important;
+    }
+}
+
+/* ==========================================
+   PAYMENT BREAKDOWN ALIGNMENT - UNIVERSAL COMPONENT
+   ========================================== */
+
+.breakdown-row-label {
+    display: flex !important;
+    align-items: center !important;
+}
+
+.breakdown-icon-tab {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    width: 1.5rem !important;
+    height: 1.25rem !important;
+    flex-shrink: 0 !important;
+    margin-right: 0.5rem !important;
+}
+
+.breakdown-icon-tab i {
+    font-size: 0.875rem !important;
+    line-height: 1 !important;
+}
+
+.breakdown-label-text {
+    font-size: 0.875rem !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    line-height: 1.25rem !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+.breakdown-amount-value {
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+}
+
+/* Dark mode support */
+.dark .breakdown-label-text {
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.dark .breakdown-amount-value {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+/* ==========================================
+   RESPONSIVE BREAKDOWN ALIGNMENT
+   ========================================== */
+
+@media (max-width: 640px) {
+    .breakdown-icon-tab {
+        width: 1rem !important;
+    }
+    
+    .breakdown-icon-tab i {
+        font-size: 0.75rem !important;
+    }
+    
+    .breakdown-label-text,
+    .breakdown-amount-value {
+        font-size: 0.75rem !important;
+    }
+}
+
+
+/* This Month Transactions - Info Color */
+.stat-card-icon.info {
+    background-color: rgb(59 130 246) !important; /* blue-500 */
+    color: white !important;
+}
+
+.stat-card-icon.info i {
+    color: white !important;
+}
+
+/* =============================================================================
+   END UNIVERSAL FILTER COMPONENTS
+   ============================================================================= */

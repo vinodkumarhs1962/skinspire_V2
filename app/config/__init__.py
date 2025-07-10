@@ -53,16 +53,17 @@ POSTING_CONFIG = {
     'POSTING_RETRY_DELAY_SECONDS': 30,
     
     # Default GL Account Mappings
-    'DEFAULT_AP_ACCOUNT': os.getenv('DEFAULT_AP_ACCOUNT', '2001'),
-    'DEFAULT_INVENTORY_ACCOUNT': os.getenv('DEFAULT_INVENTORY_ACCOUNT', '1301'),
-    'DEFAULT_EXPENSE_ACCOUNT': os.getenv('DEFAULT_EXPENSE_ACCOUNT', '5001'),
-    'DEFAULT_BANK_ACCOUNT': os.getenv('DEFAULT_BANK_ACCOUNT', '1001'),
-    'DEFAULT_CASH_ACCOUNT': os.getenv('DEFAULT_CASH_ACCOUNT', '1002'),
+    'DEFAULT_AP_ACCOUNT': os.getenv('DEFAULT_AP_ACCOUNT', '2100'),
+    'DEFAULT_INVENTORY_ACCOUNT': os.getenv('DEFAULT_INVENTORY_ACCOUNT', '1410'),
+    'DEFAULT_EXPENSE_ACCOUNT': os.getenv('DEFAULT_EXPENSE_ACCOUNT', '5900'),
+    'DEFAULT_BANK_ACCOUNT': os.getenv('DEFAULT_BANK_ACCOUNT', '1200'),
+    'DEFAULT_CASH_ACCOUNT': os.getenv('DEFAULT_CASH_ACCOUNT', '1100'),
+    'CREDIT_NOTE_EXPENSE_ACCOUNT': os.getenv('CREDIT_NOTE_EXPENSE_ACCOUNT', '5999'), 
     
     # GST Account Mappings
-    'CGST_RECEIVABLE_ACCOUNT': os.getenv('CGST_RECEIVABLE_ACCOUNT', '1501'),
-    'SGST_RECEIVABLE_ACCOUNT': os.getenv('SGST_RECEIVABLE_ACCOUNT', '1502'),
-    'IGST_RECEIVABLE_ACCOUNT': os.getenv('IGST_RECEIVABLE_ACCOUNT', '1503'),
+    'CGST_RECEIVABLE_ACCOUNT': os.getenv('CGST_RECEIVABLE_ACCOUNT', '1710'),
+    'SGST_RECEIVABLE_ACCOUNT': os.getenv('SGST_RECEIVABLE_ACCOUNT', '1720'),
+    'IGST_RECEIVABLE_ACCOUNT': os.getenv('IGST_RECEIVABLE_ACCOUNT', '1730'),
     
     # Account mappings by payment method
     'PAYMENT_METHOD_ACCOUNTS': {
@@ -99,3 +100,42 @@ POSTING_CONFIG = {
     'RECONCILIATION_TOLERANCE': 0.01,
     'DAILY_RECONCILIATION_TIME': '23:30',
 }
+
+# Credit Note Configuration
+CREDIT_NOTE_CONFIG = {
+    # Basic settings
+    'ENABLED': os.getenv('CREDIT_NOTE_ENABLED', 'true').lower() == 'true',
+    'AUTO_GENERATE_CREDIT_NUMBER': True,
+    'CREDIT_NUMBER_PREFIX': 'CN',
+    
+    # Business rules
+    'ALLOW_MULTIPLE_CREDITS_PER_PAYMENT': True,
+    'MAX_CREDIT_PERCENTAGE': 100,  # Can credit up to 100% of payment
+    'REQUIRE_REASON': True,
+    'MIN_REASON_LENGTH': 10,
+    
+    # Line item handling (NO MEDICINE DEPENDENCY)
+    'DEFAULT_CREDIT_DESCRIPTION': 'Payment Adjustment - Credit Note',
+    'USE_VIRTUAL_LINE_ITEMS': True,  # Don't require medicine_id
+    'VIRTUAL_MEDICINE_NAME': 'Credit Note Adjustment',
+    
+    # Permissions - reuse your existing pattern
+    'CREATE_PERMISSION': 'supplier.edit',
+    'VIEW_PERMISSION': 'supplier.view',
+    
+    # UI settings
+    'SHOW_IN_PAYMENT_VIEW': True,
+    'ENABLE_PARTIAL_CREDITS': True,
+}
+
+# Reason codes for credit notes
+CREDIT_NOTE_REASONS = [
+    ('payment_error', 'Payment Error'),
+    ('duplicate_payment', 'Duplicate Payment'), 
+    ('overpayment', 'Overpayment'),
+    ('invoice_dispute', 'Invoice Dispute'),
+    ('quality_issue', 'Quality Issue'),
+    ('cancellation', 'Order Cancellation'),
+    ('return', 'Goods Return'),
+    ('other', 'Other')
+]

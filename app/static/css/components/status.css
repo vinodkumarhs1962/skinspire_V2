@@ -1,0 +1,623 @@
+/* ==========================================
+   STATUS AND ALERT COMPONENTS
+   File: static/css/components/status.css
+   Status badges, alerts, and indicators
+   ========================================== */
+
+/* ==========================================
+   STATUS BADGE BASE STYLES
+   ========================================== */
+
+.status-badge {
+    display: inline-flex !important;
+    align-items: center !important;
+    padding: 0.375rem 0.75rem !important; /* Optimized default size */
+    border-radius: 0.375rem !important; /* Less rounded for table context */
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+}
+
+/* Size variants */
+.status-badge.sm {
+    padding: 0.25rem 0.5rem !important;
+    font-size: 0.625rem !important;
+}
+
+.status-badge.lg {
+    padding: 0.5rem 1rem !important;
+    font-size: 0.875rem !important;
+}
+
+/* ==========================================
+   STATUS BADGE SEMANTIC VARIANTS
+   ========================================== */
+
+/* Active, Approved, Paid - Green variants */
+.status-active,
+.status-approved, 
+.status-paid,
+.status-completed,
+.status-delivered {
+    background-color: rgb(220 252 231) !important; /* green-100 */
+    color: rgb(22 101 52) !important; /* green-800 */
+    border: 1px solid rgb(187 247 208) !important; /* green-200 */
+}
+
+/* Pending, Partial, In Progress - Yellow variants */
+.status-pending,
+.status-partial,
+.status-processing,
+.status-in-progress,
+.status-review {
+    background-color: rgb(254 249 195) !important; /* yellow-100 */
+    color: rgb(146 64 14) !important; /* yellow-800 */
+    border: 1px solid rgb(253 230 138) !important; /* yellow-200 */
+}
+
+/* Inactive, Cancelled, Unpaid - Red variants */
+.status-inactive,
+.status-cancelled,
+.status-unpaid,
+.status-rejected,
+.status-failed,
+.status-overdue {
+    background-color: rgb(254 226 226) !important; /* red-100 */
+    color: rgb(153 27 27) !important; /* red-800 */
+    border: 1px solid rgb(252 165 165) !important; /* red-200 */
+}
+
+/* Draft, Unknown - Gray variants */
+.status-draft,
+.status-unknown,
+.status-disabled {
+    background-color: rgb(243 244 246) !important; /* gray-100 */
+    color: rgb(55 65 81) !important; /* gray-700 */
+    border: 1px solid rgb(209 213 219) !important; /* gray-300 */
+}
+
+/* Info, New - Blue variants */
+.status-info,
+.status-new,
+.status-scheduled {
+    background-color: rgb(219 234 254) !important; /* blue-100 */
+    color: rgb(30 64 175) !important; /* blue-800 */
+    border: 1px solid rgb(147 197 253) !important; /* blue-200 */
+}
+
+/* Warning - Orange variants */
+.status-warning,
+.status-urgent,
+.status-attention {
+    background-color: rgb(254 215 170) !important; /* orange-100 */
+    color: rgb(154 52 18) !important; /* orange-800 */
+    border: 1px solid rgb(253 186 116) !important; /* orange-200 */
+}
+
+/* ==========================================
+   STATUS BADGE WITH ICONS
+   ========================================== */
+
+.status-badge .badge-icon {
+    margin-right: 0.375rem !important;
+    font-size: 0.75rem !important;
+}
+
+/* ==========================================
+   DARK MODE STATUS STYLES
+   ========================================== */
+
+.dark .status-active,
+.dark .status-approved,
+.dark .status-paid,
+.dark .status-completed,
+.dark .status-delivered {
+    background-color: rgba(20, 83, 45, 0.2) !important; /* green-900/20 */
+    color: rgb(134 239 172) !important; /* green-300 */
+    border-color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.dark .status-pending,
+.dark .status-partial,
+.dark .status-processing,
+.dark .status-in-progress,
+.dark .status-review {
+    background-color: rgba(146, 64, 14, 0.2) !important; /* yellow-900/20 */
+    color: rgb(253 224 71) !important; /* yellow-300 */
+    border-color: rgb(245 158 11) !important; /* amber-500 */
+}
+
+.dark .status-inactive,
+.dark .status-cancelled,
+.dark .status-unpaid,
+.dark .status-rejected,
+.dark .status-failed,
+.dark .status-overdue {
+    background-color: rgba(127, 29, 29, 0.2) !important; /* red-900/20 */
+    color: rgb(252 165 165) !important; /* red-300 */
+    border-color: rgb(239 68 68) !important; /* red-500 */
+}
+
+.dark .status-draft,
+.dark .status-unknown,
+.dark .status-disabled {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    color: rgb(209 213 219) !important; /* gray-300 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* ==========================================
+   ALERT COMPONENTS
+   ========================================== */
+
+.alert {
+    padding: 1rem !important;
+    border-radius: 0.5rem !important;
+    border: 1px solid transparent !important;
+    margin-bottom: 1rem !important;
+    display: flex !important;
+    align-items: flex-start !important;
+}
+
+.alert-icon {
+    margin-right: 0.75rem !important;
+    margin-top: 0.125rem !important;
+    font-size: 1.25rem !important;
+    flex-shrink: 0 !important;
+}
+
+.alert-content {
+    flex: 1 !important;
+}
+
+.alert-title {
+    font-weight: 600 !important;
+    font-size: 0.875rem !important;
+    margin-bottom: 0.25rem !important;
+}
+
+.alert-message {
+    font-size: 0.875rem !important;
+    line-height: 1.5 !important;
+}
+
+/* Alert variants */
+.alert-success {
+    background-color: rgb(240 253 244) !important; /* green-50 */
+    border-color: rgb(187 247 208) !important; /* green-200 */
+    color: rgb(22 101 52) !important; /* green-800 */
+}
+
+.alert-success .alert-icon {
+    color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.alert-error {
+    background-color: rgb(254 242 242) !important; /* red-50 */
+    border-color: rgb(252 165 165) !important; /* red-200 */
+    color: rgb(153 27 27) !important; /* red-800 */
+}
+
+.alert-error .alert-icon {
+    color: rgb(239 68 68) !important; /* red-500 */
+}
+
+.alert-warning {
+    background-color: rgb(255 251 235) !important; /* yellow-50 */
+    border-color: rgb(253 230 138) !important; /* yellow-200 */
+    color: rgb(146 64 14) !important; /* yellow-800 */
+}
+
+.alert-warning .alert-icon {
+    color: rgb(245 158 11) !important; /* amber-500 */
+}
+
+.alert-info {
+    background-color: rgb(239 246 255) !important; /* blue-50 */
+    border-color: rgb(147 197 253) !important; /* blue-200 */
+    color: rgb(30 64 175) !important; /* blue-800 */
+}
+
+.alert-info .alert-icon {
+    color: rgb(59 130 246) !important; /* blue-500 */
+}
+
+/* ==========================================
+   LOADING INDICATORS
+   ========================================== */
+
+.loading-spinner {
+    display: inline-block !important;
+    width: 1rem !important;
+    height: 1rem !important;
+    border: 2px solid rgb(229 231 235) !important; /* gray-200 */
+    border-top-color: rgb(99 102 241) !important; /* indigo-500 */
+    border-radius: 50% !important;
+    animation: spin 1s linear infinite !important;
+}
+
+.loading-spinner.lg {
+    width: 2rem !important;
+    height: 2rem !important;
+    border-width: 3px !important;
+}
+
+.loading-spinner.sm {
+    width: 0.75rem !important;
+    height: 0.75rem !important;
+    border-width: 1px !important;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    font-size: 0.875rem !important;
+}
+
+/* Loading skeleton */
+.skeleton {
+    background-color: rgb(229 231 235) !important; /* gray-200 */
+    border-radius: 0.25rem !important;
+    animation: pulse 2s infinite !important;
+}
+
+.skeleton-text {
+    height: 1rem !important;
+    margin-bottom: 0.5rem !important;
+}
+
+.skeleton-text.lg {
+    height: 1.25rem !important;
+}
+
+.skeleton-text.sm {
+    height: 0.75rem !important;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* ==========================================
+   PROGRESS INDICATORS
+   ========================================== */
+
+.progress-bar {
+    width: 100% !important;
+    height: 0.5rem !important;
+    background-color: rgb(229 231 235) !important; /* gray-200 */
+    border-radius: 9999px !important; /* fully rounded */
+    overflow: hidden !important;
+}
+
+.progress-fill {
+    height: 100% !important;
+    background-color: rgb(99 102 241) !important; /* indigo-500 */
+    border-radius: 9999px !important;
+    transition: width 0.3s ease-in-out !important;
+}
+
+.progress-fill.success {
+    background-color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.progress-fill.warning {
+    background-color: rgb(245 158 11) !important; /* amber-500 */
+}
+
+.progress-fill.danger {
+    background-color: rgb(239 68 68) !important; /* red-500 */
+}
+
+/* Progress with label */
+.progress-labeled {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+}
+
+.progress-label {
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    white-space: nowrap !important;
+}
+
+/* ==========================================
+   NOTIFICATION DOTS AND INDICATORS
+   ========================================== */
+
+.notification-dot {
+    width: 0.5rem !important;
+    height: 0.5rem !important;
+    border-radius: 50% !important;
+    background-color: rgb(239 68 68) !important; /* red-500 */
+    display: inline-block !important;
+}
+
+.notification-dot.info {
+    background-color: rgb(59 130 246) !important; /* blue-500 */
+}
+
+.notification-dot.success {
+    background-color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.notification-dot.warning {
+    background-color: rgb(245 158 11) !important; /* amber-500 */
+}
+
+/* Badge with notification count */
+.notification-badge {
+    position: relative !important;
+    display: inline-block !important;
+}
+
+.notification-count {
+    position: absolute !important;
+    top: -0.5rem !important;
+    right: -0.5rem !important;
+    background-color: rgb(239 68 68) !important; /* red-500 */
+    color: white !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    padding: 0.125rem 0.375rem !important;
+    border-radius: 9999px !important;
+    min-width: 1.25rem !important;
+    text-align: center !important;
+    line-height: 1 !important;
+}
+
+/* ==========================================
+   HEALTHCARE SPECIFIC STATUS INDICATORS
+   ========================================== */
+
+/* Patient priority indicators */
+.priority-indicator {
+    width: 0.75rem !important;
+    height: 0.75rem !important;
+    border-radius: 50% !important;
+    display: inline-block !important;
+    margin-right: 0.5rem !important;
+}
+
+.priority-critical {
+    background-color: rgb(239 68 68) !important; /* red-500 */
+    box-shadow: 0 0 0 2px rgb(254 226 226) !important; /* red-100 */
+}
+
+.priority-high {
+    background-color: rgb(245 158 11) !important; /* amber-500 */
+    box-shadow: 0 0 0 2px rgb(254 243 199) !important; /* amber-100 */
+}
+
+.priority-medium {
+    background-color: rgb(59 130 246) !important; /* blue-500 */
+    box-shadow: 0 0 0 2px rgb(219 234 254) !important; /* blue-100 */
+}
+
+.priority-low {
+    background-color: rgb(107 114 128) !important; /* gray-500 */
+    box-shadow: 0 0 0 2px rgb(243 244 246) !important; /* gray-100 */
+}
+
+/* Medical status indicators */
+.medical-status {
+    display: inline-flex !important;
+    align-items: center !important;
+    padding: 0.375rem 0.75rem !important;
+    border-radius: 0.375rem !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+}
+
+.medical-status.stable {
+    background-color: rgb(220 252 231) !important; /* green-100 */
+    color: rgb(22 101 52) !important; /* green-800 */
+}
+
+.medical-status.monitoring {
+    background-color: rgb(254 249 195) !important; /* yellow-100 */
+    color: rgb(146 64 14) !important; /* yellow-800 */
+}
+
+.medical-status.critical {
+    background-color: rgb(254 226 226) !important; /* red-100 */
+    color: rgb(153 27 27) !important; /* red-800 */
+}
+
+/* ==========================================
+   DARK MODE STATUS STYLES
+   ========================================== */
+
+.dark .status-active,
+.dark .status-approved,
+.dark .status-paid,
+.dark .status-completed,
+.dark .status-delivered {
+    background-color: rgb(20 83 45) !important; /* green-900/50 */
+    color: rgb(134 239 172) !important; /* green-300 */
+    border-color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.dark .status-pending,
+.dark .status-partial,
+.dark .status-processing,
+.dark .status-in-progress,
+.dark .status-review {
+    background-color: rgb(146 64 14) !important; /* yellow-900/50 */
+    color: rgb(253 224 71) !important; /* yellow-300 */
+    border-color: rgb(245 158 11) !important; /* amber-500 */
+}
+
+.dark .status-inactive,
+.dark .status-cancelled,
+.dark .status-unpaid,
+.dark .status-rejected,
+.dark .status-failed,
+.dark .status-overdue {
+    background-color: rgb(127 29 29) !important; /* red-900/50 */
+    color: rgb(252 165 165) !important; /* red-300 */
+    border-color: rgb(239 68 68) !important; /* red-500 */
+}
+
+.dark .status-draft,
+.dark .status-unknown,
+.dark .status-disabled {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    color: rgb(209 213 219) !important; /* gray-300 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.dark .alert-success {
+    background-color: rgb(20 83 45) !important; /* green-900/50 */
+    border-color: rgb(34 197 94) !important; /* green-500 */
+    color: rgb(134 239 172) !important; /* green-300 */
+}
+
+.dark .alert-error {
+    background-color: rgb(127 29 29) !important; /* red-900/50 */
+    border-color: rgb(239 68 68) !important; /* red-500 */
+    color: rgb(252 165 165) !important; /* red-300 */
+}
+
+.dark .alert-warning {
+    background-color: rgb(146 64 14) !important; /* yellow-900/50 */
+    border-color: rgb(245 158 11) !important; /* amber-500 */
+    color: rgb(253 224 71) !important; /* yellow-300 */
+}
+
+.dark .alert-info {
+    background-color: rgb(30 58 138) !important; /* blue-900/50 */
+    border-color: rgb(59 130 246) !important; /* blue-500 */
+    color: rgb(147 197 253) !important; /* blue-300 */
+}
+
+.dark .skeleton {
+    background-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.dark .progress-bar {
+    background-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.dark .loading-spinner {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    border-top-color: rgb(165 180 252) !important; /* indigo-300 */
+}
+
+.dark .loading-text {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.dark .progress-label {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+/* ==========================================
+   UNIVERSAL STATUS ENHANCEMENTS
+   ========================================== */
+
+/* Universal status badge - extends your existing status-badge */
+.universal-status-badge {
+    @apply status-badge !important;
+    transition: all 0.15s ease-in-out !important;
+    position: relative !important;
+    overflow: hidden !important;
+}
+
+/* Universal status badge animations */
+.universal-status-badge::before {
+    content: "" !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: -100% !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent) !important;
+    transition: left 0.5s ease-in-out !important;
+}
+
+.universal-status-badge:hover::before {
+    left: 100% !important;
+}
+
+/* Universal status specific colors with enhanced contrast */
+.universal-status-pending {
+    @apply status-pending !important;
+    background-color: rgb(251 191 36) !important; /* amber-400 */
+    color: rgb(92 66 0) !important; /* amber-900 */
+}
+
+.universal-status-completed {
+    @apply status-completed !important;
+    background-color: rgb(34 197 94) !important; /* green-500 */
+    color: rgb(0 69 15) !important; /* green-900 */
+}
+
+.universal-status-cancelled {
+    @apply status-cancelled !important;
+    background-color: rgb(239 68 68) !important; /* red-500 */
+    color: rgb(127 4 4) !important; /* red-900 */
+}
+
+.universal-status-draft {
+    @apply status-draft !important;
+    background-color: rgb(156 163 175) !important; /* gray-400 */
+    color: rgb(17 24 39) !important; /* gray-900 */
+}
+
+.universal-status-approved {
+    @apply status-approved !important;
+    background-color: rgb(6 182 212) !important; /* cyan-500 */
+    color: rgb(0 72 78) !important; /* cyan-900 */
+}
+
+/* Universal status with icons */
+.universal-status-with-icon {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.25rem !important;
+}
+
+.universal-status-icon {
+    font-size: 0.75rem !important;
+    line-height: 1 !important;
+}
+
+/* Universal workflow status progression */
+.universal-workflow-status {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+}
+
+.universal-workflow-step {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.25rem !important;
+    font-size: 0.75rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+}
+
+.universal-workflow-step.active {
+    color: rgb(59 130 246) !important; /* blue-500 */
+    font-weight: 600 !important;
+}
+
+.universal-workflow-step.completed {
+    color: rgb(34 197 94) !important; /* green-500 */
+}

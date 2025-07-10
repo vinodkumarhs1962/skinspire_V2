@@ -1650,7 +1650,7 @@ class APSubledger(Base, TimestampMixin, TenantMixin):
     
     # Reference Information
     reference_id = Column(UUID(as_uuid=True), nullable=False)  # supplier_invoice_id, payment_id, or advance_id
-    reference_type = Column(String(20), nullable=False)  # 'invoice', 'payment', or 'advance'
+    reference_type = Column(String(50), nullable=False)  # 'invoice', 'payment', or 'advance'
     reference_number = Column(String(50))  # Invoice number, payment reference, etc.
     
     # Supplier Information

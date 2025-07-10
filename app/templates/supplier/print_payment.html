@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Payment Receipt #{{ payment.reference_no or payment.payment_id|string|truncate(8, true, '') }} - {{ hospital.name if hospital else "SkinSpire Clinic" }}</title>
+    
+    <!-- Print-optimized CSS -->
+    <style>
+        /* Additional styles for pagination and layout */
+        @page {
+            size: A4;
+            margin: 15mm;
+            orphans: 4;
+            widows: 2;
+        }
+        
+        html, body {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto !important;
+            padding: 0 !important;
+            overflow: visible !important;
+        }
+        
+        .print-container {
+            width: 180mm !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
+            box-sizing: border-box !important;
+            overflow: visible !important;
+            page-break-inside: auto;
+        }
+        
+        /* Reset and base styles */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+            color: black;
+            background: white;
+            padding: 20px;
+        }
+        
+        /* Screen styles for preview */
+        @media screen {
+            .print-controls {
+                background: #f3f4f6;
+                padding: 15px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                text-align: center;
+            }
+            
+            .btn {
+                display: inline-block;
+                padding: 12px 16px;
+                margin: 0 10px;
+                border: none;
+                border-radius: 5px;
+                text-decoration: none;
+                font-family: Arial, sans-serif;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                width: 200px;
+                height: 50px;
+                text-align: center;
+                line-height: 1.2;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .btn-primary {
+                background-color: #3b82f6;
+                color: white;
+            }
+            
+            .btn-secondary {
+                background-color: #6b7280;
+                color: white;
+            }
+            
+            .btn:hover {
+                opacity: 0.9;
+            }
+        }
+        
+        /* Print styles - hide controls */
+        @media print {
+            .print-controls { display: none !important; }
+            .no-print { display: none !important; }
+            
+            /* Override Tailwind classes for print */
+            .bg-white { background: white !important; }
+            .text-gray-800 { color: black !important; }
+            .border-gray-200 { border-color: #ccc !important; }
+            
+            /* Ensure proper spacing for print */
+            .print-container {
+                width: 100% !important;
+                margin: 0 !important;
+            }
+        }
+        
+        /* Header styles */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #000;
+        }
+        
+        .logo {
+            flex: 1;
+        }
+        
+        .hospital-info {
+            flex: 2;
+            text-align: center;
+        }
+        
+        .hospital-info h1 {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .hospital-info .subtitle {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        
+        .document-title {
+            flex: 1;
+            text-align: right;
+        }
+        
+        .document-title h2 {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        /* Payment info grid */
+        .payment-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .payment-info, .supplier-info {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        
+        .payment-info h3, .supplier-info h3 {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 2px 0;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #555;
+            width: 40%;
+        }
+        
+        .info-value {
+            color: #000;
+            width: 55%;
+            text-align: right;
+        }
+        
+        /* Payment method breakdown */
+        .payment-breakdown {
+            margin: 20px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        
+        .payment-breakdown h4 {
+            background-color: #f8f9fa;
+            padding: 10px;
+            margin: 0;
+            font-size: 14px;
+            font-weight: bold;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .payment-breakdown table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .payment-breakdown td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .payment-breakdown td:first-child {
+            font-weight: 600;
+            width: 40%;
+        }
+        
+        .payment-breakdown td:last-child {
+            text-align: right;
+            font-weight: 600;
+        }
+        
+        /* Status badge */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status-approved {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+        
+        .status-pending {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status-rejected {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+        
+        /* Amount in words */
+        .amount-words {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .amount-words td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+        
+        /* Invoice reference section */
+        .invoice-reference {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+        }
+        
+        .invoice-reference h4 {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        /* Notes section */
+        .notes-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        
+        .notes-section h4 {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        /* Terms section */
+        .terms {
+            margin-top: 30px;
+        }
+        
+        .terms h4 {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .terms ol {
+            margin: 0;
+            padding-left: 15px;
+        }
+        
+        .terms li {
+            margin-bottom: 5px;
+        }
+        
+        /* Authorized signature */
+        .authorized-signature {
+            margin-top: 50px;
+            text-align: right;
+        }
+        
+        .authorized-signature div:first-child {
+            margin-bottom: 30px;
+        }
+        
+        /* Utility classes */
+        .text-center { text-align: center; }
+        .font-bold { font-weight: bold; }
+        .text-sm { font-size: 11px; }
+        .text-lg { font-size: 16px; }
+        .mb-2 { margin-bottom: 8px; }
+        .mb-4 { margin-bottom: 16px; }
+    </style>
+</head>
+<body>
+    <!-- Print Controls (hidden in print) -->
+    <div class="print-controls no-print">
+        <button onclick="window.print()" class="btn btn-primary">
+            🖨️ Print<br>Payment Receipt
+        </button>
+        <button onclick="history.back()" class="btn btn-secondary">
+            ← Back to<br>Payment
+        </button>
+    </div>
+
+    <!-- Document Content -->
+    <div class="print-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">
+                {% if logo_url %}
+                    <img src="{{ logo_url }}" alt="{{ hospital.name if hospital else 'SkinSpire Clinic' }}" style="max-height: 80px; max-width: 200px;">
+                {% else %}
+                    <div style="font-size: 18px; font-weight: bold;">{{ hospital.name if hospital else "SkinSpire Clinic" }}</div>
+                {% endif %}
+            </div>
+            <div class="hospital-info">
+                <h1>{{ hospital.name if hospital else "SkinSpire Clinic" }}</h1>
+                <div class="subtitle">Payment Receipt</div>
+                {% if hospital %}
+                <div class="text-sm">
+                    {% if hospital.address %}{{ hospital.address }}<br>{% endif %}
+                    {% if hospital.phone %}Phone: {{ hospital.phone }}{% endif %}
+                    {% if hospital.email %} | Email: {{ hospital.email }}{% endif %}
+                </div>
+                {% endif %}
+            </div>
+            <div class="document-title">
+                <h2>PAYMENT RECEIPT</h2>
+                <div class="text-sm">
+                    Date: {{ payment.created_date.strftime('%d/%m/%Y') if payment.created_date else payment.payment_date.strftime('%d/%m/%Y') }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment and Supplier Details -->
+        <div class="payment-details">
+            <!-- Payment Information -->
+            <div class="payment-info">
+                <h3>Payment Information</h3>
+                <div class="info-row">
+                    <span class="info-label">Payment ID:</span>
+                    <span class="info-value">{{ payment.payment_id|string|truncate(8, true, '') }}</span>
+                </div>
+                {% if payment.reference_no %}
+                <div class="info-row">
+                    <span class="info-label">Reference No:</span>
+                    <span class="info-value">{{ payment.reference_no }}</span>
+                </div>
+                {% endif %}
+                <div class="info-row">
+                    <span class="info-label">Payment Date:</span>
+                    <span class="info-value">{{ payment.payment_date.strftime('%d/%m/%Y') if payment.payment_date else 'N/A' }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Amount:</span>
+                    <span class="info-value font-bold">₹ {{ "%.2f"|format(payment.amount|float) }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Currency:</span>
+                    <span class="info-value">{{ payment.currency_code or 'INR' }}</span>
+                </div>
+                {% if payment.exchange_rate and payment.exchange_rate != 1.0 %}
+                <div class="info-row">
+                    <span class="info-label">Exchange Rate:</span>
+                    <span class="info-value">{{ payment.exchange_rate }}</span>
+                </div>
+                {% endif %}
+                <div class="info-row">
+                    <span class="info-label">Status:</span>
+                    <span class="info-value">
+                        {% if payment.workflow_status == 'approved' %}
+                            <span class="status-badge status-approved">Approved</span>
+                        {% elif payment.workflow_status == 'pending_approval' %}
+                            <span class="status-badge status-pending">Pending</span>
+                        {% elif payment.workflow_status == 'rejected' %}
+                            <span class="status-badge status-rejected">Rejected</span>
+                        {% else %}
+                            <span class="status-badge status-pending">{{ payment.workflow_status|title }}</span>
+                        {% endif %}
+                    </span>
+                </div>
+                {% if branch %}
+                <div class="info-row">
+                    <span class="info-label">Branch:</span>
+                    <span class="info-value">{{ branch.name }}</span>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Supplier Information -->
+            <div class="supplier-info">
+                <h3>Supplier Information</h3>
+                {% if supplier %}
+                <div class="info-row">
+                    <span class="info-label">Supplier:</span>
+                    <span class="info-value font-bold">{{ supplier.supplier_name }}</span>
+                </div>
+                {% if supplier.supplier_code %}
+                <div class="info-row">
+                    <span class="info-label">Supplier Code:</span>
+                    <span class="info-value">{{ supplier.supplier_code }}</span>
+                </div>
+                {% endif %}
+                {% if supplier.contact_person %}
+                <div class="info-row">
+                    <span class="info-label">Contact Person:</span>
+                    <span class="info-value">{{ supplier.contact_person }}</span>
+                </div>
+                {% endif %}
+                {% if supplier.phone %}
+                <div class="info-row">
+                    <span class="info-label">Phone:</span>
+                    <span class="info-value">{{ supplier.phone }}</span>
+                </div>
+                {% endif %}
+                {% if supplier.email %}
+                <div class="info-row">
+                    <span class="info-label">Email:</span>
+                    <span class="info-value">{{ supplier.email }}</span>
+                </div>
+                {% endif %}
+                {% if supplier.gst_number %}
+                <div class="info-row">
+                    <span class="info-label">GST Number:</span>
+                    <span class="info-value">{{ supplier.gst_number }}</span>
+                </div>
+                {% endif %}
+                {% else %}
+                <div class="info-row">
+                    <span class="info-label">Supplier:</span>
+                    <span class="info-value">Information not available</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Payment Method Breakdown -->
+        {% set total_methods = 0 %}
+        {% if payment.cash_amount and payment.cash_amount > 0 %}{% set total_methods = total_methods + 1 %}{% endif %}
+        {% if payment.cheque_amount and payment.cheque_amount > 0 %}{% set total_methods = total_methods + 1 %}{% endif %}
+        {% if payment.bank_transfer_amount and payment.bank_transfer_amount > 0 %}{% set total_methods = total_methods + 1 %}{% endif %}
+        {% if payment.upi_amount and payment.upi_amount > 0 %}{% set total_methods = total_methods + 1 %}{% endif %}
+
+        {% if total_methods > 1 %}
+        <div class="payment-breakdown">
+            <h4>Payment Method Breakdown</h4>
+            <table>
+                {% if payment.cash_amount and payment.cash_amount > 0 %}
+                <tr>
+                    <td>Cash Payment</td>
+                    <td>₹ {{ "%.2f"|format(payment.cash_amount|float) }}</td>
+                </tr>
+                {% endif %}
+                {% if payment.cheque_amount and payment.cheque_amount > 0 %}
+                <tr>
+                    <td>Cheque Payment</td>
+                    <td>₹ {{ "%.2f"|format(payment.cheque_amount|float) }}</td>
+                </tr>
+                {% endif %}
+                {% if payment.bank_transfer_amount and payment.bank_transfer_amount > 0 %}
+                <tr>
+                    <td>Bank Transfer</td>
+                    <td>₹ {{ "%.2f"|format(payment.bank_transfer_amount|float) }}</td>
+                </tr>
+                {% endif %}
+                {% if payment.upi_amount and payment.upi_amount > 0 %}
+                <tr>
+                    <td>UPI Payment</td>
+                    <td>₹ {{ "%.2f"|format(payment.upi_amount|float) }}</td>
+                </tr>
+                {% endif %}
+                <tr style="border-top: 2px solid #000; font-weight: bold;">
+                    <td>Total Payment</td>
+                    <td>₹ {{ "%.2f"|format(payment.amount|float) }}</td>
+                </tr>
+            </table>
+        </div>
+        {% else %}
+        <div class="payment-breakdown">
+            <h4>Payment Method</h4>
+            <table>
+                <tr>
+                    <td>
+                        {% if payment.cash_amount and payment.cash_amount > 0 %}Cash Payment
+                        {% elif payment.cheque_amount and payment.cheque_amount > 0 %}Cheque Payment
+                        {% elif payment.bank_transfer_amount and payment.bank_transfer_amount > 0 %}Bank Transfer
+                        {% elif payment.upi_amount and payment.upi_amount > 0 %}UPI Payment
+                        {% else %}Cash Payment{% endif %}
+                    </td>
+                    <td>₹ {{ "%.2f"|format(payment.amount|float) }}</td>
+                </tr>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- Payment Method Details -->
+        {% if payment.cheque_amount and payment.cheque_amount > 0 %}
+        <div class="payment-breakdown">
+            <h4>Cheque Details</h4>
+            <table>
+                {% if payment.cheque_number %}
+                <tr>
+                    <td>Cheque Number</td>
+                    <td>{{ payment.cheque_number }}</td>
+                </tr>
+                {% endif %}
+                {% if payment.cheque_date %}
+                <tr>
+                    <td>Cheque Date</td>
+                    <td>{{ payment.cheque_date.strftime('%d/%m/%Y') if payment.cheque_date else 'N/A' }}</td>
+                </tr>
+                {% endif %}
+                {% if payment.cheque_bank %}
+                <tr>
+                    <td>Bank</td>
+                    <td>{{ payment.cheque_bank }}</td>
+                </tr>
+                {% endif %}
+            </table>
+        </div>
+        {% endif %}
+
+        {% if payment.bank_transfer_amount and payment.bank_transfer_amount > 0 %}
+        <div class="payment-breakdown">
+            <h4>Bank Transfer Details</h4>
+            <table>
+                {% if payment.bank_reference_number %}
+                <tr>
+                    <td>Reference Number</td>
+                    <td>{{ payment.bank_reference_number }}</td>
+                </tr>
+                {% endif %}
+                {% if payment.ifsc_code %}
+                <tr>
+                    <td>IFSC Code</td>
+                    <td>{{ payment.ifsc_code }}</td>
+                </tr>
+                {% endif %}
+                {% if payment.bank_account_name %}
+                <tr>
+                    <td>Account Name</td>
+                    <td>{{ payment.bank_account_name }}</td>
+                </tr>
+                {% endif %}
+            </table>
+        </div>
+        {% endif %}
+
+        {% if payment.upi_amount and payment.upi_amount > 0 %}
+        <div class="payment-breakdown">
+            <h4>UPI Payment Details</h4>
+            <table>
+                {% if payment.upi_transaction_id %}
+                <tr>
+                    <td>Transaction ID</td>
+                    <td>{{ payment.upi_transaction_id }}</td>
+                </tr>
+                {% endif %}
+                {% if payment.upi_app_name %}
+                <tr>
+                    <td>UPI App</td>
+                    <td>{{ payment.upi_app_name }}</td>
+                </tr>
+                {% endif %}
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- Amount in Words -->
+        <table class="amount-words">
+            <tr>
+                <td style="width: 25%; font-weight: bold;">Amount in Words:</td>
+                <td style="font-weight: bold; text-transform: uppercase;">
+                    {{ payment.amount|amount_in_words }}
+                </td>
+            </tr>
+        </table>
+
+        <!-- Invoice Reference (if applicable) -->
+        {% if invoice %}
+        <div class="invoice-reference">
+            <h4>Related Invoice Information</h4>
+            <div class="info-row">
+                <span class="info-label">Invoice Number:</span>
+                <span class="info-value">{{ invoice.supplier_invoice_number }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Invoice Date:</span>
+                <span class="info-value">{{ invoice.invoice_date.strftime('%d/%m/%Y') if invoice.invoice_date else 'N/A' }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Invoice Amount:</span>
+                <span class="info-value">₹ {{ "%.2f"|format(invoice.total_amount|float) }}</span>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Notes Section -->
+        {% if payment.notes %}
+        <div class="notes-section">
+            <h4>Payment Notes</h4>
+            <p>{{ payment.notes }}</p>
+        </div>
+        {% endif %}
+
+        <!-- Terms & Conditions -->
+        <div class="terms">
+            <h4>Terms & Conditions:</h4>
+            <ol>
+                <li>This receipt serves as acknowledgment of payment received.</li>
+                <li>Payment has been applied to the specified invoice or account.</li>
+                <li>Any discrepancies should be reported within 48 hours.</li>
+                <li>This is a computer-generated receipt and does not require signature.</li>
+                <li>Please retain this receipt for your records.</li>
+            </ol>
+        </div>
+        
+        <!-- Authorized Signature -->
+        <div class="authorized-signature">
+            <div style="margin-bottom: 30px;">
+                For {{ hospital.name if hospital else "SkinSpire Clinic" }}
+            </div>
+            <div>
+                Authorized Signatory
+            </div>
+        </div>
+    </div>
+
+    <!-- Manual print script -->
+    <script>
+        // Print dialog triggered manually by user clicking Print button
+        // Auto-focus on print button for keyboard accessibility
+        document.addEventListener('DOMContentLoaded', function() {
+            const printBtn = document.querySelector('.btn-primary');
+            if (printBtn) {
+                printBtn.focus();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,778 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block content %}
+<!-- =============================================================================
+UNIVERSAL LIST TEMPLATE - FIXED FOR GOLD STANDARD COMPATIBILITY
+Fixed: Summary cards, Filter layout, Table data, Debug code issues
+============================================================================= -->
+
+<div class="container mx-auto px-4 py-6" data-entity-type="{{ assembled_data.entity_config.entity_type if assembled_data and assembled_data.entity_config and assembled_data.entity_config.entity_type else 'supplier_payments' }}">
+    {% set auto_submit_enabled = assembled_data.entity_config.get('enable_auto_submit', True) if assembled_data and assembled_data.entity_config else True %}
+    <!-- ✅ DEBUG: Auto-submit configuration (REMOVE after verification)
+    <div style="background: #ffffcc; border: 2px solid #ffcc00; padding: 10px; margin: 10px 0; font-family: monospace; font-size: 12px;">
+        <strong>🔧 AUTO-SUBMIT DEBUG:</strong><br>
+        auto_submit_enabled: {{ auto_submit_enabled }}<br>
+        entity_type: {{ assembled_data.entity_config.entity_type if assembled_data and assembled_data.entity_config else 'None' }}<br>
+        enable_auto_submit raw: {{ assembled_data.entity_config.enable_auto_submit if assembled_data and assembled_data.entity_config and hasattr(assembled_data.entity_config, 'enable_auto_submit') else 'NOT FOUND' }}<br>
+    </div> -->
+    <!-- ✅ Page Header using gold standard structure -->
+    <div class="flex flex-col md:flex-row items-start md:items-center justify-between mb-6">
+        <div>
+            <!-- First Line: Hospital and Branch (bold, bigger fonts, spaced) -->
+            <div class="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+                {% if assembled_data and assembled_data.get('hospital_name') and assembled_data.get('branch_name') %}
+                    {{ assembled_data.hospital_name }} <span class="mx-3">•</span> {{ assembled_data.branch_name }}
+                {% elif assembled_data and assembled_data.get('hospital_name') %}
+                    {{ assembled_data.hospital_name }}
+                {% else %}
+                    Hospital • Branch
+                {% endif %}
+            </div>
+            
+            <!-- Current Date and Day (Right aligned on same line) -->
+            <div class="text-right ml-4">
+                <div class="text-lg font-semibold text-gray-900 dark:text-gray-100" id="current-date">
+                    <!-- Date will be set by JavaScript -->
+                </div>
+                <div class="text-sm text-gray-600 dark:text-gray-400" id="current-day">
+                    <!-- Day will be set by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Second Line: Entity Title with colored icon (left aligned) -->
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">
+                <i class="{{ assembled_data.entity_config.icon if assembled_data and assembled_data.entity_config and assembled_data.entity_config.icon else 'fas fa-money-bill-wave' }} text-blue-600"></i>
+                {{ assembled_data.entity_config.page_title if assembled_data and assembled_data.entity_config and assembled_data.entity_config.page_title else 'Universal List' }}
+            </h1>
+            
+            <!-- Third Line: Description (left aligned) -->
+            <p class="text-gray-600 dark:text-gray-400">
+                {{ assembled_data.entity_config.description if assembled_data and assembled_data.entity_config and assembled_data.entity_config.description else 'Universal entity management' }}
+            </p>
+        </div>
+        
+
+
+        <!-- ✅ Action buttons using existing btn classes -->
+        <div class="flex space-x-2 mt-4 md:mt-0">
+            {% if assembled_data and assembled_data.entity_config and assembled_data.entity_config.actions %}
+                {% for action in assembled_data.entity_config.actions %}
+                    {% if action.show_in_toolbar %}
+                    <a href="{% if action.route_name %}{{ url_for(action.route_name, **(action.route_params or {})) }}{% else %}#{% endif %}" 
+                    class="{{ action.button_type.value }}">
+                        <i class="{{ action.icon }} icon-left"></i>{{ action.label }}
+                    </a>
+                    {% endif %}
+                {% endfor %}
+            {% else %}
+                <a href="#" class="btn-primary">
+                    <i class="fas fa-plus icon-left"></i>Add New
+                </a>
+            {% endif %}
+            <button class="btn-secondary" onclick="handleUniversalExport('csv')">
+                <i class="fas fa-download icon-left"></i>Export
+            </button>
+        </div>
+    </div>
+
+    <!-- ✅ FIXED: Summary Cards with dictionary access instead of attribute access -->
+    {% set safe_summary = assembled_data.get('summary', {}) if assembled_data else {} %}
+    {% set safe_pagination = assembled_data.get('pagination', {}) if assembled_data else {} %}
+    {% set safe_items = assembled_data.get('items', []) if assembled_data else [] %}
+    {% set safe_total_count = safe_pagination.get('total_count', safe_summary.get('total_count', safe_items|length)) %}
+    
+    <!-- ✅ DEBUG: Add this div before summary cards section
+    <div style="background: #ffffcc; border: 2px solid #ffcc00; padding: 10px; margin: 10px 0; font-family: monospace;">
+        <strong>🔍 SUMMARY CARDS TEMPLATE DEBUG:</strong><br>
+        assembled_data exists: {{ 'Yes' if assembled_data else 'No' }}<br>
+        assembled_data.summary_cards exists: {{ 'Yes' if assembled_data.summary_cards else 'No' }}<br>
+        summary_cards count: {{ assembled_data.summary_cards|length if assembled_data.summary_cards else 0 }}<br>
+        summary_data: {{ assembled_data.summary if assembled_data.summary else 'None' }}<br>
+        entity_type: {{ assembled_data.entity_type if assembled_data.entity_type else 'None' }}<br>
+    </div> -->
+
+    <!-- ✅ Configuration-Driven Summary Cards using backend assembled data -->
+    {% if assembled_data and assembled_data.summary_cards %}
+        <!-- Primary: Use data assembler's _assemble_summary_cards output -->
+        <div class="card-grid cols-4 mb-6">
+            {% for card in assembled_data.summary_cards %}
+            {% set current_summary = assembled_data.get('summary', {}) %}
+            {% set card_value = current_summary.get(card.get('field', ''), card.get('raw_value', 0)) %}
+            {% set formatted_value = ("Rs.{:,.2f}".format(card_value|float) if card.get('type') == 'currency' else "{:,}".format(card_value|int if card_value else 0)) %}
+            
+            <div class="stat-card{% if card.filterable %} clickable{% endif %}"
+                {% if card.filterable and card.filter_field and card.filter_value %}
+                onclick="applySummaryFilter('{{ card.filter_field }}', '{{ card.filter_value }}')"
+                {% elif card.filterable and card.id == 'total_count' %}
+                onclick="clearUniversalFilters()"
+                {% endif %}>
+                <div class="{{ card.get('icon_css_class', 'stat-card-icon info') }}">
+                    <i class="{{ card.icon }}"></i>
+                </div>
+                {% if card.get('card_type') == 'detail' %}
+                
+                <!-- ✅ GENERIC: Detail card rendering for breakdowns -->
+                <div class="stat-card-value" style="font-size: 0.7rem; line-height: 1.1; padding: 2px 0;">
+                    {% set breakdown_data = current_summary %}
+                    {% set breakdown_fields = card.get('breakdown_fields', {}) %}
+                    {% if breakdown_fields %}
+                        {% for field_key, field_config in breakdown_fields.items() %}
+                            {% set amount = breakdown_data.get(field_key, 0) %}
+                            {% if amount and amount > 0 %}
+                            <div style="margin-bottom: 2px; display: flex; align-items: center; justify-content: space-between;">
+                                <span class="breakdown-row-label">
+                                    <span class="breakdown-icon-tab">
+                                        <i class="{{ field_config.get('icon', 'fas fa-circle') }} {{ field_config.get('color', 'text-gray-600') }}"></i>
+                                    </span>
+                                    <span class="breakdown-label-text">{{ field_config.get('label', field_key) }}</span>
+                                </span>
+                                <span class="breakdown-amount-value">
+                                    {% if card.get('type') == 'currency' %}₹{{ "{:,.0f}".format(amount|float) }}{% else %}{{ amount }}{% endif %}
+                                </span>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <div>{{ formatted_value if card.get('field') else card.value }}</div>
+                    {% endif %}
+                </div>
+                {% else %}
+                <!-- ✅ STANDARD: Summary card rendering (existing behavior) -->
+                <div class="stat-card-value">{{ formatted_value if card.get('field') else card.value }}</div>
+                {% endif %}
+                
+                <div class="stat-card-label">{{ card.label }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <!-- ✅ Fallback: Use gold standard pattern if no summary_cards assembled -->
+        <div class="card-grid cols-4 mb-6">
+            <div class="stat-card clickable" onclick="clearUniversalFilters()">
+                <div class="stat-card-icon primary">
+                    <i class="{{ assembled_data.get('entity_config', {}).get('icon', 'fas fa-list') }}"></i>
+                </div>
+                <div class="stat-card-value">{{ safe_total_count }}</div>
+                <div class="stat-card-label">Total {{ assembled_data.get('entity_config', {}).get('plural_name', 'Records') }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card-icon success">
+                    <i class="fas fa-rupee-sign"></i>
+                </div>
+                <div class="stat-card-value">₹{{ "%.2f"|format(safe_summary.get('total_amount', 0)|float) }}</div>
+                <div class="stat-card-label">Total Amount</div>
+            </div>
+            <div class="stat-card clickable" onclick="applySummaryFilter('this_month', 'true')">
+                <div class="stat-card-icon primary">
+                    <i class="fas fa-calendar-alt"></i>
+                </div>
+                <div class="stat-card-value">{{ safe_summary.get('this_month_count', 0) }}</div>
+                <div class="stat-card-label">This Month</div>
+            </div>
+            <div class="stat-card clickable" onclick="applySummaryFilter('status', 'pending')">
+                <div class="stat-card-icon danger">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="stat-card-value">{{ safe_summary.get('pending_count', 0) }}</div>
+                <div class="stat-card-label">Pending</div>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- ✅ FIXED: Filter Card with proper horizontal layout -->
+    <div class="universal-filter-card-header">
+        <h3 class="universal-filter-card-title">
+            <i class="fas fa-filter"></i>Filter {{ assembled_data.entity_config.plural_name if assembled_data and assembled_data.entity_config and assembled_data.entity_config.plural_name else 'Records' }}
+        </h3>
+        <div class="universal-filter-results-count">
+            <span id="results-count">{{ safe_total_count }} results</span>
+        </div>
+    </div>
+        
+        <div class="universal-filter-card-body">
+            <form method="GET" action="{{ request.path }}" id="universal-filter-form" class="universal-filter-form">
+                
+                <!-- ✅ SECTION 1: Date Filter (Always Visible) -->
+                <div class="universal-date-filter-container">
+                    <div class="universal-date-filter-section">
+                        <div class="universal-date-filter-title">
+                            <i class="fas fa-calendar-alt"></i>Date Range
+                        </div>
+                        
+                        <div class="universal-date-filter-presets-row">
+                            <button type="button" class="universal-date-preset-btn universal-date-filter-preset" data-preset="today">
+                                <i class="fas fa-calendar-day"></i>Today
+                            </button>
+                            <button type="button" class="universal-date-preset-btn universal-date-filter-preset" data-preset="this_month">
+                                <i class="fas fa-calendar-alt"></i>This Month
+                            </button>
+                            <button type="button" class="universal-date-preset-btn universal-date-filter-preset" data-preset="financial_year">
+                                <i class="fas fa-calendar-year"></i>Financial Year
+                            </button>
+                            <button type="button" class="universal-date-preset-btn universal-date-filter-preset" data-preset="clear">
+                                <i class="fas fa-times"></i>Clear
+                            </button>
+                        </div>
+                        
+                        <!-- Row 2: Date Input Fields (Full Width) -->
+                        <div class="universal-date-filter-inputs-row">
+                            <div class="universal-date-input-group">
+                                <label class="universal-date-label">From Date</label>
+                                <input type="date" name="start_date" id="start_date" 
+                                    value="{{ request.args.get('start_date', '') }}" 
+                                    class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
+                            </div>
+                            <div class="universal-date-separator-container">
+                                <span class="universal-date-filter-separator">to</span>
+                            </div>
+                            <div class="universal-date-input-group">
+                                <label class="universal-date-label">To Date</label>
+                                <input type="date" name="end_date" id="end_date" 
+                                    value="{{ request.args.get('end_date', '') }}" 
+                                    class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ✅ SECTION 2: Additional Filter Fields (Always Visible) -->
+                <div class="universal-other-filters-container">
+                    <div class="universal-other-filters-section">
+                        <div class="universal-filter-grid">
+                            <!-- Universal Search Field (Always Available) -->
+                            <div class="universal-form-group">
+                                <label class="universal-form-label">Supplier Search</label>
+                                <input type="text" name="search" 
+                                    value="{{ request.args.get('search', '') }}" 
+                                    placeholder="Search records..."
+                                    class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
+                            </div>
+                            
+                            <!-- Reference No Filter (for supplier_payments) -->
+                            {% if assembled_data and assembled_data.entity_config and assembled_data.entity_config.entity_type == 'supplier_payments' %}
+                            <div class="universal-form-group">
+                                <label class="universal-form-label">Reference No.</label>
+                                <input type="text" name="reference_no" 
+                                    value="{{ request.args.get('reference_no', '') }}" 
+                                    placeholder="Search by reference number..."
+                                    class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
+                            </div>
+                                                        
+                            <!-- Status Filter -->
+                            <div class="universal-form-group">
+                                <label class="universal-form-label">Status</label>
+                                <select name="status" class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
+                                    <option value="">All Status</option>
+                                    <option value="pending" {{ 'selected' if request.args.get('status') == 'pending' else '' }}>Pending</option>
+                                    <option value="approved" {{ 'selected' if request.args.get('status') == 'approved' else '' }}>Approved</option>
+                                    <option value="completed" {{ 'selected' if request.args.get('status') == 'completed' else '' }}>Completed</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Payment Method Filter -->
+                            <div class="universal-form-group">
+                                <label class="universal-form-label">Payment Method</label>
+                                <select name="payment_method" class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
+                                    <option value="">All Methods</option>
+                                    <option value="cash" {{ 'selected' if request.args.get('payment_method') == 'cash' else '' }}>Cash</option>
+                                    <option value="cheque" {{ 'selected' if request.args.get('payment_method') == 'cheque' else '' }}>Cheque</option>
+                                    <option value="bank_transfer" {{ 'selected' if request.args.get('payment_method') == 'bank_transfer' else '' }}>Bank Transfer</option>
+                                    <option value="upi" {{ 'selected' if request.args.get('payment_method') == 'upi' else '' }}>UPI</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Amount Filter -->
+                            <div class="universal-form-group">
+                                <label class="universal-form-label">Min Amount</label>
+                                <input type="number" name="amount_min" 
+                                    value="{{ request.args.get('amount_min', '') }}"
+                                    placeholder="Minimum amount..."
+                                    class="universal-form-input{{ ' universal-filter-auto-submit' if assembled_data.entity_config.get('enable_auto_submit', True) else '' }}">
+                            </div>
+                            
+                            <div class="universal-form-group">
+                                <label class="universal-form-label">Max Amount</label>
+                                <input type="number" name="amount_max" 
+                                    value="{{ request.args.get('amount_max', '') }}"
+                                    placeholder="Maximum amount..."
+                                    class="universal-form-input{{ ' universal-filter-auto-submit' if assembled_data.entity_config.get('enable_auto_submit', True) else '' }}">
+                            </div>
+                            {% else %}
+                            <!-- Generic filters for other entities -->
+                            <div class="universal-form-group">
+                                <label class="universal-form-label">Status</label>
+                                <select name="status" class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
+                                    <option value="">All Status</option>
+                                    <option value="active" {{ 'selected' if request.args.get('status') == 'active' else '' }}>Active</option>
+                                    <option value="pending" {{ 'selected' if request.args.get('status') == 'pending' else '' }}>Pending</option>
+                                    <option value="completed" {{ 'selected' if request.args.get('status') == 'completed' else '' }}>Completed</option>
+                                </select>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ✅ SECTION 3: Filter Actions (Full Width, At Bottom) -->
+                <div class="universal-filter-actions">
+                    <div class="universal-filter-actions-left">
+                        {% if not auto_submit_enabled %}
+                        <!-- Apply Filters button only visible when auto-submit is disabled -->
+                        <button type="submit" class="btn-primary" id="apply-filters-btn">
+                            <i class="fas fa-search icon-left"></i>Apply Filters
+                        </button>
+                        {% endif %}
+                        <a href="{{ request.path }}" class="btn-secondary">
+                            <i class="fas fa-undo icon-left"></i>Reset All
+                        </a>
+                    </div>
+                    <div class="universal-filter-actions-right">
+                        <button type="button" onclick="handleUniversalExport('csv')" class="btn-outline">
+                            <i class="fas fa-download icon-left"></i>Export CSV
+                        </button>
+                        {% if not auto_submit_enabled %}
+                        <button type="button" class="btn-outline" onclick="saveUniversalFilters()">
+                            <i class="fas fa-save icon-left"></i>Save Filters
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </form>
+            
+            <!-- ✅ ENHANCED: Filter Summary matching Gold Standard -->
+            <div class="universal-filter-summary" id="filter-summary">
+                <p class="universal-filter-summary-text">
+                    <i class="fas fa-info-circle icon-left"></i>
+                    <span id="summary-text">
+                        {% if safe_total_count %}
+                            Showing {{ safe_total_count }} {{ assembled_data.entity_config.plural_name.lower() if assembled_data and assembled_data.entity_config and assembled_data.entity_config.plural_name else 'records' }}
+                            {% set has_active_filters = false %}
+                            {% for key, value in request.args.items() %}
+                                {% if key not in ['page', 'per_page', 'sort', 'direction'] and value %}
+                                    {% set has_active_filters = true %}
+                                {% endif %}
+                            {% endfor %}
+                            {% if has_active_filters %}
+                                matching your filters
+                            {% endif %}
+                        {% else %}
+                            No {{ assembled_data.entity_config.plural_name.lower() if assembled_data and assembled_data.entity_config and assembled_data.entity_config.plural_name else 'records' }} found matching your criteria
+                        {% endif %}
+                    </span>
+                </p>
+            </div>
+
+            <!-- ✅ ENHANCED: Modern Active Filters Display -->
+            <div class="universal-active-filters-enhanced" id="active-filters">
+                {% set has_filters = false %}
+                {% set filter_count = 0 %}
+                {% for key, value in request.args.items() %}
+                    {% if key not in ['page', 'per_page', 'sort', 'direction'] and value %}
+                        {% set has_filters = true %}
+                        {% set filter_count = filter_count + 1 %}
+                    {% endif %}
+                {% endfor %}
+                
+                {% if has_filters %}
+                <div class="universal-active-filters-container">
+                    <!-- Filter Header with Count and Clear All -->
+                    <div class="universal-active-filters-header">
+                        <div class="universal-active-filters-info">
+                            <i class="fas fa-filter-circle-dollar"></i>
+                            <span class="universal-active-filters-label">Active Filters</span>
+                            <span class="universal-active-filters-count">{{ filter_count }}</span>
+                        </div>
+                        <button type="button" class="universal-clear-all-filters-btn" onclick="clearUniversalFilters()">
+                            <i class="fas fa-times-circle"></i>Clear All
+                        </button>
+                    </div>
+                    
+                    <!-- Filter Tags Grid -->
+                    <div class="universal-active-filters-grid">
+                        {% for key, value in request.args.items() %}
+                            {% if key not in ['page', 'per_page', 'sort', 'direction'] and value %}
+                            <div class="universal-filter-tag-enhanced">
+                                <div class="universal-filter-tag-content">
+                                    <span class="universal-filter-tag-label">{{ key.replace('_', ' ').title() }}</span>
+                                    <span class="universal-filter-tag-value">{{ value }}</span>
+                                </div>
+                                <button type="button" class="universal-filter-tag-remove" onclick="removeFilter('{{ key }}')" title="Remove this filter">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    
+                    <!-- Filter Summary Stats -->
+                    <div class="universal-active-filters-summary">
+                        <span class="universal-filters-summary-text">
+                            <i class="fas fa-info-circle"></i>
+                            {{ filter_count }} filter{{ 's' if filter_count != 1 else '' }} applied • 
+                            <span class="universal-results-preview">{{ safe_total_count }} result{{ 's' if safe_total_count != 1 else '' }} found</span>
+                        </span>
+                    </div>
+                </div>
+                {% else %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- ✅ FIXED: Data Table with proper data access -->
+    {% if safe_items and safe_items|length > 0 %}
+    <div class="info-card">
+        <div class="card-header">
+            <div class="card-header-content">
+                <h3 class="card-title">
+                    {{ assembled_data.entity_config.plural_name if assembled_data and assembled_data.entity_config and assembled_data.entity_config.plural_name else 'Records' }}
+                    {% set current_page = safe_pagination.get('page', 1) %}
+                    {% set per_page = safe_pagination.get('per_page', 20) %}
+                    {% set displayed_count = [per_page, safe_total_count]|min %}
+                    <span class="badge badge-info">{{ displayed_count }} of {{ safe_total_count }}</span>
+                </h3>
+                <div class="card-actions" style="display: none;">
+                    <button type="button" class="btn-outline btn-sm" onclick="toggleBulkMode()">
+                        <i class="fas fa-check-square icon-left"></i>Bulk Select
+                    </button>
+                    <button type="button" class="btn-outline btn-sm" onclick="refreshData()">
+                        <i class="fas fa-refresh icon-left"></i>Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="universal-table-container">
+            <table class="universal-data-table">
+                <thead>
+                    <tr>
+                        <th class="universal-bulk-select-column">
+                            <input type="checkbox" id="select-all" onchange="toggleAllSelection(this)">
+                        </th>
+                        {% if assembled_data and assembled_data.entity_config and assembled_data.entity_config.entity_type == 'supplier_payments' %}
+                        <th class="universal-table-header universal-sortable-header" onclick="handleUniversalSort('payment_date')">
+                            Payment Date
+                            <i class="fas fa-sort universal-sort-indicator"></i>
+                        </th>
+                        <th class="universal-table-header universal-sortable-header" onclick="handleUniversalSort('reference_no')">
+                            Supplier Invoice No.
+                            <i class="fas fa-sort universal-sort-indicator"></i>
+                        </th>
+                        <th class="universal-table-header universal-sortable-header supplier-column" onclick="handleUniversalSort('supplier_name')">
+                            Supplier
+                            <i class="fas fa-sort universal-sort-indicator"></i>
+                        </th>
+                        <th class="universal-table-header universal-sortable-header amount-column" onclick="handleUniversalSort('amount')">
+                            Amount
+                            <i class="fas fa-sort universal-sort-indicator"></i>
+                        </th>
+                        <th class="universal-table-header payment-method-column">Payment Method</th>
+                        <th class="universal-table-header">Status</th>
+                        <th class="universal-table-header actions-column">Actions</th>
+                        {% else %}
+                        <!-- Generic columns for other entities -->
+                        <th class="universal-table-header">ID</th>
+                        <th class="universal-table-header">Name</th>
+                        <th class="universal-table-header">Status</th>
+                        <th class="universal-table-header actions-column">Actions</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in safe_items %}
+                    <tr class="universal-table-row universal-clickable-row" onclick="handleRowClick(event, '{{ item.payment_id if hasattr(item, 'payment_id') else item.get('payment_id', '') }}')">
+                        <td class="universal-bulk-select-column" onclick="event.stopPropagation()">
+                            <input type="checkbox" class="row-select" value="{{ item.payment_id if hasattr(item, 'payment_id') else item.get('payment_id', loop.index) }}">
+                        </td>
+                        {% if assembled_data and assembled_data.entity_config and assembled_data.entity_config.entity_type == 'supplier_payments' %}
+                        <td class="date-column">
+                            {% set payment_date = item.payment_date if hasattr(item, 'payment_date') else item.get('payment_date') %}
+                            {% if payment_date %}
+                                {% if payment_date.strftime %}
+                                    {{ payment_date.strftime('%d-%b-%Y') }}
+                                {% else %}
+                                    {{ payment_date }}
+                                {% endif %}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td class="reference-column">{{ item.reference_no if hasattr(item, 'reference_no') else item.get('reference_no', 'N/A') }}</td>
+                        <td class="supplier-column">
+                            <div class="supplier-name">{{ item.supplier_name if hasattr(item, 'supplier_name') else item.get('supplier_name', 'Unknown') }}</div>
+                        </td>
+                        <td class="amount-column">
+                            {% set amount_value = item.amount if hasattr(item, 'amount') else item.get('amount', 0) %}
+                            {% set payment_method = item.payment_method if hasattr(item, 'payment_method') else item.get('payment_method', '') %}
+                            {% set active_filter = request.args.get('payment_method', '') %}
+                            
+                            <div class="amount-display">
+                                <span class="currency">₹{{ "{:,.2f}".format(amount_value|float) if amount_value else '0.00' }}</span>
+                                
+                                {% if active_filter and active_filter != 'bank_transfer_inclusive' and payment_method == 'mixed' %}
+                                    {% set component_amount = 0 %}
+                                    {% set component_label = '' %}
+                                    
+                                    {% if active_filter == 'cash' and item.get('cash_amount', 0) > 0 %}
+                                        {% set component_amount = item.get('cash_amount') %}
+                                        {% set component_label = 'Cash' %}
+                                    {% elif active_filter == 'cheque' and item.get('cheque_amount', 0) > 0 %}
+                                        {% set component_amount = item.get('cheque_amount') %}
+                                        {% set component_label = 'Chq' %}
+                                    {% elif active_filter == 'bank_transfer' and item.get('bank_transfer_amount', 0) > 0 %}
+                                        {% set component_amount = item.get('bank_transfer_amount') %}
+                                        {% set component_label = 'Bank' %}
+                                    {% elif active_filter == 'upi' and item.get('upi_amount', 0) > 0 %}
+                                        {% set component_amount = item.get('upi_amount') %}
+                                        {% set component_label = 'UPI' %}
+                                    {% endif %}
+                                    
+                                    {% if component_amount and component_amount > 0 %}
+                                        <small class="component-amount">
+                                            ({{ component_label }} - ₹{{ "{:,.2f}".format(component_amount|float) }})
+                                        </small>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="payment-method-column">
+                            {% set payment_method = item.payment_method if hasattr(item, 'payment_method') else item.get('payment_method', '') %}
+                            {% if payment_method %}
+                            <span class="status-badge method-{{ payment_method }}">
+                                <i class="fas fa-{{ 'money-bill' if payment_method == 'cash' else 'university' if payment_method == 'bank_transfer' else 'money-check' if payment_method == 'cheque' else 'mobile-alt' }}"></i>
+                                {% if payment_method == 'bank_transfer' %}Bank
+                                {% elif payment_method == 'cheque' %}CHQ
+                                {% elif payment_method == 'cash' %}Cash
+                                {% elif payment_method == 'upi' %}UPI
+                                {% elif payment_method == 'mixed' %}Mixed
+                                {% else %}{{ payment_method.replace('_', ' ').title() }}
+                                {% endif %}
+                            </span>
+                            {% else %}
+                            N/A
+                            {% endif %}
+                        </td>
+                        <td class="status-column">
+                            {% set status = item.status if hasattr(item, 'status') else item.get('status', 'pending') %}
+                            <span class="status-badge status-{{ status }}">
+                                <i class="fas fa-{{ 'check-circle' if status == 'completed' else 'clock' if status == 'pending' else 'times-circle' }}"></i>
+                                {{ status.title() }}
+                            </span>
+                        </td>
+                        {% else %}
+                        <!-- Generic columns for other entities -->
+                        <td>{{ item.get('id', loop.index) }}</td>
+                        <td>{{ item.get('name', 'N/A') }}</td>
+                        <td>{{ item.get('status', 'active') }}</td>
+                        {% endif %}
+                        <td class="actions-column" onclick="event.stopPropagation()">
+                            <div class="universal-table-actions">
+                                <a href="{{ url_for('supplier_views.view_payment', payment_id=item.payment_id) if hasattr(item, 'payment_id') else '#' }}" class="btn-outline btn-sm" title="View Details">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{{ url_for('supplier_views.print_supplier_payment', payment_id=item.payment_id) if hasattr(item, 'payment_id') else '#' }}" class="btn-secondary btn-sm" title="Print">
+                                    <i class="fas fa-print"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+
+        <!-- ✅ Pagination -->
+        {% set per_page = safe_pagination.get('per_page', 20) %}
+        {% set current_page = safe_pagination.get('page', 1) %}
+        {% set total_pages = safe_pagination.get('total_pages', 1) %}
+
+        {% if safe_total_count > per_page %}
+        <div class="universal-pagination-container">
+            <div class="universal-pagination-info">
+                {% set start_record = (current_page - 1) * per_page + 1 %}
+                {% set end_record = [current_page * per_page, safe_total_count]|min %}
+                
+                Showing {{ start_record }} to {{ end_record }} of {{ safe_total_count }} results
+            </div>
+            <div class="universal-pagination-buttons">
+                {% set has_prev = current_page > 1 %}
+                {% set has_next = current_page < total_pages %}
+                
+                {% if has_prev %}
+                    <button class="universal-pagination-button" onclick="handleUniversalPagination({{ current_page - 1 }})">Previous</button>
+                {% endif %}
+                
+                {% set start_page = [1, current_page - 2]|max %}
+                {% set end_page = [total_pages, current_page + 2]|min %}
+                
+                {% for p in range(start_page, end_page + 1) %}
+                    {% if p == current_page %}
+                        <span class="universal-pagination-button active">{{ p }}</span>
+                    {% else %}
+                        <button class="universal-pagination-button" onclick="handleUniversalPagination({{ p }})">{{ p }}</button>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if has_next %}
+                    <button class="universal-pagination-button" onclick="handleUniversalPagination({{ current_page + 1 }})">Next</button>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    {% else %}
+    <!-- ✅ Empty state -->
+    <div class="universal-empty-state">
+        <div class="universal-empty-state-icon">
+            <i class="{{ assembled_data.entity_config.icon if assembled_data and assembled_data.entity_config and assembled_data.entity_config.icon else 'fas fa-inbox' }}"></i>
+        </div>
+        <h3 class="universal-empty-state-title">No Records Found</h3>
+        <p class="universal-empty-state-description">
+            No records match your current filters.
+        </p>
+        <div class="universal-empty-state-actions">
+            <button type="button" class="btn-secondary" onclick="clearUniversalFilters()">
+                <i class="fas fa-filter"></i>Clear Filters
+            </button>
+            <a href="#" class="btn-primary">
+                <i class="fas fa-plus"></i>Add New Record
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- ✅ COMPLETE FIXED JAVASCRIPT SECTION FOR universal_list.html -->
+<!-- ✅ FIXED: Replace the entire JavaScript section at the end of universal_list.html -->
+
+<!-- JavaScript Libraries -->
+<script src="{{ url_for('static', filename='js/components/universal_forms.js') }}"></script>
+<script src="{{ url_for('static', filename='js/components/universal_navigation.js') }}"></script>
+<script src="{{ url_for('static', filename='js/components/universal_utils.js') }}"></script>
+
+<!-- Backend State -->
+<div style="display: none;" 
+     id="backend-filter-state"
+     data-default-preset="financial_year"
+     data-start-date="{{ request.args.get('start_date', '') }}"
+     data-end-date="{{ request.args.get('end_date', '') }}">
+</div>
+
+<!-- Entity Configuration -->
+<script>
+window.assembledData = {
+    entity_config: {
+        entity_type: {{ (assembled_data.entity_config.entity_type if assembled_data and assembled_data.entity_config and assembled_data.entity_config.entity_type else 'universal') | tojson }},
+        enable_saved_filter_suggestions: {{ (assembled_data.entity_config.enable_saved_filter_suggestions if assembled_data and assembled_data.entity_config and hasattr(assembled_data.entity_config, 'enable_saved_filter_suggestions') else True) | tojson }},
+        enable_auto_submit: {{ auto_submit_enabled | tojson }}
+    },
+
+console.log('📋 Universal List template loaded');
+</script>
+
+<!-- Utility Functions -->
+<script>
+/**
+ * Apply summary card filter
+ */
+function applySummaryFilter(fieldName, fieldValue) {
+    const url = new URL(window.location);
+    url.searchParams.set(fieldName, fieldValue);
+    url.searchParams.delete('page');
+    window.location.href = url.toString();
+}
+
+/**
+ * Clear all filters
+ */
+function clearUniversalFilters() {
+    const url = new URL(window.location);
+    const newUrl = new URL(url.pathname, url.origin);
+    window.location.href = newUrl.toString();
+}
+
+/**
+ * Remove individual filter
+ */
+function removeFilter(filterName) {
+    const url = new URL(window.location);
+    url.searchParams.delete(filterName);
+    url.searchParams.delete('page');
+    window.location.href = url.toString();
+}
+
+/**
+ * Handle table row click to open payment view
+ */
+function handleRowClick(event, paymentId) {
+    console.log('🔍 Row clicked with payment ID:', paymentId);
+    console.log('🔍 Payment ID type:', typeof paymentId);
+    console.log('🔍 Payment ID length:', paymentId ? paymentId.length : 'undefined');
+    
+    if (!paymentId) {
+        console.warn('❌ No payment ID provided for row click');
+        return;
+    }
+    
+    const targetUrl = `/supplier/payment/view/${paymentId}`;
+    console.log('🔍 Navigating to URL:', targetUrl);
+    
+    // Navigate to payment view using correct supplier_views.py route
+    window.location.href = targetUrl;
+}
+
+
+/**
+ * Export functionality
+ */
+function handleUniversalExport(format) {
+    const entityType = document.querySelector('[data-entity-type]')?.dataset.entityType || 'universal';
+    const currentParams = new URLSearchParams(window.location.search);
+    currentParams.set('export', format);
+    
+    const exportUrl = `/universal/${entityType}/export?${currentParams.toString()}`;
+    window.open(exportUrl, '_blank');
+}
+
+/**
+ * Refresh page data
+ */
+function refreshData() {
+    window.location.reload();
+}
+
+/**
+ * Confirm delete action
+ */
+function confirmDelete(itemId, itemName = 'this record') {
+    if (confirm(`Are you sure you want to delete ${itemName}?`)) {
+        console.log('Delete confirmed for item:', itemId);
+    }
+}
+
+console.log('✅ Universal List utility functions loaded');
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const now = new Date();
+    const options = { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    };
+    
+    // Set current date in dd/mm/yyyy format
+    const dateStr = now.toLocaleDateString('en-GB'); // dd/mm/yyyy format
+    document.getElementById('current-date').textContent = dateStr;
+    
+    // Set current day
+    const dayStr = now.toLocaleDateString('en-US', { weekday: 'long' });
+    document.getElementById('current-day').textContent = dayStr;
+});
+</script>
+</div> <!-- ✅ Close main container -->
+
+{% endblock %} <!-- ✅ CRITICAL: Template block closure -->

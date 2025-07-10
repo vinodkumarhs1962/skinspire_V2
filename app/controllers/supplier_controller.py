@@ -1031,7 +1031,6 @@ class SupplierInvoiceFormController(FormController):
                 branch_id=branch_id,
                 invoice_data=invoice_data,
                 create_stock_entries=True,
-                create_gl_entries=True,
                 current_user_id=current_user.user_id
             )
         
@@ -3383,7 +3382,6 @@ class SupplierPaymentController(FormController):
                 result = record_supplier_payment(
                     hospital_id=current_user.hospital_id,
                     payment_data=payment_data,
-                    create_gl_entries=False,  # TEMPORARILY DISABLE GL ENTRIES
                     current_user_id=current_user.user_id
                 )
             
@@ -3726,3 +3724,252 @@ class PaymentApprovalController:
             payment=payment,
             title='Payment Approval'
         )
+    
+class SimpleCreditNoteController(FormController):
+    """
+    Phase 1: Simple credit note controller
+    Following your existing FormController patterns
+    UPDATED: Uses centralized creditnote_service
+    """
+    
+    def __init__(self, payment_id):
+        # Import form locally to avoid circular import (your pattern)
+        from app.forms.supplier_forms import SupplierCreditNoteForm
+        
+        self.payment_id = payment_id
+        
+        super().__init__(
+            form_class=SupplierCreditNoteForm,
+            template_path='supplier/credit_note_form.html',
+            success_url=self._get_success_url,
+            success_message="Credit note created successfully",
+            page_title="Create Credit Note",
+            additional_context=self.get_additional_context
+        )
+    
+    def _get_success_url(self, result):
+        """Return to payment view after creation - following your pattern"""
+        from flask import url_for
+        return url_for('supplier_views.view_payment', payment_id=self.payment_id)
+    
+    def get_additional_context(self, *args, **kwargs):
+        """
+        Get context data for credit note form
+        Following your existing additional_context pattern
+        UPDATED: Uses creditnote_service
+        """
+        context = super().get_additional_context(*args, **kwargs) if hasattr(super(), 'get_additional_context') else {}
+        
+        try:
+            from flask_login import current_user
+            # UPDATED: Import from creditnote_service
+            from app.services.credit_note_service import get_supplier_payment_by_id_with_credits
+            
+            # Get payment details with credit info using centralized service
+            payment = get_supplier_payment_by_id_with_credits(
+                payment_id=uuid.UUID(self.payment_id),
+                hospital_id=current_user.hospital_id,
+                current_user_id=current_user.user_id
+            )
+            
+            if payment:
+                context.update({
+                    'payment': payment,
+                    'can_create_credit_note': payment.get('can_create_credit_note', False),
+                    'available_amount': payment.get('net_payment_amount', 0),
+                    'existing_credits': payment.get('existing_credit_notes', [])
+                })
+            else:
+                context['error'] = 'Payment not found'
+            
+        except Exception as e:
+            current_app.logger.error(f"Error getting credit note context: {str(e)}")
+            context['error'] = f"Error loading payment details: {str(e)}"
+        
+        return context
+    
+    def get_form(self, *args, **kwargs):
+        """
+        Setup form with payment data
+        Following your existing get_form pattern
+        UPDATED: Uses creditnote_service
+        """
+        form = super().get_form(*args, **kwargs)
+        
+        if request.method == 'GET':
+            try:
+                self._setup_form_defaults(form)
+            except Exception as e:
+                current_app.logger.error(f"Error setting up form: {str(e)}")
+                flash(f"Error loading form: {str(e)}", 'error')
+        
+        return form
+    
+    def _setup_form_defaults(self, form):
+        """
+        Pre-populate form fields with payment data
+        Following your existing form population patterns
+        UPDATED: Uses creditnote_service
+        """
+        try:
+            from flask_login import current_user
+            # UPDATED: Import from creditnote_service
+            from app.services.credit_note_service import get_supplier_payment_by_id_with_credits
+            
+            # Get payment details
+            payment = get_supplier_payment_by_id_with_credits(
+                payment_id=uuid.UUID(self.payment_id),
+                hospital_id=current_user.hospital_id,
+                current_user_id=current_user.user_id
+            )
+            
+            if not payment:
+                raise ValueError("Payment not found")
+            
+            if not payment.get('can_create_credit_note', False):
+                raise ValueError("Credit note cannot be created for this payment")
+            
+            # Set hidden fields
+            form.payment_id.data = str(payment['payment_id'])
+            form.supplier_id.data = str(payment['supplier_id'])
+            form.branch_id.data = str(payment['branch_id'])
+            
+            # Set credit note details using utility functions
+            from app.utils.credit_note_utils import generate_credit_note_number
+            credit_note_number = generate_credit_note_number(payment['reference_no'])
+            form.credit_note_number.data = credit_note_number
+            form.credit_note_date.data = date.today()
+            form.credit_amount.data = float(payment.get('net_payment_amount', 0))
+            
+            # Set reference fields (readonly)
+            form.payment_reference.data = payment['reference_no']
+            form.supplier_name.data = payment['supplier_name']
+            
+            current_app.logger.info(f"Form setup completed for payment {self.payment_id}")
+            
+        except Exception as e:
+            current_app.logger.error(f"Error setting up form defaults: {str(e)}")
+            raise
+    
+    def process_form(self, form, *args, **kwargs):
+        """
+        Process credit note creation
+        Following your existing process_form pattern
+        UPDATED: Uses creditnote_service
+        """
+        try:
+            from flask_login import current_user
+            # UPDATED: Import from creditnote_service
+            from app.services.credit_note_service import (
+                validate_credit_note_creation_simple,
+                create_simple_credit_note
+            )
+            
+            # Validate before processing (your validation pattern)
+            validation_result = validate_credit_note_creation_simple(
+                payment_id=uuid.UUID(form.payment_id.data),
+                credit_amount=float(form.credit_amount.data),
+                hospital_id=current_user.hospital_id,
+                current_user_id=current_user.user_id
+            )
+            
+            if not validation_result['valid']:
+                raise ValueError(validation_result['error'])
+            
+            # Prepare credit note data
+            credit_note_data = {
+                'payment_id': uuid.UUID(form.payment_id.data),
+                'credit_note_number': form.credit_note_number.data,
+                'credit_note_date': form.credit_note_date.data,
+                'credit_amount': float(form.credit_amount.data),
+                'reason_code': form.reason_code.data,
+                'credit_reason': form.credit_reason.data,
+                'branch_id': uuid.UUID(form.branch_id.data) if form.branch_id.data else None
+            }
+            
+            # Create credit note using centralized service
+            result = create_simple_credit_note(
+                hospital_id=current_user.hospital_id,
+                credit_note_data=credit_note_data,
+                current_user_id=current_user.user_id
+            )
+            
+            current_app.logger.info(f"Credit note created: {result.get('credit_note_number')}")
+            
+            return result
+            
+        except ValueError as ve:
+            current_app.logger.warning(f"Validation error: {str(ve)}")
+            flash(f"Error: {str(ve)}", 'error')
+            raise
+        except Exception as e:
+            current_app.logger.error(f"Error processing credit note: {str(e)}")
+            flash(f"Error creating credit note: {str(e)}", 'error')
+            raise
+
+# ENHANCEMENT: Helper function to update existing payment view controller
+def enhance_payment_view_with_credits(payment_id, current_user_id, hospital_id):
+    """
+    Helper function to get enhanced payment view data
+    Can be used in existing payment view controller
+    Following your existing helper function patterns
+    UPDATED: Uses creditnote_service
+    """
+    try:
+        # UPDATED: Import from creditnote_service
+        from app.services.credit_note_service import get_supplier_payment_by_id_with_credits
+        
+        # Get payment with credit information
+        payment = get_supplier_payment_by_id_with_credits(
+            payment_id=uuid.UUID(payment_id),
+            hospital_id=hospital_id,
+            current_user_id=current_user_id
+        )
+        
+        if not payment:
+            return None
+        
+        # Add credit note creation URL if allowed
+        if payment.get('can_create_credit_note', False):
+            from flask import url_for
+            payment['create_credit_note_url'] = url_for(
+                'supplier_views.create_credit_note', 
+                payment_id=payment_id
+            )
+        
+        return payment
+        
+    except Exception as e:
+        current_app.logger.error(f"Error enhancing payment view: {str(e)}")
+        return None
+
+# ENHANCEMENT: Simple permission check function
+def can_user_create_credit_note(user, payment_id):
+    """
+    Simple permission check for credit note creation
+    Following your existing permission checking patterns
+    UPDATED: Uses creditnote_service
+    """
+    try:
+        from app.services.permission_service import has_permission
+        from app.utils.credit_note_utils import get_credit_note_permission
+        # UPDATED: Import from creditnote_service
+        from app.services.credit_note_service import get_supplier_payment_by_id_with_credits
+        
+        # Check basic permission
+        required_permission = get_credit_note_permission('CREATE')
+        if not has_permission(user, 'supplier', 'edit'):
+            return False
+        
+        # Check if payment allows credit notes
+        payment = get_supplier_payment_by_id_with_credits(
+            payment_id=uuid.UUID(payment_id),
+            hospital_id=user.hospital_id,
+            current_user_id=user.user_id
+        )
+        
+        return payment and payment.get('can_create_credit_note', False)
+        
+    except Exception as e:
+        current_app.logger.error(f"Error checking credit note permission: {str(e)}")
+        return False

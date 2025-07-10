@@ -1,0 +1,2178 @@
+/* ==========================================
+   TABLE COMPONENTS - PRODUCTION GRADE
+   File: static/css/components/tables.css
+   Complete table system for responsive data display
+   ========================================== */
+
+/* ==========================================
+   DATA TABLE BASE STYLES
+   ========================================== */
+
+.data-table {
+    min-width: 100% !important;
+    border-collapse: collapse !important;
+    background-color: white !important;
+}
+
+.data-table th {
+    padding: 0.75rem 1.5rem !important;
+    text-align: left !important;
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
+}
+
+.data-table td {
+    padding: 1rem 1.5rem !important;
+    font-size: 0.875rem !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    vertical-align: middle !important;
+}
+
+.data-table tbody tr:hover {
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+}
+
+/* ==========================================
+   COMPACT TABLE VARIANT
+   ========================================== */
+
+.compact-table {
+    font-size: 0.875rem !important;
+}
+
+.compact-table th,
+.compact-table td {
+    padding: 0.5rem 0.75rem !important;
+}
+
+.compact-table th {
+    font-size: 0.75rem !important;
+}
+
+.compact-table td {
+    font-size: 0.8125rem !important;
+}
+
+/* ==========================================
+   TABLE CONTAINER SYSTEM
+   ========================================== */
+
+.table-container {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    border-radius: 0.5rem !important;
+}
+
+.dark .table-container {
+    background-color: rgb(31 41 55) !important; /* gray-800 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* ==========================================
+   GRID TABLE SYSTEM
+   ========================================== */
+
+.grid-table {
+    display: block !important;
+    width: 100% !important;
+    background-color: white !important;
+    min-width: 900px !important;
+}
+
+.dark .grid-table {
+    background-color: rgb(31 41 55) !important; /* gray-800 */
+}
+
+.grid-table-header {
+    display: grid !important;
+    padding: 0.75rem !important;
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    min-width: 900px !important;
+    width: 100% !important;
+}
+
+.grid-table-row {
+    display: grid !important;
+    padding: 0.75rem !important;
+    border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    font-size: 0.875rem !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    align-items: center !important;
+    gap: 0.5rem !important;
+    transition: background-color 0.15s ease-in-out !important;
+    min-width: 900px !important;
+    width: 100% !important;
+}
+
+.grid-table-row:hover {
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+}
+
+/* ==========================================
+   PREDEFINED GRID LAYOUTS
+   ========================================== */
+
+/* Invoice table grid */
+.grid-invoice {
+    grid-template-columns: 
+        130px                /* Invoice # */
+        minmax(100px, 140px) /* Supplier */
+        100px                /* Date */
+        90px                 /* Total */
+        90px                 /* Paid */
+        90px                 /* Balance */
+        35px                 /* CN indicator */
+        80px                 /* Status */
+        140px !important;    /* Actions */
+}
+
+/* Patient table grid */
+.grid-patient {
+    grid-template-columns: 
+        100px                /* Patient ID */
+        minmax(150px, 1fr)   /* Name */
+        100px                /* Age/DOB */
+        120px                /* Phone */
+        80px                 /* Status */
+        100px !important;    /* Actions */
+}
+
+/* Product table grid */
+.grid-product {
+    grid-template-columns: 
+        80px                 /* SKU/Code */
+        minmax(150px, 1fr)   /* Product name */
+        80px                 /* Category */
+        80px                 /* Stock */
+        80px                 /* Price */
+        80px                 /* Status */
+        100px !important;    /* Actions */
+}
+
+/* ==========================================
+   ACTION BUTTONS SYSTEM
+   ========================================== */
+
+.action-buttons {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.0625rem !important;
+    justify-content: center !important;
+}
+
+.action-link {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0.125rem !important;
+    color: rgb(99 102 241) !important; /* indigo-500 */
+    border-radius: 0.25rem !important;
+    transition: all 0.15s ease-in-out !important;
+    text-decoration: none !important;
+    min-width: 1.25rem !important;
+    min-height: 1.25rem !important;
+    font-size: 0.625rem !important;
+}
+
+.action-link:hover {
+    color: rgb(79 70 229) !important; /* indigo-600 */
+    background-color: rgb(238 242 255) !important; /* indigo-50 */
+    transform: scale(1.15) !important;
+    z-index: 10 !important;
+    position: relative !important;
+}
+
+/* Action link variants */
+.action-link.edit {
+    color: rgb(245 158 11) !important; /* amber-500 */
+}
+
+.action-link.edit:hover {
+    color: rgb(217 119 6) !important; /* amber-600 */
+    background-color: rgb(254 243 199) !important; /* amber-50 */
+}
+
+.action-link.delete {
+    color: rgb(239 68 68) !important; /* red-500 */
+}
+
+.action-link.delete:hover {
+    color: rgb(220 38 38) !important; /* red-600 */
+    background-color: rgb(254 226 226) !important; /* red-50 */
+}
+
+.action-link.success {
+    color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.action-link.success:hover {
+    color: rgb(22 163 74) !important; /* green-600 */
+    background-color: rgb(220 252 231) !important; /* green-50 */
+}
+
+/* ==========================================
+   GRID TABLE UTILITIES
+   ========================================== */
+
+/* Text alignment */
+.grid-cell-left { text-align: left !important; }
+.grid-cell-center { text-align: center !important; }
+.grid-cell-right { text-align: right !important; }
+
+/* Monospace for numbers */
+.grid-cell-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+    font-weight: 500 !important;
+}
+
+/* Cell content management */
+.grid-table-header > div,
+.grid-table-row > div {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    min-width: 0 !important;
+}
+
+.grid-cell-flexible {
+    white-space: normal !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+}
+
+.grid-table-row .action-buttons,
+.grid-table-header .action-buttons {
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+}
+
+/* ==========================================
+   TRUNCATION WITH HOVER TOOLTIP
+   ========================================== */
+
+.grid-cell-truncate {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    position: relative !important;
+    cursor: help !important;
+}
+
+.grid-cell-truncate:hover::after {
+    content: attr(title) !important;
+    position: absolute !important;
+    bottom: 100% !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    background-color: rgb(17 24 39) !important; /* gray-900 */
+    color: white !important;
+    padding: 0.5rem 0.75rem !important;
+    border-radius: 0.375rem !important;
+    font-size: 0.75rem !important;
+    white-space: nowrap !important;
+    z-index: 50 !important;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    transition: opacity 0.2s ease-in-out !important;
+}
+
+.grid-cell-truncate:hover::after {
+    opacity: 1 !important;
+}
+
+/* ==========================================
+   TABLE STATES
+   ========================================== */
+
+/* Loading state */
+.table-loading {
+    position: relative !important;
+}
+
+.table-loading::after {
+    content: "" !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    background-color: rgba(255, 255, 255, 0.8) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 10 !important;
+}
+
+/* Empty state */
+.grid-table-empty {
+    grid-column: 1 / -1 !important;
+    text-align: center !important;
+    padding: 3rem 1.5rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+}
+
+.grid-table-empty-icon {
+    font-size: 3rem !important;
+    color: rgb(209 213 219) !important; /* gray-300 */
+    margin-bottom: 1rem !important;
+}
+
+.grid-table-empty-title {
+    font-size: 1.125rem !important;
+    font-weight: 500 !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    margin-bottom: 0.5rem !important;
+}
+
+.grid-table-empty-description {
+    font-size: 0.875rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    margin-bottom: 1.5rem !important;
+}
+
+/* ==========================================
+   TABLE PAGINATION
+   ========================================== */
+
+.table-pagination {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding: 1rem 1.5rem !important;
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    border-top: 1px solid rgb(229 231 235) !important; /* gray-200 */
+}
+
+.pagination-info {
+    font-size: 0.875rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+}
+
+.pagination-buttons {
+    display: flex !important;
+    gap: 0.5rem !important;
+}
+
+.pagination-button {
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.875rem !important;
+    border: 1px solid rgb(209 213 219) !important; /* gray-300 */
+    border-radius: 0.375rem !important;
+    background-color: white !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    cursor: pointer !important;
+    transition: all 0.15s ease-in-out !important;
+    text-decoration: none !important;
+}
+
+.pagination-button:hover:not(:disabled) {
+    background-color: rgb(243 244 246) !important; /* gray-100 */
+    border-color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.pagination-button:disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+.pagination-button.active {
+    background-color: rgb(99 102 241) !important; /* indigo-500 */
+    border-color: rgb(99 102 241) !important;
+    color: white !important;
+}
+
+/* ==========================================
+   TABLE SORTING
+   ========================================== */
+
+.sortable-header {
+    cursor: pointer !important;
+    user-select: none !important;
+    position: relative !important;
+    padding-right: 2rem !important;
+}
+
+.sortable-header:hover {
+    background-color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.sortable-header::after {
+    content: "↕" !important;
+    position: absolute !important;
+    right: 0.5rem !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    color: rgb(156 163 175) !important; /* gray-400 */
+    font-size: 0.75rem !important;
+}
+
+.sortable-header.asc::after {
+    content: "↑" !important;
+    color: rgb(99 102 241) !important; /* indigo-500 */
+}
+
+.sortable-header.desc::after {
+    content: "↓" !important;
+    color: rgb(99 102 241) !important; /* indigo-500 */
+}
+
+/* ==========================================
+   TABLE SELECTION
+   ========================================== */
+
+.table-checkbox {
+    width: 1rem !important;
+    height: 1rem !important;
+    border: 1px solid rgb(209 213 219) !important; /* gray-300 */
+    border-radius: 0.25rem !important;
+    background-color: white !important;
+    cursor: pointer !important;
+}
+
+.table-checkbox:checked {
+    background-color: rgb(99 102 241) !important; /* indigo-500 */
+    border-color: rgb(99 102 241) !important;
+}
+
+.table-checkbox:focus {
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1) !important;
+}
+
+.selection-column {
+    width: 3rem !important;
+    text-align: center !important;
+}
+
+/* ==========================================
+   RESPONSIVE BEHAVIOR
+   ========================================== */
+
+@media (max-width: 768px) {
+    .hide-mobile {
+        display: none !important;
+    }
+    
+    .grid-table,
+    .grid-table-header,
+    .grid-table-row {
+        min-width: 500px !important;
+    }
+    
+    .grid-invoice {
+        grid-template-columns: 
+            100px                /* Invoice # */
+            1fr                  /* Supplier */
+            80px                 /* Total */
+            70px                 /* Status */
+            120px !important;    /* Actions */
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1200px) {
+    .hide-tablet {
+        display: none !important;
+    }
+    
+    .grid-table,
+    .grid-table-header,
+    .grid-table-row {
+        min-width: 600px !important;
+    }
+    
+    .grid-invoice {
+        grid-template-columns: 
+            100px                /* Invoice # */
+            minmax(100px, 1fr)   /* Supplier */
+            85px                 /* Date */
+            80px                 /* Total */
+            80px                 /* Paid */
+            80px                 /* Balance */
+            30px                 /* CN */
+            70px                 /* Status */
+            120px !important;    /* Actions */
+    }
+}
+
+@media (min-width: 1201px) {
+    .grid-table,
+    .grid-table-header,
+    .grid-table-row {
+        min-width: 700px !important;
+    }
+}
+
+/* ==========================================
+   DARK MODE
+   ========================================== */
+
+.dark .data-table {
+    background-color: rgb(31 41 55) !important; /* gray-800 */
+}
+
+.dark .data-table th {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    color: rgb(209 213 219) !important; /* gray-300 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.dark .data-table td {
+    color: rgb(243 244 246) !important; /* gray-100 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.dark .data-table tbody tr:hover {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+.dark .grid-table-header {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    color: rgb(209 213 219) !important; /* gray-300 */
+    min-width: 900px !important;
+    width: 100% !important;
+}
+
+.dark .grid-table-row {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    color: rgb(243 244 246) !important; /* gray-100 */
+    min-width: 900px !important;
+    width: 100% !important;
+}
+
+.dark .grid-table-row:hover {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+.dark .action-link {
+    color: rgb(165 180 252) !important; /* indigo-300 */
+}
+
+.dark .action-link:hover {
+    color: rgb(129 140 248) !important; /* indigo-400 */
+    background-color: rgba(67, 56, 202, 0.3) !important; /* indigo-800/30 */
+}
+
+.dark .action-link.edit {
+    color: rgb(251 191 36) !important; /* amber-400 */
+}
+
+.dark .action-link.edit:hover {
+    background-color: rgba(146, 64, 14, 0.3) !important; /* amber-800/30 */
+}
+
+.dark .action-link.delete {
+    color: rgb(248 113 113) !important; /* red-400 */
+}
+
+.dark .action-link.delete:hover {
+    background-color: rgba(127, 29, 29, 0.3) !important; /* red-800/30 */
+}
+
+.dark .grid-cell-truncate:hover::after {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.dark .table-pagination {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.dark .pagination-button {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.dark .pagination-button:hover:not(:disabled) {
+    background-color: rgb(75 85 99) !important; /* gray-600 */
+    border-color: rgb(107 114 128) !important; /* gray-500 */
+}
+
+.dark .sortable-header:hover {
+    background-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.dark .grid-table-empty-title {
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.dark .table-checkbox {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.dark .table-checkbox:checked {
+    background-color: rgb(165 180 252) !important; /* indigo-300 */
+    border-color: rgb(165 180 252) !important;
+}
+
+/* Dark mode responsive - inherit base values */
+@media (max-width: 768px) {
+    .dark .grid-table,
+    .dark .grid-table-header,
+    .dark .grid-table-row {
+        min-width: 500px !important;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1200px) {
+    .dark .grid-table,
+    .dark .grid-table-header,
+    .dark .grid-table-row {
+        min-width: 600px !important;
+    }
+}
+
+@media (min-width: 1201px) {
+    .dark .grid-table,
+    .dark .grid-table-header,
+    .dark .grid-table-row {
+        min-width: 700px !important;
+    }
+}
+
+/* ==========================================
+   FINANCIAL TABLE BASE COMPONENT
+   ========================================== */
+
+.financial-table {
+    width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+    background-color: white !important;
+    font-family: inherit !important;
+}
+
+.dark .financial-table {
+    background-color: rgb(31 41 55) !important; /* gray-800 */
+}
+
+/* ==========================================
+   FINANCIAL TABLE HEADERS
+   ========================================== */
+
+.financial-table th {
+    padding: 1rem !important;
+    text-align: center !important; /* All headers center-aligned */
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    white-space: nowrap !important;
+    vertical-align: middle !important;
+}
+
+.dark .financial-table th {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+/* Header semantic classes for clarity */
+.financial-table .text-header { text-align: center !important; }
+.financial-table .number-header { text-align: center !important; }
+.financial-table .action-header { text-align: center !important; }
+
+/* ==========================================
+   FINANCIAL TABLE BODY CELLS
+   ========================================== */
+
+.financial-table td {
+    padding: 1rem !important;
+    font-size: 0.875rem !important;
+    border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    vertical-align: middle !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+}
+
+.dark .financial-table td {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+/* Content alignment by semantic purpose */
+.financial-table .text-column {
+    text-align: left !important;
+}
+
+.financial-table .number-column {
+    text-align: right !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+}
+
+.financial-table .status-column {
+    text-align: center !important;
+}
+
+.financial-table .action-column {
+    text-align: center !important;
+    white-space: nowrap !important;
+}
+
+/* ==========================================
+   FINANCIAL TABLE FOOTER
+   ========================================== */
+
+.financial-table tfoot td {
+    padding: 1rem !important; /* Match body cell padding exactly */
+    font-size: 0.875rem !important; /* Match body font size */
+    font-weight: 600 !important;
+    border-top: 2px solid rgb(229 231 235) !important; /* gray-200 */
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    vertical-align: middle !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+}
+
+.dark .financial-table tfoot td {
+    border-top-color: rgb(75 85 99) !important; /* gray-600 */
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+/* Footer follows same alignment rules as body */
+.financial-table tfoot .text-column {
+    text-align: left !important;
+}
+
+.financial-table tfoot .number-column {
+    text-align: right !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+}
+
+.financial-table tfoot .status-column {
+    text-align: center !important;
+}
+
+/* Enhanced total row styling */
+.financial-table tfoot .total-row {
+    font-weight: 700 !important;
+    font-size: 0.9375rem !important;
+    background-color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.dark .financial-table tfoot .total-row {
+    background-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* ==========================================
+   FINANCIAL CELL CONTENT STYLING
+   ========================================== */
+
+/* Primary content in financial cells */
+.financial-cell-primary {
+    font-weight: 600 !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    line-height: 1.25 !important;
+    margin-bottom: 0.25rem !important;
+}
+
+.dark .financial-cell-primary {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+/* Secondary content in financial cells */
+.financial-cell-secondary {
+    font-size: 0.75rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    line-height: 1.25 !important;
+    margin-top: 0.125rem !important;
+}
+
+.dark .financial-cell-secondary {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+/* Currency value styling */
+.currency-value {
+    font-weight: 600 !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+    line-height: 1.25 !important;
+}
+
+.dark .currency-value {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.currency-value.currency-large {
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+}
+
+.currency-value.currency-small {
+    font-size: 0.8125rem !important;
+}
+
+/* Percentage value styling */
+.percentage-value {
+    font-weight: 500 !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    line-height: 1.25 !important;
+}
+
+.dark .percentage-value {
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+/* ==========================================
+   PREDEFINED FINANCIAL TABLE LAYOUTS
+   ========================================== */
+
+/* Invoice Items Table - 7 columns */
+.invoice-items-table {
+    min-width: 900px !important;
+}
+
+.invoice-items-table th:nth-child(1),
+.invoice-items-table td:nth-child(1) { width: 25% !important; } /* Item */
+
+.invoice-items-table th:nth-child(2),
+.invoice-items-table td:nth-child(2) { width: 15% !important; } /* Batch */
+
+.invoice-items-table th:nth-child(3),
+.invoice-items-table td:nth-child(3) { width: 10% !important; } /* Qty */
+
+.invoice-items-table th:nth-child(4),
+.invoice-items-table td:nth-child(4) { width: 15% !important; } /* Price */
+
+.invoice-items-table th:nth-child(5),
+.invoice-items-table td:nth-child(5) { width: 10% !important; } /* Discount */
+
+.invoice-items-table th:nth-child(6),
+.invoice-items-table td:nth-child(6) { width: 15% !important; } /* GST */
+
+.invoice-items-table th:nth-child(7),
+.invoice-items-table td:nth-child(7) { width: 10% !important; } /* Total */
+
+/* GST Summary Table - 5 columns */
+.gst-summary-table {
+    min-width: 700px !important;
+}
+
+.gst-summary-table th:nth-child(1),
+.gst-summary-table td:nth-child(1) { width: 20% !important; } /* HSN */
+
+.gst-summary-table th:nth-child(2),
+.gst-summary-table td:nth-child(2) { width: 20% !important; } /* Taxable */
+
+.gst-summary-table th:nth-child(3),
+.gst-summary-table td:nth-child(3) { width: 20% !important; } /* CGST */
+
+.gst-summary-table th:nth-child(4),
+.gst-summary-table td:nth-child(4) { width: 20% !important; } /* SGST */
+
+.gst-summary-table th:nth-child(5),
+.gst-summary-table td:nth-child(5) { width: 20% !important; } /* IGST */
+
+/* Payment History Table - 6 columns */
+.payment-history-table {
+    min-width: 800px !important;
+}
+
+.payment-history-table th:nth-child(1),
+.payment-history-table td:nth-child(1) { width: 12% !important; } /* Date */
+
+.payment-history-table th:nth-child(2),
+.payment-history-table td:nth-child(2) { width: 18% !important; } /* Method */
+
+.payment-history-table th:nth-child(3),
+.payment-history-table td:nth-child(3) { 
+    width: 25% !important; /* Reference */
+    word-wrap: break-word !important;
+    word-break: break-word !important;
+    white-space: normal !important;
+    max-width: 200px !important;
+}
+
+.payment-history-table th:nth-child(4),
+.payment-history-table td:nth-child(4) { width: 15% !important; } /* Amount */
+
+.payment-history-table th:nth-child(5),
+.payment-history-table td:nth-child(5) { width: 15% !important; } /* Status */
+
+.payment-history-table th:nth-child(6),
+.payment-history-table td:nth-child(6) { width: 15% !important; } /* Actions */
+
+/* ==========================================
+   FINANCIAL TABLE VARIANTS
+   ========================================== */
+
+/* Compact financial table */
+.financial-table.compact th,
+.financial-table.compact td,
+.financial-table.compact tfoot td {
+    padding: 0.75rem !important;
+    font-size: 0.8125rem !important;
+}
+
+.financial-table.compact th {
+    font-size: 0.6875rem !important;
+}
+
+/* Enhanced financial table with shadows */
+.financial-table.enhanced {
+    border-radius: 0.5rem !important;
+    overflow: hidden !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1) !important;
+}
+
+/* ==========================================
+   RESPONSIVE FINANCIAL TABLES
+   ========================================== */
+
+@media (max-width: 768px) {
+    .financial-table {
+        font-size: 0.8125rem !important;
+    }
+    
+    .financial-table th,
+    .financial-table td,
+    .financial-table tfoot td {
+        padding: 0.75rem !important;
+        font-size: 0.8125rem !important;
+    }
+    
+    .financial-table th {
+        font-size: 0.6875rem !important;
+    }
+    
+    /* Adjust table minimums for mobile */
+    .invoice-items-table {
+        min-width: 600px !important;
+    }
+    
+    .gst-summary-table {
+        min-width: 500px !important;
+    }
+    
+    .payment-history-table {
+        min-width: 500px !important;
+    }
+    
+    /* Hide less critical columns on mobile */
+    .financial-table .hide-mobile {
+        display: none !important;
+    }
+    
+    /* Stack content in cells on very small screens */
+    .financial-cell-mobile-stack .financial-cell-primary,
+    .financial-cell-mobile-stack .financial-cell-secondary {
+        display: block !important;
+        text-align: inherit !important;
+    }
+}
+
+@media (max-width: 640px) {
+    /* Very small screens - further optimization */
+    .invoice-items-table {
+        min-width: 450px !important;
+    }
+    
+    .gst-summary-table {
+        min-width: 400px !important;
+    }
+    
+    .payment-history-table {
+        min-width: 400px !important;
+    }
+}
+
+/* ==========================================
+   FINANCIAL TABLE INTEGRATION WITH CARDS
+   ========================================== */
+
+/* When financial table is inside financial-data-card */
+.financial-data-card .financial-table {
+    margin: 0 !important;
+    border-radius: 0 !important;
+}
+
+.financial-data-card .table-container .financial-table {
+    border: none !important;
+}
+
+/* Ensure table extends to card edges */
+.financial-data-content .table-container {
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+
+/* ==========================================
+   EMPTY STATE STYLING
+   ========================================== */
+
+.financial-table .table-empty-state {
+    padding: 3rem 1.5rem !important;
+    text-align: center !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+}
+
+.dark .financial-table .table-empty-state {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.financial-table .table-empty-state i {
+    display: block !important;
+    font-size: 2rem !important;
+    margin-bottom: 0.75rem !important;
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.dark .financial-table .table-empty-state i {
+    color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* ==========================================
+   HOVER STATES AND INTERACTIONS
+   ========================================== */
+
+.financial-table tbody tr:hover {
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+}
+
+.dark .financial-table tbody tr:hover {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+/* Action buttons in financial tables */
+.financial-table .action-buttons {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.25rem !important;
+    justify-content: center !important;
+}
+
+/* Status badges in financial tables */
+.financial-table .status-badge {
+    font-size: 0.75rem !important;
+    padding: 0.25rem 0.5rem !important;
+}
+
+/* ==========================================
+   COLUMN ALIGNMENT FIX - COMPLETE VERSION
+   Replace the earlier "COLUMN ALIGNMENT FIX" section with this
+   Ensures perfect alignment and full-width footer coverage
+   ========================================== */
+
+/* Force table layout and exact column widths */
+.financial-table {
+    table-layout: fixed !important;
+    width: 100% !important;
+    border-collapse: collapse !important;
+    min-width: 100% !important;
+    border-spacing: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Ensure all cells follow the same width rules */
+.financial-table th,
+.financial-table td {
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    border-left: none !important;
+    border-right: none !important;
+    border-top: none !important;
+}
+
+/* Body cell borders */
+.financial-table td {
+    border-bottom: 1px solid rgb(229 231 235) !important;
+}
+
+.dark .financial-table td {
+    border-bottom-color: rgb(75 85 99) !important;
+}
+
+/* Remove border on last row before footer */
+.financial-table tbody tr:last-child td {
+    border-bottom: none !important;
+}
+
+/* Ensure table container doesn't constrain width */
+.financial-data-content {
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+}
+
+.financial-data-content .table-container {
+    width: 100% !important;
+    overflow-x: auto !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* INVOICE ITEMS TABLE - Enforce exact column widths */
+.invoice-items-table {
+    min-width: 900px !important;
+    width: 100% !important;
+}
+
+.invoice-items-table th:nth-child(1),
+.invoice-items-table td:nth-child(1),
+.invoice-items-table tfoot td:nth-child(1) {
+    width: 25% !important;
+    min-width: 225px !important;
+    max-width: 225px !important;
+}
+
+.invoice-items-table th:nth-child(2),
+.invoice-items-table td:nth-child(2),
+.invoice-items-table tfoot td:nth-child(2) {
+    width: 15% !important;
+    min-width: 135px !important;
+    max-width: 135px !important;
+}
+
+.invoice-items-table th:nth-child(3),
+.invoice-items-table td:nth-child(3),
+.invoice-items-table tfoot td:nth-child(3) {
+    width: 10% !important;
+    min-width: 90px !important;
+    max-width: 90px !important;
+}
+
+.invoice-items-table th:nth-child(4),
+.invoice-items-table td:nth-child(4),
+.invoice-items-table tfoot td:nth-child(4) {
+    width: 15% !important;
+    min-width: 135px !important;
+    max-width: 135px !important;
+}
+
+.invoice-items-table th:nth-child(5),
+.invoice-items-table td:nth-child(5),
+.invoice-items-table tfoot td:nth-child(5) {
+    width: 10% !important;
+    min-width: 90px !important;
+    max-width: 90px !important;
+}
+
+.invoice-items-table th:nth-child(6),
+.invoice-items-table td:nth-child(6),
+.invoice-items-table tfoot td:nth-child(6) {
+    width: 15% !important;
+    min-width: 135px !important;
+    max-width: 135px !important;
+}
+
+.invoice-items-table th:nth-child(7),
+.invoice-items-table td:nth-child(7),
+.invoice-items-table tfoot td:nth-child(7) {
+    width: 10% !important;
+    min-width: 90px !important;
+    max-width: 90px !important;
+}
+
+/* GST SUMMARY TABLE - Enforce exact column widths */
+.gst-summary-table {
+    min-width: 700px !important;
+    width: 100% !important;
+}
+
+.gst-summary-table th:nth-child(1),
+.gst-summary-table td:nth-child(1),
+.gst-summary-table tfoot td:nth-child(1) {
+    width: 20% !important;
+    min-width: 140px !important;
+    max-width: 140px !important;
+}
+
+.gst-summary-table th:nth-child(2),
+.gst-summary-table td:nth-child(2),
+.gst-summary-table tfoot td:nth-child(2) {
+    width: 20% !important;
+    min-width: 140px !important;
+    max-width: 140px !important;
+}
+
+.gst-summary-table th:nth-child(3),
+.gst-summary-table td:nth-child(3),
+.gst-summary-table tfoot td:nth-child(3) {
+    width: 20% !important;
+    min-width: 140px !important;
+    max-width: 140px !important;
+}
+
+.gst-summary-table th:nth-child(4),
+.gst-summary-table td:nth-child(4),
+.gst-summary-table tfoot td:nth-child(4) {
+    width: 20% !important;
+    min-width: 140px !important;
+    max-width: 140px !important;
+}
+
+.gst-summary-table th:nth-child(5),
+.gst-summary-table td:nth-child(5),
+.gst-summary-table tfoot td:nth-child(5) {
+    width: 20% !important;
+    min-width: 140px !important;
+    max-width: 140px !important;
+}
+
+/* FOOTER STYLING - Full width coverage */
+.financial-table tfoot tr {
+    width: 100% !important;
+    display: table-row !important;
+}
+
+.financial-table tfoot td {
+    padding: 1rem !important;
+    vertical-align: middle !important;
+    font-size: 0.875rem !important;
+    font-weight: 700 !important;
+    border-top: 2px solid rgb(229 231 235) !important;
+    background-color: rgb(243 244 246) !important;
+    border-left: none !important;
+    border-right: none !important;
+    border-bottom: none !important;
+}
+
+.dark .financial-table tfoot td {
+    border-top-color: rgb(75 85 99) !important;
+    background-color: rgb(75 85 99) !important;
+}
+
+/* Ensure footer follows exact same alignment as body */
+.financial-table .text-column,
+.financial-table tfoot .text-column {
+    text-align: left !important;
+    padding-left: 1rem !important;
+}
+
+.financial-table .number-column,
+.financial-table tfoot .number-column {
+    text-align: right !important;
+    padding-right: 1rem !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+}
+
+/* Enhanced total row styling */
+.financial-table .total-row {
+    background-color: rgb(243 244 246) !important;
+    font-weight: 700 !important;
+}
+
+.financial-table .total-row td {
+    background-color: rgb(243 244 246) !important;
+    font-weight: 700 !important;
+}
+
+.dark .financial-table .total-row {
+    background-color: rgb(75 85 99) !important;
+}
+
+.dark .financial-table .total-row td {
+    background-color: rgb(75 85 99) !important;
+    color: rgb(243 244 246) !important;
+}
+
+/* Fix any spacing issues */
+.financial-table th,
+.financial-table td,
+.financial-table tfoot td {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+}
+
+/* Prevent content overflow in fixed columns */
+.financial-table .text-column {
+    white-space: normal !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    overflow: hidden !important;
+}
+
+.financial-table .number-column {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+/* Ensure currency values are prominent in totals */
+.financial-table tfoot .currency-value {
+    font-weight: 700 !important;
+    font-size: 0.9375rem !important;
+    color: rgb(17 24 39) !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+}
+
+.dark .financial-table tfoot .currency-value {
+    color: rgb(243 244 246) !important;
+}
+
+/* Ensure colspan cells work properly */
+.financial-table tfoot td[colspan] {
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+}
+
+/* Remove any gaps in footer background */
+.financial-table tfoot tr td:first-child {
+    border-left: none !important;
+}
+
+.financial-table tfoot tr td:last-child {
+    border-right: none !important;
+}
+
+/* Responsive adjustments that maintain alignment */
+@media (max-width: 768px) {
+    .invoice-items-table {
+        min-width: 600px !important;
+    }
+    
+    .gst-summary-table {
+        min-width: 500px !important;
+    }
+    
+    /* Maintain proportional widths on mobile */
+    .invoice-items-table th:nth-child(1),
+    .invoice-items-table td:nth-child(1),
+    .invoice-items-table tfoot td:nth-child(1) {
+        min-width: 150px !important;
+    }
+    
+    .gst-summary-table th,
+    .gst-summary-table td,
+    .gst-summary-table tfoot td {
+        min-width: 100px !important;
+    }
+    
+    /* Ensure footer still spans full width on mobile */
+    .financial-table tfoot td {
+        font-size: 0.8125rem !important;
+        padding: 0.75rem !important;
+    }
+    
+    .financial-table tfoot .currency-value {
+        font-size: 0.9375rem !important;
+    }
+}
+
+/* Additional mobile responsive for very small screens */
+@media (max-width: 640px) {
+    .invoice-items-table {
+        min-width: 450px !important;
+    }
+    
+    .gst-summary-table {
+        min-width: 400px !important;
+    }
+}
+
+/* ==========================================
+   ENHANCED PAYMENT ACTION BUTTONS CSS
+   Add to: static/css/components/tables.css
+   Icon + Text action buttons for better usability
+   ========================================== */
+
+/* Payment action buttons container */
+.payment-action-buttons {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.25rem !important;
+    align-items: flex-start !important;
+    padding: 0.25rem 0 !important;
+}
+
+/* Individual payment action links */
+.payment-action-link {
+    display: flex !important;              /* Changed from inline-flex */
+    flex-direction: column !important;      /* Force vertical */
+    align-items: center !important;        /* Center horizontally */
+    justify-content: center !important;    /* Center vertically */
+    gap: 0.125rem !important;             /* Smaller gap for vertical */
+    padding: 0.375rem 0.5rem !important;
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    text-decoration: none !important;
+    border-radius: 0.375rem !important;
+    transition: all 0.15s ease-in-out !important;
+    min-width: 60px !important;
+    white-space: nowrap !important;
+}
+
+/* View action styling */
+.payment-action-link.view {
+    color: rgb(59 130 246) !important; /* blue-500 */
+    background-color: rgb(239 246 255) !important; /* blue-50 */
+    border: 1px solid rgb(219 234 254) !important; /* blue-100 */
+}
+
+.payment-action-link.view:hover {
+    background-color: rgb(219 234 254) !important; /* blue-100 */
+    color: rgb(37 99 235) !important; /* blue-600 */
+}
+
+.dark .payment-action-link.view {
+    color: rgb(147 197 253) !important; /* blue-300 */
+    background-color: rgb(30 58 138) !important; /* blue-900 */
+    border-color: rgb(30 64 175) !important; /* blue-800 */
+}
+
+/* Edit action styling */
+.payment-action-link.edit {
+    color: rgb(245 158 11) !important; /* amber-500 */
+    background-color: rgb(255 251 235) !important; /* amber-50 */
+    border: 1px solid rgb(254 243 199) !important; /* amber-100 */
+}
+
+.payment-action-link.edit:hover {
+    background-color: rgb(254 243 199) !important; /* amber-100 */
+    color: rgb(217 119 6) !important; /* amber-600 */
+}
+
+.dark .payment-action-link.edit {
+    color: rgb(251 191 36) !important; /* amber-400 */
+    background-color: rgb(120 53 15) !important; /* amber-900 */
+    border-color: rgb(146 64 14) !important; /* amber-800 */
+}
+
+/* Receipt action styling */
+.payment-action-link.receipt {
+    color: rgb(34 197 94) !important; /* green-500 */
+    background-color: rgb(240 253 244) !important; /* green-50 */
+    border: 1px solid rgb(220 252 231) !important; /* green-100 */
+}
+
+.payment-action-link.receipt:hover {
+    background-color: rgb(220 252 231) !important; /* green-100 */
+    color: rgb(22 163 74) !important; /* green-600 */
+}
+
+.dark .payment-action-link.receipt {
+    color: rgb(74 222 128) !important; /* green-400 */
+    background-color: rgb(20 83 45) !important; /* green-900 */
+    border-color: rgb(22 101 52) !important; /* green-800 */
+}
+
+/* Icon styling within action buttons */
+.payment-action-link i {
+    font-size: 0.875rem !important;        /* Slightly larger icon */
+    flex-shrink: 0 !important;
+    line-height: 1 !important;             /* Remove extra spacing */
+    margin-bottom: 0.125rem !important;    /* Small gap below icon */
+}
+
+.payment-action-link .action-text {
+    font-size: 0.625rem !important;        /* Smaller text */
+    font-weight: 600 !important;           /* Bolder text */
+    text-transform: uppercase !important;   /* Uppercase text */
+    letter-spacing: 0.025em !important;
+    line-height: 1 !important;             /* Remove extra spacing */
+    text-align: center !important;         /* Center text */
+}
+
+/* Responsive behavior for payment actions */
+@media (max-width: 768px) {
+    .payment-action-buttons {
+        gap: 0.125rem !important;
+    }
+    
+    .payment-action-link {
+        padding: 0.25rem 0.375rem !important;
+        font-size: 0.6875rem !important;
+        min-width: 50px !important;
+        gap: 0.25rem !important;
+    }
+    
+    .payment-action-link i {
+        font-size: 0.6875rem !important;
+    }
+    
+    .payment-action-link .action-text {
+        font-size: 0.6875rem !important;
+    }
+}
+
+/* Alternative horizontal layout for wider screens */
+@media (min-width: 1024px) {
+    .payment-action-buttons {
+        flex-direction: row !important;
+        gap: 0.375rem !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+    }
+    
+    .payment-action-link {
+        min-width: auto !important;
+        padding: 0.25rem 0.5rem !important;
+    }
+}
+
+/* Enhanced hover effects */
+.payment-action-link:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 2px 4px 0 rgb(0 0 0 / 0.1) !important;
+}
+
+/* Focus states for accessibility */
+.payment-action-link:focus {
+    outline: 2px solid rgb(59 130 246) !important;
+    outline-offset: 2px !important;
+}
+
+/* Disabled state (for restricted actions) */
+.payment-action-link.disabled {
+    opacity: 0.5 !important;
+    pointer-events: none !important;
+    cursor: not-allowed !important;
+}
+
+/* Alternative compact style variant */
+.payment-action-buttons.compact .payment-action-link {
+    padding: 0.125rem 0.375rem !important;
+    font-size: 0.6875rem !important;
+    gap: 0.25rem !important;
+}
+
+.payment-action-buttons.compact .payment-action-link i {
+    font-size: 0.6875rem !important;
+}
+
+.payment-action-buttons.compact .payment-action-link .action-text {
+    font-size: 0.6875rem !important;
+}
+
+/* Print-friendly styles */
+@media print {
+    .payment-action-buttons {
+        display: none !important;
+    }
+}
+
+/* ==========================================
+   PAYMENT ACTION BUTTONS SPECIFICITY FIX
+   Higher specificity to override Tailwind
+   ========================================== */
+
+.data-table .payment-action-buttons,
+table .payment-action-buttons {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.25rem !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0.25rem !important;
+    width: 100% !important;
+}
+
+.data-table .payment-action-link,
+table .payment-action-link {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.125rem !important;
+    padding: 0.375rem 0.5rem !important;
+    font-size: 0.75rem !important;
+    text-decoration: none !important;
+    border-radius: 0.375rem !important;
+    min-width: 50px !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+} 
+
+/* ==========================================
+   SUPPLIER COLUMN TEXT TRUNCATION
+   Prevent supplier names from overflowing
+   ========================================== */
+
+.data-table .supplier-name,
+table .supplier-name {
+    max-width: 180px !important;           /* ← Set actual width instead of 0 */
+    overflow: hidden !important;           /* Hide overflow */
+    text-overflow: ellipsis !important;    /* Show "..." */
+    white-space: nowrap !important;        /* Single line */
+    display: block !important;             /* Block for ellipsis to work */
+}
+
+.data-table .supplier-secondary,
+table .supplier-secondary {
+    max-width: 180px !important;           /* ← Set actual width instead of 0 */
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    display: block !important;
+}
+
+/* Additional fix for supplier column container */
+.data-table .supplier-column,
+table .supplier-column {
+    min-width: 150px !important;           /* Ensure column has minimum width */
+    max-width: 200px !important;           /* But constrain maximum */
+}
+/* =============================================================================
+   PRODUCTION GRADE UNIVERSAL DATA TABLE - CONSOLIDATED
+   Add to existing tables.css (enhance existing universal-data-table styles)
+   Matches gold standard payment_list.html table behavior
+   ============================================================================= */
+
+/* ==========================================
+   UNIVERSAL TABLE CONTAINER
+   ========================================== */
+
+.universal-table-container {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    border-radius: 0.5rem !important;
+}
+
+.universal-table-container::-webkit-scrollbar {
+    height: 6px !important;
+}
+
+.universal-table-container::-webkit-scrollbar-track {
+    background: rgb(243 244 246) !important;
+}
+
+.universal-table-container::-webkit-scrollbar-thumb {
+    background: rgb(156 163 175) !important;
+    border-radius: 3px !important;
+}
+
+.universal-table-container::-webkit-scrollbar-thumb:hover {
+    background: rgb(107 114 128) !important;
+}
+
+/* ==========================================
+   ENHANCED UNIVERSAL TABLE HEADERS
+   ========================================== */
+
+.universal-table-header {
+    padding: 0.75rem 1rem !important;
+    text-align: left !important;
+    font-weight: 600 !important;
+    color: rgb(55 65 81) !important;
+    font-size: 0.75rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    border-bottom: 2px solid rgb(229 231 235) !important;
+    background-color: rgb(249 250 251) !important;
+    position: relative !important;
+    white-space: nowrap !important;
+}
+
+.dark .universal-table-header {
+    color: rgb(156 163 175) !important;
+    border-color: rgb(75 85 99) !important;
+    background-color: rgb(55 65 81) !important;
+}
+
+/* ==========================================
+   SORTABLE HEADERS - PRODUCTION GRADE
+   ========================================== */
+
+.universal-sortable-header {
+    cursor: pointer !important;
+    user-select: none !important;
+    transition: background-color 0.15s ease-in-out !important;
+    padding-right: 2rem !important;
+}
+
+.universal-sortable-header:hover {
+    background-color: rgb(243 244 246) !important;
+}
+
+.dark .universal-sortable-header:hover {
+    background-color: rgb(75 85 99) !important;
+}
+
+.universal-sort-indicator {
+    position: absolute !important;
+    right: 0.5rem !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    font-size: 0.75rem !important;
+    color: rgb(156 163 175) !important;
+    opacity: 0.5 !important;
+    transition: all 0.15s ease-in-out !important;
+}
+
+.universal-sortable-header:hover .universal-sort-indicator {
+    opacity: 1 !important;
+    color: rgb(59 130 246) !important;
+}
+
+.universal-sort-indicator.asc {
+    opacity: 1 !important;
+    color: rgb(59 130 246) !important;
+    transform: translateY(-50%) rotate(0deg) !important;
+}
+
+.universal-sort-indicator.desc {
+    opacity: 1 !important;
+    color: rgb(59 130 246) !important;
+    transform: translateY(-50%) rotate(180deg) !important;
+}
+
+/* ==========================================
+   UNIVERSAL TABLE ROWS - ENHANCED
+   ========================================== */
+
+.universal-table-row {
+    transition: all 0.15s ease-in-out !important;
+    border-bottom: 1px solid rgb(229 231 235) !important;
+}
+
+.dark .universal-table-row {
+    border-bottom-color: rgb(75 85 99) !important;
+}
+
+.universal-table-row:hover {
+    background-color: rgb(249 250 251) !important;
+    transform: translateX(2px) !important;
+}
+
+.dark .universal-table-row:hover {
+    background-color: rgb(55 65 81) !important;
+}
+
+.universal-table-row.selected {
+    background-color: rgb(219 234 254) !important;
+    border-left: 3px solid rgb(59 130 246) !important;
+}
+
+.dark .universal-table-row.selected {
+    background-color: rgb(30 58 138) !important;
+    border-left-color: rgb(147 197 253) !important;
+}
+
+/* ==========================================
+   TABLE CELL STYLING
+   ========================================== */
+
+.universal-data-table td {
+    padding: 0.75rem 1rem !important;
+    vertical-align: middle !important;
+    font-size: 0.875rem !important;
+}
+
+/* Column-specific styling */
+.date-column {
+    min-width: 100px !important;
+    white-space: nowrap !important;
+}
+
+.reference-column {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 0.875rem !important;
+    color: rgb(75 85 99) !important;
+    min-width: 100px !important;
+}
+
+.dark .reference-column {
+    color: rgb(156 163 175) !important;
+}
+
+.supplier-column {
+    min-width: 180px !important;
+    max-width: 220px !important;
+}
+
+.amount-column {
+    text-align: right !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-weight: 500 !important;
+    min-width: 120px !important;
+    padding-left: 0.25rem !important;
+    padding-right: 0.25rem !important;
+}
+
+.payment-method-column {
+    min-width: 80px !important;
+    max-width: 100px !important;
+    width: 90px !important;
+    padding-left: 0.25rem !important;
+    padding-right: 0.5rem !important;
+    white-space: normal !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    line-height: 1.2 !important;
+}
+
+.payment-method-column th,
+.universal-table-header.payment-method-column {
+    white-space: normal !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    line-height: 1.3 !important;
+}
+
+.status-column {
+    min-width: 90px !important;
+    padding-left: 0.25rem !important;
+    padding-right: 0.25rem !important;
+}
+
+.actions-column {
+    width: 100px !important;
+    text-align: center !important;
+    padding-left: 0.25rem !important;
+    padding-right: 0.25rem !important;
+}
+
+/* ==========================================
+   BULK SELECTION COLUMN - CONSOLIDATED
+   ========================================== */
+
+.universal-bulk-select-column {
+    width: 40px !important;
+    text-align: center !important;
+    display: none !important;
+    padding: 0.75rem 0.5rem !important;
+}
+
+.universal-bulk-select-column input[type="checkbox"] {
+    transform: scale(1.1) !important;
+    cursor: pointer !important;
+}
+
+.bulk-mode-active .universal-bulk-select-column {
+    display: table-cell !important;
+}
+
+/* ==========================================
+   ACTION BUTTONS - PRODUCTION GRADE
+   ========================================== */
+
+.universal-table-actions {
+    display: flex !important;
+    gap: 0.25rem !important;
+    justify-content: center !important;
+    align-items: center !important;
+}
+
+.universal-action-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0.375rem 0.5rem !important;
+    border-radius: 0.375rem !important;
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    text-decoration: none !important;
+    transition: all 0.15s ease-in-out !important;
+    min-width: 32px !important;
+    height: 32px !important;
+    border: 1px solid transparent !important;
+}
+
+.universal-action-btn.btn-outline {
+    color: rgb(59 130 246) !important;
+    border-color: rgb(59 130 246) !important;
+    background: transparent !important;
+}
+
+.universal-action-btn.btn-outline:hover {
+    background: rgb(59 130 246) !important;
+    color: white !important;
+    transform: translateY(-1px) !important;
+}
+
+.universal-action-btn.btn-danger {
+    color: rgb(239 68 68) !important;
+    border-color: rgb(239 68 68) !important;
+    background: transparent !important;
+}
+
+.universal-action-btn.btn-danger:hover {
+    background: rgb(239 68 68) !important;
+    color: white !important;
+    transform: translateY(-1px) !important;
+}
+
+/* ==========================================
+   UNIVERSAL PAGINATION - CONSOLIDATED
+   ========================================== */
+
+.universal-pagination-container {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding: 1rem 1.5rem !important;
+    background-color: rgb(249 250 251) !important;
+    border-top: 1px solid rgb(229 231 235) !important;
+    border-radius: 0 0 0.5rem 0.5rem !important;
+    flex-wrap: wrap !important;
+    gap: 1rem !important;
+}
+
+.dark .universal-pagination-container {
+    background-color: rgb(55 65 81) !important;
+    border-top-color: rgb(75 85 99) !important;
+}
+
+.universal-pagination-info {
+    font-size: 0.875rem !important;
+    color: rgb(75 85 99) !important;
+    font-weight: 500 !important;
+}
+
+.dark .universal-pagination-info {
+    color: rgb(156 163 175) !important;
+}
+
+.universal-pagination-buttons {
+    display: flex !important;
+    gap: 0.25rem !important;
+    align-items: center !important;
+}
+
+.universal-pagination-button {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0.5rem 0.75rem !important;
+    border: 1px solid rgb(209 213 219) !important;
+    background-color: white !important;
+    color: rgb(55 65 81) !important;
+    text-decoration: none !important;
+    border-radius: 0.375rem !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    transition: all 0.15s ease !important;
+    cursor: pointer !important;
+    min-width: 2.5rem !important;
+    height: 2.5rem !important;
+}
+
+.dark .universal-pagination-button {
+    background-color: rgb(31 41 55) !important;
+    border-color: rgb(75 85 99) !important;
+    color: rgb(209 213 219) !important;
+}
+
+.universal-pagination-button:hover {
+    background-color: rgb(249 250 251) !important;
+    border-color: rgb(156 163 175) !important;
+    transform: translateY(-1px) !important;
+}
+
+.dark .universal-pagination-button:hover {
+    background-color: rgb(55 65 81) !important;
+    border-color: rgb(107 114 128) !important;
+}
+
+.universal-pagination-button.active {
+    background-color: rgb(59 130 246) !important;
+    border-color: rgb(59 130 246) !important;
+    color: white !important;
+    font-weight: 600 !important;
+}
+
+.universal-pagination-button.active:hover {
+    background-color: rgb(37 99 235) !important;
+    border-color: rgb(37 99 235) !important;
+    transform: none !important;
+}
+
+/* ==========================================
+   UNIVERSAL EMPTY STATE - CONSOLIDATED
+   ========================================== */
+
+.universal-empty-state {
+    text-align: center !important;
+    padding: 4rem 2rem !important;
+    background-color: white !important;
+    border-radius: 0.5rem !important;
+    border: 1px solid rgb(229 231 235) !important;
+}
+
+.dark .universal-empty-state {
+    background-color: rgb(31 41 55) !important;
+    border-color: rgb(75 85 99) !important;
+}
+
+.universal-empty-state-icon {
+    font-size: 4rem !important;
+    color: rgb(156 163 175) !important;
+    margin-bottom: 1.5rem !important;
+    opacity: 0.7 !important;
+}
+
+.dark .universal-empty-state-icon {
+    color: rgb(107 114 128) !important;
+}
+
+.universal-empty-state-title {
+    font-size: 1.5rem !important;
+    font-weight: 600 !important;
+    color: rgb(55 65 81) !important;
+    margin-bottom: 0.5rem !important;
+}
+
+.dark .universal-empty-state-title {
+    color: rgb(209 213 219) !important;
+}
+
+.universal-empty-state-description {
+    color: rgb(107 114 128) !important;
+    margin-bottom: 2rem !important;
+    max-width: 32rem !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    line-height: 1.6 !important;
+}
+
+.dark .universal-empty-state-description {
+    color: rgb(156 163 175) !important;
+}
+
+.universal-empty-state-actions {
+    display: flex !important;
+    gap: 1rem !important;
+    justify-content: center !important;
+    flex-wrap: wrap !important;
+}
+
+/* ==========================================
+   PAYMENT METHOD BADGE ICONS - MINIMAL ADDITION
+   ========================================== */
+
+/* Icon spacing for all status badges */
+.status-badge i {
+    margin-right: 0.5rem !important; /* Two spaces equivalent */
+}
+
+/* Payment method specific icon colors */
+.status-badge.method-cash i {
+    color: #16a34a !important; /* green-600 */
+}
+
+.status-badge.method-cheque i {
+    color: #2563eb !important; /* blue-600 */
+}
+
+.status-badge.method-bank_transfer i {
+    color: #0891b2 !important; /* cyan-600 */
+}
+
+.status-badge.method-upi i {
+    color: #9333ea !important; /* purple-600 */
+}
+
+.status-badge.method-mixed i {
+    color: #ea580c !important; /* orange-600 */
+}
+
+/* Dark mode variants */
+.dark .status-badge.method-cash i {
+    color: #22c55e !important; /* green-500 */
+}
+
+.dark .status-badge.method-cheque i {
+    color: #3b82f6 !important; /* blue-500 */
+}
+
+.dark .status-badge.method-bank_transfer i {
+    color: #06b6d4 !important; /* cyan-500 */
+}
+
+.dark .status-badge.method-upi i {
+    color: #a855f7 !important; /* purple-500 */
+}
+
+.dark .status-badge.method-mixed i {
+    color: #f97316 !important; /* orange-500 */
+}
+
+/* Responsive adjustment */
+@media (max-width: 768px) {
+    .supplier-payments-grid {
+        min-width: 800px !important;
+    }
+    
+    .supplier-payments-grid th:nth-child(6),
+    .supplier-payments-grid td:nth-child(6) {
+        width: 80px !important;
+        min-width: 70px !important;
+        max-width: 80px !important;
+    }
+}
+
+
+/* ==========================================
+   RESPONSIVE TABLE DESIGN
+   ========================================== */
+
+@media (max-width: 768px) {
+    .universal-data-table {
+        font-size: 0.75rem !important;
+    }
+    
+    .universal-table-header,
+    .universal-data-table td {
+        padding: 0.5rem !important;
+    }
+    
+    .supplier-column {
+        min-width: 140px !important;
+        max-width: 160px !important;
+    }
+    
+    .amount-column {
+        min-width: 100px !important;
+    }
+    
+    .universal-table-actions {
+        flex-direction: column !important;
+        gap: 0.125rem !important;
+    }
+    
+    .universal-action-btn {
+        min-width: 28px !important;
+        height: 28px !important;
+        padding: 0.25rem !important;
+    }
+    
+    .universal-pagination-container {
+        flex-direction: column !important;
+        text-align: center !important;
+        gap: 0.75rem !important;
+    }
+    
+    .universal-pagination-buttons {
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+    }
+    
+    .universal-empty-state {
+        padding: 2rem 1rem !important;
+    }
+    
+    .universal-table-row:hover {
+        transform: none !important;
+    }
+}

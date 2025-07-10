@@ -1,0 +1,310 @@
+<!-- app/templates/supplier/credit_note_form.html -->
+<!-- Phase 1: Simple credit note form template -->
+
+{% extends "layouts/dashboard.html" %}
+{% from "components/alerts.html" import alert %}
+
+{% block title %}{{ page_title or "Create Credit Note" }}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    
+    <!-- Header Section -->
+    <div class="flex flex-col md:flex-row items-start justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">{{ page_title or "Create Credit Note" }}</h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">
+                Create credit note for payment adjustment
+            </p>
+        </div>
+        <div class="mt-4 md:mt-0 flex flex-wrap gap-2">
+            <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) if payment else url_for('supplier_views.payment_list') }}" 
+               class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i> Back to Payment
+            </a>
+        </div>
+    </div>
+
+    <!-- Payment Information Card -->
+    {% if payment %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Payment Information</h2>
+        </div>
+        <div class="px-6 py-4 bg-gray-50 dark:bg-gray-900">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400">Payment Reference</span>
+                    <p class="text-lg font-mono text-gray-900 dark:text-gray-100">{{ payment.reference_no }}</p>
+                </div>
+                <div>
+                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400">Supplier</span>
+                    <p class="text-lg text-gray-900 dark:text-gray-100">{{ payment.supplier_name }}</p>
+                </div>
+                <div>
+                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400">Original Amount</span>
+                    <p class="text-lg font-semibold text-green-600 dark:text-green-400">₹{{ "%.2f"|format(payment.amount) }}</p>
+                </div>
+            </div>
+            
+            {% if payment.existing_credit_notes %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div>
+                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400">Previously Credited</span>
+                    <p class="text-lg font-semibold text-red-600 dark:text-red-400">₹{{ "%.2f"|format(payment.total_credited) }}</p>
+                </div>
+                <div>
+                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400">Available for Credit</span>
+                    <p class="text-lg font-semibold text-blue-600 dark:text-blue-400">₹{{ "%.2f"|format(payment.net_payment_amount) }}</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Error Display -->
+    {% if error %}
+    <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
+        <div class="flex">
+            <i class="fas fa-exclamation-triangle text-red-400 mt-1 mr-3"></i>
+            <div>
+                <h3 class="text-sm font-medium text-red-800 dark:text-red-400">Error</h3>
+                <p class="text-sm text-red-700 dark:text-red-300 mt-1">{{ error }}</p>
+                <div class="mt-3">
+                    <a href="{{ url_for('supplier_views.payment_list') }}" class="btn-secondary text-sm">
+                        Go to Payments List
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% elif not can_create_credit_note %}
+    <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
+        <div class="flex">
+            <i class="fas fa-exclamation-triangle text-yellow-400 mt-1 mr-3"></i>
+            <div>
+                <h3 class="text-sm font-medium text-yellow-800 dark:text-yellow-400">Credit Note Cannot Be Created</h3>
+                <p class="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                    A credit note cannot be created for this payment. This may be because:
+                </p>
+                <ul class="text-sm text-yellow-700 dark:text-yellow-300 mt-2 ml-4 list-disc">
+                    <li>The payment is not approved</li>
+                    <li>The full amount has already been credited</li>
+                    <li>The payment status doesn't allow credit notes</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% else %}
+
+    <!-- Credit Note Form -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Credit Note Details</h2>
+        </div>
+        <div class="px-6 py-6">
+            <form method="POST" class="space-y-6">
+                {{ form.hidden_tag() }}
+                
+                <!-- Hidden fields -->
+                {{ form.payment_id() }}
+                {{ form.supplier_id() }}
+                {{ form.branch_id() }}
+                
+                <!-- Credit Note Information -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Credit Note Number -->
+                    <div>
+                        {{ form.credit_note_number.label(class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2") }}
+                        {{ form.credit_note_number(class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 bg-gray-50 cursor-not-allowed", readonly=true) }}
+                        {% if form.credit_note_number.errors %}
+                            <p class="text-red-600 text-sm mt-1">{{ form.credit_note_number.errors[0] }}</p>
+                        {% endif %}
+                        <p class="text-gray-500 text-xs mt-1">Auto-generated credit note number</p>
+                    </div>
+                    
+                    <!-- Credit Note Date -->
+                    <div>
+                        {{ form.credit_note_date.label(class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2") }}
+                        {{ form.credit_note_date(class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100") }}
+                        {% if form.credit_note_date.errors %}
+                            <p class="text-red-600 text-sm mt-1">{{ form.credit_note_date.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Amount and Reason -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Credit Amount -->
+                    <div>
+                        {{ form.credit_amount.label(class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2") }}
+                        <div class="relative">
+                            <span class="absolute left-3 top-2 text-gray-500 dark:text-gray-400">₹</span>
+                            {{ form.credit_amount(class="w-full pl-8 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100", step="0.01") }}
+                        </div>
+                        {% if form.credit_amount.errors %}
+                            <p class="text-red-600 text-sm mt-1">{{ form.credit_amount.errors[0] }}</p>
+                        {% endif %}
+                        <p class="text-gray-500 text-xs mt-1">
+                            Maximum: ₹{{ "%.2f"|format(payment.net_payment_amount) if payment else "0.00" }}
+                        </p>
+                    </div>
+                    
+                    <!-- Reason Code -->
+                    <div>
+                        {{ form.reason_code.label(class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2") }}
+                        {{ form.reason_code(class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100") }}
+                        {% if form.reason_code.errors %}
+                            <p class="text-red-600 text-sm mt-1">{{ form.reason_code.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Reference Information (Read-only) -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        {{ form.payment_reference.label(class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2") }}
+                        {{ form.payment_reference(class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-gray-100 bg-gray-50 cursor-not-allowed", readonly=true) }}
+                    </div>
+                    
+                    <div>
+                        {{ form.supplier_name.label(class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2") }}
+                        {{ form.supplier_name(class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-gray-100 bg-gray-50 cursor-not-allowed", readonly=true) }}
+                    </div>
+                </div>
+                
+                <!-- Detailed Reason -->
+                <div>
+                    {{ form.credit_reason.label(class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2") }}
+                    {{ form.credit_reason(class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100", rows="4") }}
+                    {% if form.credit_reason.errors %}
+                        <p class="text-red-600 text-sm mt-1">{{ form.credit_reason.errors[0] }}</p>
+                    {% endif %}
+                    <p class="text-gray-500 text-xs mt-1">Please provide detailed explanation for this credit note (minimum 10 characters)</p>
+                </div>
+                
+                <!-- Form Actions -->
+                <div class="flex justify-end space-x-3 pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) if payment else url_for('supplier_views.payment_list') }}"
+                       class="btn-secondary">
+                        Cancel
+                    </a>
+                    {{ form.submit(class="btn-primary") }}
+                </div>
+                
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Existing Credit Notes -->
+    {% if payment and payment.existing_credit_notes %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mt-6">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Existing Credit Notes</h2>
+        </div>
+        <div class="px-6 py-4">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-50 dark:bg-gray-900">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Credit Note #</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Date</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for credit_note in payment.existing_credit_notes %}
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900 dark:text-gray-100">
+                                {{ credit_note.credit_note_number }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                                {{ credit_note.credit_date }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-red-600 dark:text-red-400">
+                                ₹{{ "%.2f"|format(credit_note.credit_amount) }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+<!-- Simple JavaScript for form validation -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Get form elements
+    const reasonCodeSelect = document.getElementById('reason_code');
+    const creditReasonTextarea = document.getElementById('credit_reason');
+    const creditAmountInput = document.getElementById('credit_amount');
+    
+    // Update placeholder based on reason selection
+    if (reasonCodeSelect && creditReasonTextarea) {
+        reasonCodeSelect.addEventListener('change', function() {
+            const reason = this.value;
+            let placeholder = 'Please provide detailed explanation for this credit note...';
+            
+            switch(reason) {
+                case 'payment_error':
+                    placeholder = 'Please describe the payment error and how it occurred...';
+                    break;
+                case 'duplicate_payment':
+                    placeholder = 'Please provide details about the duplicate payment...';
+                    break;
+                case 'overpayment':
+                    placeholder = 'Please explain the overpayment and the correct amount...';
+                    break;
+                case 'invoice_dispute':
+                    placeholder = 'Please describe the invoice dispute and resolution...';
+                    break;
+                case 'quality_issue':
+                    placeholder = 'Please describe the quality issues and impact...';
+                    break;
+                case 'other':
+                    placeholder = 'Please provide detailed explanation (minimum 20 characters for "Other")...';
+                    break;
+            }
+            
+            creditReasonTextarea.placeholder = placeholder;
+        });
+    }
+    
+    // Validate credit amount
+    if (creditAmountInput) {
+        const maxAmount = parseFloat('{{ payment.net_payment_amount if payment else 0 }}');
+        
+        creditAmountInput.addEventListener('input', function() {
+            const enteredAmount = parseFloat(this.value);
+            const parent = this.parentElement.parentElement;
+            let helpText = parent.querySelector('.text-xs');
+            
+            if (enteredAmount > maxAmount) {
+                this.classList.add('border-red-500', 'focus:border-red-500', 'focus:ring-red-500');
+                this.classList.remove('border-gray-300', 'focus:border-blue-500', 'focus:ring-blue-500');
+                if (helpText) {
+                    helpText.textContent = `Amount cannot exceed ₹${maxAmount.toFixed(2)}`;
+                    helpText.classList.add('text-red-600');
+                    helpText.classList.remove('text-gray-500');
+                }
+            } else {
+                this.classList.remove('border-red-500', 'focus:border-red-500', 'focus:ring-red-500');
+                this.classList.add('border-gray-300', 'focus:border-blue-500', 'focus:ring-blue-500');
+                if (helpText) {
+                    helpText.textContent = `Maximum: ₹${maxAmount.toFixed(2)}`;
+                    helpText.classList.remove('text-red-600');
+                    helpText.classList.add('text-gray-500');
+                }
+            }
+        });
+    }
+});
+</script>
+
+{% endblock %}

@@ -1,0 +1,2026 @@
+/* ==========================================
+   CARD COMPONENTS
+   File: static/css/components/cards.css
+   All card variants for healthcare application
+   ========================================== */
+
+/* ==========================================
+   BASE CARD STYLES
+   ========================================== */
+
+.card {
+    background: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    overflow: hidden !important;
+}
+
+.dark .card {
+    background: rgb(31 41 55) !important; /* gray-800 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* ==========================================
+   INFO CARDS - General purpose content cards
+   ========================================== */
+
+.info-card {
+    background: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    padding: 1.5rem !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+}
+
+.dark .info-card {
+    background: rgb(31 41 55) !important; /* gray-800 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.info-card-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    margin-bottom: 1rem !important;
+    padding-bottom: 0.75rem !important;
+    border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
+}
+
+.dark .info-card-header {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.info-card-title {
+    font-size: 1.125rem !important; /* text-lg */
+    font-weight: 600 !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    margin: 0 !important;
+}
+
+.dark .info-card-title {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.info-card-subtitle {
+    font-size: 0.875rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    margin-top: 0.25rem !important;
+}
+
+.dark .info-card-subtitle {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.info-card-body {
+    padding: 0 !important;
+}
+
+.info-card-footer {
+    margin-top: 1.5rem !important;
+    padding-top: 1rem !important;
+    border-top: 1px solid rgb(229 231 235) !important; /* gray-200 */
+}
+
+.dark .info-card-footer {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* ==========================================
+   STAT CARDS - Dashboard metrics and KPIs
+   ========================================== */
+
+.stat-card {
+    background: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    padding: 1.5rem !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    transition: all 0.15s ease-in-out !important;
+}
+
+.stat-card:hover {
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+    transform: translateY(-1px) !important;
+}
+
+.dark .stat-card {
+    background: rgb(31 41 55) !important; /* gray-800 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.stat-card-icon {
+    width: 3rem !important;
+    height: 3rem !important;
+    border-radius: 0.5rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 1.5rem !important;
+    margin-bottom: 1rem !important;
+}
+
+.stat-card-icon.primary {
+    background-color: rgb(219 234 254) !important; /* blue-100 */
+    color: rgb(59 130 246) !important; /* blue-500 */
+}
+
+.stat-card-icon.success {
+    background-color: rgb(220 252 231) !important; /* green-100 */
+    color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.stat-card-icon.warning {
+    background-color: rgb(254 243 199) !important; /* amber-100 */
+    color: rgb(245 158 11) !important; /* amber-500 */
+}
+
+.stat-card-icon.danger {
+    background-color: rgb(254 226 226) !important; /* red-100 */
+    color: rgb(239 68 68) !important; /* red-500 */
+}
+
+/* MODIFIED: Default size optimized for list views */
+.stat-card-value {
+    font-size: 1.5rem !important; /* Reduced from 2rem for better proportion */
+    font-weight: 700 !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    line-height: 1 !important;
+    margin-bottom: 0.5rem !important;
+}
+
+.dark .stat-card-value {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+/* Size variants for specific use cases */
+.stat-card-value.lg {
+    font-size: 2.25rem !important; /* For hero/dashboard sections */
+}
+
+.stat-card-value.sm {
+    font-size: 1.25rem !important; /* For very dense layouts */
+}
+
+.stat-card-label {
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
+}
+
+.dark .stat-card-label {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.stat-card-change {
+    display: flex !important;
+    align-items: center !important;
+    margin-top: 0.5rem !important;
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+}
+
+.stat-card-change.positive {
+    color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.stat-card-change.negative {
+    color: rgb(239 68 68) !important; /* red-500 */
+}
+
+.stat-card-change.neutral {
+    color: rgb(107 114 128) !important; /* gray-500 */
+}
+
+/* ==========================================
+   DASHBOARD CARDS - Specific dashboard widgets
+   ========================================== */
+
+.dashboard-card {
+    background: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    overflow: hidden !important;
+}
+
+.dark .dashboard-card {
+    background: rgb(31 41 55) !important; /* gray-800 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.dashboard-card-header {
+    padding: 1rem 1.5rem !important;
+    border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+}
+
+.dark .dashboard-card-header {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+.dashboard-card-title {
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    margin: 0 !important;
+}
+
+.dark .dashboard-card-title {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.dashboard-card-body {
+    padding: 1.5rem !important;
+}
+
+.dashboard-card-footer {
+    padding: 1rem 1.5rem !important;
+    border-top: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+}
+
+.dark .dashboard-card-footer {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+/* ==========================================
+   PATIENT CARDS - Healthcare specific cards
+   ========================================== */
+
+.patient-card {
+    background: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    padding: 1.5rem !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    position: relative !important;
+    transition: all 0.15s ease-in-out !important;
+}
+
+.patient-card:hover {
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+}
+
+.dark .patient-card {
+    background: rgb(31 41 55) !important; /* gray-800 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.patient-card.critical {
+    border-left: 4px solid rgb(239 68 68) !important; /* red-500 */
+}
+
+.patient-card.urgent {
+    border-left: 4px solid rgb(245 158 11) !important; /* amber-500 */
+}
+
+.patient-card.stable {
+    border-left: 4px solid rgb(34 197 94) !important; /* green-500 */
+}
+
+.patient-card-avatar {
+    width: 3rem !important;
+    height: 3rem !important;
+    border-radius: 50% !important;
+    background-color: rgb(99 102 241) !important; /* indigo-500 */
+    color: white !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 1.25rem !important;
+    font-weight: 600 !important;
+    margin-bottom: 1rem !important;
+}
+
+.patient-card-name {
+    font-size: 1.125rem !important;
+    font-weight: 600 !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    margin-bottom: 0.25rem !important;
+}
+
+.dark .patient-card-name {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.patient-card-id {
+    font-size: 0.875rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    font-family: monospace !important;
+    margin-bottom: 1rem !important;
+}
+
+.dark .patient-card-id {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.patient-card-info {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.75rem !important;
+    margin-bottom: 1rem !important;
+}
+
+.patient-card-field {
+    font-size: 0.75rem !important;
+}
+
+.patient-card-field-label {
+    color: rgb(107 114 128) !important; /* gray-500 */
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
+    margin-bottom: 0.125rem !important;
+}
+
+.dark .patient-card-field-label {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.patient-card-field-value {
+    color: rgb(17 24 39) !important; /* gray-900 */
+    font-weight: 500 !important;
+}
+
+.dark .patient-card-field-value {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+/* ==========================================
+   APPOINTMENT CARDS - Scheduling specific
+   ========================================== */
+
+.appointment-card {
+    background: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    padding: 1rem !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    margin-bottom: 0.75rem !important;
+}
+
+.dark .appointment-card {
+    background: rgb(31 41 55) !important; /* gray-800 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.appointment-card.upcoming {
+    border-left: 4px solid rgb(59 130 246) !important; /* blue-500 */
+}
+
+.appointment-card.in-progress {
+    border-left: 4px solid rgb(34 197 94) !important; /* green-500 */
+}
+
+.appointment-card.completed {
+    border-left: 4px solid rgb(107 114 128) !important; /* gray-500 */
+}
+
+.appointment-card.cancelled {
+    border-left: 4px solid rgb(239 68 68) !important; /* red-500 */
+    opacity: 0.7 !important;
+}
+
+.appointment-time {
+    font-size: 1.125rem !important;
+    font-weight: 700 !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    margin-bottom: 0.25rem !important;
+}
+
+.dark .appointment-time {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.appointment-patient {
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    margin-bottom: 0.5rem !important;
+}
+
+.dark .appointment-patient {
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.appointment-type {
+    font-size: 0.75rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
+}
+
+.dark .appointment-type {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+/* ==========================================
+   MEDICINE CARDS - Pharmacy specific
+   ========================================== */
+
+.medicine-card {
+    background: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    padding: 1.25rem !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    position: relative !important;
+}
+
+.dark .medicine-card {
+    background: rgb(31 41 55) !important; /* gray-800 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.medicine-card.low-stock {
+    border: 2px solid rgb(245 158 11) !important; /* amber-500 */
+    background-color: rgb(255 251 235) !important; /* yellow-50 */
+}
+
+.dark .medicine-card.low-stock {
+    background-color: rgba(146, 64, 14, 0.1) !important;
+}
+
+.medicine-card.out-of-stock {
+    border: 2px solid rgb(239 68 68) !important; /* red-500 */
+    background-color: rgb(254 242 242) !important; /* red-50 */
+}
+
+.dark .medicine-card.out-of-stock {
+    background-color: rgba(127, 29, 29, 0.1) !important;
+}
+
+.medicine-name {
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    margin-bottom: 0.25rem !important;
+}
+
+.dark .medicine-name {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.medicine-generic {
+    font-size: 0.75rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    margin-bottom: 0.75rem !important;
+    font-style: italic !important;
+}
+
+.dark .medicine-generic {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.medicine-details {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.5rem !important;
+    font-size: 0.75rem !important;
+}
+
+.medicine-detail {
+    display: flex !important;
+    justify-content: space-between !important;
+}
+
+.medicine-detail-label {
+    color: rgb(107 114 128) !important; /* gray-500 */
+}
+
+.dark .medicine-detail-label {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.medicine-detail-value {
+    color: rgb(17 24 39) !important; /* gray-900 */
+    font-weight: 500 !important;
+}
+
+.dark .medicine-detail-value {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+/* ==========================================
+   SUMMARY CARDS - Quick overview cards
+   ========================================== */
+
+.summary-card {
+    background: linear-gradient(135deg, rgb(59 130 246) 0%, rgb(99 102 241) 100%) !important;
+    color: white !important;
+    border-radius: 0.5rem !important;
+    padding: 1.5rem !important;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+    position: relative !important;
+    overflow: hidden !important;
+}
+
+.summary-card::before {
+    content: "" !important;
+    position: absolute !important;
+    top: 0 !important;
+    right: 0 !important;
+    width: 100px !important;
+    height: 100px !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-radius: 50% !important;
+    transform: translate(30px, -30px) !important;
+}
+
+.summary-card.success {
+    background: linear-gradient(135deg, rgb(34 197 94) 0%, rgb(22 163 74) 100%) !important;
+}
+
+.summary-card.warning {
+    background: linear-gradient(135deg, rgb(245 158 11) 0%, rgb(217 119 6) 100%) !important;
+}
+
+.summary-card.danger {
+    background: linear-gradient(135deg, rgb(239 68 68) 0%, rgb(220 38 38) 100%) !important;
+}
+
+.summary-card-title {
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    opacity: 0.9 !important;
+    margin-bottom: 0.5rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
+}
+
+.summary-card-value {
+    font-size: 2.25rem !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    margin-bottom: 0.5rem !important;
+}
+
+.summary-card-subtitle {
+    font-size: 0.75rem !important;
+    opacity: 0.8 !important;
+}
+
+/* ==========================================
+   CARD GRID LAYOUTS
+   ========================================== */
+
+.card-grid {
+    display: grid !important;
+    gap: 1.5rem !important;
+}
+
+.card-grid.cols-1 {
+    grid-template-columns: 1fr !important;
+}
+
+.card-grid.cols-2 {
+    grid-template-columns: repeat(2, 1fr) !important;
+}
+
+.card-grid.cols-3 {
+    grid-template-columns: repeat(3, 1fr) !important;
+}
+
+.card-grid.cols-4 {
+    grid-template-columns: repeat(4, 1fr) !important;
+}
+
+/* Responsive card grids */
+@media (max-width: 768px) {
+    .card-grid.cols-2,
+    .card-grid.cols-3,
+    .card-grid.cols-4 {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+    .card-grid.cols-3,
+    .card-grid.cols-4 {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+@media (min-width: 1024px) {
+    .card-grid.cols-4 {
+        grid-template-columns: repeat(3, 1fr) !important;
+    }
+}
+
+@media (min-width: 1280px) {
+    .card-grid.cols-4 {
+        grid-template-columns: repeat(4, 1fr) !important;
+    }
+}
+
+/* ==========================================
+   FINANCIAL DATA CARD - Base component for financial tables
+   ========================================== */
+
+.financial-data-card {
+    background: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    overflow: hidden !important;
+    margin-bottom: 1.5rem !important;
+}
+
+.dark .financial-data-card {
+    background: rgb(31 41 55) !important; /* gray-800 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* ==========================================
+   FINANCIAL DATA CARD HEADER
+   ========================================== */
+
+.financial-data-header {
+    padding: 1rem 1.5rem !important;
+    border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: flex-start !important;
+    gap: 1rem !important;
+}
+
+.dark .financial-data-header {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+.financial-data-title {
+    font-size: 1.125rem !important; /* text-lg */
+    font-weight: 600 !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    flex-shrink: 0 !important;
+}
+
+.dark .financial-data-title {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.financial-data-summary {
+    font-size: 0.875rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    text-align: right !important;
+    line-height: 1.25 !important;
+    flex-shrink: 0 !important;
+}
+
+.dark .financial-data-summary {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.financial-data-summary-primary {
+    font-weight: 600 !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    margin-bottom: 0.125rem !important;
+}
+
+.dark .financial-data-summary-primary {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+/* ==========================================
+   FINANCIAL DATA CARD CONTENT
+   ========================================== */
+
+.financial-data-content {
+    padding: 0 !important; /* No padding to let table extend to edges */
+    overflow-x: auto !important; /* Enable horizontal scroll for tables */
+    -webkit-overflow-scrolling: touch !important; /* Smooth scroll on mobile */
+}
+
+/* ==========================================
+   FINANCIAL DATA CARD FOOTER (if needed)
+   ========================================== */
+
+.financial-data-footer {
+    padding: 1rem 1.5rem !important;
+    border-top: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+}
+
+.dark .financial-data-footer {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+/* ==========================================
+   FINANCIAL COMPARISON CARD - Side-by-side values
+   ========================================== */
+
+.financial-comparison-card {
+    background: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    overflow: hidden !important;
+    margin-bottom: 1.5rem !important;
+}
+
+.dark .financial-comparison-card {
+    background: rgb(31 41 55) !important; /* gray-800 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.financial-comparison-header {
+    padding: 1rem 1.5rem !important;
+    border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    text-align: center !important;
+}
+
+.dark .financial-comparison-header {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+.financial-comparison-title {
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    margin: 0 !important;
+}
+
+.dark .financial-comparison-title {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.financial-comparison-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0 !important;
+}
+
+.financial-comparison-item {
+    padding: 1.5rem !important;
+    text-align: center !important;
+    border-right: 1px solid rgb(229 231 235) !important; /* gray-200 */
+}
+
+.financial-comparison-item:last-child {
+    border-right: none !important;
+}
+
+.dark .financial-comparison-item {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.financial-comparison-label {
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    margin-bottom: 0.75rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
+}
+
+.dark .financial-comparison-label {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.financial-comparison-value {
+    font-size: 1.5rem !important;
+    font-weight: 700 !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    line-height: 1 !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+}
+
+.dark .financial-comparison-value {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.financial-comparison-value.positive {
+    color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.financial-comparison-value.negative {
+    color: rgb(239 68 68) !important; /* red-500 */
+}
+
+.financial-comparison-value.neutral {
+    color: rgb(59 130 246) !important; /* blue-500 */
+}
+
+/* ==========================================
+   NUMERIC SUMMARY CARD - For KPIs and statistics
+   ========================================== */
+
+.numeric-summary-card {
+    background: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    padding: 1.5rem !important;
+    text-align: center !important;
+    transition: all 0.15s ease-in-out !important;
+}
+
+.numeric-summary-card:hover {
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+    transform: translateY(-1px) !important;
+}
+
+.dark .numeric-summary-card {
+    background: rgb(31 41 55) !important; /* gray-800 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.numeric-summary-icon {
+    width: 3rem !important;
+    height: 3rem !important;
+    border-radius: 0.5rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 1.5rem !important;
+    margin: 0 auto 1rem auto !important;
+}
+
+.numeric-summary-icon.financial {
+    background-color: rgb(219 234 254) !important; /* blue-100 */
+    color: rgb(59 130 246) !important; /* blue-500 */
+}
+
+.numeric-summary-icon.success {
+    background-color: rgb(220 252 231) !important; /* green-100 */
+    color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.numeric-summary-icon.warning {
+    background-color: rgb(254 243 199) !important; /* amber-100 */
+    color: rgb(245 158 11) !important; /* amber-500 */
+}
+
+.numeric-summary-icon.danger {
+    background-color: rgb(254 226 226) !important; /* red-100 */
+    color: rgb(239 68 68) !important; /* red-500 */
+}
+
+.numeric-summary-value {
+    font-size: 1.875rem !important;
+    font-weight: 700 !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    line-height: 1 !important;
+    margin-bottom: 0.5rem !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+}
+
+.dark .numeric-summary-value {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.numeric-summary-label {
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
+}
+
+.dark .numeric-summary-label {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+/* ==========================================
+   RESPONSIVE FINANCIAL CARDS
+   ========================================== */
+
+@media (max-width: 768px) {
+    .financial-data-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.75rem !important;
+    }
+    
+    .financial-data-summary {
+        text-align: left !important;
+    }
+    
+    .financial-comparison-grid {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .financial-comparison-item {
+        border-right: none !important;
+        border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    }
+    
+    .financial-comparison-item:last-child {
+        border-bottom: none !important;
+    }
+    
+    .dark .financial-comparison-item {
+        border-color: rgb(75 85 99) !important; /* gray-600 */
+    }
+    
+    .numeric-summary-value {
+        font-size: 1.5rem !important;
+    }
+    
+    .financial-data-header,
+    .financial-data-footer {
+        padding: 1rem !important;
+    }
+}
+
+/* ==========================================
+   CARD GRID INTEGRATION
+   ========================================== */
+
+/* When financial cards are used in card grids */
+.card-grid .numeric-summary-card {
+    margin-bottom: 0 !important; /* Remove margin in grid context */
+}
+
+.card-grid .financial-comparison-card {
+    margin-bottom: 0 !important; /* Remove margin in grid context */
+}
+
+.card-grid .financial-data-card {
+    margin-bottom: 0 !important; /* Remove margin in grid context */
+}
+
+/* ==========================================
+   SPECIALIZED FINANCIAL CARD VARIANTS
+   ========================================== */
+
+/* Enhanced financial data card with subtle shadow */
+.financial-data-card.enhanced {
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+}
+
+/* Compact financial data card */
+.financial-data-card.compact .financial-data-header,
+.financial-data-card.compact .financial-data-footer {
+    padding: 0.75rem 1rem !important;
+}
+
+.financial-data-card.compact .financial-data-title {
+    font-size: 1rem !important;
+}
+
+.financial-data-card.compact .financial-data-summary {
+    font-size: 0.8125rem !important;
+}
+
+/* ==========================================
+   HEALTHCARE FINANCIAL CARD THEMES
+   ========================================== */
+
+/* Invoice status themed cards */
+.financial-data-card.invoice-paid {
+    border-left: 4px solid rgb(34 197 94) !important; /* green-500 */
+}
+
+.financial-data-card.invoice-partial {
+    border-left: 4px solid rgb(245 158 11) !important; /* amber-500 */
+}
+
+.financial-data-card.invoice-unpaid {
+    border-left: 4px solid rgb(239 68 68) !important; /* red-500 */
+}
+
+/* GST/Tax themed cards */
+.financial-data-card.tax-summary {
+    border-left: 4px solid rgb(99 102 241) !important; /* indigo-500 */
+}
+
+/* Payment themed cards */
+.financial-data-card.payment-summary {
+    border-left: 4px solid rgb(59 130 246) !important; /* blue-500 */
+}
+
+/* ==========================================
+   PAYMENT METHOD BREAKDOWN CARDS
+   ========================================== */
+
+.payment-method-card {
+    background: white !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    border-radius: 0.5rem !important;
+    padding: 1rem !important;
+    text-align: center !important;
+    transition: all 0.15s ease-in-out !important;
+}
+
+.payment-method-card:hover {
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
+    transform: translateY(-1px) !important;
+}
+
+.dark .payment-method-card {
+    background: rgb(31 41 55) !important; /* gray-800 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.payment-method-icon {
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    border-radius: 0.375rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 auto 0.75rem auto !important;
+    font-size: 1.25rem !important;
+}
+
+.payment-method-icon.cash {
+    background-color: rgb(220 252 231) !important; /* green-100 */
+    color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.payment-method-icon.digital {
+    background-color: rgb(219 234 254) !important; /* blue-100 */
+    color: rgb(59 130 246) !important; /* blue-500 */
+}
+
+.payment-method-icon.bank {
+    background-color: rgb(254 243 199) !important; /* amber-100 */
+    color: rgb(245 158 11) !important; /* amber-500 */
+}
+
+/* ==========================================
+   INVOICE SUMMARY CARDS WITH GRADIENTS
+   ========================================== */
+
+.invoice-summary-card {
+    background: linear-gradient(135deg, rgb(59 130 246) 0%, rgb(99 102 241) 100%) !important;
+    color: white !important;
+    border-radius: 0.5rem !important;
+    padding: 1.5rem !important;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+    position: relative !important;
+    overflow: hidden !important;
+}
+
+.invoice-summary-card::before {
+    content: "" !important;
+    position: absolute !important;
+    top: 0 !important;
+    right: 0 !important;
+    width: 100px !important;
+    height: 100px !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-radius: 50% !important;
+    transform: translate(30px, -30px) !important;
+}
+
+.invoice-summary-card.paid {
+    background: linear-gradient(135deg, rgb(34 197 94) 0%, rgb(22 163 74) 100%) !important;
+}
+
+.invoice-summary-card.partial {
+    background: linear-gradient(135deg, rgb(245 158 11) 0%, rgb(217 119 6) 100%) !important;
+}
+
+.invoice-summary-card.overdue {
+    background: linear-gradient(135deg, rgb(239 68 68) 0%, rgb(220 38 38) 100%) !important;
+}
+
+.invoice-summary-card.cancelled {
+    background: linear-gradient(135deg, rgb(107 114 128) 0%, rgb(75 85 99) 100%) !important;
+}
+
+.invoice-summary-title {
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    opacity: 0.9 !important;
+    margin-bottom: 0.5rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
+}
+
+.invoice-summary-value {
+    font-size: 2.25rem !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    margin-bottom: 0.5rem !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+}
+
+.invoice-summary-subtitle {
+    font-size: 0.75rem !important;
+    opacity: 0.8 !important;
+}
+
+/* ==========================================
+   PAYMENT BREAKDOWN SECTION (for credit notes)
+   ========================================== */
+
+.payment-breakdown-section {
+    padding: 1.5rem !important;
+    border-top: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+}
+
+.dark .payment-breakdown-section {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+.payment-breakdown-title {
+    font-size: 0.875rem !important;
+    font-weight: 700 !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    margin-bottom: 1rem !important;
+    text-align: center !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.dark .payment-breakdown-title {
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.payment-breakdown-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 1rem !important;
+}
+
+.payment-breakdown-item {
+    background: white !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    border-radius: 0.5rem !important;
+    padding: 1rem !important;
+    text-align: center !important;
+}
+
+.dark .payment-breakdown-item {
+    background: rgb(31 41 55) !important; /* gray-800 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.payment-breakdown-label {
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    margin-bottom: 0.5rem !important;
+}
+
+.dark .payment-breakdown-label {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.payment-breakdown-value {
+    font-size: 1.25rem !important;
+    font-weight: 700 !important;
+    margin-bottom: 0.25rem !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+}
+
+.payment-breakdown-note {
+    font-size: 0.75rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+}
+
+.dark .payment-breakdown-note {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+/* ==========================================
+   ENHANCED FINANCIAL SUMMARY CARDS
+   ========================================== */
+
+.financial-summary-card {
+    background: linear-gradient(135deg, rgb(59 130 246) 0%, rgb(99 102 241) 100%) !important;
+    color: white !important;
+    border-radius: 0.5rem !important;
+    padding: 1.5rem !important;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+    position: relative !important;
+    overflow: hidden !important;
+}
+
+.financial-summary-card::before {
+    content: "" !important;
+    position: absolute !important;
+    top: 0 !important;
+    right: 0 !important;
+    width: 100px !important;
+    height: 100px !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-radius: 50% !important;
+    transform: translate(30px, -30px) !important;
+}
+
+.financial-summary-card.success {
+    background: linear-gradient(135deg, rgb(34 197 94) 0%, rgb(22 163 74) 100%) !important;
+}
+
+.financial-summary-card.warning {
+    background: linear-gradient(135deg, rgb(245 158 11) 0%, rgb(217 119 6) 100%) !important;
+}
+
+.financial-summary-card.danger {
+    background: linear-gradient(135deg, rgb(239 68 68) 0%, rgb(220 38 38) 100%) !important;
+}
+
+.financial-summary-title {
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    opacity: 0.9 !important;
+    margin-bottom: 0.5rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
+}
+
+.financial-summary-value {
+    font-size: 2.25rem !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    margin-bottom: 0.5rem !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+}
+
+.financial-summary-subtitle {
+    font-size: 0.75rem !important;
+    opacity: 0.8 !important;
+}
+
+/* ==========================================
+   PAYMENT SUMMARY ACTIONS
+   ========================================== */
+
+.payment-summary-actions {
+    padding: 1rem 1.5rem !important;
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    border-top: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.75rem !important;
+    justify-content: center !important;
+}
+
+.dark .payment-summary-actions {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+
+/* ==========================================
+   PAYMENT SUMMARY CARD COMPONENT
+   Specialized component for payment information display
+   ========================================== */
+
+.payment-summary-card {
+    background: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    overflow: hidden !important;
+}
+
+.dark .payment-summary-card {
+    background: rgb(31 41 55) !important; /* gray-800 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.payment-summary-header {
+    padding: 1rem 1.5rem !important;
+    border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+}
+
+.dark .payment-summary-header {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+.payment-summary-title {
+    font-size: 1.125rem !important; /* text-lg */
+    font-weight: 600 !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    margin: 0 !important;
+}
+
+.dark .payment-summary-title {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+/* Payment summary rows */
+.payment-summary-row {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 2rem !important;
+    padding: 1.5rem !important;
+    border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
+}
+
+.dark .payment-summary-row {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.payment-summary-row:last-of-type {
+    border-bottom: none !important;
+}
+
+.payment-summary-item {
+    text-align: center !important;
+}
+
+.payment-summary-label {
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    margin-bottom: 0.75rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
+}
+
+.dark .payment-summary-label {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.payment-summary-value {
+    font-size: 1.5rem !important;
+    font-weight: 700 !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    line-height: 1 !important;
+    margin-bottom: 0.5rem !important;
+}
+
+.dark .payment-summary-value {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.payment-summary-note {
+    font-size: 0.75rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    margin-top: 0.5rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.dark .payment-summary-note {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+/* Credit breakdown section */
+.payment-breakdown-section {
+    padding: 1.5rem !important;
+    border-top: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+}
+
+.dark .payment-breakdown-section {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+.payment-breakdown-title {
+    font-size: 0.875rem !important;
+    font-weight: 700 !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    margin-bottom: 1rem !important;
+    text-align: center !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.dark .payment-breakdown-title {
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.payment-breakdown-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 1rem !important;
+}
+
+.payment-breakdown-item {
+    background: white !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    border-radius: 0.5rem !important;
+    padding: 1rem !important;
+    text-align: center !important;
+}
+
+.dark .payment-breakdown-item {
+    background: rgb(31 41 55) !important; /* gray-800 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.payment-breakdown-label {
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    margin-bottom: 0.5rem !important;
+}
+
+.dark .payment-breakdown-label {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.payment-breakdown-value {
+    font-size: 1.25rem !important;
+    font-weight: 700 !important;
+    margin-bottom: 0.25rem !important;
+}
+
+.payment-breakdown-note {
+    font-size: 0.75rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+}
+
+.dark .payment-breakdown-note {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+/* Payment summary actions */
+.payment-summary-actions {
+    padding: 1rem 1.5rem !important;
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    border-top: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.75rem !important;
+    justify-content: center !important;
+}
+
+.dark .payment-summary-actions {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .payment-summary-row {
+        grid-template-columns: 1fr !important;
+        gap: 1.5rem !important;
+        padding: 1rem !important;
+    }
+    
+    .payment-breakdown-grid {
+        grid-template-columns: 1fr !important;
+        gap: 0.75rem !important;
+    }
+    
+    .payment-summary-actions {
+        padding: 1rem !important;
+    }
+}
+
+/* ==========================================
+   DATA DISPLAY CARD COMPONENT
+   Standardized component for tabular data display
+   ========================================== */
+
+.data-display-card {
+    background: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    overflow: hidden !important;
+    margin-bottom: 1.5rem !important;
+}
+
+.dark .data-display-card {
+    background: rgb(31 41 55) !important; /* gray-800 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.data-display-header {
+    padding: 1rem 1.5rem !important;
+    border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+}
+
+.dark .data-display-header {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+.data-display-title {
+    font-size: 1.125rem !important; /* text-lg */
+    font-weight: 600 !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+.dark .data-display-title {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.data-display-subtitle {
+    font-size: 0.875rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    margin: 0 !important;
+}
+
+.dark .data-display-subtitle {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.data-display-content {
+    padding: 0 !important; /* No padding - let table container handle it */
+}
+
+.data-display-footer {
+    padding: 1rem 1.5rem !important;
+    border-top: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+}
+
+.dark .data-display-footer {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+/* ==========================================
+   DROPDOWN ALIGNMENT FIX
+   Fix for action dropdown positioning
+   ========================================== */
+
+.dropdown {
+    position: relative !important;
+    display: inline-block !important;
+}
+
+.dropdown-menu {
+    position: absolute !important;
+    z-index: 50 !important;
+    margin-top: 0.5rem !important;
+    background-color: white !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    border-radius: 0.5rem !important;
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1) !important;
+    padding: 0.5rem 0 !important;
+    min-width: 12rem !important;
+    max-width: 16rem !important;
+}
+
+.dark .dropdown-menu {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* Right-aligned dropdown (default) */
+.dropdown-menu.origin-top-right {
+    right: 0 !important;
+    left: auto !important;
+}
+
+/* Left-aligned dropdown */
+.dropdown-menu.origin-top-left {
+    left: 0 !important;
+    right: auto !important;
+}
+
+/* Center-aligned dropdown */
+.dropdown-menu.origin-top-center {
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+}
+
+.dropdown-menu a,
+.dropdown-menu button {
+    display: block !important;
+    width: 100% !important;
+    padding: 0.5rem 1rem !important;
+    text-align: left !important;
+    font-size: 0.875rem !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    text-decoration: none !important;
+    transition: background-color 0.15s ease-in-out !important;
+    border: none !important;
+    background: none !important;
+    cursor: pointer !important;
+}
+
+.dark .dropdown-menu a,
+.dark .dropdown-menu button {
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.dropdown-menu a:hover,
+.dropdown-menu button:hover {
+    background-color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.dark .dropdown-menu a:hover,
+.dark .dropdown-menu button:hover {
+    background-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.dropdown-menu .dropdown-divider {
+    height: 1px !important;
+    background-color: rgb(229 231 235) !important; /* gray-200 */
+    margin: 0.5rem 0 !important;
+}
+
+.dark .dropdown-menu .dropdown-divider {
+    background-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* Disabled items */
+.dropdown-menu a.disabled,
+.dropdown-menu button.disabled,
+.dropdown-menu span.disabled {
+    color: rgb(156 163 175) !important; /* gray-400 */
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+
+.dark .dropdown-menu a.disabled,
+.dark .dropdown-menu button.disabled,
+.dark .dropdown-menu span.disabled {
+    color: rgb(107 114 128) !important; /* gray-500 */
+}
+
+/* ==========================================
+   ENHANCED FOOTER ACTIONS
+   Fix for button alignment in footer sections
+   ========================================== */
+
+.footer-actions {
+    display: flex !important;
+    justify-content: center !important; /* Center by default */
+    align-items: center !important;
+    gap: 0.75rem !important;
+    padding: 1.5rem !important;
+    border-top: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    flex-wrap: wrap !important;
+}
+
+.dark .footer-actions {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+/* Footer actions variants */
+.footer-actions.justify-start {
+    justify-content: flex-start !important;
+}
+
+.footer-actions.justify-end {
+    justify-content: flex-end !important;
+}
+
+.footer-actions.justify-between {
+    justify-content: space-between !important;
+}
+
+/* Responsive footer actions */
+@media (max-width: 640px) {
+    .footer-actions {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.5rem !important;
+    }
+    
+    .footer-actions .btn-primary,
+    .footer-actions .btn-secondary,
+    .footer-actions .btn-outline,
+    .footer-actions .btn-warning,
+    .footer-actions .btn-danger,
+    .footer-actions .btn-success {
+        width: 100% !important;
+        justify-content: center !important;
+    }
+    
+    /* Keep inline layout for small button groups */
+    .footer-actions.inline-mobile {
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    
+    .footer-actions.inline-mobile .btn-primary,
+    .footer-actions.inline-mobile .btn-secondary,
+    .footer-actions.inline-mobile .btn-outline,
+    .footer-actions.inline-mobile .btn-warning,
+    .footer-actions.inline-mobile .btn-danger,
+    .footer-actions.inline-mobile .btn-success {
+        width: auto !important;
+        flex: 1 !important;
+        min-width: 0 !important;
+    }
+}
+
+/* ==========================================
+   UTILITY CLASSES FOR COMPONENT COMBINATIONS
+   ========================================== */
+
+/* Spacing utilities for component stacking */
+.component-stack > * + * {
+    margin-top: 1.5rem !important;
+}
+
+.component-stack.tight > * + * {
+    margin-top: 1rem !important;
+}
+
+.component-stack.loose > * + * {
+    margin-top: 2rem !important;
+}
+
+/* Header alignment utilities */
+.header-inline {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 1rem !important;
+}
+
+.header-inline-actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+}
+
+@media (max-width: 768px) {
+    .header-inline {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 1rem !important;
+    }
+    
+    .header-inline-actions {
+        justify-content: center !important;
+    }
+}
+/* =============================================================================
+   PRODUCTION GRADE UNIVERSAL SUMMARY CARDS - CONSOLIDATED
+   Add to existing cards.css (replace any existing universal-summary-grid styles)
+   Matches gold standard payment_list.html exactly
+   ============================================================================= */
+
+/* ==========================================
+   UNIVERSAL SUMMARY GRID - GOLD STANDARD MATCH
+   ========================================== */
+
+.universal-summary-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 1.5rem !important;
+    margin-bottom: 1.5rem !important;
+}
+
+@media (max-width: 1024px) {
+    .universal-summary-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 1rem !important;
+    }
+}
+
+@media (max-width: 640px) {
+    .universal-summary-grid {
+        grid-template-columns: 1fr !important;
+        gap: 1rem !important;
+    }
+}
+
+/* ==========================================
+   UNIVERSAL STAT CARDS - WHITE BACKGROUND GOLD STANDARD
+   ========================================== */
+
+.universal-stat-card {
+    background: white !important;
+    border: 1px solid rgb(229 231 235) !important;
+    border-radius: 0.75rem !important;
+    padding: 1.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    transition: all 0.2s ease-in-out !important;
+    position: relative !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
+}
+
+.dark .universal-stat-card {
+    background: rgb(31 41 55) !important;
+    border-color: rgb(75 85 99) !important;
+    color: rgb(243 244 246) !important;
+}
+
+/* ==========================================
+   STAT CARD CLICKABLE BEHAVIOR
+   ========================================== */
+
+.universal-stat-card.clickable {
+    cursor: pointer !important;
+}
+
+.universal-stat-card.clickable:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
+}
+
+.dark .universal-stat-card.clickable:hover {
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* ==========================================
+   STAT CARD ICON STYLING
+   ========================================== */
+
+.universal-stat-card .stat-card-icon {
+    width: 3rem !important;
+    height: 3rem !important;
+    border-radius: 0.75rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-bottom: 1rem !important;
+    font-size: 1.5rem !important;
+}
+
+.universal-stat-card .stat-card-icon.primary {
+    background-color: rgb(219 234 254) !important;
+    color: rgb(59 130 246) !important;
+}
+
+.universal-stat-card .stat-card-icon.success {
+    background-color: rgb(220 252 231) !important;
+    color: rgb(34 197 94) !important;
+}
+
+.universal-stat-card .stat-card-icon.info {
+    background-color: rgb(219 234 254) !important;
+    color: rgb(14 165 233) !important;
+}
+
+.universal-stat-card .stat-card-icon.neutral {
+    background-color: rgb(243 244 246) !important;
+    color: rgb(107 114 128) !important;
+}
+
+/* ==========================================
+   STAT CARD CONTENT STYLING
+   ========================================== */
+
+.universal-stat-card .stat-card-info {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
+}
+
+.universal-stat-card .stat-card-value {
+    font-size: 2rem !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    margin-bottom: 0.5rem !important;
+    color: rgb(17 24 39) !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+}
+
+.dark .universal-stat-card .stat-card-value {
+    color: rgb(243 244 246) !important;
+}
+
+.universal-stat-card .stat-card-label {
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    color: rgb(107 114 128) !important;
+    line-height: 1.25 !important;
+    text-align: center !important;
+}
+
+.dark .universal-stat-card .stat-card-label {
+    color: rgb(156 163 175) !important;
+}
+
+/* ==========================================
+   CURRENCY DISPLAY IN STAT CARDS
+   ========================================== */
+
+.universal-stat-card .currency {
+    color: rgb(22 163 74) !important;
+    font-weight: 700 !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+}
+
+.dark .universal-stat-card .currency {
+    color: rgb(34 197 94) !important;
+}
+
+/* ==========================================
+   CARD VARIANT HOVER EFFECTS (WHITE BACKGROUND MAINTAINED)
+   ========================================== */
+
+.universal-stat-card.primary-card.clickable:hover {
+    border-color: rgb(59 130 246) !important;
+    background: white !important;
+}
+
+.universal-stat-card.success-card.clickable:hover {
+    border-color: rgb(34 197 94) !important;
+    background: white !important;
+}
+
+.universal-stat-card.info-card.clickable:hover {
+    border-color: rgb(14 165 233) !important;
+    background: white !important;
+}
+
+.universal-stat-card.neutral-card.clickable:hover {
+    border-color: rgb(107 114 128) !important;
+    background: white !important;
+}
+
+/* ==========================================
+   RESPONSIVE STAT CARD ADJUSTMENTS
+   ========================================== */
+
+@media (max-width: 768px) {
+    .universal-stat-card {
+        padding: 1rem !important;
+    }
+    
+    .universal-stat-card .stat-card-icon {
+        width: 2.5rem !important;
+        height: 2.5rem !important;
+        font-size: 1.25rem !important;
+        margin-bottom: 0.75rem !important;
+    }
+    
+    .universal-stat-card .stat-card-value {
+        font-size: 1.5rem !important;
+    }
+    
+    .universal-stat-card .stat-card-label {
+        font-size: 0.8rem !important;
+    }
+}
+
+/* ==========================================
+   CARD ANIMATION ON LOAD
+   ========================================== */
+
+.universal-stat-card {
+    animation: fadeInUp 0.3s ease-out !important;
+}
+
+.universal-stat-card:nth-child(1) { animation-delay: 0.1s !important; }
+.universal-stat-card:nth-child(2) { animation-delay: 0.2s !important; }
+.universal-stat-card:nth-child(3) { animation-delay: 0.3s !important; }
+.universal-stat-card:nth-child(4) { animation-delay: 0.4s !important; }
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0 !important;
+        transform: translateY(20px) !important;
+    }
+    to {
+        opacity: 1 !important;
+        transform: translateY(0) !important;
+    }
+}
+
+/* ==========================================
+   SUPPLIER INFO DISPLAY (Consolidated from patches)
+   ========================================== */
+
+.supplier-info {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.125rem !important;
+}
+
+.supplier-name {
+    font-weight: 500 !important;
+    color: rgb(17 24 39) !important;
+    line-height: 1.25 !important;
+    font-size: 0.875rem !important;
+}
+
+.dark .supplier-name {
+    color: rgb(243 244 246) !important;
+}
+
+.supplier-code {
+    font-size: 0.75rem !important;
+    color: rgb(107 114 128) !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    line-height: 1 !important;
+}
+
+.dark .supplier-code {
+    color: rgb(156 163 175) !important;
+}

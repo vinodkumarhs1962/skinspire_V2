@@ -1,0 +1,181 @@
+/* ==========================================
+   LAYOUT COMPONENTS
+   File: static/css/components/layout.css
+   ========================================== */
+
+/* ==========================================
+   FILTER COMPONENTS
+   ========================================== */
+
+/* Filter actions container - ENHANCED from existing */
+.filter-actions,
+.filter-card .flex.flex-wrap {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0.75rem !important; /* Slightly reduced from 1rem for better fit */
+}
+
+/* Responsive button spacing - smaller gap on mobile */
+@media (max-width: 640px) {
+    .filter-actions,
+    .filter-card .flex.flex-wrap {
+        gap: 0.5rem !important; /* Tighter spacing on mobile */
+    }
+}
+
+/* Ensure buttons in filter sections don't overlap */
+.filter-card .btn-primary,
+.filter-card .btn-secondary,
+.filter-card .btn-outline,
+.filter-card .btn-danger,
+.filter-card .btn-success,
+.filter-card .btn-warning {
+    flex-shrink: 0 !important; /* Prevent button shrinking */
+    white-space: nowrap !important; /* Prevent text wrapping in buttons */
+}
+
+/* Filter card styling */
+.filter-card {
+    background: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    padding: 1rem !important;
+    margin-bottom: 1.5rem !important;
+}
+
+.dark .filter-card {
+    background: rgb(31 41 55) !important; /* gray-800 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* ==========================================
+   FOOTER COMPONENTS
+   ========================================== */
+
+.footer-actions {
+    display: flex !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    padding: 1.5rem !important;
+    border-top: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+}
+
+.dark .footer-actions {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+/* Responsive footer */
+@media (max-width: 640px) {
+    .footer-actions {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+    
+    .footer-actions .btn-primary,
+    .footer-actions .btn-secondary,
+    .footer-actions .btn-outline,
+    .footer-actions .btn-warning,
+    .footer-actions .btn-danger,
+    .footer-actions .btn-success {
+        width: 100% !important;
+        justify-content: center !important;
+    }
+}
+
+/* ==========================================
+   CARD COMPONENTS
+   ========================================== */
+
+.info-card {
+    background: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    padding: 1.5rem !important;
+}
+
+.dark .info-card {
+    background: rgb(31 41 55) !important; /* gray-800 */
+}
+
+.info-card-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    margin-bottom: 1rem !important;
+}
+
+.info-card-title {
+    font-size: 1.125rem !important; /* text-lg */
+    font-weight: 600 !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+}
+
+.dark .info-card-title {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+/* ==========================================
+   ACTION COMPONENTS
+   ========================================== */
+
+.action-buttons {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+}
+
+.action-link {
+    display: inline-flex !important;
+    align-items: center !important;
+    padding: 0.25rem !important;
+    color: rgb(99 102 241) !important; /* indigo-500 */
+    border-radius: 0.25rem !important;
+    transition: all 0.15s ease-in-out !important;
+}
+
+.action-link:hover {
+    color: rgb(79 70 229) !important; /* indigo-600 */
+    background-color: rgb(238 242 255) !important; /* indigo-50 */
+}
+
+.dark .action-link {
+    color: rgb(165 180 252) !important; /* indigo-300 */
+}
+
+.dark .action-link:hover {
+    color: rgb(129 140 248) !important; /* indigo-400 */
+    background-color: rgba(67, 56, 202, 0.3) !important; /* indigo-800/30 */
+}
+
+/* ==========================================
+   UTILITY CLASSES
+   ========================================== */
+
+/* Spacing utilities for consistent gaps */
+.gap-xs { gap: 0.25rem !important; }
+.gap-sm { gap: 0.5rem !important; }
+.gap-md { gap: 0.75rem !important; }
+.gap-lg { gap: 1rem !important; }
+.gap-xl { gap: 1.5rem !important; }
+
+/* Text utilities */
+.text-muted {
+    color: rgb(107 114 128) !important; /* gray-500 */
+}
+
+.dark .text-muted {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+/* Background utilities */
+.bg-subtle {
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+}
+
+.dark .bg-subtle {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}

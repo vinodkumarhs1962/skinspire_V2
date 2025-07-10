@@ -1,0 +1,59 @@
+{# 
+Entity-Specific Wrapper for Supplier Payments
+Calls universal_list.html for 99% of functionality
+Adds supplier-specific autocomplete and enhancements
+#}
+
+{% extends "engine/universal_list.html" %}
+
+{% block entity_specific_scripts %}
+<!-- ✅ Supplier-specific autocomplete JavaScript -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // ✅ Setup supplier autocomplete with backend data
+    const supplierInput = document.querySelector('input[name="supplier_id"]');
+    if (supplierInput && window.supplierAutocompeteData) {
+        setupSupplierAutocomplete(supplierInput, window.supplierAutocompeteData);
+    }
+    
+    // ✅ Setup payment reference autocomplete  
+    const referenceInput = document.querySelector('input[name="reference_no"]');
+    if (referenceInput && window.paymentReferencesData) {
+        setupPaymentReferenceAutocomplete(referenceInput, window.paymentReferencesData);
+    }
+});
+
+function setupSupplierAutocomplete(input, suppliers) {
+    // ✅ Minimal JavaScript - mostly backend-driven
+    input.addEventListener('input', debounce(function() {
+        const term = this.value.toLowerCase();
+        if (term.length >= 2) {
+            const matches = suppliers.filter(s => 
+                s.search_text.includes(term)
+            ).slice(0, 10);
+            showAutocompleteDropdown(input, matches, 'supplier');
+        }
+    }, 300));
+}
+
+function setupPaymentReferenceAutocomplete(input, references) {
+    input.addEventListener('input', debounce(function() {
+        const term = this.value.toLowerCase();
+        if (term.length >= 2) {
+            const matches = references.filter(r => 
+                r.label.toLowerCase().includes(term)
+            ).slice(0, 10);
+            showAutocompleteDropdown(input, matches, 'reference');
+        }
+    }, 300));
+}
+</script>
+
+<!-- ✅ Pass backend data to JavaScript -->
+<script>
+// ✅ TEMPORARY FIX: Disable autocomplete data until serialization issue is resolved
+window.supplierAutocompeteData = [];
+window.paymentReferencesData = [];
+console.log('Autocomplete data disabled - using fallback');
+</script>
+{% endblock %}

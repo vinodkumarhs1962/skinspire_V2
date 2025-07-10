@@ -7,72 +7,36 @@ from typing import Dict, List
 from app.utils.unicode_logging import get_unicode_safe_logger
 logger = get_unicode_safe_logger(__name__)
 
+# SIMPLIFIED posting_config_service.py:
 def get_posting_config(hospital_id: str = None) -> Dict:
     """
-    Get posting configuration from static .env file
-    SIMPLIFIED: No dynamic lookup - eliminates all session conflicts
+    SIMPLIFIED: Get posting configuration from static .env file
     """
-    # Static configuration from environment only
-    config = {
-        'ENABLE_ENHANCED_POSTING': os.getenv('ENABLE_ENHANCED_POSTING', 'False').lower() == 'true',
+    return {
         'DEFAULT_AP_ACCOUNT': os.getenv('DEFAULT_AP_ACCOUNT', '2100'),
         'DEFAULT_INVENTORY_ACCOUNT': os.getenv('DEFAULT_INVENTORY_ACCOUNT', '1410'),
-        'DEFAULT_EXPENSE_ACCOUNT': os.getenv('DEFAULT_EXPENSE_ACCOUNT', '5100'),
-        'DEFAULT_BANK_ACCOUNT': os.getenv('DEFAULT_BANK_ACCOUNT', '1100'),
+        'DEFAULT_BANK_ACCOUNT': os.getenv('DEFAULT_BANK_ACCOUNT', '1200'),
         'DEFAULT_CASH_ACCOUNT': os.getenv('DEFAULT_CASH_ACCOUNT', '1101'),
         'CGST_RECEIVABLE_ACCOUNT': os.getenv('CGST_RECEIVABLE_ACCOUNT', '1710'),
         'SGST_RECEIVABLE_ACCOUNT': os.getenv('SGST_RECEIVABLE_ACCOUNT', '1720'),
         'IGST_RECEIVABLE_ACCOUNT': os.getenv('IGST_RECEIVABLE_ACCOUNT', '1730'),
-        'POSTING_BATCH_SIZE': int(os.getenv('POSTING_BATCH_SIZE', '100')),
-        
-        # Payment method accounts (if configured)
-        'PAYMENT_METHOD_ACCOUNTS': {
-            'cash': os.getenv('DEFAULT_CASH_ACCOUNT', '1101'),
-            'bank_transfer': os.getenv('DEFAULT_BANK_ACCOUNT', '1100'),
-            'cheque': os.getenv('DEFAULT_BANK_ACCOUNT', '1100'),
-            'credit_card': os.getenv('CREDIT_CARD_ACCOUNT', os.getenv('DEFAULT_BANK_ACCOUNT', '1100')),
-            'debit_card': os.getenv('DEBIT_CARD_ACCOUNT', os.getenv('DEFAULT_BANK_ACCOUNT', '1100')),
-            'upi': os.getenv('UPI_ACCOUNT', os.getenv('DEFAULT_BANK_ACCOUNT', '1100')),
-        },
-        
-        # Additional settings for backward compatibility
-        'AUTO_POST_INVOICES': True,
-        'AUTO_POST_PAYMENTS': True,
-        'REQUIRE_APPROVAL_FOR_CREDIT_NOTES': True,
-        'VALIDATE_ACCOUNT_EXISTENCE': False,  # Disabled since no dynamic lookup
-        'LOG_POSTING_DETAILS': os.getenv('FLASK_ENV', 'development').lower() == 'development',
-        'CONTINUE_ON_POSTING_ERRORS': os.getenv('FLASK_ENV', 'development').lower() == 'development'
     }
-    
-    if hospital_id:
-        logger.info(f"📋 Using static configuration for hospital {hospital_id}")
-    
-    return config
 
 def get_default_gl_account(account_type: str, hospital_id: str = None) -> str:
-    """
-    Get default GL account for a given type from static configuration
-    SIMPLIFIED: No dynamic lookup
-    """
+    """Get default GL account for a given type"""
     config = get_posting_config(hospital_id)
     
     account_mapping = {
         'ap': config.get('DEFAULT_AP_ACCOUNT', '2100'),
         'inventory': config.get('DEFAULT_INVENTORY_ACCOUNT', '1410'),
-        'expense': config.get('DEFAULT_EXPENSE_ACCOUNT', '5100'),
-        'bank': config.get('DEFAULT_BANK_ACCOUNT', '1100'),
+        'bank': config.get('DEFAULT_BANK_ACCOUNT', '1200'),
         'cash': config.get('DEFAULT_CASH_ACCOUNT', '1101'),
         'cgst': config.get('CGST_RECEIVABLE_ACCOUNT', '1710'),
         'sgst': config.get('SGST_RECEIVABLE_ACCOUNT', '1720'),
         'igst': config.get('IGST_RECEIVABLE_ACCOUNT', '1730'),
     }
     
-    result = account_mapping.get(account_type.lower(), '1100')
-    
-    if hospital_id:
-        logger.info(f"🔍 Account lookup for type '{account_type}': {result} (hospital: {hospital_id})")
-    
-    return result
+    return account_mapping.get(account_type.lower(), '1200')
 
 def get_payment_method_account(payment_method: str, hospital_id: str = None) -> str:
     """

@@ -797,52 +797,6 @@ class SupplierPaymentForm(FlaskForm):
             return 'level_2'
 
 
-# # === HELPER FUNCTIONS ===
-# def populate_branch_choices(form, current_user):
-#     """Populate branch choices for the form"""
-#     try:
-#         from app.services.database_service import get_db_session
-#         from app.models.master import Branch
-        
-#         with get_db_session(read_only=True) as session:
-#             branches = session.query(Branch).filter_by(
-#                 hospital_id=current_user.hospital_id,
-#                 is_active=True
-#             ).order_by(Branch.branch_name).all()
-            
-#             choices = [('', 'Select Branch')]
-#             for branch in branches:
-#                 choices.append((str(branch.branch_id), f"{branch.branch_name} ({branch.branch_code})"))
-            
-#             form.branch_id.choices = choices
-#         return True
-        
-#     except Exception as e:
-#         form.branch_id.choices = [('', 'Error loading branches')]
-#         return False
-
-
-# def setup_payment_form(form, current_user):
-#     """Setup form with branch choices and defaults"""
-#     populate_branch_choices(form, current_user)
-    
-#     # Set default branch if user has one
-#     try:
-#         from app.services.database_service import get_db_session
-#         from app.models.master import Staff
-        
-#         if current_user.entity_type == 'staff':
-#             with get_db_session(read_only=True) as session:
-#                 staff = session.query(Staff).filter_by(
-#                     staff_id=current_user.entity_id
-#                 ).first()
-                
-#                 if staff and staff.branch_id and not form.branch_id.data:
-#                     form.branch_id.data = str(staff.branch_id)
-                    
-#     except Exception:
-#         pass  # Ignore errors, just don't set default
-
 class SupplierFilterForm(FlaskForm):
     """Form for filtering suppliers."""
     
@@ -1096,3 +1050,89 @@ class PaymentSearchForm(FlaskForm):
         if (field.data and self.min_amount.data and 
             field.data < self.min_amount.data):
             raise ValidationError('Maximum amount must be greater than minimum amount')
+        
+
+class SupplierCreditNoteForm(FlaskForm):
+    """
+    Phase 1: Simple credit note form
+    Minimal implementation with core functionality only
+    """
+    
+    # Hidden fields for context
+    payment_id = HiddenField('Payment ID', validators=[DataRequired()])
+    supplier_id = HiddenField('Supplier ID')
+    branch_id = HiddenField('Branch ID')
+    
+    # Credit note details
+    credit_note_number = StringField(
+        'Credit Note Number',
+        validators=[DataRequired(message="Credit note number is required")],
+        render_kw={'readonly': True, 'class': 'form-control readonly-field'}
+    )
+    
+    credit_note_date = DateField(
+        'Credit Note Date',
+        validators=[DataRequired(message="Credit note date is required")],
+        default=date.today
+    )
+    
+    credit_amount = DecimalField(
+        'Credit Amount (₹)',
+        validators=[
+            DataRequired(message="Credit amount is required"),
+            NumberRange(min=0.01, message="Credit amount must be greater than 0")
+        ],
+        places=2
+    )
+    
+    reason_code = SelectField(
+        'Reason',
+        validators=[DataRequired(message="Please select a reason")],
+        choices=[]  # Will be populated dynamically
+    )
+    
+    credit_reason = TextAreaField(
+        'Detailed Reason',
+        validators=[
+            DataRequired(message="Please provide detailed reason"),
+            Length(min=10, max=500, message="Reason must be between 10 and 500 characters")
+        ],
+        render_kw={'rows': 4, 'placeholder': 'Please explain the reason for this credit note...'}
+    )
+    
+    # Display fields (readonly)
+    payment_reference = StringField(
+        'Payment Reference',
+        render_kw={'readonly': True, 'class': 'form-control readonly-field'}
+    )
+    
+    supplier_name = StringField(
+        'Supplier Name', 
+        render_kw={'readonly': True, 'class': 'form-control readonly-field'}
+    )
+    
+    # Form actions
+    submit = SubmitField('Create Credit Note')
+    cancel = SubmitField('Cancel', render_kw={'formnovalidate': True})
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Populate reason choices from configuration
+        from app.utils.credit_note_utils import get_credit_note_reasons
+        self.reason_code.choices = get_credit_note_reasons()
+    
+    def validate_credit_amount(self, field):
+        """Custom validation for credit amount"""
+        if field.data and field.data <= 0:
+            raise ValidationError('Credit amount must be greater than zero')
+    
+    def validate_credit_note_date(self, field):
+        """Custom validation for credit note date"""
+        if field.data and field.data > date.today():
+            raise ValidationError('Credit note date cannot be in the future')
+    
+    def validate_credit_reason(self, field):
+        """Custom validation for detailed reason"""
+        if self.reason_code.data == 'other' and field.data:
+            if len(field.data.strip()) < 20:
+                raise ValidationError('For "Other" reason, please provide at least 20 characters of explanation')

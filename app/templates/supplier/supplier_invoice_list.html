@@ -1,547 +1,414 @@
+<!-- app/templates/supplier/supplier_invoice_list.html -->
+<!-- CLEAN supplier invoice list using ONLY modified component library -->
+
 {% extends "layouts/dashboard.html" %}
 
 {% block title %}Supplier Invoices{% endblock %}
 
-<!-- Add CSS for responsive table -->
 {% block styles %}
 <style>
-    /* Responsive styling for the table */
-    @media (max-width: 1024px) {
-        .invoice-table th:nth-child(5),
-        .invoice-table td:nth-child(5) {
-            display: none; /* Hide the Paid column on smaller screens */
-        }
-    }
-    
-    @media (max-width: 768px) {
-        .invoice-table th:nth-child(3),
-        .invoice-table td:nth-child(3),
-        .invoice-table th:nth-child(6),
-        .invoice-table td:nth-child(6) {
-            display: none; /* Hide Date and Balance columns on even smaller screens */
-        }
-    }
-    
-    /* Make sure action buttons are always visible */
-    .action-buttons {
-        min-width: 120px;
-        display: flex;
-        justify-content: center;
-        gap: 0.75rem;
-    }
-    
-    /* For money columns, ensure they don't grow too much */
-    .money-column {
-        max-width: 100px;
-    }
-    /* Make the table more compact */
-    .compact-table {
-        font-size: 0.875rem; /* Slightly smaller text */
-    }
-    
-    .compact-table th,
-    .compact-table td {
-        padding: 0.5rem 0.5rem; /* Reduced padding */
-    }
-    
-    /* Ensure columns don't take up excessive space */
-    .compact-table th {
-        width: auto; /* Let the browser calculate optimal widths */
-    }
-    
-    /* Limit supplier name length */
-    .compact-table td:nth-child(2) {
-        max-width: 150px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    
-    /* Make numeric columns narrower */
-    .compact-table th:nth-child(4),
-    .compact-table td:nth-child(4),
-    .compact-table th:nth-child(5),
-    .compact-table td:nth-child(5),
-    .compact-table th:nth-child(6),
-    .compact-table td:nth-child(6) {
-        width: 80px;
-    }
-    
-    /* Make date column narrower */
-    .compact-table th:nth-child(3),
-    .compact-table td:nth-child(3) {
-        width: 90px;
-    }
-    
-    /* Make status column narrower */
-    .compact-table th:nth-child(7),
-    .compact-table td:nth-child(7) {
-        width: 80px;
-    }
-    
-    /* Make action column compact but sufficient */
-    .compact-table th:nth-child(8),
-    .compact-table td:nth-child(8) {
-        width: 90px;
-    }
-    
-    /* Align action buttons more compactly */
-    .compact-table .inline-flex {
-        gap: 0.25rem;
-    }
-    .compact-table .inline-flex a,
-    .compact-table .inline-flex button {
-        padding: 0.25rem;
-    }
+.supplier-name-cell {
+    max-width: 140px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    position: relative !important;
+    cursor: help !important;
+}
+
+/* Tooltip-style hover - no layout shift */
+.supplier-name-cell:hover::after {
+    content: attr(title) !important;
+    position: absolute !important;
+    bottom: 100% !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    background-color: rgb(17 24 39) !important;
+    color: white !important;
+    padding: 0.5rem 0.75rem !important;
+    border-radius: 0.375rem !important;
+    font-size: 0.75rem !important;
+    white-space: nowrap !important;
+    z-index: 60 !important;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    transition: opacity 0.2s ease-in-out !important;
+    max-width: 300px !important;
+    word-wrap: break-word !important;
+    white-space: normal !important;
+}
+
+.supplier-name-cell:hover::after {
+    opacity: 1 !important;
+}
+
+.dark .supplier-name-cell:hover::after {
+    background-color: rgb(55 65 81) !important;
+    color: rgb(243 244 246) !important;
+}
+
+.branch-data {
+    display: none !important;
+}
+
+.branch-column {
+    display: none !important;
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container mx-auto px-4 py-6">
-    <!-- Header -->
+    <!-- Page Header -->
     <div class="flex flex-col md:flex-row items-start md:items-center justify-between mb-6">
-        <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Supplier Invoices</h1>
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Supplier Invoices</h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">Manage and track supplier invoices</p>
+        </div>
         <div class="flex space-x-2 mt-4 md:mt-0">
             <a href="{{ url_for('supplier_views.purchase_order_list') }}" class="btn-secondary">
-                <i class="fas fa-file-invoice mr-2"></i> Purchase Orders
+                <i class="fas fa-file-invoice icon-left"></i>Purchase Orders
             </a>
             <a href="{{ url_for('supplier_views.supplier_list') }}" class="btn-secondary">
-                <i class="fas fa-users mr-2"></i> Suppliers
+                <i class="fas fa-users icon-left"></i>Suppliers
             </a>
             <a href="{{ url_for('supplier_views.add_supplier_invoice') }}" class="btn-primary">
-                <i class="fas fa-plus mr-2"></i> New Invoice
+                <i class="fas fa-plus icon-left"></i>New Invoice
             </a>
         </div>
     </div>
 
-    <!-- Summary Cards in a single row -->
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
-        <!-- Use flex layout with explicit wrapping control -->
-        <div class="flex flex-wrap -mx-2">
-            <!-- Total Invoices Card - explicit width with padding -->
-            <div class="w-full sm:w-1/2 lg:w-1/4 px-2 mb-4 lg:mb-0">
-                <div class="flex items-center bg-white dark:bg-gray-800 h-full">
-                    <div class="flex-shrink-0 bg-blue-100 dark:bg-blue-900 rounded-full p-3">
-                        <i class="fas fa-file-invoice text-blue-600 dark:text-blue-300"></i>
-                    </div>
-                    <div class="ml-4">
-                        <h2 class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Invoices</h2>
-                        <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                            {% if summary and summary.total_invoices is defined %}
-                                {{ summary.total_invoices }}
-                            {% else %}
-                                0
-                            {% endif %}
-                        </p>
-                    </div>
-                </div>
+    <!-- Summary Cards - Using Default Optimized Size -->
+    <div class="card-grid cols-4 mb-6">
+        <div class="stat-card">
+            <div class="stat-card-icon primary">
+                <i class="fas fa-file-invoice-dollar"></i>
             </div>
+            <div class="stat-card-value">
+                {{ summary.total_invoices if summary and summary.total_invoices else 0 }}
+            </div>
+            <div class="stat-card-label">Total Invoices</div>
+        </div>
 
-            <!-- Unpaid Amount Card - explicit width with padding -->
-            <div class="w-full sm:w-1/2 lg:w-1/4 px-2 mb-4 lg:mb-0">
-                <div class="flex items-center bg-white dark:bg-gray-800 h-full">
-                    <div class="flex-shrink-0 bg-red-100 dark:bg-red-900 rounded-full p-3">
-                        <i class="fas fa-exclamation-circle text-red-600 dark:text-red-300"></i>
-                    </div>
-                    <div class="ml-4">
-                        <h2 class="text-sm font-medium text-gray-500 dark:text-gray-400">Unpaid Amount</h2>
-                        <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                            {% if summary and summary.unpaid_amount is defined %}
-                                 Rs. {{ "%.2f"|format(summary.unpaid_amount) }}
-                            {% else %}
-                                 Rs. 0.00
-                            {% endif %}
-                        </p>
-                    </div>
-                </div>
+        <div class="stat-card">
+            <div class="stat-card-icon danger">
+                <i class="fas fa-exclamation-triangle"></i>
             </div>
+            <div class="stat-card-value">
+                {% if summary and summary.unpaid_amount %}
+                    ₹{{ "%.2f"|format(summary.unpaid_amount) }}
+                {% else %}
+                    ₹0.00
+                {% endif %}
+            </div>
+            <div class="stat-card-label">Outstanding</div>
+        </div>
 
-            <!-- Paid Amount Card - explicit width with padding -->
-            <div class="w-full sm:w-1/2 lg:w-1/4 px-2 mb-4 lg:mb-0">
-                <div class="flex items-center bg-white dark:bg-gray-800 h-full">
-                    <div class="flex-shrink-0 bg-green-100 dark:bg-green-900 rounded-full p-3">
-                        <i class="fas fa-check-circle text-green-600 dark:text-green-300"></i>
-                    </div>
-                    <div class="ml-4">
-                        <h2 class="text-sm font-medium text-gray-500 dark:text-gray-400">Paid Amount</h2>
-                        <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                            {% if summary and summary.paid_amount is defined %}
-                                 Rs. {{ "%.2f"|format(summary.paid_amount) }}
-                            {% else %}
-                                 Rs. 0.00
-                            {% endif %}
-                        </p>
-                    </div>
-                </div>
+        <div class="stat-card">
+            <div class="stat-card-icon success">
+                <i class="fas fa-check-circle"></i>
             </div>
+            <div class="stat-card-value">
+                {% if summary and summary.paid_amount %}
+                    ₹{{ "%.2f"|format(summary.paid_amount) }}
+                {% else %}
+                    ₹0.00
+                {% endif %}
+            </div>
+            <div class="stat-card-label">Paid Total</div>
+        </div>
 
-            <!-- Listed Invoices Total - explicit width with padding -->
-            <div class="w-full sm:w-1/2 lg:w-1/4 px-2 mb-4 lg:mb-0">
-                <div class="flex items-center bg-white dark:bg-gray-800 h-full">
-                    <div class="flex-shrink-0 bg-purple-100 dark:bg-purple-900 rounded-full p-3">
-                        <i class="fas fa-calculator text-purple-600 dark:text-purple-300"></i>
-                    </div>
-                    <div class="ml-4">
-                        <h2 class="text-sm font-medium text-gray-500 dark:text-gray-400">Listed Total</h2>
-                        <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                            {% if summary and summary.listed_total is defined %}
-                                 Rs. {{ "%.2f"|format(summary.listed_total) }}
-                            {% else %}
-                                 Rs. 0.00
-                            {% endif %}
-                        </p>
-                    </div>
-                </div>
+        <div class="stat-card">
+            <div class="stat-card-icon primary">
+                <i class="fas fa-calculator"></i>
             </div>
+            <div class="stat-card-value">
+                {% if summary and summary.listed_total %}
+                    ₹{{ "%.2f"|format(summary.listed_total) }}
+                {% else %}
+                    ₹0.00
+                {% endif %}
+            </div>
+            <div class="stat-card-label">Listed Total</div>
         </div>
     </div>
 
-    <!-- Improved Filter Form -->
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
-        <form method="GET" action="{{ url_for('supplier_views.supplier_invoice_list') }}" class="space-y-6">
-            <!-- First row: Supplier and Payment Status -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label for="supplier_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Supplier</label>
-                    <select id="supplier_id" name="supplier_id" class="form-select w-full rounded-md shadow-sm">
-                        <option value="">All Suppliers</option>
-                        {% if suppliers %}
-                            {% for supplier in suppliers %}
-                                <option value="{{ supplier.supplier_id }}" {% if request.args.get('supplier_id') == supplier.supplier_id|string %}selected{% endif %}>
-                                    {{ supplier.supplier_name }}
-                                </option>
-                            {% endfor %}
-                        {% endif %}
-                    </select>
-                </div>
-                
-                <div>
-                    <label for="payment_status" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Payment Status</label>
-                    <select id="payment_status" name="payment_status" class="form-select w-full rounded-md shadow-sm">
-                        <option value="">All Statuses</option>
-                        <option value="unpaid" {% if request.args.get('payment_status') == 'unpaid' %}selected{% endif %}>Unpaid</option>
-                        <option value="partial" {% if request.args.get('payment_status') == 'partial' %}selected{% endif %}>Partially Paid</option>
-                        <option value="paid" {% if request.args.get('payment_status') == 'paid' %}selected{% endif %}>Paid</option>
-                    </select>
-                </div>
+    <!-- Filter Card -->
+    <div class="filter-card">
+        <div class="filter-card-header">
+            <h3 class="filter-card-title">
+                <i class="fas fa-filter icon-left"></i>Filter Invoices
+            </h3>
+            <div class="text-sm text-gray-500 dark:text-gray-400">
+                {% if summary and summary.total_invoices %}{{ summary.total_invoices }} results{% endif %}
             </div>
-
-            <!-- Second row: Invoice Number and Date range -->
-            <div class="flex flex-wrap md:flex-nowrap items-start md:space-x-4">
-                <!-- Invoice Number - narrower on desktop -->
-                <div class="w-full md:w-2/5 mb-4 md:mb-0">
-                    <label for="invoice_number" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Invoice Number</label>
-                    <input type="text" id="invoice_number" name="invoice_number" value="{{ request.args.get('invoice_number', '') }}" 
-                        class="form-input w-full rounded-md shadow-sm">
-                </div>
-                
-                <!-- NEW: Branch Filter -->
-                <div class="w-full md:w-1/5 mb-4 md:mb-0">
-                    {% include 'components/branch/branch_filter.html' %}
-                </div>
-
-                <!-- Date Range - wider on desktop with period presets -->
-                <div class="w-full md:w-3/5">
-                    <div class="flex items-center justify-between mb-1">
-                        <label for="date_range" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Date Range</label>
-                        <div class="flex text-xs space-x-2">
-                            <button type="button" id="current-month" class="text-blue-600 dark:text-blue-400 hover:underline">Current Month</button>
-                            <button type="button" id="financial-year" class="text-blue-600 dark:text-blue-400 hover:underline">Financial Year</button>
-                        </div>
+        </div>
+        <div class="filter-card-body">
+            <form method="GET" action="{{ url_for('supplier_views.supplier_invoice_list') }}" class="space-y-6">
+                <div class="filter-grid filter-grid-cols-4">
+                    <div class="form-group">
+                        <label for="invoice_number" class="form-label">
+                            <i class="fas fa-hashtag icon-left"></i>Invoice Number
+                        </label>
+                        <input type="text" id="invoice_number" name="invoice_number" 
+                            value="{{ request.args.get('invoice_number', '') }}"
+                            placeholder="Search by invoice number..."
+                            class="form-input">
                     </div>
-                    <div class="flex space-x-2">
-                        <div class="w-1/2">
-                            <input type="date" id="start_date" name="start_date" value="{{ request.args.get('start_date', '') }}" 
-                                class="form-input w-full rounded-md shadow-sm" placeholder="From">
-                        </div>
-                        <div class="w-1/2">
-                            <input type="date" id="end_date" name="end_date" value="{{ request.args.get('end_date', '') }}" 
-                                class="form-input w-full rounded-md shadow-sm" placeholder="To">
-                        </div>
+                    
+                    <div class="form-group">
+                        <label for="supplier_id" class="form-label">
+                            <i class="fas fa-building icon-left"></i>Supplier
+                        </label>
+                        <select id="supplier_id" name="supplier_id" class="form-select">
+                            <option value="">All Suppliers</option>
+                            {% if suppliers %}
+                                {% for supplier in suppliers %}
+                                    <option value="{{ supplier.supplier_id }}" 
+                                            {% if request.args.get('supplier_id') == supplier.supplier_id|string %}selected{% endif %}>
+                                        {{ supplier.supplier_name }}
+                                    </option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="payment_status" class="form-label">
+                            <i class="fas fa-credit-card icon-left"></i>Payment Status
+                        </label>
+                        <select id="payment_status" name="payment_status" class="form-select">
+                            <option value="">All Statuses</option>
+                            <option value="unpaid" {% if request.args.get('payment_status') == 'unpaid' %}selected{% endif %}>Unpaid</option>
+                            <option value="partial" {% if request.args.get('payment_status') == 'partial' %}selected{% endif %}>Partial</option>
+                            <option value="paid" {% if request.args.get('payment_status') == 'paid' %}selected{% endif %}>Paid</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="po_id" class="form-label">
+                            <i class="fas fa-file-alt icon-left"></i>Purchase Order
+                        </label>
+                        <input type="text" id="po_id" name="po_id" 
+                            value="{{ request.args.get('po_id', '') }}"
+                            placeholder="Search by PO number..."
+                            class="form-input">
                     </div>
                 </div>
-            </div>
-
-            <!-- Filter Actions -->
-            <div class="flex justify-end items-center">
-                <button type="submit" class="btn-primary">
-                    <i class="fas fa-filter mr-2"></i> Apply Filters
-                </button>
-                <a href="{{ url_for('supplier_views.supplier_invoice_list') }}" class="btn-secondary ml-2">
-                    <i class="fas fa-redo mr-2"></i> Reset
-                </a>
-                <button type="button" id="export-csv" class="btn-secondary ml-2">
-                    <i class="fas fa-file-export mr-2"></i> Export
-                </button>
-            </div>
-        </form>
+                
+                <div class="filter-grid filter-grid-cols-2">
+                    <div class="form-group">
+                        <label for="start_date" class="form-label">
+                            <i class="fas fa-calendar icon-left"></i>Start Date
+                        </label>
+                        <input type="date" id="start_date" name="start_date" 
+                            value="{{ request.args.get('start_date', '') }}"
+                            class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label for="end_date" class="form-label">
+                            <i class="fas fa-calendar icon-left"></i>End Date
+                        </label>
+                        <input type="date" id="end_date" name="end_date" 
+                            value="{{ request.args.get('end_date', '') }}"
+                            class="form-input">
+                    </div>
+                </div>
+                
+                <!-- Correct Button Colors Following Guidelines -->
+                <div class="filter-actions">
+                    <button type="submit" class="btn-outline">
+                        <i class="fas fa-search icon-left"></i>Apply Filters
+                    </button>
+                    <a href="{{ url_for('supplier_views.supplier_invoice_list') }}" class="btn-outline">
+                        <i class="fas fa-times icon-left"></i>Reset
+                    </a>
+                    <button type="button" onclick="setCurrentMonth()" class="btn-outline">
+                        <i class="fas fa-calendar icon-left"></i>Current Month
+                    </button>
+                    <button type="button" onclick="setFinancialYear()" class="btn-outline">
+                        <i class="fas fa-calendar-year icon-left"></i>Financial Year
+                    </button>
+                    <button type="button" id="export-csv" class="btn-outline">
+                        <i class="fas fa-file-export icon-left"></i>Export CSV
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 
-    <!-- Invoice Table -->
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 compact-table">
-                <thead>
-                    <tr class="bg-gray-50 dark:bg-gray-700">
-                        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Invoice #</th>
-                        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Supplier</th>
-                        <th scope="col" class="hidden lg:table-cell px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Branch</th>
-                        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
-                        <th scope="col" class="px-2 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Total</th>
-                        <th scope="col" class="px-2 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Paid</th>
-                        <th scope="col" class="px-2 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Balance</th>
-                        <th scope="col" class="px-2 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-                        <th scope="col" class="px-2 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    {% if invoices and invoices|length > 0 %}
-                        {% for invoice in invoices %}
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
-                            <td class="px-2 py-2 whitespace-nowrap text-xs font-medium">
-                                <a href="{{ url_for('supplier_views.view_supplier_invoice', invoice_id=invoice.invoice_id) }}" class="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 hover:underline">
-                                    {{ invoice.supplier_invoice_number }}
+    <!-- Grid Table - Clean Component Usage -->
+    <div class="info-card mb-6">
+        <div class="table-container">
+            <div class="grid-table">
+                <!-- Header -->
+                <div class="grid-table-header grid-invoice">
+                    <div>Invoice #</div>
+                    <div>Supplier</div>
+                    <div class="hide-mobile">Date</div>
+                    <div class="grid-cell-right">Total</div>
+                    <div class="grid-cell-right hide-mobile">Paid</div>
+                    <div class="grid-cell-right hide-mobile">Balance</div>
+                    <div class="grid-cell-center hide-mobile">CN</div>
+                    <div class="grid-cell-center">Status</div>
+                    <div class="grid-cell-center">Actions</div>
+                </div>
+
+                <!-- Rows -->
+                {% if invoices and invoices|length > 0 %}
+                    {% for invoice in invoices %}
+                    <div class="grid-table-row grid-invoice">
+                        <span class="branch-data" data-branch="{{ invoice.branch_id or '' }}" data-branch-name="{{ invoice.branch_name or '' }}"></span>
+                        <div class="grid-cell-truncate" title="{{ invoice.supplier_invoice_number }}">
+                            <a href="{{ url_for('supplier_views.view_supplier_invoice', invoice_id=invoice.invoice_id) }}" 
+                            class="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 hover:underline">
+                                {{ invoice.supplier_invoice_number }}
+                            </a>
+                        </div>
+
+                        <div class="grid-cell-truncate supplier-name-cell" title="{{ invoice.supplier_name }}">
+                            {{ invoice.supplier_name }}
+                        </div>
+
+                        <div class="grid-cell-truncate hide-mobile" title="{{ invoice.invoice_date.strftime('%d-%m-%Y') if invoice.invoice_date else '-' }}">
+                            {{ invoice.invoice_date.strftime('%d-%m-%Y') if invoice.invoice_date else '-' }}
+                        </div>
+
+                        <div class="grid-cell-right grid-cell-mono grid-cell-truncate" title="₹{{ '%.2f'|format(invoice.total_amount) if invoice.total_amount else '0.00' }}">
+                            ₹{{ "%.2f"|format(invoice.total_amount) if invoice.total_amount else "0.00" }}
+                        </div>
+
+                        <div class="grid-cell-right grid-cell-mono hide-mobile grid-cell-truncate" title="₹{{ '%.2f'|format(invoice.payment_total) if invoice.payment_total else '0.00' }}">
+                            ₹{{ "%.2f"|format(invoice.payment_total) if invoice.payment_total else "0.00" }}
+                        </div>
+
+                        <div class="grid-cell-right grid-cell-mono hide-mobile grid-cell-truncate" title="₹{{ '%.2f'|format(invoice.balance_due) if invoice.balance_due else '0.00' }}">
+                            ₹{{ "%.2f"|format(invoice.balance_due) if invoice.balance_due else "0.00" }}
+                        </div>
+                        
+                        <div class="grid-cell-center hide-mobile">
+                            {% if invoice.has_credit_notes %}
+                                <span class="status-badge status-warning sm" title="Invoice has credit notes applied">CN</span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </div>
+
+                        <div class="grid-cell-center">
+                            {% if invoice.payment_status == 'paid' %}
+                                <span class="status-badge status-paid sm">Paid</span>
+                            {% elif invoice.payment_status == 'partial' %}
+                                <span class="status-badge status-partial sm">Partial</span>
+                            {% elif invoice.payment_status == 'unpaid' %}
+                                <span class="status-badge status-unpaid sm">Unpaid</span>
+                            {% elif invoice.payment_status == 'cancelled' %}
+                                <span class="status-badge status-cancelled sm">Cancelled</span>
+                            {% else %}
+                                <span class="status-badge status-unknown sm">Unknown</span>
+                            {% endif %}
+                        </div>
+
+                        <div class="grid-cell-center">
+                            <div class="action-buttons">
+                                <a href="{{ url_for('supplier_views.view_supplier_invoice', invoice_id=invoice.invoice_id) }}" 
+                                class="action-link" title="View">
+                                    <i class="fas fa-eye"></i>
                                 </a>
-                            </td>
-                            <td class="px-2 py-2 whitespace-nowrap text-xs text-gray-700 dark:text-gray-300 max-w-[10ch] truncate">
-                                {{ invoice.supplier_name }}
-                            </td>
-                            <!-- NEW: Branch Cell -->
-                            <td class="hidden lg:table-cell px-2 py-2 whitespace-nowrap text-xs text-gray-500 dark:text-gray-300">
-                                {% if invoice.get('branch_name') %}
-                                    {% set branch_name = invoice.branch_name %}
-                                    {% include 'components/branch/branch_indicator.html' %}
-                                {% else %}
-                                    <span class="text-gray-400">-</span>
+                                
+                                {% if invoice.payment_status in ['unpaid', 'partial'] %}
+                                <a href="{{ url_for('supplier_views.edit_supplier_invoice', invoice_id=invoice.invoice_id) }}" 
+                                class="action-link edit" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </a>
                                 {% endif %}
-                            </td>
-                            <td class="px-2 py-2 whitespace-nowrap text-xs text-gray-700 dark:text-gray-300">
-                                {% if invoice.invoice_date %}
-                                    {{ invoice.invoice_date.strftime('%Y-%m-%d') if invoice.invoice_date is not string else invoice.invoice_date }}
+                                
+                                <a href="{{ url_for('supplier_views.print_supplier_invoice', invoice_id=invoice.invoice_id) }}" 
+                                class="action-link" title="Print" target="_blank">
+                                    <i class="fas fa-print"></i>
+                                </a>
+                                
+                                {% if invoice.payment_status != 'paid' and invoice.payment_status != 'cancelled' %}
+                                <a href="{{ url_for('supplier_views.record_payment', invoice_id=invoice.invoice_id) }}" 
+                                class="action-link success" title="Record Payment">
+                                    <i class="fas fa-money-bill"></i>
+                                </a>
                                 {% endif %}
-                            </td>
-                            <td class="px-2 py-2 whitespace-nowrap text-xs text-right text-gray-700 dark:text-gray-300">
-                                {% if invoice.total_amount is defined %}
-                                     Rs.{{ "%.0f"|format(invoice.total_amount) }}
+                                
+                                {% if invoice.payment_status == 'unpaid' %}
+                                <button type="button" 
+                                        onclick="confirmCancel('{{ invoice.invoice_id }}', '{{ invoice.supplier_invoice_number }}')"
+                                        class="action-link delete"
+                                        title="Cancel">
+                                    <i class="fas fa-times"></i>
+                                </button>
                                 {% endif %}
-                            </td>
-                            <td class="px-2 py-2 whitespace-nowrap text-xs text-right text-gray-700 dark:text-gray-300">
-                                {% if invoice.payment_total is defined %}
-                                     Rs.{{ "%.0f"|format(invoice.payment_total) }}
-                                {% endif %}
-                            </td>
-                            <td class="px-2 py-2 whitespace-nowrap text-xs text-right
-                                {% if invoice.balance_due > 0 %}text-red-600 dark:text-red-400{% else %}text-gray-700 dark:text-gray-300{% endif %}">
-                                {% if invoice.balance_due is defined %}
-                                     Rs.{{ "%.0f"|format(invoice.balance_due) }}
-                                {% endif %}
-                            </td>
-                            <td class="px-2 py-2 whitespace-nowrap text-xs text-center">
-                                {% if invoice.payment_status == 'paid' %}
-                                    <span class="inline-flex items-center px-1 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                                        Paid
-                                    </span>
-                                {% elif invoice.payment_status == 'partial' %}
-                                    <span class="inline-flex items-center px-1 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-                                        Partial
-                                    </span>
-                                {% elif invoice.payment_status == 'cancelled' %}
-                                    <span class="inline-flex items-center px-1 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200">
-                                        Cancelled
-                                    </span>
-                                {% else %}
-                                    <span class="inline-flex items-center px-1 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                                        Unpaid
-                                    </span>
-                                {% endif %}
-                            </td>
-                            <td class="px-2 py-2 whitespace-nowrap text-xs text-center">
-                                <div class="inline-flex space-x-1">
-                                    <a href="{{ url_for('supplier_views.view_supplier_invoice', invoice_id=invoice.invoice_id) }}" 
-                                    class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 p-1"
-                                    title="View">
-                                        <i class="fas fa-eye"></i>
-                                    </a>
-                                    
-                                    {% if invoice.payment_status != 'paid' and invoice.payment_status != 'cancelled' %}
-                                    <a href="{{ url_for('supplier_views.record_payment', invoice_id=invoice.invoice_id) }}" 
-                                    class="text-green-600 dark:text-green-400 hover:text-green-900 dark:hover:text-green-300 p-1"
-                                    title="Record Payment">
-                                        <i class="fas fa-money-bill"></i>
-                                    </a>
-                                    {% endif %}
-                                    
-                                    <!--  ENHANCED: Cancel button logic with payment status validation --> 
-                                    {% if invoice.payment_status == 'unpaid' %}
-                                        <button type="button" 
-                                                onclick="confirmCancel('{{ invoice.invoice_id }}', '{{ invoice.supplier_invoice_number }}')"
-                                                class="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 p-1"
-                                                title="Cancel Invoice">
-                                            <i class="fas fa-times-circle"></i>
-                                        </button>
-                                    {% else %}
-                                        <span class="text-gray-400 dark:text-gray-500 p-1 cursor-not-allowed"
-                                            title="Cannot cancel {{ invoice.payment_status }} invoice">
-                                            <i class="fas fa-ban"></i>
-                                        </span>
-                                    {% endif %}
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    {% else %}
-                        <!-- Empty state row remains the same -->
-                    {% endif %}
-                </tbody>
-            </table>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="grid-table-empty">
+                        <div class="grid-table-empty-icon">
+                            <i class="fas fa-file-invoice"></i>
+                        </div>
+                        <h3 class="grid-table-empty-title">No Invoices Found</h3>
+                        <p class="grid-table-empty-description">No supplier invoices match your current filters.</p>
+                        <a href="{{ url_for('supplier_views.add_supplier_invoice') }}" class="btn-primary">
+                            <i class="fas fa-plus icon-left"></i>Create New Invoice
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
         </div>
     </div>
+        
+    <!-- Pagination -->
+    {% if total > per_page %}
+    {% set filtered_args = {} %}
+    {% for key, value in request.args.items() %}
+        {% if key != 'page' %}
+            {% set _ = filtered_args.update({key: value}) %}
+        {% endif %}
+    {% endfor %}
+
+    <div class="info-card">
+        <div class="table-pagination">
+            <div class="pagination-info">
+                Showing {{ ((page - 1) * per_page) + 1 }} to {{ min(page * per_page, total) }} of {{ total }} results
+            </div>
+            <div class="pagination-buttons">
+                {% if page > 1 %}
+                    <a href="{{ url_for('supplier_views.supplier_invoice_list', page=page-1, **filtered_args) }}#filter-section" 
+                       class="pagination-button">Previous</a>
+                {% endif %}
+                
+                {% set start_page = max(1, page - 2) %}
+                {% set end_page = min((total // per_page) + (1 if total % per_page > 0 else 0), page + 2) %}
+                
+                {% for p in range(start_page, end_page + 1) %}
+                    {% if p == page %}
+                        <span class="pagination-button active">{{ p }}</span>
+                    {% else %}
+                        <a href="{{ url_for('supplier_views.supplier_invoice_list', page=p, **filtered_args) }}#filter-section" 
+                           class="pagination-button">{{ p }}</a>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if page * per_page < total %}
+                    <a href="{{ url_for('supplier_views.supplier_invoice_list', page=page+1, **filtered_args) }}#filter-section" 
+                       class="pagination-button">Next</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Auto-submit form when fields change
-        document.querySelectorAll('#supplier_id, #payment_status').forEach(select => {
-            select.addEventListener('change', function() {
-                this.form.submit();
-            });
-        });
-        
-        // Date range validation
-        const startDateInput = document.getElementById('start_date');
-        const endDateInput = document.getElementById('end_date');
-        
-        if (startDateInput && endDateInput) {
-            startDateInput.addEventListener('change', function() {
-                if (endDateInput.value && new Date(this.value) > new Date(endDateInput.value)) {
-                    endDateInput.value = this.value;
-                }
-            });
-            
-            endDateInput.addEventListener('change', function() {
-                if (startDateInput.value && new Date(this.value) < new Date(startDateInput.value)) {
-                    startDateInput.value = this.value;
-                }
-            });
-        }
-        
-        // Set up current month and financial year buttons
-        const currentMonthBtn = document.getElementById('current-month');
-        const financialYearBtn = document.getElementById('financial-year');
-        
-        if (currentMonthBtn) {
-            currentMonthBtn.addEventListener('click', function() {
-                setCurrentMonth();
-            });
-        }
-        
-        if (financialYearBtn) {
-            financialYearBtn.addEventListener('click', function() {
-                setFinancialYear();
-            });
-        }
-        
-        // Export to CSV functionality
-        const exportBtn = document.getElementById('export-csv');
-        if (exportBtn) {
-            exportBtn.addEventListener('click', function() {
-                // Add export functionality here
-                // For now, just redirect to current page with export=true
-                const currentUrl = new URL(window.location.href);
-                currentUrl.searchParams.set('export', 'true');
-                window.location.href = currentUrl.toString();
-            });
-        }
-        
-        // Install Font Awesome if not already loaded (fallback)
-        if (!document.querySelector('link[href*="fontawesome"]') && typeof FontAwesome === 'undefined') {
-            const fontAwesome = document.createElement('link');
-            fontAwesome.rel = 'stylesheet';
-            fontAwesome.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css';
-            document.head.appendChild(fontAwesome);
-        }
-        
-        // Make entire row clickable (optional)
-        document.querySelectorAll('tr').forEach(row => {
-            if (!row.classList.contains('header-row') && row.querySelector('a')) {
-                row.style.cursor = 'pointer';
-                row.addEventListener('click', function(e) {
-                    // Ignore if clicking on action buttons
-                    if (e.target.closest('.text-indigo-600, .text-green-600, .text-red-600')) {
-                        return;
-                    }
-                    const link = this.querySelector('a');
-                    if (link) {
-                        window.location.href = link.href;
-                    }
-                });
-            }
-        });
-
-        // Fix for invoice links
-        document.querySelectorAll('a[href*="view_supplier_invoice"]').forEach(link => {
-            link.addEventListener('click', function(e) {
-                e.stopPropagation(); // Prevent parent row handlers from firing
-            });
-        });
-        
-        // Ensure the action buttons work correctly
-        document.querySelectorAll('.text-indigo-600, .text-green-600, .text-red-600').forEach(button => {
-            button.addEventListener('click', function(e) {
-                e.stopPropagation(); // Prevent row click from interfering
-            });
-        });
-    });
-    
-    // Functions for date preset handling
-    function setCurrentMonth() {
-        const now = new Date();
-        const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        
-        document.getElementById('start_date').value = formatDate(startDate);
-        document.getElementById('end_date').value = formatDate(endDate);
-    }
-
-    function setFinancialYear() {
-        const now = new Date();
-        let startYear, endYear;
-        
-        // Financial year is April 1 to March 31
-        if (now.getMonth() >= 3) { // April or later
-            startYear = now.getFullYear();
-            endYear = now.getFullYear() + 1;
-        } else { // January to March
-            startYear = now.getFullYear() - 1;
-            endYear = now.getFullYear();
-        }
-        
-        const startDate = new Date(startYear, 3, 1); // April 1st
-        const endDate = new Date(endYear, 2, 31); // March 31st
-        
-        document.getElementById('start_date').value = formatDate(startDate);
-        document.getElementById('end_date').value = formatDate(endDate);
-    }
-
-    function formatDate(date) {
-        // Format date as YYYY-MM-DD for input fields
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }
-    
-    // Using the confirmation page for cancellation
-    window.confirmCancel = function(invoiceId, invoiceNumber) {
-        if (confirm('Are you sure you want to cancel invoice ' + invoiceNumber + '?')) {
-            // Redirect to the cancellation confirmation page
-            window.location.href = '/supplier/invoice/cancel/' + invoiceId;
-        }
-    }
-</script>
-<script>
-// Enhanced confirmation dialogs for invoice list
 function confirmCancel(invoiceId, invoiceNumber) {
     const confirmMessage = `⚠️ CANCEL INVOICE CONFIRMATION\n\n` +
         `Invoice: ${invoiceNumber}\n\n` +
@@ -550,18 +417,68 @@ function confirmCancel(invoiceId, invoiceNumber) {
         `Are you absolutely sure you want to cancel this invoice?`;
     
     if (confirm(confirmMessage)) {
-        // Show loading state
         const button = event.target.closest('button');
         if (button) {
             button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             button.disabled = true;
+            button.classList.add('btn-loading');
         }
-        
-        // Redirect to the cancellation page
         window.location.href = '/supplier/invoice/cancel/' + invoiceId;
         return true;
     }
     return false;
 }
+
+function setCurrentMonth() {
+    const now = new Date();
+    const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    
+    document.getElementById('start_date').value = formatDate(startDate);
+    document.getElementById('end_date').value = formatDate(endDate);
+}
+
+function setFinancialYear() {
+    const now = new Date();
+    let startYear, endYear;
+    
+    if (now.getMonth() >= 3) {
+        startYear = now.getFullYear();
+        endYear = now.getFullYear() + 1;
+    } else {
+        startYear = now.getFullYear() - 1;
+        endYear = now.getFullYear();
+    }
+    
+    const startDate = new Date(startYear, 3, 1);
+    const endDate = new Date(endYear, 2, 31);
+    
+    document.getElementById('start_date').value = formatDate(startDate);
+    document.getElementById('end_date').value = formatDate(endDate);
+}
+
+function formatDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const exportBtn = document.getElementById('export-csv');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', function() {
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('export', 'true');
+            window.location.href = currentUrl.toString();
+        });
+    }
+    
+    document.querySelectorAll('.action-buttons a, .action-buttons button').forEach(element => {
+        element.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    });
+});
 </script>
 {% endblock %}

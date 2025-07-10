@@ -1,0 +1,121 @@
+SKINSPIRE COMPONENT ANALYSIS REPORT
+================================================================================
+
+SUMMARY OVERVIEW:
+--------------------------------------------------
+Template                                 Coverage   Issues
+--------------------------------------------------
+supplier_invoice_list.html               11.2     % 5
+view_supplier_invoice.html               21.3     % 15
+purchase_order_list.html                 2.0      % 3
+view_purchase_order.html                 2.5      % 6
+
+================================================================================
+
+TEMPLATE: supplier_invoice_list.html
+------------------------------------------------------------
+Coverage: 11.2%
+Components Found: 22
+Conversion Candidates: 5
+
+COMPONENTS FOUND:
+  BUTTONS: btn-outline, action-buttons, action-link, btn-primary, btn-secondary
+  CARDS: stat-card, card-grid, info-card
+  TABLES: table-empty, table-container, pagination-buttons, table-pagination
+  FORMS: form-input, form-label, form-select, form-group
+  STATUS: status-warning, status-badge
+  FILTERS: filter-actions, filter-card
+  LAYOUT: filter-actions
+  SUPPLIER: supplier-name-cell
+
+CONVERSION CANDIDATES:
+  Old Cards: 1
+  Old Tables: 1
+  Old Buttons: 0
+  Old Status: 0
+  Financial Upgrade Candidates: 3
+
+RECOMMENDATIONS:
+  🚨 URGENT: Very low component usage. Consider major refactoring.
+  💳 Replace old card patterns with financial-data-card components
+  📊 Upgrade tables to use financial-table components
+  💰 Add currency-value classes to financial displays
+
+================================================================================
+
+TEMPLATE: view_supplier_invoice.html
+------------------------------------------------------------
+Coverage: 21.3%
+Components Found: 42
+Conversion Candidates: 15
+
+COMPONENTS FOUND:
+  BUTTONS: btn-warning, btn-outline, action-buttons, action-link, btn-primary, btn-secondary, btn-success
+  CARDS: info-card-header, info-card, financial-data-summary-primary, financial-data-title, financial-data-summary, financial-data-header, financial-data-card, info-card-title, financial-data-content
+  TABLES: table-container, total-row, text-header, financial-cell-primary, number-header, currency-value, invoice-items-table, text-column, percentage-value, financial-cell-secondary, gst-summary-table, financial-table, payment-history-table, number-column
+  STATUS: status-completed, status-success, status-info, status-rejected, status-badge, status-pending, status-approved, status-warning
+  LAYOUT: footer-actions
+  INTERACTIVE: dropdown-toggle, dropdown-menu, dropdown
+
+CONVERSION CANDIDATES:
+  Old Cards: 6
+  Old Tables: 6
+  Old Buttons: 0
+  Old Status: 0
+  Financial Upgrade Candidates: 3
+
+RECOMMENDATIONS:
+  🚨 URGENT: Very low component usage. Consider major refactoring.
+  💰 Add currency-value classes to financial displays
+  🔍 Consider adding filter components for better table UX
+
+================================================================================
+
+TEMPLATE: purchase_order_list.html
+------------------------------------------------------------
+Coverage: 2.0%
+Components Found: 4
+Conversion Candidates: 3
+
+COMPONENTS FOUND:
+  BUTTONS: btn-secondary, btn-primary
+  FORMS: form-input, form-select
+
+CONVERSION CANDIDATES:
+  Old Cards: 2
+  Old Tables: 1
+  Old Buttons: 0
+  Old Status: 0
+  Financial Upgrade Candidates: 0
+
+RECOMMENDATIONS:
+  🚨 URGENT: Very low component usage. Consider major refactoring.
+  💳 Replace old card patterns with financial-data-card components
+  📊 Upgrade tables to use financial-table components
+
+================================================================================
+
+TEMPLATE: view_purchase_order.html
+------------------------------------------------------------
+Coverage: 2.5%
+Components Found: 5
+Conversion Candidates: 6
+
+COMPONENTS FOUND:
+  BUTTONS: btn-secondary, btn-primary
+  INTERACTIVE: dropdown-toggle, dropdown-menu, dropdown
+
+CONVERSION CANDIDATES:
+  Old Cards: 5
+  Old Tables: 1
+  Old Buttons: 0
+  Old Status: 0
+  Financial Upgrade Candidates: 0
+
+RECOMMENDATIONS:
+  🚨 URGENT: Very low component usage. Consider major refactoring.
+  💳 Replace old card patterns with financial-data-card components
+  📊 Upgrade tables to use financial-table components
+
+================================================================================
+

@@ -1,81 +1,162 @@
-/* app/static/css/components/invoice.css */
+/* ==========================================
+   INVOICE SPECIFIC STYLES
+   File: static/css/components/invoice.css
+   Only invoice-specific styles that don't conflict with components
+   ========================================== */
 
-/* Invoice Container Styles */
+/* ==========================================
+   INVOICE LAYOUT COMPONENTS
+   ========================================== */
+
+/* Invoice container - specific layout */
 .invoice-container {
-  @apply bg-white dark:bg-gray-800 shadow-md rounded-lg p-6;
-  width: 100% !important;
-  max-width: 100% !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    background: white !important;
+    padding: 1.5rem !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
 }
 
-/* Invoice Header Styles */
+.dark .invoice-container {
+    background: rgb(31 41 55) !important; /* gray-800 */
+}
+
+/* Invoice header grid */
 .invoice-header {
-  @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6;
-  width: 100% !important;
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)) !important;
+    gap: 1.5rem !important;
+    margin-bottom: 1.5rem !important;
+    width: 100% !important;
 }
 
-/* Patient Info Styles */
-.patient-info {
-  @apply p-4 bg-gray-100 dark:bg-gray-700 rounded-lg mb-4;
+/* Invoice meta information layout */
+.invoice-meta {
+    display: flex !important;
+    justify-content: space-between !important;
+    margin-bottom: 1.5rem !important;
+    width: 100% !important;
+    gap: 2rem !important;
 }
 
-/* Line Items Section Structure */
+.meta-section {
+    flex: 1 !important;
+    max-width: 48% !important;
+    overflow: hidden !important;
+}
+
+.meta-section:first-child {
+    text-align: left !important;
+}
+
+.meta-section:last-child {
+    text-align: right !important;
+}
+
+.meta-title {
+    font-weight: 600 !important;
+    font-size: 0.875rem !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    margin-bottom: 0.5rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
+}
+
+.dark .meta-title {
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.meta-section div {
+    font-size: 0.75rem !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    margin-bottom: 0.25rem !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}
+
+.dark .meta-section div {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+/* ==========================================
+   INVOICE LINE ITEMS TABLE
+   ========================================== */
+
+/* Line items section */
 .line-items-section {
-  width: 100% !important;
-  position: relative !important;
-  margin-bottom: 2rem !important;
+    width: 100% !important;
+    margin-bottom: 2rem !important;
+    position: relative !important;
 }
 
 .line-items-header {
-  display: flex !important;
-  justify-content: space-between !important;
-  align-items: center !important;
-  width: 100% !important;
-  margin-bottom: 1rem !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    margin-bottom: 1rem !important;
+    width: 100% !important;
 }
 
-/* Table container with horizontal scrolling if needed */
+/* Invoice table wrapper */
 .invoice-table-wrapper {
-  width: 100% !important;
-  overflow-x: auto !important;
-  position: relative !important;
-  border: 1px solid #ddd !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    border: 1px solid rgb(209 213 219) !important; /* gray-300 */
+    border-radius: 0.375rem !important;
 }
 
-/* Table Layout Styles */
+.dark .invoice-table-wrapper {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* Invoice table */
 .invoice-table {
-  @apply min-w-full border border-gray-300 dark:border-gray-700;
-  table-layout: fixed !important;
-  width: 100% !important;
-  min-width: 100% !important;
-  border-collapse: collapse !important;
-  border-spacing: 0 !important;
-  margin-bottom: 0 !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+    border-spacing: 0 !important;
+    margin: 0 !important;
 }
 
 .invoice-table th {
-  @apply py-1 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-xs font-medium;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-  padding: 8px 6px !important;
-  box-sizing: border-box !important;
+    padding: 0.5rem 0.375rem !important;
+    border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    border-right: 1px solid rgb(229 231 235) !important;
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    text-align: center !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
 }
 
-.invoice-table tr {
-  display: table-row !important;
-  width: 100% !important;
+.dark .invoice-table th {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    color: rgb(209 213 219) !important; /* gray-300 */
 }
 
-.invoice-table td, 
-.invoice-table th {
-  display: table-cell !important;
-  vertical-align: middle !important;
+.invoice-table td {
+    padding: 0.5rem 0.375rem !important;
+    border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    border-right: 1px solid rgb(229 231 235) !important;
+    font-size: 0.75rem !important;
+    vertical-align: middle !important;
 }
 
-/* Set column sizes specifically */
+.dark .invoice-table td {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* Column width specifications */
 .invoice-table th:nth-child(1), .invoice-table td:nth-child(1) { width: 40px !important; } /* Sr. */
 .invoice-table th:nth-child(2), .invoice-table td:nth-child(2) { width: 90px !important; } /* Type */
-.invoice-table th:nth-child(3), .invoice-table td:nth-child(3) { width: auto !important; min-width: 200px !important; } /* Item - allow flexible width */
+.invoice-table th:nth-child(3), .invoice-table td:nth-child(3) { width: auto !important; min-width: 200px !important; } /* Item */
 .invoice-table th:nth-child(4), .invoice-table td:nth-child(4) { width: 60px !important; } /* Qty */
 .invoice-table th:nth-child(5), .invoice-table td:nth-child(5) { width: 80px !important; } /* Price */
 .invoice-table th:nth-child(6), .invoice-table td:nth-child(6) { width: 70px !important; } /* Disc % */
@@ -83,908 +164,366 @@
 .invoice-table th:nth-child(8), .invoice-table td:nth-child(8) { width: 80px !important; } /* Total */
 .invoice-table th:nth-child(9), .invoice-table td:nth-child(9) { width: 80px !important; } /* Action */
 
-/* Add Item button styling */
-#add-line-item {
-  position: static !important; /* Ensure it doesn't interfere with layout */
-  z-index: 1 !important;
-}
-
-/* Line Item Styles */
+/* Line item row styling */
 .line-item-row {
-  width: 100% !important;
+    width: 100% !important;
 }
 
 .line-item-row input,
 .line-item-row select {
-  @apply w-full box-border py-1 px-2 text-xs;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 0.25rem 0.5rem !important;
+    font-size: 0.75rem !important;
+    border: 1px solid rgb(209 213 219) !important; /* gray-300 */
+    border-radius: 0.25rem !important;
 }
 
 .line-item-row.saved input,
 .line-item-row.saved select {
-  @apply bg-gray-50 dark:bg-gray-800;
+    background-color: rgb(249 250 251) !important; /* gray-50 */
 }
 
-/* Search Results Styles */
+.dark .line-item-row.saved input,
+.dark .line-item-row.saved select {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+/* Right-aligned columns */
+.invoice-table .text-right,
+.invoice-table .text-right input {
+    text-align: right !important;
+}
+
+/* ==========================================
+   INVOICE SEARCH AND AUTOCOMPLETE
+   ========================================== */
+
+/* Item search results */
 .item-search-results {
-  @apply absolute z-50 bg-white dark:bg-gray-700 shadow-md rounded w-full max-w-xs max-h-40 overflow-y-auto;
+    position: absolute !important;
+    z-index: 50 !important;
+    background-color: white !important;
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1) !important;
+    border-radius: 0.375rem !important;
+    max-width: 20rem !important;
+    max-height: 10rem !important;
+    overflow-y: auto !important;
+    border: 1px solid rgb(209 213 219) !important; /* gray-300 */
+}
+
+.dark .item-search-results {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
 }
 
 .item-search-results div {
-  @apply p-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer;
+    padding: 0.5rem 0.75rem !important;
+    cursor: pointer !important;
+    font-size: 0.75rem !important;
+    border-bottom: 1px solid rgb(229 231 235) !important; /* gray-200 */
 }
 
-/* Text Alignment Styles */
-.text-right, 
-.text-right input, 
-.total-value {
-  @apply text-right !important;
+.dark .item-search-results div {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
 }
 
-/* Medicine Fields Styles */
-.medicine-fields {
-  @apply mt-2 text-xs;
+.item-search-results div:hover {
+    background-color: rgb(243 244 246) !important; /* gray-100 */
 }
 
-/* Invoice List Item Styles */
-.invoice-list-item {
-  font-size: 12px !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
+.dark .item-search-results div:hover {
+    background-color: rgb(75 85 99) !important; /* gray-600 */
 }
 
-/* Invoice Table Cell Styles */
-.invoice-table td {
-  max-width: 150px !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  font-size: 12px !important; /* Reduced font size */
+/* Patient search results - larger and positioned better */
+.patient-search-results {
+    position: absolute !important;
+    z-index: 50 !important;
+    width: auto !important;
+    min-width: 18rem !important;
+    max-width: 25rem !important;
+    max-height: 18rem !important;
+    overflow-y: auto !important;
+    right: 0 !important;
+    background-color: white !important;
+    border: 1px solid rgb(209 213 219) !important; /* gray-300 */
+    border-radius: 0.375rem !important;
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1) !important;
 }
 
-/* Place of Supply Field Improvements */
-.gst-element {
-  width: 100% !important;
-  margin-bottom: 15px !important;
+.dark .patient-search-results {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
 }
 
-.gst-element select,
-.gst-element input,
-#place_of_supply {
-  width: 100% !important;
-  display: block !important;
-  box-sizing: border-box !important;
-}
+/* ==========================================
+   INVOICE TOTALS SECTION
+   ========================================== */
 
-.gst-field {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-}
-
-/* Print Invoice Styles */
-.print-container {
-  max-width: 210mm;
-  margin: 0 auto;
-  padding: 10mm;
-  box-sizing: border-box;
-  width: 100%;
-}
-
-.header {
-  display: flex;
-  justify-content: space-between;
-  border-bottom: 2px solid #333;
-  padding-bottom: 10px;
-  margin-bottom: 20px;
-  width: 100%;
-}
-
-.logo {
-  font-size: 24px;
-  font-weight: bold;
-}
-
-.hospital-info {
-  text-align: right;
-  font-size: 12px;
-}
-
-.invoice-title {
-  text-align: center;
-  font-size: 20px;
-  font-weight: bold;
-  margin: 20px 0;
-}
-
-/* Fix the invoice meta section to ensure patient details/invoice details alignment */
-.invoice-meta {
-  display: flex !important;
-  flex-direction: row !important;
-  justify-content: space-between !important;
-  margin-bottom: 20px;
-  width: 100% !important;
-}
-
-.meta-section {
-  flex: 1;
-  max-width: 48%;
-}
-
-.meta-section:first-child {
-  text-align: left !important;
-}
-
-.meta-section:last-child {
-  text-align: right !important;
-}
-
-.meta-title {
-  font-weight: bold;
-  margin-bottom: 5px;
-}
-
-.currency-note {
-  text-align: right;
-  font-size: 12px;
-  margin-bottom: 5px;
-  font-style: italic;
-}
-
-/* Fix for Print Invoice Tables */
-.print-container table {
-  width: 100% !important;
-  border-collapse: collapse !important;
-  margin-bottom: 15px !important;
-  table-layout: fixed !important;
-}
-
-.print-container table th,
-.print-container table td {
-  border: 1px solid #ddd !important;
-  padding: 5px !important;
-  text-align: right !important;
-  font-size: 12px !important;
-}
-
-.print-container table th {
-  background-color: #f2f2f2 !important;
-  font-weight: bold !important;
-  text-align: center !important;
-}
-
-.print-container table td:first-child,
-.print-container table td.item-description {
-  text-align: left !important;
-}
-
-.total-section {
-  display: block;
-  width: 100%;
-  margin: 20px 0;
-  box-sizing: border-box;
+/* Total section layout */
+.invoice-total-section {
+    display: block !important;
+    width: 100% !important;
+    margin: 1.5rem 0 !important;
 }
 
 .amount-in-words {
-  width: 100%;
-  border: 1px solid #ddd;
-  padding: 8px;
-  margin-bottom: 15px;
-  background-color: #f9f9f9;
-  word-wrap: break-word;
-  box-sizing: border-box;
+    width: 100% !important;
+    border: 1px solid rgb(209 213 219) !important; /* gray-300 */
+    padding: 0.75rem !important;
+    margin-bottom: 1rem !important;
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    border-radius: 0.375rem !important;
+    font-size: 0.875rem !important;
+    word-wrap: break-word !important;
+    box-sizing: border-box !important;
 }
 
-.totals {
-  width: 100%;
-  text-align: right;
-  box-sizing: border-box;
+.dark .amount-in-words {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.invoice-totals {
+    width: 100% !important;
+    text-align: right !important;
 }
 
 .total-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 5px 0;
-  width: 100%;
-  box-sizing: border-box;
+    display: flex !important;
+    justify-content: space-between !important;
+    padding: 0.375rem 0 !important;
+    font-size: 0.875rem !important;
 }
 
-.total-row > div:first-child {
-  width: 60%;
-  text-align: right;
-  padding-right: 10px;
-  box-sizing: border-box;
+.total-row.grand-total {
+    font-weight: 700 !important;
+    font-size: 1rem !important;
+    border-top: 2px solid rgb(55 65 81) !important; /* gray-700 */
+    padding-top: 0.5rem !important;
+    margin-top: 0.5rem !important;
 }
 
-.total-row > div:last-child {
-  width: 40%;
-  text-align: right;
-  box-sizing: border-box;
+.dark .total-row.grand-total {
+    border-color: rgb(209 213 219) !important; /* gray-300 */
 }
 
-.grand-total {
-  font-weight: bold;
-  font-size: 16px;
-  border-top: 1px solid #333;
-  padding-top: 5px;
+/* ==========================================
+   INVOICE SUMMARY CARD
+   ========================================== */
+
+.invoice-total-summary {
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    border-radius: 0.5rem !important;
+    padding: 1rem !important;
+    margin-top: 1rem !important;
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    width: 100% !important;
+    box-sizing: border-box !important;
 }
 
-.payment-info {
-  margin-top: 20px;
-  width: 100%;
-  box-sizing: border-box;
+.dark .invoice-total-summary {
+    background-color: rgba(31, 41, 55, 0.5) !important;
+    border-color: rgba(75, 85, 99, 0.3) !important;
 }
 
-.payment-info table {
-  width: 100%;
-  box-sizing: border-box;
+/* ==========================================
+   INVOICE PRINT STYLES
+   ========================================== */
+
+@media print {
+    /* Page setup */
+    @page {
+        size: A4 portrait;
+        margin: 15mm !important;
+    }
+    
+    /* Print container */
+    .print-container {
+        width: 180mm !important;
+        height: auto !important;
+        padding: 0 !important;
+        margin: 0 auto !important;
+        font-size: 13px !important;
+        line-height: 1.6 !important;
+        page-break-inside: avoid !important;
+    }
+    
+    /* Hide non-printable elements */
+    .no-print, .btn-primary, .btn-secondary, .btn-outline, .btn-warning, .btn-danger {
+        display: none !important;
+        visibility: hidden !important;
+    }
+    
+    /* Print-specific layouts */
+    .print-container .invoice-meta {
+        display: flex !important;
+        justify-content: space-between !important;
+        width: 180mm !important;
+    }
+    
+    .print-container .invoice-table {
+        width: 180mm !important;
+        font-size: 12px !important;
+    }
+    
+    .print-container .invoice-total-section {
+        width: 180mm !important;
+        display: block !important;
+    }
+    
+    .print-container .amount-in-words {
+        width: 180mm !important;
+        margin-bottom: 10px !important;
+        padding: 8px !important;
+    }
+    
+    .print-container .invoice-totals {
+        width: 180mm !important;
+        text-align: right !important;
+    }
+    
+    .print-container .total-row {
+        display: flex !important;
+        justify-content: space-between !important;
+        width: 180mm !important;
+        padding: 3px 0 !important;
+    }
+    
+    /* Print table styling */
+    .print-container table {
+        width: 180mm !important;
+        table-layout: fixed !important;
+        border-collapse: collapse !important;
+    }
+    
+    .print-container table th,
+    .print-container table td {
+        border: 1px solid #ddd !important;
+        padding: 5px !important;
+        font-size: 12px !important;
+    }
+    
+    .print-container table th {
+        background-color: #f2f2f2 !important;
+        font-weight: bold !important;
+        text-align: center !important;
+    }
+    
+    /* Force print layout */
+    .print-container > * {
+        width: 180mm !important;
+        max-width: 180mm !important;
+        box-sizing: border-box !important;
+    }
 }
 
-.terms {
-  margin-top: 20px;
-  font-size: 12px;
-  width: 100%;
-  box-sizing: border-box;
+/* ==========================================
+   MOBILE RESPONSIVE ADJUSTMENTS
+   ========================================== */
+
+@media (max-width: 768px) {
+    .invoice-header {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .invoice-meta {
+        flex-direction: column !important;
+        gap: 1rem !important;
+    }
+    
+    .meta-section {
+        max-width: 100% !important;
+        text-align: left !important;
+    }
+    
+    .meta-section:last-child {
+        text-align: left !important;
+    }
+    
+    .invoice-table-wrapper {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    
+    .patient-search-results {
+        width: 100% !important;
+        max-width: 100% !important;
+        right: auto !important;
+        left: 0 !important;
+    }
+    
+    .total-row {
+        font-size: 0.75rem !important;
+    }
+    
+    .total-row.grand-total {
+        font-size: 0.875rem !important;
+    }
 }
 
-.terms ol {
-  width: 100%;
-  box-sizing: border-box;
-  padding-left: 20px;
+/* ==========================================
+   CURRENCY AND NUMERIC FORMATTING
+   ========================================== */
+
+.currency-note {
+    text-align: right !important;
+    font-size: 0.75rem !important;
+    margin-bottom: 0.375rem !important;
+    font-style: italic !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
 }
 
-.authorized-signature {
-  margin-top: 40px;
-  text-align: right;
-  width: 100%;
-  box-sizing: border-box;
+.dark .currency-note {
+    color: rgb(156 163 175) !important; /* gray-400 */
 }
 
-.gst-details {
-  margin-top: 20px;
-  border-top: 1px solid #ddd;
-  padding-top: 10px;
-  font-size: 12px;
-  width: 100%;
-  box-sizing: border-box;
+/* Numeric value styling */
+.numeric-value {
+    font-family: 'Courier New', monospace !important;
+    text-align: right !important;
 }
 
-.tax-summary {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 20px;
-  box-sizing: border-box;
+/* Medicine fields specific styling */
+.medicine-fields {
+    margin-top: 0.5rem !important;
+    font-size: 0.75rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
 }
 
-.tax-summary th, 
-.tax-summary td {
-  border: 1px solid #ddd;
-  padding: 5px;
-  text-align: right;
+.dark .medicine-fields {
+    color: rgb(156 163 175) !important; /* gray-400 */
 }
 
-.tax-summary th {
-  background-color: #f2f2f2;
-  font-weight: bold;
-  text-align: center;
-}
-
-.tax-summary td:first-child {
-  text-align: left;
-}
-
-/* Fix for the no-print class to ensure buttons are visible */
-.no-print {
-  display: block !important;
-  padding: 10px;
-  background-color: #f8f9fa;
-  text-align: center;
-  margin-bottom: 20px;
-  width: 100%;
-}
-
-/* Make sure all buttons are properly styled */
-.no-print button {
-  margin: 0 5px !important;
-  padding: 8px 15px !important;
-  border-radius: 4px !important;
-  border: none !important;
-  cursor: pointer !important;
-  font-weight: bold !important;
-  color: white !important;
-  display: inline-block !important;
-}
-
-.no-print button:nth-child(1) {
-  background-color: #4CAF50 !important;
-}
-
-.no-print button:nth-child(2) {
-  background-color: #f44336 !important;
-}
-
-.no-print button:nth-child(3) {
-  background-color: #2196F3 !important;
-}
-
-.no-print button:nth-child(4) {
-  background-color: #25D366 !important;
-}
-
-/* Additional fixes for line item table width */
-.line-items-section {
-  width: 100% !important;
-  display: block !important;
-}
-
-.invoice-table-wrapper,
-.overflow-x-auto {
-  width: 100% !important;
-  min-width: 100% !important;
-  display: block !important;
-  border: 1px solid #ddd !important;
-}
-
-.invoice-table {
-  width: 100% !important;
-  min-width: 100% !important;
-  table-layout: fixed !important;
-}
-
-/* Force table display mode */
-.invoice-table {
-  display: table !important;
-  box-sizing: border-box !important;
-}
-
-.invoice-table-wrapper {
-  display: block !important; 
-  box-sizing: border-box !important;
-}
-
-/* Ensure "no items" row spans full width */
-#no-items-row td {
-  width: 100% !important;
-}
-
-/* Prevent text overflow in invoice detail blocks */
-.meta-section div {
-  max-width: 100% !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  font-size: 11px !important; /* Reduce font size for all fields */
-}
-
-/* Specifically target amounts in payment summary */
-.payment-summary div {
-  max-width: 100% !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  font-size: 11px !important;
-}
-
-/* Target numeric values */
-[class*="total"],
-[class*="amount"],
-[class*="value"] {
-  max-width: 120px !important;
-  text-overflow: ellipsis !important;
-  overflow: hidden !important;
-}
-
-/* Add max-width to all containers */
-.meta-section {
-  max-width: 48% !important;
-  overflow: hidden !important;
-}
-
-/* View Invoice Template Specific Styles */
-.invoice-card, .table-fixed {
-  width: 100% !important;
-  table-layout: fixed !important;
-}
+/* ==========================================
+   INVOICE STATUS INDICATORS
+   ========================================== */
 
 .invoice-card {
-  transition: all 0.3s ease;
-  border-radius: 0.375rem;
-  margin-bottom: 0.75rem !important;
+    transition: all 0.3s ease !important;
+    border-radius: 0.375rem !important;
+    margin-bottom: 0.75rem !important;
 }
 
 .invoice-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    transform: translateY(-2px) !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
 }
 
 .active-invoice {
-  border-left: 4px solid #3B82F6;
+    border-left: 4px solid rgb(59 130 246) !important; /* blue-500 */
 }
 
 .related-invoice {
-  border-left: 4px solid #10B981;
+    border-left: 4px solid rgb(34 197 94) !important; /* green-500 */
 }
 
 .amount-pill {
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
-  font-weight: 600;
-  font-size: 0.875rem;
-}
-
-.invoice-total-summary {
-  background-color: #F9FAFB;
-  border-radius: 0.5rem;
-  padding: 1rem;
-  margin-top: 1rem;
-  border: 1px solid #E5E7EB;
-  width: 100% !important;
-  box-sizing: border-box !important;
-}
-
-/* Ensure consistent text truncation and responsive behavior */
-.truncate, [title] {
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  max-width: 100% !important;
-}
-
-[title] {
-  position: relative;
-  cursor: pointer;
-}
-
-/* Modal Styles - ensuring proper positioning and z-index */
-.fixed.inset-0 {
-  position: fixed !important;
-  top: 0 !important;
-  right: 0 !important;
-  bottom: 0 !important;
-  left: 0 !important;
-  z-index: 50 !important;
-}
-
-/* Patient search results styling - Added for improved usability */
-.patient-search-results {
-  width: auto !important;
-  min-width: 300px;
-  max-width: 400px;
-  max-height: 300px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  right: 0;
-  z-index: 50;
-  border: 1px solid #ddd !important;
-  border-radius: 4px !important;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
-}
-
-.patient-search-results::-webkit-scrollbar {
-  width: 6px;
-}
-
-.patient-search-results::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-.patient-search-results::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 3px;
-}
-
-.patient-search-results::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
-
-/* Make sure the list doesn't overflow off-screen on mobile */
-@media (max-width: 640px) {
-  .patient-search-results {
-    width: 100% !important;
-    max-width: 100%;
-  }
-}
-
-/* Dark Mode Improvements */
-@media (prefers-color-scheme: dark) {
-  .invoice-card {
-    background-color: rgba(31, 41, 55, 0.7) !important;
-    border-color: rgba(75, 85, 99, 0.3) !important;
-  }
-  
-  .invoice-total-summary {
-    background-color: rgba(31, 41, 55, 0.5) !important;
-    border-color: rgba(75, 85, 99, 0.3) !important;
-  }
-  
-  .item-search-results {
-    @apply bg-gray-700 border-gray-600;
-  }
-  
-  .line-item-row input,
-  .line-item-row select {
-    @apply text-gray-300 bg-transparent;
-  }
-}
-
-/* Responsive Design Adjustments */
-@media (max-width: 768px) {
-  .invoice-header {
-    flex-direction: column;
-  }
-  
-  .col-span-1, .col-span-2 {
-    width: 100%;
-    margin-bottom: 1rem;
-  }
-  
-  .invoice-meta {
-    flex-direction: column;
-  }
-  
-  .meta-section {
-    max-width: 100%;
-    margin-bottom: 1rem;
-  }
-  
-  .total-section {
-    flex-direction: column;
-  }
-  
-  .amount-in-words, .totals {
-    width: 100%;
-    margin-right: 0;
-    margin-bottom: 1rem;
-  }
-}
-
-/* CONSOLIDATED PRINT STYLES - All print-related styles in one place */
-@media print {
-  /* Page setup */
-  @page {
-    size: A4 portrait;
-    margin: 15mm !important;
-  }
-  
-  html, body {
-    width: 210mm !important;
-    height: 297mm !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: hidden !important;
-  }
-  
-  /* Hide non-printable elements */
-  .no-print, header, footer, .footer, .header-text, .footer-text {
-    display: none !important;
-    visibility: hidden !important;
-    height: 0 !important;
-    width: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    position: absolute !important;
-    left: -9999px !important;
-  }
-  
-  /* Force remove browser-added header/footer */
-  body::before, body::after, 
-  html::before, html::after,
-  head::before, head::after {
-    content: none !important;
-    display: none !important;
-    visibility: hidden !important;
-  }
-  
-  /* Print container styles */
-  .print-container {
-    width: 180mm !important;
-    height: auto !important;
-    padding: 0 !important;
-    margin: 0 auto !important;
-    box-sizing: border-box !important;
-    overflow: visible !important;
-    page-break-inside: avoid !important;
-    page-break-after: avoid !important;
-    page-break-before: avoid !important;
-    font-size: 13px !important;
-    line-height: 1.6 !important;
-  }
-  
-  /* Force all print container children to use full width */
-  .print-container > div,
-  .print-container > table {
-    width: 180mm !important;
-    max-width: 180mm !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    box-sizing: border-box !important;
-    position: relative !important;
-    overflow: visible !important;
-    clear: both !important;
-  }
-  
-  /* Style elements in print */
-  .invoice-title {
-    font-size: 20px !important;
-    margin: 15px 0 !important;
-    font-weight: bold !important;
-    width: 180mm !important;
-    text-align: center !important;
-  }
-  
-  .meta-section {
-    font-size: 13px !important;
-    width: 48% !important;
-  }
-  
-  .meta-title {
-    font-size: 14px !important;
-    font-weight: bold !important;
-  }
-  
-  /* Table styles for print */
-  .print-container table {
-    font-size: 12px !important;
-    width: 180mm !important;
-    table-layout: fixed !important;
-    margin-bottom: 15px !important;
-  }
-  
-  .print-container table th {
-    font-size: 13px !important;
-    font-weight: bold !important;
-    padding: 6px !important;
-    text-align: center !important;
-  }
-  
-  .print-container table td {
-    font-size: 12px !important;
-    padding: 5px !important;
-  }
-  
-  .print-container table th, 
-  .print-container table td {
-    border: 1px solid #ddd !important;
-  }
-  
-  /* Header styling for print */
-  .header {
-    border-bottom: 1px solid #333 !important;
-    padding-bottom: 5px !important;
-    margin-bottom: 10px !important;
-    width: 180mm !important;
-  }
-  
-  /* Fix for total section */
-  .total-section {
-    display: block !important;
-    width: 180mm !important;
-    max-width: 180mm !important;
-    margin: 20px 0 !important;
-    box-sizing: border-box !important;
-    position: relative !important;
-    overflow: visible !important;
-    clear: both !important;
-  }
-  
-  .amount-in-words {
-    display: block !important;
-    width: 180mm !important;
-    max-width: 180mm !important;
-    margin: 0 0 15px 0 !important;
-    padding: 8px !important;
-    box-sizing: border-box !important;
-    word-wrap: break-word !important;
-    overflow-wrap: break-word !important;
-    white-space: normal !important;
-    position: relative !important;
-    overflow: visible !important;
-    clear: both !important;
-  }
-  
-  .totals {
-    display: block !important;
-    width: 180mm !important;
-    max-width: 180mm !important;
-    margin: 0 !important;
-    box-sizing: border-box !important;
-    position: relative !important;
-    overflow: visible !important;
-    clear: both !important;
-  }
-  
-  .total-row {
-    display: flex !important;
-    width: 180mm !important;
-    margin: 0 !important;
-    padding: 3px 0 !important;
-    box-sizing: border-box !important;
-    position: relative !important;
-    overflow: visible !important;
-    clear: both !important;
-  }
-  
-  .total-row > div:first-child {
-    width: 60% !important;
-    text-align: right !important;
-    padding-right: 10px !important;
-    box-sizing: border-box !important;
-    position: relative !important;
-    overflow: visible !important;
-  }
-  
-  .total-row > div:last-child {
-    width: 40% !important;
-    text-align: right !important;
-    padding-right: 0 !important;
-    box-sizing: border-box !important;
-    position: relative !important;
-    overflow: visible !important;
-  }
-  
-  .grand-total {
-    border-top: 1px solid #333 !important;
-    padding-top: 5px !important;
-    margin-top: 5px !important;
-    font-size: 15px !important;
-    font-weight: bold !important;
-  }
-  
-  /* Fix for payment info and terms */
-  .payment-info,
-  .terms {
-    display: block !important;
-    width: 180mm !important;
-    max-width: 180mm !important;
-    margin: 20px 0 !important;
-    padding: 0 !important;
-    box-sizing: border-box !important;
-    position: relative !important;
-    overflow: visible !important;
-    clear: both !important;
-  }
-  
-  .payment-info table,
-  .terms ol {
-    width: 180mm !important;
-    max-width: 180mm !important;
-    box-sizing: border-box !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-  
-  .terms ol {
-    padding-left: 20px !important;
-  }
-  
-  .authorized-signature {
-    display: block !important;
-    width: 180mm !important;
-    max-width: 180mm !important;
-    margin: 30px 0 20px 0 !important;
-    padding: 0 !important;
-    box-sizing: border-box !important;
-    text-align: right !important;
-    position: relative !important;
-    overflow: visible !important;
-    clear: both !important;
-  }
-  
-  /* GST summary table fix */
-  .gst-details {
-    display: block !important;
-    width: 180mm !important;
-    max-width: 180mm !important;
-    margin: 20px 0 !important;
-    padding: 10px 0 0 0 !important;
-    box-sizing: border-box !important;
-    position: relative !important;
-    overflow: visible !important;
-    clear: both !important;
-    border-top: 1px solid #ddd !important;
-  }
-  
-  .tax-summary {
-    width: 180mm !important;
-    max-width: 180mm !important;
-    margin: 10px 0 20px 0 !important;
-    box-sizing: border-box !important;
-  }
-  
-  /* Force right alignment for amount columns */
-  .print-container table td:last-child,
-  .print-container table th:last-child,
-  .print-container .tax-summary td:not(:first-child),
-  .print-container .total-row > div:last-child {
-    text-align: right !important;
-    padding-right: 8px !important;
-  }
-  /* Critical fix for total section in print mode */
-  .print-container .total-section {
-    display: block !important;
-    position: relative !important;
-    width: 180mm !important;
-    min-width: 180mm !important;
-    max-width: 180mm !important;
-    margin: 20px 0 !important;
-    padding: 0 !important;
-    overflow: visible !important;
-    page-break-inside: avoid !important;
-    box-sizing: border-box !important;
-    float: none !important;
-    flex-shrink: 0 !important;
-  }
-  
-  .print-container .amount-in-words {
-    display: block !important;
-    position: relative !important;
-    width: 180mm !important;
-    min-width: 180mm !important;
-    max-width: 180mm !important;
-    margin: 0 0 10px 0 !important;
-    padding: 8px !important;
-    overflow: visible !important;
-    word-wrap: break-word !important;
-    box-sizing: border-box !important;
-    float: none !important;
-    flex-shrink: 0 !important;
-  }
-  
-  .print-container .totals {
-    display: block !important;
-    position: relative !important;
-    width: 180mm !important;
-    min-width: 180mm !important;
-    max-width: 180mm !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: visible !important;
-    box-sizing: border-box !important;
-    float: none !important;
-    flex-shrink: 0 !important;
-  }
-  
-  .print-container .total-row {
-    display: flex !important;
-    position: relative !important;
-    width: 180mm !important;
-    min-width: 180mm !important;
-    max-width: 180mm !important;
-    margin: 0 !important;
-    padding: 3px 0 !important;
-    overflow: visible !important;
-    box-sizing: border-box !important;
-    flex-shrink: 0 !important;
-  }
-  
-  .print-container .total-row > div:first-child {
     display: inline-block !important;
-    position: relative !important;
-    width: 108mm !important; /* 60% of 180mm */
-    min-width: 108mm !important;
-    max-width: 108mm !important;
-    margin: 0 !important;
-    padding-right: 10px !important;
-    text-align: right !important;
-    overflow: visible !important;
-    box-sizing: border-box !important;
-    float: left !important;
-    flex-shrink: 0 !important;
-  }
-  
-  .print-container .total-row > div:last-child {
-    display: inline-block !important;
-    position: relative !important;
-    width: 72mm !important; /* 40% of 180mm */
-    min-width: 72mm !important;
-    max-width: 72mm !important;
-    margin: 0 !important;
-    padding-right: 5px !important;
-    text-align: right !important;
-    overflow: visible !important;
-    box-sizing: border-box !important;
-    float: right !important;
-    flex-shrink: 0 !important;
-  }
+    padding: 0.25rem 0.75rem !important;
+    border-radius: 9999px !important;
+    font-weight: 600 !important;
+    font-size: 0.875rem !important;
 }

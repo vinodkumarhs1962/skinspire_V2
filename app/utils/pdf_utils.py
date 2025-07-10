@@ -66,7 +66,7 @@ def generate_invoice_pdf(invoice_id):
         from app.services.billing_service import get_invoice_by_id
         from app.models.master import Patient, Hospital
         from app.services.database_service import get_db_session
-        from flask import current_user
+        from flask_login import current_user
 
         # Get invoice details
         with get_db_session() as session:

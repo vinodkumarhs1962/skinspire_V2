@@ -236,6 +236,74 @@ def boolformat(value, true_text="Yes", false_text="No"):
     """
     return true_text if value else false_text
 
+def amount_in_words(value):
+    """
+    Convert numeric amount to words (Indian numbering system)
+    
+    Args:
+        value: Numeric amount to convert
+        
+    Returns:
+        Amount in words format (e.g., "One Thousand Two Hundred Rupees Only")
+    """
+    try:
+        if not value:
+            return "Zero Rupees Only"
+        
+        amount = float(value)
+        
+        # Handle negative amounts
+        if amount < 0:
+            return f"Minus {amount_in_words(abs(amount))}"
+        
+        # Split into rupees and paise
+        rupees = int(amount)
+        paise = round((amount - rupees) * 100)
+        
+        # Helper function to convert numbers to words
+        def number_to_words(num):
+            if num == 0:
+                return ""
+            
+            ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
+                   "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", 
+                   "Seventeen", "Eighteen", "Nineteen"]
+            
+            tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
+            
+            if num < 20:
+                return ones[num]
+            elif num < 100:
+                return tens[num // 10] + (" " + ones[num % 10] if num % 10 != 0 else "")
+            elif num < 1000:
+                return ones[num // 100] + " Hundred" + (" " + number_to_words(num % 100) if num % 100 != 0 else "")
+            elif num < 100000:  # Thousands
+                return number_to_words(num // 1000) + " Thousand" + (" " + number_to_words(num % 1000) if num % 1000 != 0 else "")
+            elif num < 10000000:  # Lakhs
+                return number_to_words(num // 100000) + " Lakh" + (" " + number_to_words(num % 100000) if num % 100000 != 0 else "")
+            else:  # Crores
+                return number_to_words(num // 10000000) + " Crore" + (" " + number_to_words(num % 10000000) if num % 10000000 != 0 else "")
+        
+        # Convert rupees to words
+        result = ""
+        if rupees > 0:
+            result = number_to_words(rupees) + " Rupees"
+        else:
+            result = "Zero Rupees"
+        
+        # Add paise if present
+        if paise > 0:
+            if rupees > 0:
+                result += " and "
+            else:
+                result = ""
+            result += number_to_words(paise) + " Paise"
+        
+        return result + " Only"
+        
+    except (ValueError, TypeError):
+        return "Amount conversion error"
+
 
 def register_filters(app):
     """
@@ -253,6 +321,7 @@ def register_filters(app):
     app.jinja_env.filters['percentformat'] = percentformat
     app.jinja_env.filters['statusformat'] = statusformat
     app.jinja_env.filters['boolformat'] = boolformat
+    app.jinja_env.filters['amount_in_words'] = amount_in_words 
     
     # Add global functions that might be useful
     app.jinja_env.globals['now'] = datetime.now

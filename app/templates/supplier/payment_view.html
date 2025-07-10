@@ -1,12 +1,13 @@
 {% extends "layouts/dashboard.html" %}
 {% from "components/alerts.html" import alert %}
+{% from "components/badges.html" import payment_status_badge, priority_badge %}
 
 {% block title %}Payment Details{% endblock %}
 
 {% block content %}
 <div class="container mx-auto px-4 py-6">
-    <!-- Header Section -->
-    <div class="flex flex-col md:flex-row items-start justify-between mb-6">
+    <!-- Page Header -->
+    <div class="flex flex-col md:flex-row items-start md:items-center justify-between mb-6">
         <div>
             <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Payment Details</h1>
             <p class="text-gray-600 dark:text-gray-400 mt-1">
@@ -14,353 +15,446 @@
                 {% if payment.reference_no %} | Ref: {{ payment.reference_no }}{% endif %}
             </p>
         </div>
-        <div class="mt-4 md:mt-0 flex flex-wrap gap-2">
+        <div class="flex space-x-2 mt-4 md:mt-0">
             <a href="{{ url_for('supplier_views.payment_list') }}" class="btn-secondary">
-                <i class="fas fa-arrow-left mr-2"></i> Back to Payments
+                <i class="fas fa-arrow-left icon-left"></i>Back to Payments
             </a>
             {% if payment.invoice_id %}
             <a href="{{ url_for('supplier_views.view_supplier_invoice', invoice_id=payment.invoice_id) }}" 
-               class="btn-primary">
-                <i class="fas fa-file-invoice mr-2"></i> View Invoice
+               class="btn-secondary">
+                <i class="fas fa-file-invoice icon-left"></i>View Invoice
             </a>
             {% endif %}
             {% if payment.workflow_status not in ['approved', 'rejected'] %}
             <a href="{{ url_for('supplier_views.edit_payment', payment_id=payment.payment_id) }}" 
-               class="btn-success">
-                <i class="fas fa-edit mr-2"></i> Edit Payment
+               class="btn-warning">
+                <i class="fas fa-edit icon-left"></i>Edit Payment
             </a>
             {% endif %}
-            <button onclick="window.print()" class="btn-secondary">
-                <i class="fas fa-print mr-2"></i> Print
-            </button>
+            <a href="{{ url_for('supplier_views.print_supplier_payment', payment_id=payment.payment_id) }}" 
+            class="btn-outline" target="_blank">
+                <i class="fas fa-print icon-left"></i>Print Receipt
+            </a>
         </div>
     </div>
     
-    <!-- Main Content -->
-    <div class="space-y-6">
-        <!-- Payment Overview Card -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
-            <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-                <div class="flex items-center justify-between">
-                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Payment Overview</h2>
-                    <div class="flex items-center space-x-4">
-                        <div class="text-right">
-                            <div class="text-sm text-gray-500 dark:text-gray-400">Status</div>
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                                {% if payment.workflow_status == 'approved' %}bg-green-100 text-green-800
-                                {% elif payment.workflow_status == 'pending_approval' %}bg-yellow-100 text-yellow-800
-                                {% elif payment.workflow_status == 'rejected' %}bg-red-100 text-red-800
-                                {% else %}bg-gray-100 text-gray-800{% endif %}">
-                                {{ payment.workflow_status.replace('_', ' ').title() if payment.workflow_status else 'Completed' }}
-                            </span>
-                        </div>
-                        <div class="text-right">
-                            <div class="text-sm text-gray-500 dark:text-gray-400">Total Amount</div>
-                            <div class="text-2xl font-bold text-gray-800 dark:text-gray-200">
-                                Rs. {{ "%.2f"|format(payment.amount|float) if payment.amount else '0.00' }}
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="mb-6">
+                {% for category, message in messages %}
+                    {% if category == 'error' %}
+                        {{ alert(message, "error") }}
+                    {% elif category == 'success' %}
+                        {{ alert(message, "success") }}
+                    {% elif category == 'warning' %}
+                        {{ alert(message, "warning") }}
+                    {% else %}
+                        {{ alert(message, "info") }}
+                    {% endif %}
+                {% endfor %}
             </div>
-            
-            <div class="p-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <!-- Basic Information -->
-                    <div>
-                        <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-3">Payment Information</h3>
-                        <div class="space-y-3">
-                            <div class="flex justify-between">
-                                <span class="text-gray-600 dark:text-gray-400">Date:</span>
-                                <span class="font-medium text-gray-800 dark:text-gray-200">
-                                    {{ payment.payment_date.strftime('%d %b %Y') if payment.payment_date and payment.payment_date is not string else payment.payment_date or 'N/A' }}
-                                </span>
-                            </div>
-                            
-                            {% if payment.supplier_name %}
-                            <div class="flex justify-between">
-                                <span class="text-gray-600 dark:text-gray-400">Supplier:</span>
-                                <span class="font-medium text-gray-800 dark:text-gray-200">{{ payment.supplier_name }}</span>
-                            </div>
-                            {% endif %}
-
-                            {% if payment.reference_no %}
-                            <div class="flex justify-between">
-                                <span class="text-gray-600 dark:text-gray-400">Reference:</span>
-                                <span class="font-medium text-gray-800 dark:text-gray-200">{{ payment.reference_no }}</span>
-                            </div>
-                            {% endif %}
-
-                            {% if payment.invoice_number %}
-                            <div class="flex justify-between">
-                                <span class="text-gray-600 dark:text-gray-400">Invoice:</span>
-                                <span class="font-medium text-gray-800 dark:text-gray-200">{{ payment.invoice_number }}</span>
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <!-- Payment Methods -->
-                    <div>
-                        <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-3">Payment Methods</h3>
-                        <div class="space-y-3">
-                            {% set cash_amount = payment.cash_amount|float if payment.cash_amount else 0 %}
-                            {% set cheque_amount = payment.cheque_amount|float if payment.cheque_amount else 0 %}
-                            {% set bank_amount = payment.bank_transfer_amount|float if payment.bank_transfer_amount else 0 %}
-                            {% set upi_amount = payment.upi_amount|float if payment.upi_amount else 0 %}
-                            
-                            {% if cash_amount > 0 %}
-                            <div class="flex justify-between">
-                                <span class="text-gray-600 dark:text-gray-400">Cash:</span>
-                                <span class="font-medium text-gray-800 dark:text-gray-200">Rs. {{ "%.2f"|format(cash_amount) }}</span>
-                            </div>
-                            {% endif %}
-                            
-                            {% if cheque_amount > 0 %}
-                            <div class="flex justify-between">
-                                <span class="text-gray-600 dark:text-gray-400">Cheque:</span>
-                                <span class="font-medium text-gray-800 dark:text-gray-200">Rs. {{ "%.2f"|format(cheque_amount) }}</span>
-                            </div>
-                            {% endif %}
-                            
-                            {% if bank_amount > 0 %}
-                            <div class="flex justify-between">
-                                <span class="text-gray-600 dark:text-gray-400">Bank Transfer:</span>
-                                <span class="font-medium text-gray-800 dark:text-gray-200">Rs. {{ "%.2f"|format(bank_amount) }}</span>
-                            </div>
-                            {% endif %}
-                            
-                            {% if upi_amount > 0 %}
-                            <div class="flex justify-between">
-                                <span class="text-gray-600 dark:text-gray-400">UPI:</span>
-                                <span class="font-medium text-gray-800 dark:text-gray-200">Rs. {{ "%.2f"|format(upi_amount) }}</span>
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <!-- Audit Information -->
-                    <div>
-                        <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-3">Audit Trail</h3>
-                        <div class="space-y-3">
-                            {% if payment.created_at %}
-                            <div class="flex justify-between">
-                                <span class="text-gray-600 dark:text-gray-400">Created:</span>
-                                <span class="font-medium text-gray-800 dark:text-gray-200">
-                                    {{ payment.created_at.strftime('%d %b %Y %H:%M') if payment.created_at is not string else payment.created_at }}
-                                </span>
-                            </div>
-                            {% endif %}
-
-                            {% if payment.created_by %}
-                            <div class="flex justify-between">
-                                <span class="text-gray-600 dark:text-gray-400">Created By:</span>
-                                <span class="font-medium text-gray-800 dark:text-gray-200">{{ payment.created_by }}</span>
-                            </div>
-                            {% endif %}
-
-                            {% if payment.approved_by and payment.workflow_status == 'approved' %}
-                            <div class="flex justify-between">
-                                <span class="text-gray-600 dark:text-gray-400">Approved By:</span>
-                                <span class="font-medium text-gray-800 dark:text-gray-200">{{ payment.approved_by }}</span>
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
+        {% endif %}
+    {% endwith %}
+    
+    <!-- Payment Summary Cards -->
+    <div class="card-grid cols-4 mb-6">
+        <div class="stat-card">
+            <div class="stat-card-icon success">
+                <i class="fas fa-money-bill-wave"></i>
             </div>
+            <div class="stat-card-value">
+                {% set total_amount = (payment.cash_amount|float if payment.cash_amount else 0) + (payment.cheque_amount|float if payment.cheque_amount else 0) + (payment.bank_transfer_amount|float if payment.bank_transfer_amount else 0) + (payment.upi_amount|float if payment.upi_amount else 0) %}
+                ₹{{ "%.2f"|format(total_amount) }}
+            </div>
+            <div class="stat-card-label">Total Payment</div>
         </div>
 
-        <!-- Notes & Attachments Section -->
-        {% if payment.notes or (payment.documents and payment.documents|length > 0) or (documents and documents|length > 0) %}
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
-            <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-                <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">
-                    {% if payment.notes and ((payment.documents and payment.documents|length > 0) or (documents and documents|length > 0)) %}
-                        Notes & Attachments
-                    {% elif payment.notes %}
-                        Payment Notes
-                    {% else %}
-                        Attachments
-                    {% endif %}
-                </h2>
+        <div class="stat-card">
+            <div class="stat-card-icon primary">
+                <i class="fas fa-calendar-alt"></i>
             </div>
-            
-            <div class="p-6">
-                <!-- Notes Section -->
-                {% if payment.notes %}
-                <div class="{% if (payment.documents and payment.documents|length > 0) or (documents and documents|length > 0) %}mb-6{% endif %}">
-                    <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">Notes</h3>
-                    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                        <p class="text-gray-700 dark:text-gray-300 whitespace-pre-line">{{ payment.notes }}</p>
-                    </div>
-                </div>
-                {% endif %}
+            <div class="stat-card-value">
+                {{ payment.payment_date.strftime('%d/%m/%Y') if payment.payment_date is not string else payment.payment_date }}
+            </div>
+            <div class="stat-card-label">Payment Date</div>
+        </div>
 
-                <!-- Documents Section -->
-                {% set payment_documents = payment.documents if payment.documents else documents if documents else [] %}
-                {% if payment_documents and payment_documents|length > 0 %}
-                <div>
-                    <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-3">Documents</h3>
-                    <div class="space-y-3">
-                        {% for doc in payment_documents %}
-                        <div class="flex items-center justify-between bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                            <div class="flex items-center">
-                                {% if doc.document_type == 'receipt' %}
-                                    <i class="fas fa-receipt text-green-500 mr-3"></i>
-                                {% elif doc.document_type == 'bank_statement' %}
-                                    <i class="fas fa-university text-blue-500 mr-3"></i>
-                                {% elif doc.document_type == 'authorization' %}
-                                    <i class="fas fa-file-signature text-purple-500 mr-3"></i>
-                                {% else %}
-                                    <i class="fas fa-file-alt text-gray-500 mr-3"></i>
+        <div class="stat-card">
+            <div class="stat-card-icon primary">
+                <i class="fas fa-building"></i>
+            </div>
+            <div class="stat-card-value">
+                {{ payment.supplier_name|truncate(15, true) if payment.supplier_name else 'N/A' }}
+            </div>
+            <div class="stat-card-label">Supplier</div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-card-icon {% if payment.workflow_status == 'approved' %}success{% elif payment.workflow_status == 'rejected' %}danger{% else %}warning{% endif %}">
+                <i class="fas fa-flag"></i>
+            </div>
+            <div class="stat-card-value">
+                {{ payment.workflow_status|title if payment.workflow_status else 'Completed' }}
+            </div>
+            <div class="stat-card-label">Status</div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left Column - Payment Information -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Basic Payment Information -->
+            <div class="info-card">
+                <div class="info-card-header">
+                    <h2 class="info-card-title">
+                        <i class="fas fa-info-circle icon-left"></i>Payment Information
+                    </h2>
+                </div>
+                <div class="info-card-content">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-3">Basic Details</h3>
+                            <div class="space-y-3">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600 dark:text-gray-400">Payment Date:</span>
+                                    <span class="font-medium text-gray-800 dark:text-gray-200">
+                                        {{ payment.payment_date.strftime('%d/%m/%Y at %H:%M') if payment.payment_date is not string else payment.payment_date }}
+                                    </span>
+                                </div>
+                                
+                                {% if payment.reference_no %}
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600 dark:text-gray-400">Reference:</span>
+                                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ payment.reference_no }}</span>
+                                </div>
                                 {% endif %}
                                 
-                                <div>
-                                    <div class="font-medium text-gray-800 dark:text-gray-200">
-                                        {{ doc.original_filename or doc.filename or 'Document' }}
-                                    </div>
-                                    
-                                    <div class="text-sm text-gray-600 dark:text-gray-400">
-                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium
-                                            {% if doc.document_type == 'receipt' %}bg-green-100 text-green-800
-                                            {% elif doc.document_type == 'bank_statement' %}bg-blue-100 text-blue-800
-                                            {% elif doc.document_type == 'authorization' %}bg-purple-100 text-purple-800
-                                            {% else %}bg-gray-100 text-gray-800{% endif %}">
-                                            {{ doc.document_type.replace('_', ' ').title() if doc.document_type else 'Other' }}
-                                        </span>
-                                    </div>
-                                    
-                                    {% if doc.description %}
-                                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                        {{ doc.description }}
-                                    </div>
-                                    {% endif %}
-                                    
-                                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                        {% if doc.uploaded_at or doc.created_at %}
-                                        Uploaded {{ (doc.uploaded_at or doc.created_at).strftime('%d %b %Y') if (doc.uploaded_at or doc.created_at) is not string else (doc.uploaded_at or doc.created_at) }}
-                                        {% endif %}
-                                        {% if doc.created_by %}
-                                        • by {{ doc.created_by }}
-                                        {% endif %}
-                                    </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600 dark:text-gray-400">Branch:</span>
+                                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ payment.branch_name if payment.branch_name else 'Main Branch' }}</span>
+                                </div>
+                                
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600 dark:text-gray-400">Status:</span>
+                                    <span>{{ payment_status_badge(payment.workflow_status|default('completed')) }}</span>
                                 </div>
                             </div>
-                            
-                            <div class="flex items-center space-x-2">
-                                {% if doc.file_extension %}
-                                <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-200 text-gray-700">
-                                    .{{ doc.file_extension.upper() }}
-                                </span>
+                        </div>
+                        
+                        <div>
+                            <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-3">Supplier Details</h3>
+                            <div class="space-y-3">
+                                {% if payment.supplier_name %}
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600 dark:text-gray-400">Supplier:</span>
+                                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ payment.supplier_name }}</span>
+                                </div>
                                 {% endif %}
                                 
-                                <a href="{{ url_for('supplier_views.download_payment_document', payment_id=payment.payment_id, document_id=doc.document_id) }}" 
-                                   class="btn-secondary btn-sm">
-                                    <i class="fas fa-download mr-1"></i> Download
-                                </a>
+                                {% if payment.invoice_id %}
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600 dark:text-gray-400">Invoice:</span>
+                                    <span class="font-medium text-gray-800 dark:text-gray-200">
+                                        <a href="{{ url_for('supplier_views.view_supplier_invoice', invoice_id=payment.invoice_id) }}" 
+                                           class="action-link">
+                                            {{ payment.invoice_number if payment.invoice_number else payment.invoice_id }}
+                                            <i class="fas fa-external-link-alt ml-1"></i>
+                                        </a>
+                                    </span>
+                                </div>
+                                {% endif %}
+                                
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600 dark:text-gray-400">Created By:</span>
+                                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ payment.created_by if payment.created_by else 'System' }}</span>
+                                </div>
+                                
+                                {% if payment.created_date %}
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600 dark:text-gray-400">Created Date:</span>
+                                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ payment.created_date.strftime('%d/%m/%Y at %H:%M') }}</span>
+                                </div>
+                                {% endif %}
                             </div>
                         </div>
-                        {% endfor %}
+                    </div>
+                    
+                    {% if payment.notes %}
+                    <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                        <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-3">Notes</h3>
+                        <div class="text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{{ payment.notes }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Payment Methods Breakdown -->
+            <div class="info-card">
+                <div class="info-card-header">
+                    <h2 class="info-card-title">
+                        <i class="fas fa-credit-card icon-left"></i>Payment Methods
+                    </h2>
+                </div>
+                <div class="info-card-content">
+                    <div class="space-y-6">
+                        {% set cash_amount = payment.cash_amount|float if payment.cash_amount else 0 %}
+                        {% set cheque_amount = payment.cheque_amount|float if payment.cheque_amount else 0 %}
+                        {% set bank_amount = payment.bank_transfer_amount|float if payment.bank_transfer_amount else 0 %}
+                        {% set upi_amount = payment.upi_amount|float if payment.upi_amount else 0 %}
+                        
+                        {% if cash_amount > 0 %}
+                        <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center">
+                                    <span class="status-badge status-success">
+                                        <i class="fas fa-money-bill-wave"></i> Cash
+                                    </span>
+                                </div>
+                                <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                                    ₹{{ "%.2f"|format(cash_amount) }}
+                                </div>
+                            </div>
+                            <div class="mt-2 text-sm text-gray-600 dark:text-gray-400">Cash payment received</div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if cheque_amount > 0 %}
+                        <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center">
+                                    <span class="status-badge status-info">
+                                        <i class="fas fa-money-check"></i> Cheque
+                                    </span>
+                                </div>
+                                <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                                    ₹{{ "%.2f"|format(cheque_amount) }}
+                                </div>
+                            </div>
+                            <div class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                                {% if payment.cheque_number %}Cheque #{{ payment.cheque_number }}{% endif %}
+                                {% if payment.cheque_bank %}{{ ' - ' + payment.cheque_bank if payment.cheque_number else payment.cheque_bank }}{% endif %}
+                                {% if payment.cheque_date %}{{ ' dated ' + payment.cheque_date.strftime('%d/%m/%Y') if payment.cheque_date }}{% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if bank_amount > 0 %}
+                        <div class="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center">
+                                    <span class="status-badge status-warning">
+                                        <i class="fas fa-university"></i> Bank Transfer
+                                    </span>
+                                </div>
+                                <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                                    ₹{{ "%.2f"|format(bank_amount) }}
+                                </div>
+                            </div>
+                            <div class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                                {% if payment.bank_reference_number %}Ref: {{ payment.bank_reference_number }}{% endif %}
+                                {% if payment.bank_account_name %}{{ ' - ' + payment.bank_account_name if payment.bank_reference_number else payment.bank_account_name }}{% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if upi_amount > 0 %}
+                        <div class="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg">
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center">
+                                    <span class="status-badge status-processing">
+                                        <i class="fas fa-mobile-alt"></i> UPI
+                                    </span>
+                                </div>
+                                <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                                    ₹{{ "%.2f"|format(upi_amount) }}
+                                </div>
+                            </div>
+                            <div class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                                {% if payment.upi_transaction_id %}Transaction ID: {{ payment.upi_transaction_id }}{% else %}UPI payment received{% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
-                {% else %}
-                <div class="text-center py-8">
-                    <i class="fas fa-paperclip text-gray-400 text-3xl mb-4"></i>
-                    <p class="text-gray-500 dark:text-gray-400">No attachments found</p>
+            </div>
+            
+            <!-- Invoice Balance Information (if linked to invoice) -->
+            {% if payment.invoice_id and payment.invoice_amount %}
+            <div class="info-card">
+                <div class="info-card-header">
+                    <h2 class="info-card-title">
+                        <i class="fas fa-balance-scale icon-left"></i>Invoice Balance
+                    </h2>
                 </div>
-                {% endif %}
+                <div class="info-card-content">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                            <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Invoice Amount</div>
+                            <div class="text-lg font-semibold text-blue-600 dark:text-blue-400">
+                                ₹{{ "%.2f"|format(payment.invoice_amount|float) }}
+                            </div>
+                        </div>
+                        
+                        <div class="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                            <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Payment Amount</div>
+                            <div class="text-lg font-semibold text-green-600 dark:text-green-400">
+                                ₹{{ "%.2f"|format(total_amount) }}
+                            </div>
+                        </div>
+                        
+                        <div class="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            {% set remaining = payment.invoice_amount|float - total_amount %}
+                            <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Remaining Balance</div>
+                            <div class="text-lg font-semibold {{ 'text-red-600 dark:text-red-400' if remaining > 0 else 'text-green-600 dark:text-green-400' if remaining < 0 else 'text-gray-600 dark:text-gray-400' }}">
+                                ₹{{ "%.2f"|format(remaining|abs) }}
+                                {% if remaining > 0 %}(Outstanding){% elif remaining < 0 %}(Overpaid){% else %}(Fully Paid){% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Right Column - Actions and Quick Info -->
+        <div class="space-y-6">
+            <!-- Quick Actions -->
+            <div class="info-card">
+                <div class="info-card-header">
+                    <h2 class="info-card-title">
+                        <i class="fas fa-bolt icon-left"></i>Quick Actions
+                    </h2>
+                </div>
+                <div class="info-card-content">
+                    <div class="space-y-3">
+                        {% if payment.workflow_status not in ['approved', 'rejected'] %}
+                        <a href="{{ url_for('supplier_views.edit_payment', payment_id=payment.payment_id) }}" 
+                           class="btn-warning w-full justify-center">
+                            <i class="fas fa-edit icon-left"></i>Edit Payment
+                        </a>
+                        {% endif %}
+                        
+                        <a href="{{ url_for('supplier_views.print_supplier_payment', payment_id=payment.payment_id) }}" 
+                           class="btn-outline w-full justify-center" target="_blank">
+                            <i class="fas fa-print icon-left"></i>Print Receipt
+                        </a>
+                        
+                        {% if payment.invoice_id %}
+                        <a href="{{ url_for('supplier_views.view_supplier_invoice', invoice_id=payment.invoice_id) }}" 
+                           class="btn-secondary w-full justify-center">
+                            <i class="fas fa-file-invoice icon-left"></i>View Related Invoice
+                        </a>
+                        {% endif %}
+                        
+                        <a href="{{ url_for('supplier_views.create_payment') }}" 
+                           class="btn-primary w-full justify-center">
+                            <i class="fas fa-plus icon-left"></i>Record New Payment
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Audit Trail -->
+            <div class="info-card">
+                <div class="info-card-header">
+                    <h2 class="info-card-title">
+                        <i class="fas fa-history icon-left"></i>Audit Trail
+                    </h2>
+                </div>
+                <div class="info-card-content">
+                    <div class="space-y-4">
+                        <div class="border-l-4 border-blue-400 pl-4">
+                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">Payment Created</div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">
+                                {{ payment.created_date.strftime('%d/%m/%Y at %H:%M') if payment.created_date else 'N/A' }}
+                            </div>
+                            <div class="text-sm text-gray-600 dark:text-gray-400">by {{ payment.created_by if payment.created_by else 'System' }}</div>
+                        </div>
+                        
+                        {% if payment.updated_by %}
+                        <div class="border-l-4 border-yellow-400 pl-4">
+                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">Last Updated</div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">
+                                {{ payment.updated_date.strftime('%d/%m/%Y at %H:%M') if payment.updated_date else 'N/A' }}
+                            </div>
+                            <div class="text-sm text-gray-600 dark:text-gray-400">by {{ payment.updated_by }}</div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if payment.workflow_status == 'approved' %}
+                        <div class="border-l-4 border-green-400 pl-4">
+                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">Payment Approved</div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">Payment has been approved</div>
+                        </div>
+                        {% elif payment.workflow_status == 'rejected' %}
+                        <div class="border-l-4 border-red-400 pl-4">
+                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">Payment Rejected</div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">Payment has been rejected</div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </div>
-        {% endif %}
-
-        <!-- Approval Section -->
-        {% if can_approve and payment.workflow_status == 'pending_approval' %}
-        <div class="bg-yellow-50 dark:bg-yellow-900/30 rounded-lg p-6">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h3 class="text-lg font-semibold text-yellow-800 dark:text-yellow-300">Approval Required</h3>
-                    <p class="text-yellow-700 dark:text-yellow-400">This payment requires approval before processing.</p>
-                </div>
-                <div class="space-x-2">
-                    <a href="{{ url_for('supplier_views.approve_payment', payment_id=payment.payment_id) }}" 
-                       class="btn-success">
-                        <i class="fas fa-check mr-2"></i> Approve
-                    </a>
-                    <button onclick="rejectPayment()" class="btn-danger">
-                        <i class="fas fa-times mr-2"></i> Reject
+    </div>
+    
+    <!-- Workflow Actions (if pending) -->
+    {% if payment.workflow_status == 'pending' %}
+    <div class="info-card mt-6">
+        <div class="info-card-header">
+            <h2 class="info-card-title">
+                <i class="fas fa-tasks icon-left"></i>Approval Actions
+            </h2>
+        </div>
+        <div class="info-card-content">
+            <div class="flex flex-wrap gap-3">
+                <form method="POST" action="{{ url_for('supplier_views.approve_payment', payment_id=payment.payment_id) }}" class="inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn-success" onclick="return confirm('Are you sure you want to approve this payment?')">
+                        <i class="fas fa-check icon-left"></i>Approve Payment
                     </button>
-                </div>
+                </form>
+                
+                <form method="POST" action="{{ url_for('supplier_views.reject_payment', payment_id=payment.payment_id) }}" class="inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn-danger" onclick="return confirm('Are you sure you want to reject this payment?')">
+                        <i class="fas fa-times icon-left"></i>Reject Payment
+                    </button>
+                </form>
             </div>
         </div>
-        {% endif %}
+    </div>
+    {% endif %}
+    
+    <!-- Create New Button Row -->
+    <div class="info-card">
+        <div class="footer-actions">
+            <a href="{{ url_for('supplier_views.create_payment') }}" class="btn-primary">
+                <i class="fas fa-plus icon-left"></i>New Payment
+            </a>
+            
+            <a href="{{ url_for('supplier_views.payment_list') }}" class="btn-secondary">
+                <i class="fas fa-list icon-left"></i>Payment List
+            </a>
+            
+            <a href="{{ url_for('supplier_views.supplier_invoice_list') }}" class="btn-secondary">
+                <i class="fas fa-file-invoice icon-left"></i>Invoice List
+            </a>
+            
+            {% if payment.invoice_id %}
+            <a href="{{ url_for('supplier_views.record_payment', invoice_id=payment.invoice_id) }}" class="btn-success">
+                <i class="fas fa-money-bill icon-left"></i>Record Another Payment
+            </a>
+            {% endif %}
+        </div>
     </div>
 </div>
 
-<style>
-/* Print styles */
-@media print {
-    .no-print { display: none !important; }
-    .bg-white { background: white !important; }
-    .shadow-md { box-shadow: none !important; }
-    .rounded-lg { border-radius: 0 !important; }
-    .text-gray-800 { color: black !important; }
-    .text-gray-600 { color: #333 !important; }
-    .border-gray-200 { border-color: #ccc !important; }
-    body { font-size: 12px; }
-    .text-3xl { font-size: 1.5rem !important; }
-    .text-2xl { font-size: 1.25rem !important; }
-    .text-xl { font-size: 1.125rem !important; }
-    .text-lg { font-size: 1rem !important; }
-}
-</style>
-
 <script>
-function downloadPaymentReceipt() {
-    // Generate and download payment receipt
-    const paymentId = '{{ payment.payment_id }}';
-    const url = `/supplier/payment/receipt/${paymentId}`;
-    
-    // Create a temporary link to download
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `payment_receipt_${paymentId.slice(0, 8)}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
-function approvePayment() {
-    if (confirm('Are you sure you want to approve this payment?')) {
-        const paymentId = '{{ payment.payment_id }}';
-        fetch(`/supplier/payment/approve/${paymentId}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token() }}'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                window.location.reload();
-            } else {
-                alert('Error approving payment: ' + data.error);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error approving payment');
-        });
-    }
-}
-</script>
-<script>
-function rejectPayment() {
-    if (confirm('Are you sure you want to reject this payment?')) {
-        // Handle payment rejection
-        window.location.href = '{{ url_for("supplier_views.approve_payment", payment_id=payment.payment_id) }}?action=reject';
-    }
-}
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Payment view loaded for payment ID: {{ payment.payment_id }}');
+});
 </script>
 {% endblock %}

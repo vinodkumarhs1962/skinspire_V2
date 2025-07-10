@@ -1,0 +1,119 @@
+{# 
+Universal Searchable Field Component
+ARCHITECTURE: Configuration-driven, entity-agnostic, reusable
+USAGE: {{ render_entity_search_field(field_config, current_value, form_name) }}
+#}
+
+{% macro render_entity_search_field(field_config, current_value="", form_name="", css_classes="") %}
+    {% set field_id = form_name + "_" + field_config.name if form_name else field_config.name %}
+    {% set entity_config = field_config.entity_search_config %}
+    
+    <div class="universal-entity-search-field {{ css_classes }}" 
+         data-field-name="{{ field_config.name }}"
+         data-entity-type="{{ entity_config.target_entity }}"
+         data-min-chars="{{ entity_config.min_chars }}"
+         data-max-results="{{ entity_config.max_results }}">
+        
+        <!-- Field Label -->
+        {% if field_config.label %}
+        <label for="{{ field_id }}" class="form-label">
+            {{ field_config.label }}
+            {% if field_config.required %}<span class="text-red-500">*</span>{% endif %}
+        </label>
+        {% endif %}
+        
+        <!-- Search Input with Dropdown -->
+        <div class="relative">
+            <!-- ✅ Main search input -->
+            <input type="text" 
+                   id="{{ field_id }}_search"
+                   name="{{ field_id }}_search"
+                   value="{{ current_value }}"
+                   placeholder="{{ entity_config.placeholder_template.format(entity=entity_config.target_entity.title()) }}"
+                   class="form-input universal-entity-search-input {{ 'border-red-300' if field_config.required else '' }}"
+                   autocomplete="off"
+                   {% if field_config.required %}required{% endif %}
+                   {% if field_config.readonly %}readonly{% endif %}>
+            
+            <!-- ✅ Hidden field for actual value -->
+            <input type="hidden" 
+                   id="{{ field_id }}"
+                   name="{{ field_config.name }}"
+                   value="{{ current_value }}">
+            
+            <!-- ✅ Search icon -->
+            <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                <i class="fas fa-search text-gray-400"></i>
+            </div>
+            
+            <!-- ✅ Dropdown results container -->
+            <div id="{{ field_id }}_dropdown" 
+                 class="universal-entity-dropdown absolute z-50 w-full bg-white border border-gray-300 rounded-md shadow-lg hidden mt-1 max-h-60 overflow-y-auto">
+                <!-- Results populated by JavaScript -->
+            </div>
+            
+            <!-- ✅ Loading indicator -->
+            <div id="{{ field_id }}_loading" 
+                 class="absolute inset-y-0 right-8 pr-3 flex items-center hidden">
+                <i class="fas fa-spinner fa-spin text-gray-400"></i>
+            </div>
+        </div>
+        
+        <!-- Help text -->
+        {% if field_config.help_text %}
+        <p class="mt-1 text-sm text-gray-500">{{ field_config.help_text }}</p>
+        {% endif %}
+        
+        <!-- ✅ Configuration data for JavaScript -->
+        <script type="application/json" id="{{ field_id }}_config">
+        {
+            "fieldName": "{{ field_config.name }}",
+            "entityType": "{{ entity_config.target_entity }}",
+            "searchFields": {{ entity_config.search_fields | tojson }},
+            "displayTemplate": "{{ entity_config.display_template }}",
+            "minChars": {{ entity_config.min_chars }},
+            "maxResults": {{ entity_config.max_results }},
+            "searchUrl": "{{ url_for('universal_views.entity_search_api') }}",
+            "additionalFilters": {{ entity_config.additional_filters | tojson if entity_config.additional_filters else '{}' }}
+        }
+        </script>
+    </div>
+{% endmacro %}
+
+{# 
+Quick Field Macro - For simple usage
+#}
+{% macro render_supplier_field(field_name, current_value="", required=false, placeholder="Search suppliers...") %}
+    {% set field_config = {
+        'name': field_name,
+        'label': 'Supplier',
+        'required': required,
+        'entity_search_config': {
+            'target_entity': 'suppliers',
+            'search_fields': ['supplier_name', 'supplier_code'],
+            'display_template': '{supplier_name} ({supplier_code})',
+            'min_chars': 2,
+            'max_results': 10,
+            'placeholder_template': placeholder,
+            'additional_filters': {'status': 'active'}
+        }
+    } %}
+    {{ render_entity_search_field(field_config, current_value) }}
+{% endmacro %}
+
+{% macro render_patient_field(field_name, current_value="", required=false) %}
+    {% set field_config = {
+        'name': field_name,
+        'label': 'Patient',
+        'required': required,
+        'entity_search_config': {
+            'target_entity': 'patients',
+            'search_fields': ['first_name', 'last_name', 'patient_code', 'phone_number'],
+            'display_template': '{first_name} {last_name} ({patient_code})',
+            'min_chars': 2,
+            'max_results': 10,
+            'placeholder_template': 'Search patients...'
+        }
+    } %}
+    {{ render_entity_search_field(field_config, current_value) }}
+{% endmacro %}

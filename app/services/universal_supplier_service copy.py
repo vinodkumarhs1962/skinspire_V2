@@ -1,0 +1,1866 @@
+# =============================================================================
+# File: app/services/universal_supplier_service.py
+# COMPLETE: Universal Supplier Service with ALL Entity-Specific Code
+# Hospital and Branch Aware | Contains ALL Supplier-Specific Rendering
+# =============================================================================
+
+"""
+Enhanced Universal Supplier Service - ALL Entity-Specific Code Moved Here
+Contains ALL supplier-specific rendering, form integration, and business logic
+Hospital and branch aware with configuration-driven behavior
+"""
+
+from typing import Dict, Any, Optional, List, Union
+import uuid
+from datetime import datetime, date
+from flask import request, url_for, current_app
+from flask_login import current_user
+from flask_wtf import FlaskForm
+from sqlalchemy.orm import Session
+from sqlalchemy import or_, and_, desc, asc, func
+from decimal import Decimal
+
+from app.services.database_service import get_db_session, get_entity_dict
+from app.models.transaction import SupplierPayment
+from app.models.master import Supplier, Branch
+from app.models.transaction import SupplierInvoice
+from app.config.entity_configurations import get_entity_config, get_service_filter_mapping
+from app.config.field_definitions import FieldDefinition, FieldType, ComplexDisplayType
+from app.utils.unicode_logging import get_unicode_safe_logger
+
+logger = get_unicode_safe_logger(__name__)
+
+class EnhancedUniversalSupplierService:
+    """
+    Enhanced universal service with ALL supplier-specific business logic
+    Hospital and branch aware with complete form integration
+    """
+    
+    def __init__(self):
+        self.form_instance = None
+
+    def search_data(self, filters: dict, **kwargs) -> dict:
+        """
+        ✅ UNIVERSAL INTERFACE: Simple wrapper that calls enhanced method
+        This keeps universal service registry entity-agnostic while using enhanced logic
+        """
+        try:
+            # Get the form class for supplier payments
+            from flask_wtf import FlaskForm
+            from wtforms import StringField, SelectField, SubmitField
+            
+            class SimpleFilterForm(FlaskForm):
+                supplier_id = SelectField('Supplier', choices=[])
+                submit = SubmitField('Filter')
+            
+            # Call the existing enhanced method with required parameters
+            logger.info("🔄 Universal interface calling enhanced search")
+            result = self.search_payments_with_form_integration(
+                form_class=SimpleFilterForm,
+                filters=filters,
+                **kwargs
+            )
+            
+            logger.info(f"✅ Universal interface completed: {len(result.get('items', []))} items")
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Error in universal interface: {str(e)}")
+            return {
+                'items': [],
+                'total': 0,
+                'pagination': {'total_count': 0},
+                'summary': {},
+                'suppliers': [],
+                'success': False,
+                'error': str(e)
+            }
+
+
+    def search_payments_with_form_integration(self, form_class, **kwargs) -> Dict:
+        """
+        FIXED: Enhanced search with existing service integration
+        Removes parameter conflict by properly handling filters
+        """
+        try:
+            logger.info("🔄 Starting enhanced search with form integration")
+            
+            # Form validation and population
+            if form_class is None:
+                from flask_wtf import FlaskForm
+                form_instance = FlaskForm()
+                logger.warning("Using empty form instance")
+            else:
+                form_instance = form_class()
+            
+            # # Enhanced form population with hospital context
+            # if hasattr(form_instance, 'populate_choices'):
+            #     try:
+            #         from app.engine.service_integration import get_form_population_function
+            #         populate_func = get_form_population_function('supplier_payments')
+            #         if populate_func:
+            #             populate_func(form_instance, current_user)
+            #             logger.debug(f"✅ Applied form population function: {populate_func.__name__}")
+            #     except Exception as e:
+            #         logger.warning(f"Error in form population: {str(e)}")
+            
+            # Additional supplier-specific form population
+            self._populate_form_with_suppliers(form_instance)
+            logger.debug("✅ Form population completed for supplier fields")
+            
+            # Extract filters with full parameter compatibility
+            filters = self._extract_complex_filters()
+            
+            # FIXED: Remove filters from kwargs to prevent duplicate parameter
+            branch_id = kwargs.pop('branch_id', None)
+            current_user_id = kwargs.pop('current_user_id', None)
+            
+            # Clean kwargs to remove any conflicting parameters
+            clean_kwargs = {k: v for k, v in kwargs.items() 
+                        if k not in ['filters', 'branch_id', 'current_user_id']}
+            
+            # Call existing service with clean parameters
+            result = self._search_payments_enhanced(
+                filters=filters,
+                branch_id=branch_id or request.args.get('branch_id'),
+                current_user_id=current_user_id or current_user.user_id,
+                **clean_kwargs  # Now clean of conflicts
+            )
+            
+            # Enhance result with complete template data
+            enhanced_result = result.copy()
+            enhanced_result.update({
+                'form_instance': form_instance,
+                'branch_context': {
+                    'branch_id': branch_id,
+                    'branch_name': request.args.get('branch_name', 'All Branches')
+                },
+                'request_args': request.args.to_dict(),
+                'active_filters': self._build_active_filters(),
+                'filtered_args': {k: v for k, v in request.args.items() if k != 'page'},
+                'filters_applied': filters,
+                'additional_context': {
+                    'entity_type': 'supplier_payments',
+                    'view_mode': 'list',
+                    'user_permissions': self._get_user_permissions(),
+                    'suppliers': self._get_suppliers_for_dropdown(),
+                    'payment_config': self._get_payment_config_object()
+                }
+            })
+            
+            logger.info("✅ Enhanced search completed with complete form integration")
+            return enhanced_result
+            
+        except Exception as e:
+            logger.error(f"❌ Error in enhanced search: {str(e)}")
+            return self._get_error_fallback_result(form_class, str(e))
+    
+    def _extract_complex_filters(self) -> Dict:
+        """Extract filters matching EXACT existing payment_list filter logic"""
+        try:
+            filters = {}
+            
+            # SUPPLIER FILTERING (exact match to existing - multiple parameter names)
+            supplier_id = request.args.get('supplier_id')
+            supplier_search = request.args.get('supplier_search')
+            supplier_text = request.args.get('supplier_text')
+            supplier_name = request.args.get('supplier_name')
+            search = request.args.get('search')
+            
+            if supplier_id and supplier_id.strip():
+                filters['supplier_id'] = supplier_id
+            elif supplier_search and supplier_search.strip():
+                filters['supplier_name_search'] = supplier_search.strip()
+            elif supplier_text and supplier_text.strip():
+                filters['supplier_name_search'] = supplier_text.strip()
+            elif supplier_name and supplier_name.strip():
+                filters['supplier_name_search'] = supplier_name.strip()
+            elif search and search.strip():
+                filters['supplier_name_search'] = search.strip()
+            
+            # REFERENCE NO FILTERING (new field)
+            reference_no = request.args.get('reference_no')
+            if reference_no and reference_no.strip():
+                filters['reference_no_search'] = reference_no.strip()
+
+            # # PAYMENT METHOD FILTERING (exact match - supports multiple)
+            # payment_methods = request.args.getlist('payment_method')
+            # payment_methods = [method.strip() for method in payment_methods if method.strip()]
+            # if payment_methods:
+            #     filters['payment_methods'] = payment_methods
+            # elif request.args.get('payment_method'):
+            #     filters['payment_methods'] = [request.args.get('payment_method').strip()]
+            
+            # ✅ NEW: SPECIAL BANK TRANSFER INCLUSIVE FILTERING
+            payment_method = request.args.get('payment_method')
+            if payment_method == 'bank_transfer_inclusive':
+                # Special handling for bank transfers that includes mixed payments
+                filters['bank_transfer_inclusive'] = True
+                logger.info("🔍 [SPECIAL_FILTER] Applied bank_transfer_inclusive filter")
+            else:
+                # ✅ EXISTING: Standard payment method filtering (unchanged)
+                payment_methods = request.args.getlist('payment_method')
+                payment_methods = [method.strip() for method in payment_methods if method.strip()]
+                if payment_methods:
+                    filters['payment_methods'] = payment_methods
+                    # ✅ FIX: Also set single payment_method for table query compatibility
+                    filters['payment_method'] = payment_methods[0]
+                    logger.info(f"🔍 [TABLE_FIX] Set payment_method='{payment_methods[0]}' for table query")
+                elif request.args.get('payment_method'):
+                    single_method = request.args.get('payment_method').strip()
+                    filters['payment_methods'] = [single_method]
+                    # ✅ FIX: Also set single payment_method for table query compatibility  
+                    filters['payment_method'] = single_method
+                    logger.info(f"🔍 [TABLE_FIX] Set payment_method='{single_method}' for table query")
+
+            # STATUS FILTERING (exact match - supports multiple)
+            statuses = request.args.getlist('status')
+            statuses = [status.strip() for status in statuses if status.strip()]
+            if statuses:
+                filters['statuses'] = statuses
+            elif request.args.get('status'):
+                filters['statuses'] = [request.args.get('status').strip()]
+            elif request.args.get('workflow_status'):
+                filters['statuses'] = [request.args.get('workflow_status').strip()]
+            
+            # DATE FILTERING with financial year default
+            start_date = request.args.get('start_date')
+            end_date = request.args.get('end_date')
+            
+            # If no dates provided, default to financial year
+            if start_date:
+                filters['start_date'] = start_date
+            if end_date:
+                filters['end_date'] = end_date
+
+            
+            # AMOUNT FILTERING (exact match - multiple parameter names)
+            min_amount = request.args.get('min_amount') or request.args.get('amount_min')
+            max_amount = request.args.get('max_amount') or request.args.get('amount_max')
+            
+            if min_amount and min_amount.strip():
+                try:
+                    filters['min_amount'] = float(min_amount)
+                except ValueError:
+                    pass
+            
+            if max_amount and max_amount.strip():
+                try:
+                    filters['max_amount'] = float(max_amount)
+                except ValueError:
+                    pass
+            
+            # ADDITIONAL FILTERS (exact match)
+            search_term = request.args.get('search') or request.args.get('q')
+            if search_term and search_term.strip():
+                filters['search'] = search_term.strip()
+            
+            reference_no = request.args.get('reference_no') or request.args.get('ref_no')
+            if reference_no and reference_no.strip():
+                filters['reference_no'] = reference_no.strip()
+            
+            invoice_id = request.args.get('invoice_id')
+            if invoice_id and invoice_id.strip():
+                filters['invoice_id'] = invoice_id.strip()
+            
+            branch_id = request.args.get('branch_id')
+            if branch_id and branch_id.strip():
+                filters['branch_id'] = branch_id.strip()
+            
+            # PAGINATION
+            page = request.args.get('page', 1)
+            per_page = request.args.get('per_page', 20)
+            
+            try:
+                filters['page'] = int(page)
+            except ValueError:
+                filters['page'] = 1
+            
+            try:
+                filters['per_page'] = int(per_page)
+            except ValueError:
+                filters['per_page'] = 20
+            
+            # SORTING
+            sort_field = request.args.get('sort') or request.args.get('sort_field')
+            sort_direction = request.args.get('direction') or request.args.get('sort_direction')
+            
+            if sort_field:
+                filters['sort_field'] = sort_field
+            if sort_direction:
+                filters['sort_direction'] = sort_direction
+            
+            # Clean empty values
+            filters = {k: v for k, v in filters.items() if v is not None and v != ''}
+            
+            logger.debug(f"Extracted filters: {filters}")
+            return filters
+            
+        except Exception as e:
+            logger.error(f"Error extracting filters: {str(e)}")
+            return {}
+    
+    def _search_supplier_payments_universal(self, hospital_id: uuid.UUID, filters: Dict, 
+                                       branch_id: Optional[uuid.UUID] = None,
+                                       current_user_id: Optional[str] = None,
+                                       page: int = 1, per_page: int = 20,
+                                       session: Optional[Session] = None) -> Dict:
+        """
+        ✅ UNIVERSAL ENGINE: Complete supplier payments search implementation
+        Self-contained version that reads from filters parameter first, then request.args fallback
+        """
+        from app.services.database_service import get_db_session, get_entity_dict
+        from app.models.transaction import SupplierPayment, SupplierInvoice
+        from app.models.master import Supplier, Branch
+        from flask import request
+        from sqlalchemy import or_, and_, desc, func
+        from datetime import datetime, date
+        import time
+        
+        start_time = time.time()
+        logger.info(f"🔍 [UNIVERSAL] PAYMENT SEARCH START - Time: {datetime.now().strftime('%H:%M:%S')}")
+        logger.info(f"🔍 [UNIVERSAL] Filters received: {filters}")
+        logger.info(f"🔍 [UNIVERSAL] Hospital ID: {hospital_id}")
+        logger.info(f"🔍 [UNIVERSAL] Branch ID: {branch_id}")
+        logger.info(f"🔍 [UNIVERSAL] User ID: {current_user_id}")
+        
+        try:
+            # Use provided session or create new one
+            if session:
+                session_scope = session
+                should_close = False
+            else:
+                session_scope = get_db_session().__enter__()
+                should_close = True
+            
+            try:
+                # STEP 1: Base query
+                step_start = time.time()
+                query = session_scope.query(SupplierPayment).filter_by(hospital_id=hospital_id)
+                logger.info(f"✅ [UNIVERSAL] STEP 1 - Base query: {time.time() - step_start:.3f}s")
+                
+                # STEP 2: Branch filtering
+                step_start = time.time()
+                if branch_id:
+                    query = query.filter(SupplierPayment.branch_id == branch_id)
+                    logger.info(f"Applied direct branch filter: {branch_id}")
+                logger.info(f"✅ [UNIVERSAL] STEP 2 - Branch filter: {time.time() - step_start:.3f}s")
+                
+                # STEP 3: Apply filters - READ FROM FILTERS FIRST, THEN REQUEST.ARGS
+                
+                # 3a: Supplier ID filtering
+                supplier_id = filters.get('supplier_id') or request.args.get('supplier_id')
+                if supplier_id and str(supplier_id).strip():
+                    step_start = time.time()
+                    query = query.filter(SupplierPayment.supplier_id == supplier_id)
+                    logger.info(f"✅ [UNIVERSAL] STEP 3a - Supplier ID: {time.time() - step_start:.3f}s")
+                
+                # 3b: Payment method filtering - THE MAIN FIX
+                payment_method = filters.get('payment_method') or request.args.get('payment_method')
+                payment_methods = filters.get('payment_methods') or request.args.getlist('payment_method')
+                
+                if payment_method and str(payment_method).strip():
+                    step_start = time.time()
+                    logger.info(f"🔍 [UNIVERSAL] Applying single payment method: {payment_method}")
+                    
+                    if payment_method == 'bank_transfer_inclusive':
+                        query = query.filter(
+                            or_(
+                                SupplierPayment.payment_method == 'bank_transfer',
+                                and_(
+                                    SupplierPayment.payment_method == 'mixed',
+                                    SupplierPayment.bank_transfer_amount > 0
+                                )
+                            )
+                        )
+                    elif payment_method == 'cash':
+                        query = query.filter(
+                            or_(
+                                SupplierPayment.payment_method == 'cash',
+                                and_(
+                                    SupplierPayment.payment_method == 'mixed',
+                                    SupplierPayment.cash_amount > 0
+                                )
+                            )
+                        )
+                    elif payment_method == 'cheque':
+                        query = query.filter(
+                            or_(
+                                SupplierPayment.payment_method == 'cheque',
+                                and_(
+                                    SupplierPayment.payment_method == 'mixed',
+                                    SupplierPayment.cheque_amount > 0
+                                )
+                            )
+                        )
+                    elif payment_method == 'bank_transfer':
+                        query = query.filter(
+                            or_(
+                                SupplierPayment.payment_method == 'bank_transfer',
+                                and_(
+                                    SupplierPayment.payment_method == 'mixed',
+                                    SupplierPayment.bank_transfer_amount > 0
+                                )
+                            )
+                        )
+                    elif payment_method == 'upi':
+                        query = query.filter(
+                            or_(
+                                SupplierPayment.payment_method == 'upi',
+                                and_(
+                                    SupplierPayment.payment_method == 'mixed',
+                                    SupplierPayment.upi_amount > 0
+                                )
+                            )
+                        )
+                    else:
+                        query = query.filter(SupplierPayment.payment_method == payment_method)
+                    logger.info(f"✅ [UNIVERSAL] STEP 3b - Single payment method: {time.time() - step_start:.3f}s")
+                    
+                elif payment_methods and len(payment_methods) > 0:
+                    step_start = time.time()
+                    logger.info(f"🔍 [UNIVERSAL] Applying multiple payment methods: {payment_methods}")
+                    payment_method_filters = []
+                    for method in payment_methods:
+                        if method and str(method).strip():
+                            if method == 'bank_transfer_inclusive':
+                                payment_method_filters.append(
+                                    or_(
+                                        SupplierPayment.payment_method == 'bank_transfer',
+                                        and_(
+                                            SupplierPayment.payment_method == 'mixed',
+                                            SupplierPayment.bank_transfer_amount > 0
+                                        )
+                                    )
+                                )
+                            elif method == 'cash':
+                                payment_method_filters.append(
+                                    or_(
+                                        SupplierPayment.payment_method == 'cash',
+                                        and_(
+                                            SupplierPayment.payment_method == 'mixed',
+                                            SupplierPayment.cash_amount > 0
+                                        )
+                                    )
+                                )
+                            elif method == 'cheque':
+                                payment_method_filters.append(
+                                    or_(
+                                        SupplierPayment.payment_method == 'cheque',
+                                        and_(
+                                            SupplierPayment.payment_method == 'mixed',
+                                            SupplierPayment.cheque_amount > 0
+                                        )
+                                    )
+                                )
+                            elif method == 'bank_transfer':
+                                payment_method_filters.append(
+                                    or_(
+                                        SupplierPayment.payment_method == 'bank_transfer',
+                                        and_(
+                                            SupplierPayment.payment_method == 'mixed',
+                                            SupplierPayment.bank_transfer_amount > 0
+                                        )
+                                    )
+                                )
+                            elif method == 'upi':
+                                payment_method_filters.append(
+                                    or_(
+                                        SupplierPayment.payment_method == 'upi',
+                                        and_(
+                                            SupplierPayment.payment_method == 'mixed',
+                                            SupplierPayment.upi_amount > 0
+                                        )
+                                    )
+                                )
+                            else:
+                                payment_method_filters.append(SupplierPayment.payment_method == method)
+                    
+                    if payment_method_filters:
+                        query = query.filter(or_(*payment_method_filters))
+                    logger.info(f"✅ [UNIVERSAL] STEP 3b - Multiple payment methods: {time.time() - step_start:.3f}s")
+                
+                # 3c: Status filtering
+                workflow_status = filters.get('workflow_status') or request.args.get('workflow_status')
+                status = filters.get('status') or request.args.get('status')
+                statuses = filters.get('statuses') or request.args.getlist('status')
+                
+                if workflow_status and str(workflow_status).strip():
+                    step_start = time.time()
+                    query = query.filter(SupplierPayment.workflow_status == workflow_status)
+                    logger.info(f"✅ [UNIVERSAL] STEP 3c - Workflow status: {time.time() - step_start:.3f}s")
+                elif status and str(status).strip():
+                    step_start = time.time()
+                    query = query.filter(SupplierPayment.workflow_status == status)
+                    logger.info(f"✅ [UNIVERSAL] STEP 3c - Status: {time.time() - step_start:.3f}s")
+                elif statuses and len(statuses) > 0:
+                    step_start = time.time()
+                    valid_statuses = [s for s in statuses if s and str(s).strip()]
+                    if valid_statuses:
+                        query = query.filter(SupplierPayment.workflow_status.in_(valid_statuses))
+                    logger.info(f"✅ [UNIVERSAL] STEP 3c - Multiple statuses: {time.time() - step_start:.3f}s")
+                
+                # 3d: Amount filtering
+                min_amount = filters.get('min_amount') or filters.get('amount_min') or request.args.get('min_amount') or request.args.get('amount_min')
+                max_amount = filters.get('max_amount') or filters.get('amount_max') or request.args.get('max_amount') or request.args.get('amount_max')
+                
+                if min_amount:
+                    try:
+                        step_start = time.time()
+                        min_val = float(min_amount)
+                        query = query.filter(SupplierPayment.amount >= min_val)
+                        logger.info(f"✅ [UNIVERSAL] STEP 3d - Min amount: {time.time() - step_start:.3f}s")
+                    except ValueError:
+                        pass
+                        
+                if max_amount:
+                    try:
+                        step_start = time.time()
+                        max_val = float(max_amount)
+                        query = query.filter(SupplierPayment.amount <= max_val)
+                        logger.info(f"✅ [UNIVERSAL] STEP 3e - Max amount: {time.time() - step_start:.3f}s")
+                    except ValueError:
+                        pass
+                
+                # 3f: Date filtering
+                start_date = filters.get('start_date') or request.args.get('start_date')
+                end_date = filters.get('end_date') or request.args.get('end_date')
+                
+                if start_date:
+                    try:
+                        step_start = time.time()
+                        start_date_obj = datetime.strptime(str(start_date), '%Y-%m-%d').date()
+                        query = query.filter(SupplierPayment.payment_date >= start_date_obj)
+                        logger.info(f"✅ [UNIVERSAL] STEP 3f - Start date: {time.time() - step_start:.3f}s")
+                    except ValueError:
+                        pass
+                        
+                if end_date:
+                    try:
+                        step_start = time.time()
+                        end_date_obj = datetime.strptime(str(end_date), '%Y-%m-%d').date()
+                        query = query.filter(SupplierPayment.payment_date <= end_date_obj)
+                        logger.info(f"✅ [UNIVERSAL] STEP 3g - End date: {time.time() - step_start:.3f}s")
+                    except ValueError:
+                        pass
+                
+                # 3h: Reference number filtering
+                reference_no = filters.get('reference_no') or request.args.get('reference_no') or request.args.get('ref_no')
+                if reference_no and str(reference_no).strip():
+                    step_start = time.time()
+                    query = query.filter(SupplierPayment.reference_no.ilike(f'%{reference_no}%'))
+                    logger.info(f"✅ [UNIVERSAL] STEP 3h - Reference number: {time.time() - step_start:.3f}s")
+                
+                # 3i: Invoice filtering
+                invoice_id = filters.get('invoice_id') or request.args.get('invoice_id')
+                if invoice_id and str(invoice_id).strip():
+                    step_start = time.time()
+                    query = query.filter(SupplierPayment.invoice_id == invoice_id)
+                    logger.info(f"✅ [UNIVERSAL] STEP 3i - Invoice ID: {time.time() - step_start:.3f}s")
+                
+                # 3j: Supplier name search
+                supplier_name_search = filters.get('supplier_name_search') or request.args.get('supplier_name_search') or request.args.get('search')
+                if supplier_name_search and str(supplier_name_search).strip() and not supplier_id:
+                    step_start = time.time()
+                    supplier_subquery = session_scope.query(Supplier.supplier_id).filter(
+                        Supplier.hospital_id == hospital_id,
+                        Supplier.supplier_name.ilike(f'%{supplier_name_search}%')
+                    ).subquery()
+                    query = query.filter(SupplierPayment.supplier_id.in_(supplier_subquery))
+                    logger.info(f"✅ [UNIVERSAL] STEP 3j - Supplier name search: {time.time() - step_start:.3f}s")
+                
+                # 3k: Reference number search from filters
+                reference_no_search = filters.get('reference_no_search')
+                if reference_no_search and str(reference_no_search).strip():
+                    step_start = time.time()
+                    query = query.filter(SupplierPayment.reference_no.ilike(f'%{reference_no_search}%'))
+                    logger.info(f"✅ [UNIVERSAL] STEP 3k - Reference number search: {time.time() - step_start:.3f}s")
+                
+                # STEP 4: Query execution
+                logger.info(f"🔍 [UNIVERSAL] CRITICAL: About to execute query with {len([f for f in filters.values() if f])} filters")
+                
+                # 4a: Ordering
+                step_start = time.time()
+                query = query.order_by(SupplierPayment.payment_date.desc())
+                logger.info(f"✅ [UNIVERSAL] STEP 4a - Ordering: {time.time() - step_start:.3f}s")
+                
+                # 4b: Count query
+                step_start = time.time()
+                logger.info(f"🔍 [UNIVERSAL] CRITICAL: Executing COUNT query...")
+                total_count = query.count()
+                logger.info(f"✅ [UNIVERSAL] STEP 4b - Count query: {time.time() - step_start:.3f}s - Found {total_count} records")
+                
+                # 4c: Main query execution
+                step_start = time.time()
+                logger.info(f"🔍 [UNIVERSAL] CRITICAL: Executing MAIN query...")
+                offset = (page - 1) * per_page
+                payments = query.offset(offset).limit(per_page).all()
+                logger.info(f"✅ [UNIVERSAL] STEP 4c - Main query: {time.time() - step_start:.3f}s - Retrieved {len(payments)} records")
+                
+                # STEP 5: Result processing
+                step_start = time.time()
+                payment_dicts = []
+                
+                for payment in payments:
+                    payment_dict = get_entity_dict(payment)
+                    
+                    # Add supplier information
+                    supplier = session_scope.query(Supplier).filter_by(supplier_id=payment.supplier_id).first()
+                    if supplier:
+                        payment_dict['supplier_name'] = supplier.supplier_name
+                        payment_dict['supplier_code'] = getattr(supplier, 'supplier_code', supplier.supplier_id)
+                    else:
+                        payment_dict['supplier_name'] = 'N/A'
+                        payment_dict['supplier_code'] = 'N/A'
+                    
+                    # Add branch information
+                    if payment.branch_id:
+                        branch = session_scope.query(Branch).filter_by(branch_id=payment.branch_id).first()
+                        if branch:
+                            payment_dict['branch_name'] = branch.name
+                    
+                    # Add invoice information
+                    if payment.invoice_id:
+                        invoice = session_scope.query(SupplierInvoice).filter_by(invoice_id=payment.invoice_id).first()
+                        if invoice:
+                            payment_dict['invoice_number'] = invoice.supplier_invoice_number
+                            payment_dict['invoice_amount'] = float(invoice.total_amount)
+                    
+                    payment_dicts.append(payment_dict)
+                
+                logger.info(f"✅ [UNIVERSAL] STEP 5 - Result processing: {time.time() - step_start:.3f}s")
+                
+                # STEP 6: Summary calculation using existing Universal Engine methods
+                step_start = time.time()
+                try:
+                    summary = self._calculate_basic_summary_from_filtered_results()
+                    logger.info(f"✅ [UNIVERSAL] STEP 6 - Summary calculation: {time.time() - step_start:.3f}s")
+                    logger.info(f"Summary calculated: total_amount={summary.get('total_amount', 0)}, total_count={summary.get('total_count', 0)}")
+                except Exception as e:
+                    logger.error(f"Error calculating summary: {str(e)}")
+                    summary = {
+                        'total_count': total_count,
+                        'total_amount': 0.0,
+                        'pending_count': 0,
+                        'this_month_count': 0
+                    }
+                logger.info(f"✅ [UNIVERSAL] STEP 6 - Summary: {time.time() - step_start:.3f}s")
+                
+                # Final result
+                total_time = time.time() - start_time
+                logger.info(f"🎯 [UNIVERSAL] TOTAL SEARCH TIME: {total_time:.3f}s")
+                logger.info(f"✅ [UNIVERSAL] SEARCH COMPLETED SUCCESSFULLY in {total_time:.3f}s")
+                
+                # Get suppliers for dropdown
+                suppliers = []
+                try:
+                    from app.services.supplier_service import get_suppliers_for_choice
+                    suppliers = get_suppliers_for_choice(hospital_id, session_scope)
+                except Exception as e:
+                    logger.warning(f"Could not get suppliers: {str(e)}")
+                
+                return {
+                    'success': True,
+                    'payments': payment_dicts,
+                    'pagination': {
+                        'page': page,
+                        'per_page': per_page,
+                        'total_count': total_count,
+                        'total_pages': max(1, (total_count + per_page - 1) // per_page)
+                    },
+                    'summary': summary,
+                    'suppliers': suppliers,
+                    'metadata': {
+                        'search_time': total_time,
+                        'filters_applied': len([f for f in filters.values() if f]),
+                        'universal_engine': True
+                    }
+                }
+                
+            finally:
+                if should_close and session_scope:
+                    session_scope.__exit__(None, None, None)
+                    
+        except Exception as e:
+            logger.error(f"❌ [UNIVERSAL] Error in supplier payment search: {str(e)}")
+            return {
+                'success': False,
+                'payments': [],
+                'pagination': {'total_count': 0, 'page': page, 'per_page': per_page, 'total_pages': 1},
+                'summary': {'total_count': 0, 'total_amount': 0.0},
+                'suppliers': [],
+                'error': str(e)
+            }
+
+
+    def _search_payments_enhanced(self, filters: Dict, branch_id=None, current_user_id=None, **kwargs) -> Dict:
+        """
+        FIXED: Enhanced search with clean parameter handling
+        No longer accepts filters in kwargs to prevent conflicts
+        """
+        try:
+            # Call existing supplier payment service using exact signature
+            # from app.services.supplier_service import search_supplier_payments
+            
+            # Prepare parameters for existing service (exact signature match)
+            search_params = {
+                'hospital_id': current_user.hospital_id,
+                'filters': filters,
+                'current_user_id': current_user_id or current_user.user_id,
+                'page': filters.get('page', 1),
+                'per_page': filters.get('per_page', 20)
+            }
+            
+            # Add branch context if available
+            branch_uuid = None
+            if branch_id:
+                if isinstance(branch_id, str):
+                    try:
+                        branch_uuid = uuid.UUID(branch_id)
+                    except ValueError:
+                        logger.warning(f"Invalid branch_id format: {branch_id}")
+                else:
+                    branch_uuid = branch_id
+            
+            # Clean additional parameters (no filters to prevent conflict)
+            additional_params = {k: v for k, v in kwargs.items() 
+                            if k not in ['filters', 'hospital_id', 'current_user_id', 'page', 'per_page']}
+            search_params.update(additional_params)
+            
+            logger.debug(f"Calling search_supplier_payments with params: {list(search_params.keys())}")
+            
+            # Call existing service
+            result = self._search_supplier_payments_universal(
+                hospital_id=current_user.hospital_id,
+                filters=filters,
+                branch_id=branch_uuid,
+                current_user_id=current_user_id or current_user.user_id,
+                page=filters.get('page', 1),
+                per_page=filters.get('per_page', 20),
+                session=None
+            )
+            
+            # Standardize response format for universal engine
+            if result and result.get('success', True):
+
+                payments = result.get('payments', [])
+                existing_summary = result.get('summary', {})
+                
+                # Apply enhanced summary calculation
+                logger.info(f"🔧 BEFORE Enhancement - Summary fields: {list(existing_summary.keys())}")
+                enhanced_summary = self._calculate_enhanced_summary(payments, existing_summary)
+                logger.info(f"🎯 AFTER Enhancement - Summary fields: {list(enhanced_summary.keys())}")
+
+                if filters.get('bank_transfer_inclusive'):
+                    logger.info("🔍 [BANK_INCLUSIVE] Filtering fetched payments for bank transfers")
+                    
+                    # Filter the already-fetched records for bank transfers
+                    filtered_payments = []
+                    for payment in payments:
+                        payment_method = payment.get('payment_method', '')
+                        bank_amount = payment.get('bank_transfer_amount', 0)
+                        
+                        # Convert bank_amount to float for comparison
+                        try:
+                            bank_amount_float = float(bank_amount) if bank_amount not in [None, '', 'None'] else 0.0
+                        except (ValueError, TypeError):
+                            bank_amount_float = 0.0
+                        
+                        # Include if pure bank transfer OR mixed with bank amount
+                        if payment_method == 'bank_transfer' or bank_amount_float > 0:
+                            filtered_payments.append(payment)
+                            logger.info(f"🔍 [INCLUDED] Payment: method={payment_method}, bank_amt={bank_amount_float}")
+                    
+                    logger.info(f"🎯 [BANK_INCLUSIVE] Filtered {len(payments)} records to {len(filtered_payments)} bank transfers")
+                    
+                    # Return filtered results with original pagination context
+                    return {
+                        'items': filtered_payments,
+                        'total': result.get('pagination', {}).get('total_count', 0),  # Keep original total
+                        'pagination': result.get('pagination', {}),  # Keep original pagination
+                        'summary': enhanced_summary,
+                        'suppliers': result.get('suppliers', []),
+                        'success': True,
+                        'metadata': result.get('metadata', {}),
+                        'search_executed': True
+                    }
+                else:
+                    # ✅ EXISTING: Standard return (unchanged)
+                    return {
+                        'items': payments,
+                        'total': result.get('pagination', {}).get('total_count', 0),
+                        'pagination': result.get('pagination', {}),
+                        'summary': enhanced_summary,  # ✅ Use enhanced summary instead of original
+                        'suppliers': result.get('suppliers', []),
+                        'success': True,
+                        'metadata': result.get('metadata', {}),
+                        'search_executed': True
+                    }
+            else:
+                return self._get_empty_result_with_metadata()
+                
+        except Exception as e:
+            logger.error(f"Error in enhanced payment search: {str(e)}")
+            return self._get_error_result(str(e))
+    
+    def _calculate_enhanced_summary(self, payments: List[Dict], existing_summary: Dict = None) -> Dict:
+        """
+        ✅ CONFIGURATION-DRIVEN: Add missing fields to existing summary
+        Respects card configuration for filterable vs static cards
+        Handles basic field recalculation for filtered results
+        """
+        try:
+            if existing_summary and isinstance(existing_summary, dict):
+                logger.info(f"🎯 Enhancing existing summary: {list(existing_summary.keys())}")
+                
+                # ✅ Start with existing summary (4 fields)
+                enhanced_summary = existing_summary.copy()
+                
+                # ✅ CONFIGURATION-DRIVEN: Get card configurations
+                from app.config.entity_configurations import get_entity_config
+                config = get_entity_config('supplier_payments')
+                
+                # ✅ NEW: Build filterable/static field mapping from configuration
+                filterable_fields = set()
+                static_fields = set()
+                
+                if config and hasattr(config, 'summary_cards'):
+                    for card_config in config.summary_cards:
+                        field_name = card_config.get('field', '')
+                        is_filterable = card_config.get('filterable', False)
+                        
+                        if field_name:
+                            if is_filterable:
+                                filterable_fields.add(field_name)
+                            else:
+                                static_fields.add(field_name)
+                                
+                    logger.info(f"🔧 Card configuration - Filterable: {filterable_fields}, Static: {static_fields}")
+                
+                # ✅ NEW: Recalculate basic summary fields if they are filterable and filters are applied
+                basic_filterable_fields = [f for f in ['total_count', 'total_amount'] 
+                                        if f in filterable_fields]
+
+                if basic_filterable_fields and self._has_active_filters():
+                    logger.info(f"🔍 [FILTERED] Recalculating basic summary fields: {basic_filterable_fields}")
+                    
+                    # Get filtered totals from the actual filtered results
+                    filtered_totals = self._calculate_basic_summary_from_filtered_results()
+                    
+                    for field in basic_filterable_fields:
+                        if field in filtered_totals:
+                            old_value = enhanced_summary.get(field, 0)
+                            enhanced_summary[field] = filtered_totals[field]
+                            logger.info(f"✅ Updated {field}: {old_value} -> {enhanced_summary[field]} (filtered)")
+                
+                # ✅ ENHANCED: Get database counts with configuration-aware filtering
+                status_fields = ['approved_count', 'completed_count', 'bank_transfer_count', 'pending_count']
+
+                # Separate fields that need filtering vs static calculation
+                filterable_status_fields = [f for f in status_fields if f in filterable_fields]
+                static_status_fields = [f for f in status_fields if f in static_fields]
+
+                # Get filterable card counts (respect current filters) - RECALCULATE ALL when filters applied
+                if filterable_status_fields and self._has_active_filters():
+                    logger.info(f"🔍 [DATABASE] Getting filtered counts for: {filterable_status_fields}")
+                    filtered_counts = self._get_actual_database_counts(respect_current_filters=True)
+                    
+                    for field in filterable_status_fields:
+                        old_value = enhanced_summary.get(field, 0)
+                        enhanced_summary[field] = filtered_counts.get(field, 0)
+                        logger.info(f"✅ Updated {field}: {old_value} -> {enhanced_summary[field]} (filtered)")
+
+                # Get filterable counts without filters if no active filters
+                elif filterable_status_fields and not self._has_active_filters():
+                    missing_filterable_fields = [f for f in filterable_status_fields if f not in enhanced_summary]
+                    if missing_filterable_fields:
+                        logger.info(f"🔍 [DATABASE] Getting unfiltered counts for missing: {missing_filterable_fields}")
+                        unfiltered_counts = self._get_actual_database_counts(respect_current_filters=True)
+                        
+                        for field in missing_filterable_fields:
+                            enhanced_summary[field] = unfiltered_counts.get(field, 0)
+                            logger.info(f"✅ Added {field} (unfiltered): {enhanced_summary[field]}")
+
+                # Get static card counts (always use "this month" regardless of filters)  
+                if static_status_fields:
+                    missing_static_fields = [f for f in static_status_fields if f not in enhanced_summary]
+                    if missing_static_fields:
+                        logger.info(f"🔍 [DATABASE] Getting static counts for: {missing_static_fields}")
+                        static_counts = self._get_actual_database_counts(respect_current_filters=False)
+                        
+                        for field in missing_static_fields:
+                            enhanced_summary[field] = static_counts.get(field, 0)
+                            logger.info(f"✅ Added {field} (static): {enhanced_summary[field]}")
+                
+                # ✅ BACKWARD COMPATIBLE: Handle fields not in configuration (use existing logic)
+                remaining_fields = [f for f in ['approved_count', 'completed_count', 'bank_transfer_count'] 
+                                if f not in enhanced_summary]
+                if remaining_fields:
+                    logger.info(f"🔍 [DATABASE] Getting counts for unconfigured fields: {remaining_fields}")
+                    fallback_counts = self._get_actual_database_counts()
+                    
+                    for field in remaining_fields:
+                        enhanced_summary[field] = fallback_counts.get(field, 0)
+                        logger.info(f"✅ Added {field} (fallback): {enhanced_summary[field]}")
+                
+                # ✅ SPECIAL HANDLING: this_month_amount (configuration-driven static calculation)
+                if 'this_month_amount' not in enhanced_summary:
+                    if 'this_month_amount' in static_fields:
+                        # Static field - always use actual this month amount regardless of filters
+                        enhanced_summary['this_month_amount'] = self._calculate_this_month_amount_from_database(enhanced_summary)
+                        logger.info(f"✅ Added this_month_amount (static DB): Rs.{enhanced_summary['this_month_amount']:.2f}")
+                    else:
+                        # Existing logic for backward compatibility
+                        this_month_count = enhanced_summary.get('this_month_count', 0)
+                        total_count = enhanced_summary.get('total_count', 0)
+                        total_amount = enhanced_summary.get('total_amount', 0)
+                        
+                        if this_month_count == total_count and total_count > 0:
+                            enhanced_summary['this_month_amount'] = total_amount
+                            logger.info(f"✅ This month amount = total amount: Rs.{total_amount} (all {total_count} transactions are from this month)")
+                        else:
+                            if total_count > 0:
+                                ratio = this_month_count / total_count
+                                enhanced_summary['this_month_amount'] = total_amount * ratio
+                            else:
+                                enhanced_summary['this_month_amount'] = 0
+                            logger.info(f"✅ Added this_month_amount (calculated): Rs.{enhanced_summary['this_month_amount']:.2f}")
+                
+                logger.info(f"✅ Enhanced summary complete with {len(enhanced_summary)} fields: {list(enhanced_summary.keys())}")
+                return enhanced_summary
+            
+            # ✅ Fallback: If no existing summary, calculate everything from page items
+            else:
+                logger.warning("🔄 No existing summary provided, calculating from page items")
+                return self._calculate_fallback_summary_from_items(payments)
+            
+        except Exception as e:
+            logger.error(f"❌ Error in enhanced summary calculation: {str(e)}")
+            # Return existing summary as fallback
+            return existing_summary if existing_summary else {}
+
+    def _has_active_filters(self) -> bool:
+        """Check if there are any active filters applied"""
+        from flask import request
+        
+        # Check for all possible filter types
+        filter_params = [
+            'start_date', 'end_date',  # Date filters
+            'supplier_id', 'supplier_search', 'supplier_name_search', 'search',  # Supplier filters
+            'workflow_status', 'payment_method',  # Status filters
+            'approved_by', 'created_by'  # User filters
+        ]
+        
+        for param in filter_params:
+            value = request.args.get(param)
+            if value and str(value).strip():
+                return True
+        
+        # If no explicit filters, we always have financial year default filters, so always return True
+        # This ensures summary cards are always properly calculated
+        return True
+
+    def get_filter_state_for_frontend(self) -> Dict:
+        """Get filter state information for frontend synchronization"""
+        from flask import request
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # If no dates in URL, we're using FY default
+        if not start_date and not end_date:
+            from datetime import date
+            today = date.today()
+            if today.month >= 4:  # April onwards - current FY
+                fy_start = date(today.year, 4, 1)
+                fy_end = date(today.year + 1, 3, 31)
+            else:  # January to March - previous FY
+                fy_start = date(today.year - 1, 4, 1)
+                fy_end = date(today.year, 3, 31)
+            
+            return {
+                'default_preset': 'financial_year',
+                'start_date': fy_start.strftime('%Y-%m-%d'),
+                'end_date': fy_end.strftime('%Y-%m-%d'),
+                'is_default_state': True
+            }
+        
+        return {
+            'default_preset': 'none',
+            'start_date': start_date,
+            'end_date': end_date,
+            'is_default_state': False
+        }
+
+    def _calculate_basic_summary_from_filtered_results(self) -> Dict:
+        """Calculate total_count and total_amount from filtered database query"""
+        try:
+            from app.services.database_service import get_db_session
+            from app.models.transaction import SupplierPayment
+            from app.models.master import Supplier
+            from sqlalchemy import func
+            from flask_login import current_user
+            from flask import request
+            from datetime import datetime
+            
+            with get_db_session() as session:
+                # Same base query as _get_actual_database_counts but for totals
+                base_query = session.query(SupplierPayment).filter_by(
+                    hospital_id=current_user.hospital_id
+                )
+                
+                # Apply same date filters as current request
+                start_date = request.args.get('start_date')
+                end_date = request.args.get('end_date')
+                
+                if start_date:
+                    try:
+                        start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+                        base_query = base_query.filter(SupplierPayment.payment_date >= start_date_obj)
+                    except ValueError:
+                        pass
+                        
+                if end_date:
+                    try:
+                        end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+                        base_query = base_query.filter(SupplierPayment.payment_date <= end_date_obj)
+                    except ValueError:
+                        pass
+                
+
+                # Apply supplier filters (same logic as main query)
+                supplier_name_search = request.args.get('supplier_name_search')
+                search = request.args.get('search')
+                supplier_id = request.args.get('supplier_id')
+                
+                if supplier_id and supplier_id.strip():
+                    base_query = base_query.filter(SupplierPayment.supplier_id == supplier_id)
+                elif supplier_name_search and supplier_name_search.strip():
+                    # Apply same supplier name search logic as main query
+                    supplier_subquery = session.query(Supplier.supplier_id).filter(
+                        Supplier.hospital_id == current_user.hospital_id,
+                        Supplier.supplier_name.ilike(f'%{supplier_name_search}%')
+                    ).subquery()
+                    base_query = base_query.filter(SupplierPayment.supplier_id.in_(supplier_subquery))
+                elif search and search.strip():
+                    # Apply same general search logic as main query
+                    supplier_subquery = session.query(Supplier.supplier_id).filter(
+                        Supplier.hospital_id == current_user.hospital_id,
+                        Supplier.supplier_name.ilike(f'%{search}%')
+                    ).subquery()
+                    base_query = base_query.filter(SupplierPayment.supplier_id.in_(supplier_subquery))
+
+                # Apply status filters
+                workflow_status = request.args.get('workflow_status')
+                status = request.args.get('status')
+                if workflow_status and workflow_status.strip():
+                    base_query = base_query.filter(SupplierPayment.workflow_status == workflow_status)
+                elif status and status.strip():
+                    base_query = base_query.filter(SupplierPayment.workflow_status == status)
+                
+                # Apply payment method filters
+                payment_method = request.args.get('payment_method')
+                if payment_method and payment_method.strip():
+                    if payment_method == 'bank_transfer_inclusive':
+                        # Special handling for bank transfer inclusive
+                        base_query = base_query.filter(
+                            or_(
+                                SupplierPayment.payment_method == 'bank_transfer',
+                                and_(
+                                    SupplierPayment.payment_method == 'mixed',
+                                    SupplierPayment.bank_transfer_amount > 0
+                                )
+                            )
+                        )
+                    elif payment_method == 'cash':
+                        base_query = base_query.filter(
+                            or_(
+                                SupplierPayment.payment_method == 'cash',
+                                and_(
+                                    SupplierPayment.payment_method == 'mixed',
+                                    SupplierPayment.cash_amount > 0
+                                )
+                            )
+                        )
+                    elif payment_method == 'cheque':
+                        base_query = base_query.filter(
+                            or_(
+                                SupplierPayment.payment_method == 'cheque',
+                                and_(
+                                    SupplierPayment.payment_method == 'mixed',
+                                    SupplierPayment.cheque_amount > 0
+                                )
+                            )
+                        )
+                    elif payment_method == 'bank_transfer':
+                        base_query = base_query.filter(
+                            or_(
+                                SupplierPayment.payment_method == 'bank_transfer',
+                                and_(
+                                    SupplierPayment.payment_method == 'mixed',
+                                    SupplierPayment.bank_transfer_amount > 0
+                                )
+                            )
+                        )
+                    elif payment_method == 'upi':
+                        base_query = base_query.filter(
+                            or_(
+                                SupplierPayment.payment_method == 'upi',
+                                and_(
+                                    SupplierPayment.payment_method == 'mixed',
+                                    SupplierPayment.upi_amount > 0
+                                )
+                            )
+                        )
+                    else:
+                        base_query = base_query.filter(SupplierPayment.payment_method == payment_method)
+                
+                # Apply amount range filters
+                min_amount = request.args.get('min_amount') or request.args.get('amount_min')
+                max_amount = request.args.get('max_amount') or request.args.get('amount_max')
+                
+                if min_amount:
+                    try:
+                        min_val = float(min_amount)
+                        base_query = base_query.filter(SupplierPayment.amount >= min_val)
+                    except ValueError:
+                        pass
+                
+                if max_amount:
+                    try:
+                        max_val = float(max_amount)
+                        base_query = base_query.filter(SupplierPayment.amount <= max_val)
+                    except ValueError:
+                        pass
+                
+                # Apply reference number filter
+                reference_no = request.args.get('reference_no') or request.args.get('ref_no')
+                if reference_no and reference_no.strip():
+                    base_query = base_query.filter(SupplierPayment.reference_no.ilike(f'%{reference_no}%'))
+                
+                # Apply invoice ID filter
+                invoice_id = request.args.get('invoice_id')
+                if invoice_id and invoice_id.strip():
+                    base_query = base_query.filter(SupplierPayment.invoice_id == invoice_id)
+
+                # If no date filters specified, use financial year default
+                if not start_date and not end_date:
+                    from datetime import date
+                    today = date.today()
+                    if today.month >= 4:  # April onwards - current FY
+                        fy_start = date(today.year, 4, 1)
+                        fy_end = date(today.year + 1, 3, 31)
+                    else:  # January to March - previous FY
+                        fy_start = date(today.year - 1, 4, 1)
+                        fy_end = date(today.year, 3, 31)
+                    
+                    base_query = base_query.filter(
+                        SupplierPayment.payment_date >= fy_start,
+                        SupplierPayment.payment_date <= fy_end
+                    )
+                
+                # Calculate filtered totals
+                total_count = base_query.count()
+                total_amount = base_query.with_entities(func.sum(SupplierPayment.amount)).scalar() or 0
+                
+                logger.info(f"🎯 [FILTERED] Calculated from database - Count: {total_count}, Amount: {total_amount}")
+                
+                return {
+                    'total_count': total_count,
+                    'total_amount': float(total_amount)
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Error calculating filtered basic summary: {str(e)}")
+            return {}
+
+    def _calculate_this_month_amount_from_database(self, existing_summary: Dict) -> float:
+        """Calculate this month amount using database query with same filters"""
+        try:
+            from app.services.database_service import get_db_session
+            from app.models.transaction import SupplierPayment
+            from sqlalchemy import func
+            from flask_login import current_user
+            from datetime import datetime, date
+            
+            # Get current month start date
+            current_month = datetime.now().month
+            current_year = datetime.now().year
+            this_month_start = date(current_year, current_month, 1)
+            
+            with get_db_session() as session:
+                # Build same query as supplier_service but with this_month filter
+                query = session.query(SupplierPayment).filter_by(
+                    hospital_id=current_user.hospital_id
+                ).filter(
+                    SupplierPayment.payment_date >= this_month_start
+                )
+                
+                # Apply same default filters as supplier_service (current month date range)
+                today = date.today()
+                default_start = today.replace(day=1)
+                query = query.filter(
+                    SupplierPayment.payment_date >= default_start,
+                    SupplierPayment.payment_date <= today
+                )
+                
+                this_month_amount = query.with_entities(
+                    func.sum(SupplierPayment.amount)
+                ).scalar() or 0
+                
+                logger.info(f"🎯 Calculated this month amount from database: {this_month_amount}")
+                return float(this_month_amount)
+                
+        except Exception as e:
+            logger.error(f"Error calculating this month amount from database: {str(e)}")
+            return 0.0
+
+    def _calculate_fallback_summary_from_items(self, payments: List[Dict]) -> Dict:
+        """Calculate complete summary from page items when no existing summary"""
+        from decimal import Decimal
+        from datetime import datetime
+        
+        try:
+            total_count = len(payments)
+            total_amount = sum(Decimal(str(p.get('amount', 0))) for p in payments)
+            
+            # Count by status
+            pending_count = len([p for p in payments if p.get('workflow_status') == 'pending'])
+            approved_count = len([p for p in payments if p.get('workflow_status') == 'approved'])
+            completed_count = len([p for p in payments if p.get('workflow_status') == 'completed'])
+            # ✅ COMPREHENSIVE bank transfer counting in fallback
+            bank_transfer_count = 0
+            for payment in payments:
+                payment_method = payment.get('payment_method', '')
+                bank_amount = payment.get('bank_transfer_amount', 0)
+                
+                # Convert bank_amount to float for comparison
+                try:
+                    bank_amount_float = float(bank_amount) if bank_amount not in [None, '', 'None'] else 0.0
+                except (ValueError, TypeError):
+                    bank_amount_float = 0.0
+                
+                # Count as bank transfer if pure bank transfer OR mixed with bank amount
+                if payment_method == 'bank_transfer' or bank_amount_float > 0:
+                    bank_transfer_count += 1
+
+            logger.info(f"🔍 [FALLBACK] Calculated bank_transfer_count: {bank_transfer_count}")
+            
+            # Calculate this month data
+            current_month = datetime.now().month
+            current_year = datetime.now().year
+            this_month_count = 0
+            this_month_amount = Decimal('0.00')
+            
+            for payment in payments:
+                payment_date = payment.get('payment_date')
+                if payment_date:
+                    if isinstance(payment_date, str):
+                        try:
+                            payment_date = datetime.strptime(payment_date, '%Y-%m-%d').date()
+                        except ValueError:
+                            continue
+                    if hasattr(payment_date, 'month') and hasattr(payment_date, 'year'):
+                        if payment_date.month == current_month and payment_date.year == current_year:
+                            this_month_count += 1
+                            this_month_amount += Decimal(str(payment.get('amount', 0)))
+            
+            return {
+                'total_count': total_count,
+                'total_amount': float(total_amount),
+                'pending_count': pending_count,
+                'approved_count': approved_count,
+                'completed_count': completed_count,
+                'this_month_count': this_month_count,
+                'this_month_amount': float(this_month_amount),
+                'bank_transfer_count': bank_transfer_count,
+                'calculation_method': 'fallback_from_page_items'
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error in fallback summary calculation: {str(e)}")
+            return {
+                'total_count': 0, 'total_amount': 0.0, 'pending_count': 0, 'approved_count': 0,
+                'completed_count': 0, 'this_month_amount': 0.0, 'bank_transfer_count': 0, 'this_month_count': 0
+            }
+
+
+    def _calculate_this_month_amount_from_page_items(self, payments: List[Dict]) -> float:
+        """Helper method to calculate this month amount from page items"""
+        try:
+            current_month = datetime.now().month
+            current_year = datetime.now().year
+            this_month_amount = Decimal('0.00')
+            
+            for payment in payments:
+                payment_date = payment.get('payment_date')
+                if payment_date:
+                    if isinstance(payment_date, str):
+                        try:
+                            payment_date = datetime.strptime(payment_date, '%Y-%m-%d').date()
+                        except ValueError:
+                            continue
+                    if hasattr(payment_date, 'month') and hasattr(payment_date, 'year'):
+                        if payment_date.month == current_month and payment_date.year == current_year:
+                            this_month_amount += Decimal(str(payment.get('amount', 0)))
+            
+            return float(this_month_amount)
+        except Exception as e:
+            logger.error(f"Error calculating this month amount: {str(e)}")
+            return 0.0
+    
+    def _get_actual_database_counts(self, respect_current_filters: bool = True) -> Dict:
+        """Get actual counts from database for enhanced summary fields"""
+        try:
+            from app.services.database_service import get_db_session
+            from app.models.transaction import SupplierPayment
+            from sqlalchemy import func, or_, and_
+            from flask_login import current_user
+            from flask import request
+            from datetime import datetime, date
+            
+            with get_db_session() as session:
+                # Base query matching the same filters as the main search
+                base_query = session.query(SupplierPayment).filter_by(
+                    hospital_id=current_user.hospital_id
+                )
+                
+                # Apply date filters based on card configuration
+                if respect_current_filters:
+                    # For filterable cards - apply current user filters
+                    start_date = request.args.get('start_date')
+                    end_date = request.args.get('end_date')
+                    
+                    if start_date:
+                        try:
+                            start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+                            base_query = base_query.filter(SupplierPayment.payment_date >= start_date_obj)
+                        except ValueError:
+                            pass
+                            
+                    if end_date:
+                        try:
+                            end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+                            base_query = base_query.filter(SupplierPayment.payment_date <= end_date_obj)
+                        except ValueError:
+                            pass
+
+                    # Apply supplier filters (same logic as main query)
+                    from app.models.master import Supplier
+                    supplier_name_search = request.args.get('supplier_name_search')
+                    search = request.args.get('search')
+                    supplier_id = request.args.get('supplier_id')
+                    
+                    if supplier_id and supplier_id.strip():
+                        base_query = base_query.filter(SupplierPayment.supplier_id == supplier_id)
+                    elif supplier_name_search and supplier_name_search.strip():
+                        # Apply same supplier name search logic as main query
+                        supplier_subquery = session.query(Supplier.supplier_id).filter(
+                            Supplier.hospital_id == current_user.hospital_id,
+                            Supplier.supplier_name.ilike(f'%{supplier_name_search}%')
+                        ).subquery()
+                        base_query = base_query.filter(SupplierPayment.supplier_id.in_(supplier_subquery))
+                    elif search and search.strip():
+                        # Apply same general search logic as main query
+                        supplier_subquery = session.query(Supplier.supplier_id).filter(
+                            Supplier.hospital_id == current_user.hospital_id,
+                            Supplier.supplier_name.ilike(f'%{search}%')
+                        ).subquery()
+                        base_query = base_query.filter(SupplierPayment.supplier_id.in_(supplier_subquery))
+
+                    # Apply status filters
+                    workflow_status = request.args.get('workflow_status')
+                    status = request.args.get('status')
+                    if workflow_status and workflow_status.strip():
+                        base_query = base_query.filter(SupplierPayment.workflow_status == workflow_status)
+                    elif status and status.strip():
+                        base_query = base_query.filter(SupplierPayment.workflow_status == status)
+                    
+                    # Apply payment method filters
+                    payment_method = request.args.get('payment_method')
+                    if payment_method and payment_method.strip():
+                        if payment_method == 'bank_transfer_inclusive':
+                            # Special handling for bank transfer inclusive
+                            base_query = base_query.filter(
+                                or_(
+                                    SupplierPayment.payment_method == 'bank_transfer',
+                                    and_(
+                                        SupplierPayment.payment_method == 'mixed',
+                                        SupplierPayment.bank_transfer_amount > 0
+                                    )
+                                )
+                            )
+                        else:
+                            base_query = base_query.filter(SupplierPayment.payment_method == payment_method)
+                    
+                    # Apply amount range filters
+                    min_amount = request.args.get('min_amount') or request.args.get('amount_min')
+                    max_amount = request.args.get('max_amount') or request.args.get('amount_max')
+                    
+                    if min_amount:
+                        try:
+                            min_val = float(min_amount)
+                            base_query = base_query.filter(SupplierPayment.amount >= min_val)
+                        except ValueError:
+                            pass
+                    
+                    if max_amount:
+                        try:
+                            max_val = float(max_amount)
+                            base_query = base_query.filter(SupplierPayment.amount <= max_val)
+                        except ValueError:
+                            pass
+                    
+                    # Apply reference number filter
+                    reference_no = request.args.get('reference_no') or request.args.get('ref_no')
+                    if reference_no and reference_no.strip():
+                        base_query = base_query.filter(SupplierPayment.reference_no.ilike(f'%{reference_no}%'))
+                    
+                    # Apply invoice ID filter
+                    invoice_id = request.args.get('invoice_id')
+                    if invoice_id and invoice_id.strip():
+                        base_query = base_query.filter(SupplierPayment.invoice_id == invoice_id)
+
+
+                    # If no date filters specified, use financial year default
+                    if not start_date and not end_date:
+                        from datetime import date
+                        today = date.today()
+                        if today.month >= 4:  # April onwards - current FY
+                            fy_start = date(today.year, 4, 1)
+                            fy_end = date(today.year + 1, 3, 31)
+                        else:  # January to March - previous FY
+                            fy_start = date(today.year - 1, 4, 1)
+                            fy_end = date(today.year, 3, 31)
+                        
+                        base_query = base_query.filter(
+                            SupplierPayment.payment_date >= fy_start,
+                            SupplierPayment.payment_date <= fy_end
+                        )
+                else:
+                    # For non-filterable cards - always use "this month" regardless of filters
+                    today = date.today()
+                    default_start = today.replace(day=1)
+                    base_query = base_query.filter(
+                        SupplierPayment.payment_date >= default_start,
+                        SupplierPayment.payment_date <= today
+                    )
+                
+                # Count by workflow status
+                approved_count = base_query.filter(
+                    SupplierPayment.workflow_status == 'approved'
+                ).count()
+
+                completed_count = base_query.filter(
+                    SupplierPayment.workflow_status == 'completed'
+                ).count()
+
+                pending_count = base_query.filter(
+                    SupplierPayment.workflow_status == 'pending'
+                ).count()
+                
+                # Count bank transfers (both pure and mixed)
+                bank_transfer_count = base_query.filter(
+                    or_(
+                        SupplierPayment.payment_method == 'bank_transfer',
+                        and_(
+                            SupplierPayment.payment_method == 'mixed',
+                            SupplierPayment.bank_transfer_amount > 0
+                        )
+                    )
+                ).count()
+                
+                logger.info(f"🎯 [DATABASE] Actual counts - Approved: {approved_count}, Completed: {completed_count}, Bank Transfers: {bank_transfer_count}")
+                
+                return {
+                    'approved_count': approved_count,
+                    'completed_count': completed_count,
+                    'pending_count': pending_count,
+                    'bank_transfer_count': bank_transfer_count
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Error getting database counts: {str(e)}")
+            return {
+                'approved_count': 0,
+                'completed_count': 0,
+                'bank_transfer_count': 0
+            }
+
+    
+
+    # ========================================================================
+    # SUPPLIER-SPECIFIC RENDERING METHODS (Moved from data_assembler.py)
+    # ========================================================================
+    
+    def _populate_form_with_suppliers(self, form_instance: FlaskForm):
+        """Populate form with supplier choices"""
+        
+        try:
+            if hasattr(form_instance, 'supplier_id'):
+                from app.utils.form_helpers import populate_supplier_choices
+                # ✅ FIX: Pass SelectField object and current_user object 
+                populate_supplier_choices(form_instance.supplier_id, current_user)
+                logger.debug("✅ Populated supplier choices in form")
+        except Exception as e:
+            logger.warning(f"Error populating supplier choices: {str(e)}")
+    
+    def _get_suppliers_for_dropdown(self) -> List[Dict]:
+        """Get suppliers for dropdown choices"""
+        try:
+            from app.services.supplier_service import get_suppliers_for_choice
+            return get_suppliers_for_choice(current_user.hospital_id)
+        except Exception as e:
+            logger.warning(f"Error getting suppliers for dropdown: {str(e)}")
+            return []
+    
+    def _get_payment_config_object(self):
+        """Get payment configuration object for template compatibility"""
+        try:
+            from app.config import PAYMENT_CONFIG
+            return PAYMENT_CONFIG
+        except ImportError:
+            logger.warning("Could not import PAYMENT_CONFIG")
+            return None
+    
+    def _get_user_permissions(self) -> Dict:
+        """Get user permissions for template"""
+        
+        try:
+            from app.services.permission_service import has_branch_permission
+            
+            return {
+                'can_view': has_branch_permission(current_user, 'payment', 'view'),
+                'can_create': has_branch_permission(current_user, 'payment', 'create'),
+                'can_edit': has_branch_permission(current_user, 'payment', 'edit'),
+                'can_approve': has_branch_permission(current_user, 'payment', 'approve'),
+                'can_delete': has_branch_permission(current_user, 'payment', 'delete'),
+                'can_export': has_branch_permission(current_user, 'payment', 'export')
+            }
+        except Exception as e:
+            logger.warning(f"Error getting user permissions: {str(e)}")
+            return {
+                'can_view': True,
+                'can_create': False,
+                'can_edit': False,
+                'can_approve': False,
+                'can_delete': False,
+                'can_export': False
+            }
+    
+    def _build_active_filters(self) -> Dict:
+        """Build active filters for template"""
+        
+        active_filters = {}
+        
+        try:
+            for key, value in request.args.items():
+                if key not in ['page', 'per_page'] and value and value.strip():
+                    active_filters[key] = {
+                        'value': value.strip(),
+                        'label': key.replace('_', ' ').title(),
+                        'remove_url': self._get_filter_remove_url(key)
+                    }
+        except Exception as e:
+            logger.warning(f"Error building active filters: {str(e)}")
+        
+        return active_filters
+    
+    def _get_filter_remove_url(self, filter_key: str) -> str:
+        """Generate URL to remove specific filter"""
+        
+        try:
+            current_args = dict(request.args)
+            if filter_key in current_args:
+                del current_args[filter_key]
+            if 'page' in current_args:
+                del current_args['page']  # Reset pagination
+            
+            return url_for(request.endpoint, **current_args)
+        except Exception:
+            return '#'
+    
+    def _get_error_fallback_result(self, form_class, error: str) -> Dict:
+        """Error fallback matching existing error handling"""
+        
+        return {
+            'payments': [],
+            'total': 0,
+            'page': 1,
+            'per_page': 20,
+            'summary': {
+                'total_count': 0, 
+                'total_amount': Decimal('0.00'), 
+                'pending_count': 0, 
+                'this_month_count': 0
+            },
+            'form_instance': form_class(request.args) if form_class else None,
+            'branch_context': {},
+            'request_args': {},
+            'active_filters': {},
+            'filtered_args': {},
+            'error': error,
+            'error_timestamp': datetime.now().isoformat()
+        }
+
+# =============================================================================
+# SUPPLIER PAYMENT RENDERER (Entity-Specific Rendering for Data Assembler)
+# =============================================================================
+
+class SupplierPaymentRenderer:
+    """
+    Supplier-specific rendering methods for universal data assembler
+    Contains ALL supplier payment-specific display logic
+    """
+    
+    def render_field(self, field: FieldDefinition, value: Any, item: Dict) -> Optional[Dict]:
+        """Render supplier-specific fields"""
+        
+        try:
+            # Multi-method payment rendering
+            if hasattr(field, 'complex_display_type') and field.complex_display_type == ComplexDisplayType.MULTI_METHOD_PAYMENT:
+                return self._render_multi_method_payment(item, field)
+            
+            # Supplier column rendering
+            elif field.name == 'supplier_name':
+                return self._render_supplier_column(item, field)
+            
+            # Status badge rendering
+            elif field.field_type == FieldType.STATUS_BADGE:
+                return self._render_status_badge(field, value)
+            
+            # Amount field rendering
+            elif field.field_type == FieldType.AMOUNT:
+                return self._render_amount_field(value, field, item)
+            
+            # No supplier-specific rendering needed
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error rendering supplier field {field.name}: {str(e)}")
+            return None
+    
+    def _render_multi_method_payment(self, item: Dict, field: FieldDefinition) -> Dict:
+        """SUPPLIER-SPECIFIC: Multi-method payment breakdown (exact from existing payment_list)"""
+        
+        # Check if this is a multi-method payment
+        cash_amount = item.get("cash_amount", 0)
+        cheque_amount = item.get("cheque_amount", 0)
+        bank_amount = item.get("bank_transfer_amount", 0)
+        upi_amount = item.get("upi_amount", 0)
+        
+        # Count methods present (same logic as existing)
+        methods_present = sum([
+            1 if cash_amount and float(cash_amount) > 0 else 0,
+            1 if cheque_amount and float(cheque_amount) > 0 else 0,
+            1 if bank_amount and float(bank_amount) > 0 else 0,
+            1 if upi_amount and float(upi_amount) > 0 else 0
+        ])
+        
+        if methods_present > 1:
+            # Multi-method display with breakdown (exact HTML structure as existing)
+            breakdown_html = '<div class="payment-method-breakdown">'
+            
+            if cash_amount and float(cash_amount) > 0:
+                breakdown_html += f'''
+                    <div class="payment-method-item">
+                        <i class="fas fa-money-bill text-green-600"></i>
+                        <span>Cash: ₹{float(cash_amount):,.2f}</span>
+                    </div>
+                '''
+            if cheque_amount and float(cheque_amount) > 0:
+                breakdown_html += f'''
+                    <div class="payment-method-item">
+                        <i class="fas fa-money-check text-blue-600"></i>
+                        <span>Cheque: ₹{float(cheque_amount):,.2f}</span>
+                    </div>
+                '''
+            if bank_amount and float(bank_amount) > 0:
+                breakdown_html += f'''
+                    <div class="payment-method-item">
+                        <i class="fas fa-university text-blue-600"></i>
+                        <span>Bank: ₹{float(bank_amount):,.2f}</span>
+                    </div>
+                '''
+            if upi_amount and float(upi_amount) > 0:
+                breakdown_html += f'''
+                    <div class="payment-method-item">
+                        <i class="fas fa-mobile-alt text-purple-600"></i>
+                        <span>UPI: ₹{float(upi_amount):,.2f}</span>
+                    </div>
+                '''
+            
+            breakdown_html += '</div>'
+            
+            return {
+                'field_name': field.name,
+                'raw_value': 'Mixed',
+                'field_type': field.field_type.value,
+                'css_class': getattr(field, 'css_classes', ''),
+                'align': getattr(field, 'align', 'left'),
+                'formatted_value': breakdown_html,
+                'component': 'multi_method_payment',
+                'is_multi_method': True,
+                'display_method': 'Mixed'
+            }
+        else:
+            # Single method display (exact logic as existing)
+            method = item.get('display_payment_method', item.get('payment_method', ''))
+            method_icons = {
+                'cash': 'fas fa-money-bill text-green-600',
+                'cheque': 'fas fa-money-check text-blue-600', 
+                'bank_transfer': 'fas fa-university text-blue-600',
+                'upi': 'fas fa-mobile-alt text-purple-600'
+            }
+            
+            icon = method_icons.get(item.get('payment_method', ''), 'fas fa-credit-card')
+            
+            return {
+                'field_name': field.name,
+                'raw_value': method,
+                'field_type': field.field_type.value,
+                'css_class': getattr(field, 'css_classes', ''),
+                'align': getattr(field, 'align', 'left'),
+                'formatted_value': f'<i class="{icon}"></i> {method}',
+                'component': 'single_method_payment',
+                'is_multi_method': False,
+                'display_method': method
+            }
+    
+    def _render_supplier_column(self, item: Dict, field: FieldDefinition) -> Dict:
+        """SUPPLIER-SPECIFIC: Supplier column rendering (exact from existing payment_list)"""
+        
+        supplier_name = item.get('supplier_name', '')
+        supplier_code = item.get('supplier_code', '')
+        reference_no = item.get('reference_no', '')
+        
+        # Build supplier column HTML (exact structure as existing payment_list)
+        supplier_html = f'<div class="supplier-name">{supplier_name}</div>'
+        if reference_no:
+            supplier_html += f'<div class="supplier-secondary">Ref: {reference_no}</div>'
+        elif supplier_code:
+            supplier_html += f'<div class="supplier-secondary">Code: {supplier_code}</div>'
+        
+        return {
+            'field_name': field.name,
+            'raw_value': supplier_name,
+            'field_type': field.field_type.value,
+            'css_class': 'supplier-column',
+            'align': getattr(field, 'align', 'left'),
+            'formatted_value': supplier_html,
+            'component': 'supplier_column',
+            'supplier_name': supplier_name,
+            'supplier_code': supplier_code,
+            'reference_no': reference_no
+        }
+    
+    def _render_status_badge(self, field: FieldDefinition, value: Any) -> Dict:
+        """SUPPLIER-SPECIFIC: Status badge rendering with CSS classes"""
+        
+        status_option = self._get_status_option(field, value)
+        
+        return {
+            'field_name': field.name,
+            'raw_value': value,
+            'field_type': field.field_type.value,
+            'css_class': getattr(field, 'css_classes', ''),
+            'align': getattr(field, 'align', 'left'),
+            'formatted_value': str(value).title(),
+            'component': 'status_badge',
+            'status_css_class': status_option.get('css_class', 'status-default'),
+            'badge_html': f'<span class="status-badge {status_option.get("css_class", "status-default")}">{str(value).title()}</span>'
+        }
+    
+    def _render_amount_field(self, value: Any, field: FieldDefinition, item: Dict = None) -> Dict:
+        """SUPPLIER-SPECIFIC: Amount field with enhanced payment method filtering display"""
+        
+        from flask import request
+        
+        if isinstance(value, (int, float, Decimal)):
+            formatted = f"₹{float(value):,.2f}"
+            
+            # Check for active payment method filter and mixed payment
+            active_payment_filter = request.args.get('payment_method') if request else None
+            payment_method = item.get('payment_method') if item else None
+            
+            # If payment method filter is active and this is a mixed payment, show component amount
+            if (active_payment_filter and 
+                active_payment_filter not in ['bank_transfer_inclusive'] and 
+                payment_method == 'mixed' and 
+                item):
+                
+                # Get the component amount for the filtered payment method
+                component_amount = None
+                component_label = None
+                
+                if active_payment_filter == 'cash' and item.get('cash_amount', 0) > 0:
+                    component_amount = item.get('cash_amount')
+                    component_label = 'Cash'
+                elif active_payment_filter == 'cheque' and item.get('cheque_amount', 0) > 0:
+                    component_amount = item.get('cheque_amount')  
+                    component_label = 'Cheque'
+                elif active_payment_filter == 'bank_transfer' and item.get('bank_transfer_amount', 0) > 0:
+                    component_amount = item.get('bank_transfer_amount')
+                    component_label = 'Bank Transfer'
+                elif active_payment_filter == 'upi' and item.get('upi_amount', 0) > 0:
+                    component_amount = item.get('upi_amount')
+                    component_label = 'UPI'
+                
+                # If we found a component amount, add it to the formatted display
+                if component_amount and float(component_amount) > 0:
+                    component_formatted = f"₹{float(component_amount):,.2f}"
+                    formatted += f'<br><small style="font-size: 0.75em; color: #666; font-weight: normal;">({component_label} - {component_formatted})</small>'
+        else:
+            formatted = str(value) if value is not None else "₹0.00"
+        
+        return {
+            'field_name': field.name,
+            'raw_value': value,
+            'field_type': field.field_type.value,
+            'css_class': getattr(field, 'css_classes', ''),
+            'align': getattr(field, 'align', 'right'),
+            'formatted_value': formatted,
+            'component': 'amount_field'
+        }
+    
+    def _get_status_option(self, field: FieldDefinition, value: Any) -> Dict:
+        """Get status option configuration"""
+        
+        if not hasattr(field, 'options') or not field.options:
+            return {'css_class': 'status-default', 'label': str(value).title()}
+        
+        for option in field.options:
+            if option.get('value') == value:
+                return option
+        
+        return {'css_class': 'status-default', 'label': str(value).title()}
+    
+    def get_template_data(self, additional_context: Dict, form_instance: FlaskForm) -> Dict:
+        """Get supplier-specific template data"""
+        
+        return {
+            'suppliers': additional_context.get('suppliers', []),
+            'payment_config': additional_context.get('payment_config')
+        }
+    
+    def get_dropdown_choices(self) -> Dict:
+        """Get supplier-specific dropdown choices"""
+        
+        try:
+            from app.services.supplier_service import get_suppliers_for_choice
+            return {
+                'suppliers': get_suppliers_for_choice(current_user.hospital_id)
+            }
+        except Exception as e:
+            logger.warning(f"Error getting supplier dropdown choices: {str(e)}")
+            return {'suppliers': []}
+    
+    def get_config_object(self):
+        """Get supplier-specific configuration object"""
+        
+        try:
+            from app.config import PAYMENT_CONFIG
+            return PAYMENT_CONFIG
+        except ImportError:
+            logger.warning("Could not import PAYMENT_CONFIG")
+            return None
+

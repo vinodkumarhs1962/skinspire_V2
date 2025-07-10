@@ -1,0 +1,109 @@
+/* ==========================================
+   ICON COMPONENTS
+   File: static/css/components/icons.css
+   ========================================== */
+
+/* ==========================================
+   FONTAWESOME ICON FIXES - CENTRALIZED
+   ========================================== */
+
+/* Ensure FontAwesome icons are always visible */
+.fas, .far, .fab, .fal, .fad {
+    display: inline-block !important;
+    font-family: "Font Awesome 5 Free" !important;
+    font-style: normal !important;
+    font-variant: normal !important;
+    text-rendering: auto !important;
+    line-height: 1 !important;
+    vertical-align: baseline !important;
+}
+
+/* Specific weights for FontAwesome */
+.fas {
+    font-weight: 900 !important;
+}
+
+.far {
+    font-weight: 400 !important;
+}
+
+/* Override Tailwind's text size constraints for action column icons */
+.action-column .fas,
+.action-column .far,
+table .fas,
+table .far {
+    font-size: inherit !important;
+    width: auto !important;
+    height: auto !important;
+    min-width: 1em !important;
+    min-height: 1em !important;
+}
+
+/* Ensure action buttons have proper spacing and icon visibility */
+.action-buttons .fas,
+.action-buttons .far,
+.inline-flex .fas,
+.inline-flex .far {
+    padding: 0 !important;
+    vertical-align: middle !important;
+}
+
+/* ==========================================
+   ICON SPACING UTILITIES
+   ========================================== */
+
+/* Ensure Tailwind margin utilities work with higher specificity */
+.mr-1 { margin-right: 0.25rem !important; }
+.mr-2 { margin-right: 0.5rem !important; }
+.mr-3 { margin-right: 0.75rem !important; }
+.ml-1 { margin-left: 0.25rem !important; }
+.ml-2 { margin-left: 0.5rem !important; }
+.ml-3 { margin-left: 0.75rem !important; }
+
+/* Semantic icon spacing classes for better maintainability */
+.icon-left { margin-right: 0.5rem !important; }
+.icon-right { margin-left: 0.5rem !important; }
+
+/* Optional: Add fallback spacing for icons without explicit classes */
+.fas:not([class*="mr-"]):not([class*="ml-"]) + * {
+    margin-left: 0.5rem !important;
+}
+
+.far:not([class*="mr-"]):not([class*="ml-"]) + * {
+    margin-left: 0.5rem !important;
+}
+
+/* ==========================================
+   ENHANCED ICON SPACING WITHIN BUTTONS
+   ========================================== */
+
+/* Ensure icons within buttons have proper spacing from text */
+.btn-primary .icon-left,
+.btn-secondary .icon-left,
+.btn-outline .icon-left,
+.btn-danger .icon-left,
+.btn-success .icon-left,
+.btn-warning .icon-left,
+.btn-primary .fas.mr-2,
+.btn-secondary .fas.mr-2,
+.btn-outline .fas.mr-2,
+.btn-danger .fas.mr-2,
+.btn-success .fas.mr-2,
+.btn-warning .fas.mr-2 {
+    margin-right: 0.5rem !important;
+}
+
+.btn-primary .icon-right,
+.btn-secondary .icon-right,
+.btn-outline .icon-right,
+.btn-danger .icon-right,
+.btn-success .icon-right,
+.btn-warning .icon-right,
+.btn-primary .fas.ml-2,
+.btn-secondary .fas.ml-2,
+.btn-outline .fas.ml-2,
+.btn-danger .fas.ml-2,
+.btn-success .fas.ml-2,
+.btn-warning .fas.ml-2 {
+    margin-left: 0.5rem !important;
+}

@@ -91,6 +91,8 @@ def create_app() -> Flask:
         # Configure logging first to ensure proper error tracking
         app.logger.setLevel(logging.INFO)
         
+        fix_logging_rotation_error(app)
+
         # Add file logging for the application
         logs_dir = os.path.join(app.root_path, 'logs')
         os.makedirs(logs_dir, exist_ok=True)
@@ -201,6 +203,9 @@ def create_app() -> Flask:
         
         # Register error handlers
         register_error_handlers(app)
+
+        # Register custom filters
+        register_jinja_filters(app)
         
         # Add request middleware for authentication token
         @app.before_request
@@ -294,6 +299,17 @@ def register_view_blueprints(app: Flask) -> None:
         from app.views.admin_views import admin_views_bp
         view_blueprints.append(admin_views_bp)
         
+        # ✅ Universal Views Blueprint
+        try:
+            app.logger.info("🔧 Attempting to import universal views...")
+            from app.views.universal_views import universal_bp
+            view_blueprints.append(universal_bp)
+            app.logger.info("✅ Successfully imported universal views blueprint")
+        except ImportError as e:
+            app.logger.warning(f"⚠️ Universal views blueprint could not be loaded: {str(e)}")
+        except Exception as e:
+            app.logger.error(f"❌ Error importing universal views: {str(e)}")
+
         # Import new GL, inventory, and supplier blueprints
         try:
             # GL views
@@ -363,6 +379,15 @@ def register_view_blueprints(app: Flask) -> None:
         app.logger.info(f"  URL prefix: {app.blueprints['supplier_views'].url_prefix}")
     else:
         app.logger.error("supplier_views blueprint is NOT registered")
+        app.logger.error(f"  Registered blueprints: {list(app.blueprints.keys())}")
+
+    # Debug: Check if universal views blueprint is registered
+    if 'universal_views' in app.blueprints:
+        app.logger.info("✅ universal_views blueprint is registered")
+        app.logger.info(f"  URL prefix: {app.blueprints['universal_views'].url_prefix}")
+        app.logger.info("🚀 Universal Engine is ready!")
+    else:
+        app.logger.error("❌ universal_views blueprint is NOT registered")
         app.logger.error(f"  Registered blueprints: {list(app.blueprints.keys())}")
 
 def register_api_blueprints(app: Flask) -> None:
@@ -478,3 +503,60 @@ def setup_unicode_logging():
         logger.warning("⚠️ Unicode logging fallback active")
     
     return success
+
+def fix_logging_rotation_error(app):
+    """Fix Windows log rotation permission errors"""
+    import logging.handlers
+    import os
+    
+    try:
+        # Remove any existing RotatingFileHandler
+        for handler in app.logger.handlers[:]:
+            if isinstance(handler, logging.handlers.RotatingFileHandler):
+                app.logger.removeHandler(handler)
+        
+        log_dir = os.path.join(app.root_path, '..', 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+        log_file = os.path.join(log_dir, 'app.log')
+        
+        file_handler = logging.handlers.TimedRotatingFileHandler(
+            log_file, when='midnight', interval=1, backupCount=7, encoding='utf-8'
+        )
+        
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(formatter)
+        file_handler.setLevel(logging.INFO)
+        
+        app.logger.addHandler(file_handler)
+        app.logger.info("✅ Fixed logging rotation error")
+        
+    except Exception as e:
+        app.logger.error(f"Logging fix error: {str(e)}")
+
+def register_jinja_filters(app):
+    """Register custom Jinja2 filters - BACKWARD COMPATIBLE FIX"""
+    
+    @app.template_filter('flatten')
+    def flatten_filter(nested_list):
+        """Flatten a nested list - FIX for missing flatten filter"""
+        try:
+            result = []
+            for item in nested_list:
+                if isinstance(item, (list, tuple)):
+                    result.extend(flatten_filter(item))
+                else:
+                    result.append(item)
+            return result
+        except Exception:
+            return nested_list if isinstance(nested_list, (list, tuple)) else [nested_list]
+    
+    @app.template_filter('selectattr_safe')
+    def selectattr_safe_filter(items, attribute, value=None):
+        """Safe selectattr that handles missing attributes"""
+        try:
+            if value is None:
+                return [item for item in items if hasattr(item, attribute) and getattr(item, attribute)]
+            else:
+                return [item for item in items if hasattr(item, attribute) and getattr(item, attribute) == value]
+        except Exception:
+            return []

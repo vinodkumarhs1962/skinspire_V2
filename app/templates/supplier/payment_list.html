@@ -1,164 +1,583 @@
 {% extends "layouts/dashboard.html" %}
 {% from "components/alerts.html" import alert %}
 {% from "components/badges.html" import payment_status_badge %}
-{% from "components/tables.html" import sortable_header, pagination, table_toolbar, empty_state %}
 
 {% block title %}Supplier Payment History{% endblock %}
 
+{% block styles %}
+{{ super() }}
+/* MODIFIED: Enhanced existing CSS in payment_list.html styles block */
+/* Replace the existing styles with these enhanced versions */
+
+<style>
+/* CRITICAL: Fix supplier column visibility in tables.css */
+/* The current CSS has max-width: 0 which hides everything */
+.data-table .supplier-name,
+table .supplier-name {
+    max-width: 180px !important;  /* Change from 0 to actual width */
+    min-width: 100px !important;  /* Ensure minimum visibility */
+    overflow: hidden !important;           
+    text-overflow: ellipsis !important;    
+    white-space: nowrap !important;        
+    display: block !important;
+}
+
+.data-table .supplier-secondary,
+table .supplier-secondary {
+    max-width: 180px !important;  /* Change from 0 to actual width */
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    display: block !important;
+}
+
+/* Ensure supplier column container has proper width */
+.data-table .supplier-column,
+table .supplier-column {
+    min-width: 150px !important;
+    max-width: 200px !important;
+    width: 22% !important; /* Match your table header width */
+}
+
+/* Method column icon spacing - targets payment method badges */
+.payment-method-badge i {
+    margin-right: 0.25rem !important;
+}
+
+/* General status badge icon spacing */
+.status-badge i {
+    margin-right: 0.25rem !important;
+}
+
+/* Right align amount in summary cards */
+.stat-card-value.amount {
+    text-align: right !important;
+}
+
+/* MODIFIED: Enhanced scroll behavior for better filter targeting */
+html {
+    scroll-behavior: smooth !important;
+    scroll-padding-top: 100px !important; /* NEW: Global scroll padding */
+}
+
+/* MODIFIED: Enhanced filter section scroll targeting */
+filter-bottom {
+    scroll-margin-top: 20px !important; /* INCREASED from 20px to 120px */
+    position: relative !important; /* NEW: Ensure proper positioning */
+}
+
+/* MODIFIED: Enhanced filter section visibility when targeted */
+filter-bottom:target {
+    /* NEW: Visual feedback when scrolled to via anchor */
+    animation: filter-highlight 0.6s ease-in-out !important;
+}
+
+/* Filter middle anchor - perfect positioning */
+#filter-middle {
+    scroll-margin-top: 60px !important;
+    position: relative !important;
+}
+
+#filter-middle:target {
+    animation: filter-highlight 0.6s ease-in-out !important;
+}
+
+/* NEW: Animation for visual feedback */
+@keyframes filter-highlight {
+    0% { 
+        background-color: rgba(59, 130, 246, 0.1) !important;
+        transform: scale(1.002) !important;
+    }
+    50% {
+        background-color: rgba(59, 130, 246, 0.05) !important;
+    }
+    100% { 
+        background-color: transparent !important;
+        transform: scale(1) !important;
+    }
+}
+
+/* Specific targeting for method column icons */
+.data-table .status-badge i,
+table .status-badge i {
+    margin-right: 0.25rem !important;
+}
+
+/* Ensure consistent spacing across all icon-text combinations */
+.payment-list-table .status-badge i {
+    margin-right: 0.25rem !important;
+}
+
+/* MODIFIED: Enhanced form behavior to prevent scroll interference */
+.filter-card form {
+    scroll-behavior: inherit !important; /* NEW: Inherit from html instead of auto */
+}
+
+/* NEW: Ensure filter card is visible during scroll animation */
+.filter-card {
+    scroll-margin: 100px 0 !important; /* NEW: Margin for scroll targeting */
+}
+
+/* NEW: Handle page load scroll restoration for filter section */
+.filter-card.scroll-target {
+    scroll-behavior: smooth !important;
+    scroll-margin-top: 120px !important;
+}
+</style>
+
+{% endblock %}
+
 {% block content %}
 <div class="container mx-auto px-4 py-6">
-    <!-- Header Section -->
-    <div class="flex flex-col md:flex-row items-start justify-between mb-6">
+    <!-- Page Header -->
+    <div class="flex flex-col md:flex-row items-start md:items-center justify-between mb-6">
         <div>
             <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Supplier Payment History</h1>
-            <p class="text-gray-600 dark:text-gray-400 mt-1">
-                Track and manage supplier payments across all branches
-            </p>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">Track and manage supplier payments across all branches</p>
         </div>
-        <div class="mt-4 md:mt-0 space-x-2">
+        <div class="flex space-x-2 mt-4 md:mt-0">
             <a href="{{ url_for('supplier_views.create_payment') }}" class="btn-primary">
-                <i class="fas fa-plus mr-2"></i> Record Payment
+                <i class="fas fa-plus icon-left"></i>Record Payment
             </a>
-            <button onclick="exportPayments()" class="btn-secondary">
-                <i class="fas fa-download mr-2"></i> Export
-            </button>
+            <a href="{{ url_for('supplier_views.supplier_invoice_list') }}" class="btn-secondary">
+                <i class="fas fa-file-invoice icon-left"></i>Invoices
+            </a>
+            <a href="{{ url_for('supplier_views.purchase_order_list') }}" class="btn-secondary">
+                <i class="fas fa-file-contract icon-left"></i>Purchase Orders
+            </a>
+            <a href="{{ url_for('supplier_views.supplier_list') }}" class="btn-secondary">
+                <i class="fas fa-users icon-left"></i>Suppliers
+            </a>
         </div>
     </div>
-    
-    <!-- Summary Cards -->
-    {% if summary %}
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-            <p class="text-sm text-gray-500 dark:text-gray-400">Total Payments</p>
-            <h3 class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ summary.total_count or 0 }}</h3>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">For selected period</p>
-        </div>
-        
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-            <p class="text-sm text-gray-500 dark:text-gray-400">Total Amount</p>
-            <h3 class="text-2xl font-bold text-green-600 dark:text-green-400">
-                Rs. {{ "{:,.2f}".format(summary.total_amount or 0) }}
-            </h3>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">For selected period</p>
-        </div>
-        
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-            <p class="text-sm text-gray-500 dark:text-gray-400">Pending Approval</p>
-            <h3 class="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{{ summary.pending_approval or 0 }}</h3>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Need attention</p>
-        </div>
-        
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-            <p class="text-sm text-gray-500 dark:text-gray-400">Approved</p>
-            <h3 class="text-2xl font-bold text-green-600 dark:text-green-400">{{ summary.approved or 0 }}</h3>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Completed</p>
-        </div>
-    </div>
-    {% endif %}
-    
-    <!-- Filter Section -->
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
-        <form method="GET" action="{{ url_for('supplier_views.payment_list') }}" class="p-4">
-            <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                
-                <!-- Search -->
-                <div class="lg:col-span-2">
-                    <label for="search" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search</label>
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i class="fas fa-search text-gray-400"></i>
-                        </div>
-                        <input type="text" id="search" name="search" value="{{ filters.search or '' }}" 
-                               placeholder="Supplier name, reference..." 
-                               class="pl-10 w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                    </div>
-                </div>
-                
-                <!-- Supplier Filter -->
-                <div>
-                    <label for="supplier_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Supplier</label>
-                    <select id="supplier_id" name="supplier_id" class="form-select w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                        <option value="">All Suppliers</option>
-                        <!-- Add supplier options dynamically -->
-                    </select>
-                </div>
-                
-                <!-- Payment Method Filter -->
-                <div>
-                    <label for="payment_method" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Payment Method</label>
-                    <select id="payment_method" name="payment_method" class="form-select w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                        <option value="">All Methods</option>
-                        <option value="cash" {% if filters.payment_method == 'cash' %}selected{% endif %}>Cash</option>
-                        <option value="cheque" {% if filters.payment_method == 'cheque' %}selected{% endif %}>Cheque</option>
-                        <option value="bank_transfer" {% if filters.payment_method == 'bank_transfer' %}selected{% endif %}>Bank Transfer</option>
-                        <option value="upi" {% if filters.payment_method == 'upi' %}selected{% endif %}>UPI</option>
-                        <option value="mixed" {% if filters.payment_method == 'mixed' %}selected{% endif %}>Mixed</option>
-                    </select>
-                </div>
-                
-                <!-- Status Filter -->
-                <div>
-                    <label for="status" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
-                    <select id="status" name="status" class="form-select w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                        <option value="">All Status</option>
-                        <option value="pending" {% if filters.status == 'pending' %}selected{% endif %}>Pending</option>
-                        <option value="approved" {% if filters.status == 'approved' %}selected{% endif %}>Approved</option>
-                        <option value="rejected" {% if filters.status == 'rejected' %}selected{% endif %}>Rejected</option>
-                    </select>
-                </div>
-                
-                <!-- Filter Buttons -->
-                <div class="flex items-end space-x-2">
-                    <button type="submit" class="btn-primary w-full">
-                        <i class="fas fa-filter mr-2"></i> Filter
-                    </button>
-                </div>
+    <!-- Add test link for testing universal payment list at top of page -->
+    <div class="alert alert-info mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <i class="fas fa-flask mr-2"></i>
+                <strong>Testing Universal Engine:</strong> Compare with new implementation
             </div>
-            
-            <!-- Date Range -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                <div>
-                    <label for="start_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
-                    <input type="date" id="start_date" name="start_date" value="{{ filters.start_date or '' }}" 
-                           class="form-input w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                </div>
-                <div>
-                    <label for="end_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
-                    <input type="date" id="end_date" name="end_date" value="{{ filters.end_date or '' }}" 
-                           class="form-input w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                </div>
-            </div>
-        </form>
+            <a href="{{ url_for('supplier_views.payment_list_universal_test') }}" 
+            class="btn btn-outline-primary btn-sm">
+                <i class="fas fa-rocket mr-1"></i>Test Universal Version
+            </a>
+        </div>
     </div>
-    
-    <!-- Payment History Table -->
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
-        <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-between items-center">
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Payment History</h2>
-            <div class="text-sm text-gray-600 dark:text-gray-400">
-                {% if payments %}
-                    Showing {{ payments|length }} of {{ total }} payments
+
+    <!-- Summary Cards - Using stat-card like supplier invoice list -->
+    <div class="card-grid cols-4 mb-6">
+        <div class="stat-card">
+            <div class="stat-card-icon primary">
+                <i class="fas fa-receipt"></i>
+            </div>
+            <div class="stat-card-value">
+                {{ summary.total_count if summary and summary.total_count else total if total else payments|length if payments else 0 }}
+            </div>
+            <div class="stat-card-label">Total Payments</div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-card-icon success">
+                <i class="fas fa-rupee-sign"></i>
+            </div>
+            <div class="stat-card-value amount">
+                {% if summary and summary.total_amount %}
+                    ₹{{ "%.0f"|format(summary.total_amount) }}
                 {% else %}
-                    No payments found
+                    ₹0.00
                 {% endif %}
             </div>
+            <div class="stat-card-label">Total Amount</div>
         </div>
-        
-        {% if payments %}
-        <div class="overflow-x-auto">
-            <table class="min-w-full table-auto">
+
+        <div class="stat-card">
+            <div class="stat-card-icon danger">
+                <i class="fas fa-clock"></i>
+            </div>
+            <div class="stat-card-value">
+                {{ summary.pending_count if summary and summary.pending_count else 0 }}
+            </div>
+            <div class="stat-card-label">Pending Approval</div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-card-icon primary">
+                <i class="fas fa-calendar-check"></i>
+            </div>
+            <div class="stat-card-value">
+                {{ summary.this_month_count if summary and summary.this_month_count else 0 }}
+            </div>
+            <div class="stat-card-label">This Month</div>
+        </div>
+    </div>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="mb-6">
+                {% for category, message in messages %}
+                    {% if category == 'error' %}
+                        {{ alert(message, "error") }}
+                    {% elif category == 'success' %}
+                        {{ alert(message, "success") }}
+                    {% elif category == 'warning' %}
+                        {{ alert(message, "warning") }}
+                    {% else %}
+                        {{ alert(message, "info") }}
+                    {% endif %}
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Filter Card - Following supplier invoice list structure -->
+    <div class="filter-card standard-filter-layout" 
+    id="filter-section"    
+    data-standard-filters='{"entityName": "payments", "enableTableEnhancements": true, "enableSearchClear": true, "searchPlaceholder": "Search by supplier name...", "defaultPeriod": "current-month", "enableAutoSubmit": false}'>
+        <div class="filter-card-header">
+            <h3 class="filter-card-title">
+                <i class="fas fa-filter icon-left"></i>Filter Payments
+            </h3>
+            <div class="filter-results-count" data-record-count="{{ summary.total_count if summary and summary.total_count else 0 }}">
+                <span id="results-count">{{ summary.total_count if summary and summary.total_count else 0 }} results</span>
+            </div>
+        </div>
+        <div class="filter-card-body">
+            <form method="GET" action="{{ url_for('supplier_views.payment_list') }}" id="filter-form">
+                <!-- Standard Date Filter -->
+                <div class="standard-date-filter">
+                    <div class="date-filter-title">
+                        <i class="fas fa-calendar-alt"></i>Date Range
+                    </div>
+                    <div class="date-filter-presets">
+                        <button type="button" class="date-filter-preset">
+                            <i class="fas fa-calendar-day"></i>Today
+                        </button>
+                        <button type="button" class="date-filter-preset active">
+                            <i class="fas fa-calendar-alt"></i>This Month
+                        </button>
+                        <button type="button" class="date-filter-preset">
+                            <i class="fas fa-calendar-year"></i>Financial Year
+                        </button>
+                        <button type="button" class="date-filter-preset">
+                            <i class="fas fa-times"></i>Clear
+                        </button>
+                    </div>
+                    <div class="date-filter-inputs">
+                        <input type="date" name="start_date" id="start_date" 
+                            value="{{ request.args.get('start_date', '') }}" class="form-input">
+                        <span class="date-filter-separator">to</span>
+                        <input type="date" name="end_date" id="end_date" 
+                            value="{{ request.args.get('end_date', '') }}" class="form-input">
+                    </div>
+                </div>
+
+                <!-- FIX 2: SUPPLIER DROPDOWN (instead of text input) -->
+                <div class="standard-search-section">
+                    <div class="form-group">
+                        <label for="supplier_id" class="form-label">
+                            <i class="fas fa-building icon-left"></i>Supplier
+                        </label>
+                        <select id="supplier_id" name="supplier_id" class="form-select">
+                            <option value="">All Suppliers</option>
+                            {% if suppliers %}
+                                {% for supplier in suppliers %}
+                                    <option value="{{ supplier.supplier_id }}" 
+                                            {% if request.args.get('supplier_id') == supplier.supplier_id|string %}selected{% endif %}>
+                                        {{ supplier.supplier_name }}
+                                    </option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                        <div class="form-help">Select supplier to filter payments</div>
+                    </div>
+                </div>
+
+                <!-- FIX 4: REORGANIZED PAYMENT FILTERS (moved min amount, hidden reference) -->
+                <div class="filter-grid auto-responsive">                   
+                    <div class="form-group">
+                        <label for="payment_method" class="form-label">
+                            <i class="fas fa-credit-card icon-left"></i>Payment Method
+                        </label>
+                        <select id="payment_method" name="payment_method" multiple class="form-input" 
+                                style="min-height: 2.5rem; padding: 0.5rem;">
+                            <option value="cash" {{ 'selected' if 'cash' in request.args.getlist('payment_method') }}>
+                                💵 Cash
+                            </option>
+                            <option value="cheque" {{ 'selected' if 'cheque' in request.args.getlist('payment_method') }}>
+                                📋 Cheque
+                            </option>
+                            <option value="bank_transfer" {{ 'selected' if 'bank_transfer' in request.args.getlist('payment_method') }}>
+                                🏦 Bank Transfer
+                            </option>
+                            <option value="upi" {{ 'selected' if 'upi' in request.args.getlist('payment_method') }}>
+                                📱 UPI
+                            </option>
+                        </select>
+                        <div class="form-help">Hold Ctrl/Cmd to select multiple methods</div>
+                    </div>
+
+                    <!-- FIXED: Status Field (no custom JavaScript needed) -->
+                    <div class="form-group">
+                        <label for="status" class="form-label">
+                            <i class="fas fa-check-circle icon-left"></i>Status
+                        </label>
+                        <select id="status" name="status" multiple class="form-input" 
+                                style="min-height: 2.5rem; padding: 0.5rem;">
+                            <option value="pending" {{ 'selected' if 'pending' in request.args.getlist('status') }}>
+                                ⏳ Pending
+                            </option>
+                            <option value="approved" {{ 'selected' if 'approved' in request.args.getlist('status') }}>
+                                ✅ Approved
+                            </option>
+                            <option value="rejected" {{ 'selected' if 'rejected' in request.args.getlist('status') }}>
+                                ❌ Rejected
+                            </option>
+                            <option value="cancelled" {{ 'selected' if 'cancelled' in request.args.getlist('status') }}>
+                                🚫 Cancelled
+                            </option>
+                        </select>
+                        <div class="form-help">Hold Ctrl/Cmd to select multiple statuses</div>
+                    </div>
+                    
+                    <!-- FIX 4: MOVED MIN AMOUNT TO REPLACE REFERENCE FIELD POSITION -->
+                    <div class="form-group">
+                        <label for="amount_min" class="form-label">
+                            <i class="fas fa-rupee-sign icon-left"></i>Min Amount
+                        </label>
+                        <input type="number" id="amount_min" name="amount_min" 
+                            value="{{ request.args.get('amount_min', '') }}"
+                            placeholder="Minimum amount..."
+                            step="0.01"
+                            class="form-input">
+                        <div class="form-help">Filter by minimum payment amount</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="invoice_id" class="form-label">
+                            <i class="fas fa-file-invoice icon-left"></i>Invoice
+                        </label>
+                        <input type="text" id="invoice_id" name="invoice_id" 
+                            value="{{ request.args.get('invoice_id', '') }}"
+                            placeholder="Search by invoice..."
+                            class="form-input">
+                        <div class="form-help">Search by invoice number</div>
+                    </div>
+                    
+                    <!-- FIX 4: REFERENCE FIELD HIDDEN (commented out) -->
+                    <!-- 
+                    <div class="form-group" style="display: none;">
+                        <label for="reference_no" class="form-label">
+                            <i class="fas fa-hashtag icon-left"></i>Reference
+                        </label>
+                        <input type="text" id="reference_no" name="reference_no" 
+                            value="{{ request.args.get('reference_no', '') }}"
+                            placeholder="Search by reference..."
+                            class="form-input">
+                    </div>
+                    -->
+                </div>
+
+                <!-- FIX 5: ACTIVE FILTERS MOVED ABOVE APPLY BUTTON -->
+                <!-- Build active filters data -->
+                {% set active_filters_data = [] %}
+                
+                {# Supplier filter (updated for dropdown) #}
+                {% if request.args.get('supplier_id') %}
+                    {% for supplier in suppliers %}
+                        {% if supplier.supplier_id|string == request.args.get('supplier_id') %}
+                            {% set _ = active_filters_data.append({
+                                'category': 'supplier_id',
+                                'label': 'Supplier',
+                                'value': supplier.supplier_name,
+                                'field_name': 'supplier_id',
+                                'field_value': supplier.supplier_id|string
+                            }) %}
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
+                
+                {# Payment method filters (multiple) #}
+                {% set selected_methods = request.args.getlist('payment_method') %}
+                {% if selected_methods %}
+                    {% for method in selected_methods %}
+                        {% if method %}
+                            {% set method_display = {
+                                'cash': 'Cash',
+                                'cheque': 'Cheque', 
+                                'bank_transfer': 'Bank Transfer',
+                                'upi': 'UPI'
+                            }.get(method, method|title) %}
+                            {% set _ = active_filters_data.append({
+                                'category': 'payment_method',
+                                'label': 'Method',
+                                'value': method_display,
+                                'field_name': 'payment_method',
+                                'field_value': method
+                            }) %}
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
+                
+                {# Status filters (multiple) #}
+                {% set selected_statuses = request.args.getlist('status') %}
+                {% if selected_statuses %}
+                    {% for status in selected_statuses %}
+                        {% if status %}
+                            {% set _ = active_filters_data.append({
+                                'category': 'status',
+                                'label': 'Status',
+                                'value': status|title,
+                                'field_name': 'status',
+                                'field_value': status
+                            }) %}
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
+                
+                {# Amount filter #}
+                {% if request.args.get('amount_min') %}
+                    {% set _ = active_filters_data.append({
+                        'category': 'amount_min',
+                        'label': 'Min Amount',
+                        'value': '₹' + request.args.get('amount_min'),
+                        'field_name': 'amount_min'
+                    }) %}
+                {% endif %}
+                
+                {# Invoice filter #}
+                {% if request.args.get('invoice_id') %}
+                    {% set _ = active_filters_data.append({
+                        'category': 'invoice_id',
+                        'label': 'Invoice',
+                        'value': request.args.get('invoice_id'),
+                        'field_name': 'invoice_id'
+                    }) %}
+                {% endif %}
+                
+                {# Date range filter #}
+                {% if request.args.get('start_date') or request.args.get('end_date') %}
+                    {% set date_display = '' %}
+                    {% if request.args.get('start_date') and request.args.get('end_date') %}
+                        {% set date_display = request.args.get('start_date') + ' to ' + request.args.get('end_date') %}
+                    {% elif request.args.get('start_date') %}
+                        {% set date_display = 'From ' + request.args.get('start_date') %}
+                    {% elif request.args.get('end_date') %}
+                        {% set date_display = 'Until ' + request.args.get('end_date') %}
+                    {% endif %}
+                    {% set _ = active_filters_data.append({
+                        'category': 'date_range',
+                        'label': 'Date Range',
+                        'value': date_display,
+                        'field_name': 'date_range'
+                    }) %}
+                {% endif %}
+
+                <!-- FIX 5: ACTIVE FILTERS SECTION (moved above apply button) -->
+                <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600" id="active-filters-section">
+                    <div class="flex flex-wrap items-center gap-2" id="active-filters-wrapper">
+                        {% if active_filters_data %}
+                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                <i class="fas fa-filter mr-1"></i>Active filters:
+                            </span>
+                            
+                            {% for filter_item in active_filters_data %}
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                {{ filter_item.label }}: {{ filter_item.value }}
+                                <button type="button" 
+                                        class="ml-1 text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-100" 
+                                        onclick="removeActiveFilter('{{ filter_item.category }}', '{{ filter_item.field_value if filter_item.field_value else filter_item.field_name }}')"
+                                        title="Remove this filter">
+                                    <i class="fas fa-times text-xs"></i>
+                                </button>
+                            </span>
+                            {% endfor %}
+                            
+                            <a href="{{ url_for('supplier_views.payment_list') }}#filter-middle" 
+                            class="text-sm text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-200 ml-2">
+                                <i class="fas fa-times-circle mr-1"></i>Clear all filters
+                            </a>
+                        {% else %}
+                            <span class="text-sm text-gray-500 dark:text-gray-400">
+                                <i class="fas fa-info-circle mr-1"></i>No active filters - use the controls above to filter results
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- FIX 3: APPLY FILTER ACTIONS (with scroll prevention) -->
+                <div id="filter-middle" style="height: 1px; margin-top: -1px; position: relative;"></div>
+                <div class="filter-actions mt-4">
+                    <div class="filter-actions-left">
+                        <button type="submit" class="btn-primary" id="apply-filters-btn">
+                            <i class="fas fa-search icon-left"></i>Apply Filters
+                        </button>
+                        <a href="{{ url_for('supplier_views.payment_list') }}#filter-middle" class="btn-secondary">
+                            <i class="fas fa-undo icon-left"></i>Reset All
+                        </a>
+                    </div>
+                    <div class="filter-actions-right">
+                        <button type="button" onclick="exportPayments()" class="btn-outline">
+                            <i class="fas fa-download icon-left"></i>Export CSV
+                        </button>
+                        <button type="button" class="btn-outline" onclick="saveFilters()">
+                            <i class="fas fa-save icon-left"></i>Save Filters
+                        </button>
+                    </div>
+                </div>
+            </form>
+
+            <!-- Simple Filter Summary -->
+            <div class="filter-summary enhanced" id="filter-summary">
+                <p class="filter-summary-text enhanced">
+                    <i class="fas fa-info-circle icon-left"></i>
+                    <span id="summary-text">
+                        {% if summary and summary.total_count %}
+                            Showing {{ summary.total_count }} payment records
+                            {% if active_filters_data %}
+                                matching your filters
+                            {% endif %}
+                        {% else %}
+                            No payments found matching your criteria
+                        {% endif %}
+                    </span>
+                </p>
+            </div>
+        </div>
+        <!-- ADD THIS NEW ANCHOR POINT RIGHT HERE -->
+        <div id="filter-bottom" style="height: 1px; margin-top: -1px;"></div>
+    </div>
+    <script>
+    // Restore scroll position after form submission
+    if (window.location.search && !window.location.hash) {
+        setTimeout(function() {
+            const filterSection = document.getElementById('filter-middle');
+            if (filterSection) {
+                filterSection.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }
+        }, 200);
+    }
+    </script>
+    <!-- Main Data Table -->
+    <div class="info-card">
+        <div class="table-container">
+            {% if payments %}
+            <table class="data-table payment-list-table" style="table-layout: fixed; width: 100%;">
                 <thead>
-                    <tr class="bg-gray-50 dark:bg-gray-700 text-xs uppercase">
-                        {{ sortable_header('payment_date', 'Date', filters.sort, filters.order) }}
-                        <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">Supplier</th>
-                        <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">Method</th>
-                        <th class="px-4 py-2 text-left text-gray-500 dark:text-gray-300">Details</th>
-                        {{ sortable_header('amount', 'Amount', filters.sort, filters.order) }}
-                        <th class="px-4 py-2 text-center text-gray-500 dark:text-gray-300">Status</th>
-                        <th class="px-4 py-2 text-center text-gray-500 dark:text-gray-300">Actions</th>
+                    <tr>
+                        <th style="width: 12%;" class="px-2 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Date</th>
+                        <th style="width: 22%;" class="px-2 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Supplier</th>
+                        <th style="width: 17%;" class="px-2 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Method</th>
+                        <th style="width: 16%;" class="px-2 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Details</th>
+                        <th style="width: 10%;" class="px-2 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Amount</th>
+                        <th style="width: 10%;" class="px-2 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                        <th style="width: 14%;" class="px-2 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                     {% for payment in payments %}
                         {% set cash_exists = payment.cash_amount and payment.cash_amount > 0 %}
                         {% set cheque_exists = payment.cheque_amount and payment.cheque_amount > 0 %}
@@ -171,371 +590,1057 @@
                             {% set row_counter = [] %}
                             
                             {% if cash_exists %}
-                            <tr class="border-b dark:border-gray-700 bg-green-50 dark:bg-green-900/20">
-                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <td class="px-2 py-4 whitespace-nowrap">
                                     {% if row_counter|length == 0 %}
+                                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
                                         {{ payment.payment_date.strftime('%d/%m/%Y') if payment.payment_date is not string else payment.payment_date }}
-                                    {% endif %}
-                                </td>
-                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                    {% if row_counter|length == 0 %}
-                                        <div class="font-medium">{{ payment.supplier_name or 'N/A' }}</div>
-                                        {% if payment.reference_no %}
-                                        <div class="text-xs text-gray-500">Ref: {{ payment.reference_no }}</div>
-                                        {% endif %}
-                                    {% endif %}
-                                </td>
-                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
-                                        <i class="fas fa-money-bill-wave mr-1"></i> Cash
-                                    </span>
-                                </td>
-                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                    Cash payment
-                                </td>
-                                <td class="px-4 py-3 text-right font-medium text-gray-800 dark:text-gray-200">
-                                    Rs. {{ "%.2f"|format(payment.cash_amount|float) }}
-                                </td>
-                                <td class="px-4 py-3 text-center">
-                                    {% if row_counter|length == 0 %}
-                                    <span class="px-2 py-1 text-xs rounded-full 
-                                               {% if payment.workflow_status == 'approved' %}bg-green-100 text-green-800
-                                               {% elif payment.workflow_status == 'pending_approval' %}bg-yellow-100 text-yellow-800
-                                               {% else %}bg-gray-100 text-gray-800{% endif %}">
-                                        {{ payment.workflow_status.replace('_', ' ').title() if payment.workflow_status else 'Completed' }}
-                                    </span>
-                                    {% endif %}
-                                </td>
-                                <td class="px-4 py-3 text-center">
-                                    {% if row_counter|length == 0 %}
-                                    <div class="flex justify-center space-x-1">
-                                        <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) }}" 
-                                           class="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors">
-                                            <i class="fas fa-eye mr-1"></i>View
-                                        </a>
-                                        {% if payment.workflow_status not in ['approved', 'rejected'] %}
-                                        <a href="{{ url_for('supplier_views.edit_payment', payment_id=payment.payment_id) }}" 
-                                           class="inline-flex items-center px-2 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors">
-                                            <i class="fas fa-edit mr-1"></i>Edit
-                                        </a>
-                                        {% endif %}
+                                    </div>
+                                    <div class="text-sm text-gray-500 dark:text-gray-400">
+                                        {{ payment.payment_date.strftime('%A') if payment.payment_date is not string else '' }}
                                     </div>
                                     {% endif %}
                                 </td>
-                            </tr>
-                            {{ row_counter.append(1) or "" }}
-                            {% endif %}
-
-                            {% if cheque_exists %}
-                            <tr class="border-b dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20">
-                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                <td class="px-2 py-4 whitespace-nowrap supplier-column" 
+                                    title="{{ payment.supplier_name if payment.supplier_name else 'N/A' }}">
                                     {% if row_counter|length == 0 %}
-                                        {{ payment.payment_date.strftime('%d/%m/%Y') if payment.payment_date is not string else payment.payment_date }}
-                                    {% endif %}
-                                </td>
-                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                    {% if row_counter|length == 0 %}
-                                        <div class="font-medium">{{ payment.supplier_name or 'N/A' }}</div>
-                                        {% if payment.reference_no %}
-                                        <div class="text-xs text-gray-500">Ref: {{ payment.reference_no }}</div>
-                                        {% endif %}
-                                    {% endif %}
-                                </td>
-                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
-                                        <i class="fas fa-money-check mr-1"></i> Cheque
-                                    </span>
-                                </td>
-                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                    {% if payment.cheque_number %}Cheque #{{ payment.cheque_number }}{% else %}Cheque payment{% endif %}
-                                </td>
-                                <td class="px-4 py-3 text-right font-medium text-gray-800 dark:text-gray-200">
-                                    Rs. {{ "%.2f"|format(payment.cheque_amount|float) }}
-                                </td>
-                                <td class="px-4 py-3 text-center">
-                                    {% if row_counter|length == 0 %}
-                                    <span class="px-2 py-1 text-xs rounded-full 
-                                               {% if payment.workflow_status == 'approved' %}bg-green-100 text-green-800
-                                               {% elif payment.workflow_status == 'pending_approval' %}bg-yellow-100 text-yellow-800
-                                               {% else %}bg-gray-100 text-gray-800{% endif %}">
-                                        {{ payment.workflow_status.replace('_', ' ').title() if payment.workflow_status else 'Completed' }}
-                                    </span>
-                                    {% endif %}
-                                </td>
-                                <td class="px-4 py-3 text-center">
-                                    {% if row_counter|length == 0 %}
-                                    <div class="flex justify-center space-x-1">
-                                        <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) }}" 
-                                           class="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors">
-                                            <i class="fas fa-eye mr-1"></i>View
-                                        </a>
-                                        {% if payment.workflow_status not in ['approved', 'rejected'] %}
-                                        <a href="{{ url_for('supplier_views.edit_payment', payment_id=payment.payment_id) }}" 
-                                           class="inline-flex items-center px-2 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors">
-                                            <i class="fas fa-edit mr-1"></i>Edit
-                                        </a>
-                                        {% endif %}
+                                    <div class="supplier-name text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.supplier_name|truncate(25, true) if payment.supplier_name else 'N/A' }}
                                     </div>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {{ row_counter.append(1) or "" }}
-                            {% endif %}
-
-                            {% if bank_exists %}
-                            <tr class="border-b dark:border-gray-700 bg-purple-50 dark:bg-purple-900/20">
-                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                    {% if row_counter|length == 0 %}
-                                        {{ payment.payment_date.strftime('%d/%m/%Y') if payment.payment_date is not string else payment.payment_date }}
-                                    {% endif %}
-                                </td>
-                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                    {% if row_counter|length == 0 %}
-                                        <div class="font-medium">{{ payment.supplier_name or 'N/A' }}</div>
-                                        {% if payment.reference_no %}
-                                        <div class="text-xs text-gray-500">Ref: {{ payment.reference_no }}</div>
-                                        {% endif %}
-                                    {% endif %}
-                                </td>
-                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-800">
-                                        <i class="fas fa-university mr-1"></i> Bank Transfer
-                                    </span>
-                                </td>
-                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                    {% if payment.bank_reference_number %}Ref: {{ payment.bank_reference_number }}{% else %}Bank transfer{% endif %}
-                                </td>
-                                <td class="px-4 py-3 text-right font-medium text-gray-800 dark:text-gray-200">
-                                    Rs. {{ "%.2f"|format(payment.bank_transfer_amount|float) }}
-                                </td>
-                                <td class="px-4 py-3 text-center">
-                                    {% if row_counter|length == 0 %}
-                                    <span class="px-2 py-1 text-xs rounded-full 
-                                               {% if payment.workflow_status == 'approved' %}bg-green-100 text-green-800
-                                               {% elif payment.workflow_status == 'pending_approval' %}bg-yellow-100 text-yellow-800
-                                               {% else %}bg-gray-100 text-gray-800{% endif %}">
-                                        {{ payment.workflow_status.replace('_', ' ').title() if payment.workflow_status else 'Completed' }}
-                                    </span>
-                                    {% endif %}
-                                </td>
-                                <td class="px-4 py-3 text-center">
-                                    {% if row_counter|length == 0 %}
-                                    <div class="flex justify-center space-x-1">
-                                        <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) }}" 
-                                           class="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors">
-                                            <i class="fas fa-eye mr-1"></i>View
-                                        </a>
-                                        {% if payment.workflow_status not in ['approved', 'rejected'] %}
-                                        <a href="{{ url_for('supplier_views.edit_payment', payment_id=payment.payment_id) }}" 
-                                           class="inline-flex items-center px-2 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors">
-                                            <i class="fas fa-edit mr-1"></i>Edit
-                                        </a>
-                                        {% endif %}
-                                    </div>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {{ row_counter.append(1) or "" }}
-                            {% endif %}
-
-                            {% if upi_exists %}
-                            <tr class="border-b dark:border-gray-700 bg-orange-50 dark:bg-orange-900/20">
-                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                    {% if row_counter|length == 0 %}
-                                        {{ payment.payment_date.strftime('%d/%m/%Y') if payment.payment_date is not string else payment.payment_date }}
-                                    {% endif %}
-                                </td>
-                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                    {% if row_counter|length == 0 %}
-                                        <div class="font-medium">{{ payment.supplier_name or 'N/A' }}</div>
-                                        {% if payment.reference_no %}
-                                        <div class="text-xs text-gray-500">Ref: {{ payment.reference_no }}</div>
-                                        {% endif %}
-                                    {% endif %}
-                                </td>
-                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-orange-100 text-orange-800">
-                                        <i class="fas fa-mobile-alt mr-1"></i> UPI
-                                    </span>
-                                </td>
-                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                    {% if payment.upi_transaction_id %}ID: {{ payment.upi_transaction_id }}{% else %}UPI payment{% endif %}
-                                </td>
-                                <td class="px-4 py-3 text-right font-medium text-gray-800 dark:text-gray-200">
-                                    Rs. {{ "%.2f"|format(payment.upi_amount|float) }}
-                                </td>
-                                <td class="px-4 py-3 text-center">
-                                    {% if row_counter|length == 0 %}
-                                    <span class="px-2 py-1 text-xs rounded-full 
-                                               {% if payment.workflow_status == 'approved' %}bg-green-100 text-green-800
-                                               {% elif payment.workflow_status == 'pending_approval' %}bg-yellow-100 text-yellow-800
-                                               {% else %}bg-gray-100 text-gray-800{% endif %}">
-                                        {{ payment.workflow_status.replace('_', ' ').title() if payment.workflow_status else 'Completed' }}
-                                    </span>
-                                    {% endif %}
-                                </td>
-                                <td class="px-4 py-3 text-center">
-                                    {% if row_counter|length == 0 %}
-                                    <div class="flex justify-center space-x-1">
-                                        <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) }}" 
-                                           class="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors">
-                                            <i class="fas fa-eye mr-1"></i>View
-                                        </a>
-                                        {% if payment.workflow_status not in ['approved', 'rejected'] %}
-                                        <a href="{{ url_for('supplier_views.edit_payment', payment_id=payment.payment_id) }}" 
-                                           class="inline-flex items-center px-2 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors">
-                                            <i class="fas fa-edit mr-1"></i>Edit
-                                        </a>
-                                        {% endif %}
-                                    </div>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {{ row_counter.append(1) or "" }}
-                            {% endif %}
-
-                        {% else %}
-                            <!-- Single Payment Method - Show appropriate label -->
-                            <tr class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                    {{ payment.payment_date.strftime('%d/%m/%Y') if payment.payment_date is not string else payment.payment_date }}
-                                </td>
-                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                    <div class="font-medium">{{ payment.supplier_name or 'N/A' }}</div>
                                     {% if payment.reference_no %}
-                                    <div class="text-xs text-gray-500">Ref: {{ payment.reference_no }}</div>
+                                    <div class="supplier-secondary text-sm text-gray-500 dark:text-gray-400">Ref: {{ payment.reference_no|truncate(20, true) }}</div>
                                     {% endif %}
-                                </td>
-                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                    {% if cash_exists %}
-                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
-                                            <i class="fas fa-money-bill-wave mr-1"></i> Cash
-                                        </span>
-                                    {% elif cheque_exists %}
-                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
-                                            <i class="fas fa-money-check mr-1"></i> Cheque
-                                        </span>
-                                    {% elif bank_exists %}
-                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-800">
-                                            <i class="fas fa-university mr-1"></i> Bank Transfer
-                                        </span>
-                                    {% elif upi_exists %}
-                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-orange-100 text-orange-800">
-                                            <i class="fas fa-mobile-alt mr-1"></i> UPI
-                                        </span>
-                                    {% else %}
-                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-800">
-                                            <i class="fas fa-question mr-1"></i> Unknown
-                                        </span>
                                     {% endif %}
+                                    {% set _ = row_counter.append(1) %}
                                 </td>
-                                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                    {% if cash_exists %}
-                                        Cash payment
-                                    {% elif cheque_exists %}
-                                        {% if payment.cheque_number %}Cheque #{{ payment.cheque_number }}{% else %}Cheque payment{% endif %}
-                                    {% elif bank_exists %}
-                                        {% if payment.bank_reference_number %}Ref: {{ payment.bank_reference_number }}{% else %}Bank transfer{% endif %}
-                                    {% elif upi_exists %}
-                                        {% if payment.upi_transaction_id %}ID: {{ payment.upi_transaction_id }}{% else %}UPI payment{% endif %}
-                                    {% else %}
-                                        Payment details
-                                    {% endif %}
-                                </td>
-                                <td class="px-4 py-3 text-right font-medium text-gray-800 dark:text-gray-200">
-                                    Rs. {{ "%.2f"|format(payment.amount|float) }}
-                                </td>
-                                <td class="px-4 py-3 text-center">
-                                    <span class="px-2 py-1 text-xs rounded-full 
-                                               {% if payment.workflow_status == 'approved' %}bg-green-100 text-green-800
-                                               {% elif payment.workflow_status == 'pending_approval' %}bg-yellow-100 text-yellow-800
-                                               {% else %}bg-gray-100 text-gray-800{% endif %}">
-                                        {{ payment.workflow_status.replace('_', ' ').title() if payment.workflow_status else 'Completed' }}
+                                <td class="px-2 py-4 whitespace-nowrap">
+                                    <span class="status-badge status-success sm payment-method-badge">
+                                        <i class="fas fa-money-bill-wave"></i>Cash
                                     </span>
                                 </td>
-                                <td class="px-4 py-3 text-center">
-                                    <div class="flex justify-center space-x-1">
+                                <td class="px-2 py-4">
+                                    <div class="text-sm text-gray-900 dark:text-gray-100">Cash payment</div>
+                                </td>
+                                <td class="px-2 py-4 whitespace-nowrap text-right">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        ₹{{ "%.2f"|format(payment.cash_amount|float) }}
+                                    </div>
+                                </td>
+                                <td class="px-2 py-4 whitespace-nowrap text-center">
+                                    {{ payment_status_badge(payment.workflow_status|default('completed')) }}
+                                </td>
+                                <td class="px-2 py-4 whitespace-nowrap text-center">
+                                    <div class="payment-action-buttons">
                                         <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) }}" 
-                                           class="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors">
-                                            <i class="fas fa-eye mr-1"></i>View
+                                        class="payment-action-link view" title="View Payment Details">
+                                            <i class="fas fa-eye"></i>
+                                            <span class="action-text">View</span>
                                         </a>
                                         {% if payment.workflow_status not in ['approved', 'rejected'] %}
                                         <a href="{{ url_for('supplier_views.edit_payment', payment_id=payment.payment_id) }}" 
-                                           class="inline-flex items-center px-2 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors">
-                                            <i class="fas fa-edit mr-1"></i>Edit
+                                        class="payment-action-link edit" title="Edit Payment">
+                                            <i class="fas fa-edit"></i>
+                                            <span class="action-text">Edit</span>
                                         </a>
                                         {% endif %}
+                                        <a href="{{ url_for('supplier_views.print_supplier_payment', payment_id=payment.payment_id) }}" 
+                                        class="payment-action-link receipt" title="Print Receipt" target="_blank">
+                                            <i class="fas fa-print"></i>
+                                            <span class="action-text">Print</span>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endif %}
+                            
+                            {% if cheque_exists %}
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <td class="px-2 py-4 whitespace-nowrap">
+                                    {% if row_counter|length == 0 %}
+                                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.payment_date.strftime('%d/%m/%Y') if payment.payment_date is not string else payment.payment_date }}
+                                    </div>
+                                    <div class="text-sm text-gray-500 dark:text-gray-400">
+                                        {{ payment.payment_date.strftime('%A') if payment.payment_date is not string else '' }}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td class="px-2 py-4 whitespace-nowrap supplier-column" 
+                                    title="{{ payment.supplier_name if payment.supplier_name else 'N/A' }}">
+                                    {% if row_counter|length == 0 %}
+                                    <div class="supplier-name text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.supplier_name|truncate(25, true) if payment.supplier_name else 'N/A' }}
+                                    </div>
+                                    {% if payment.reference_no %}
+                                    <div class="supplier-secondary text-sm text-gray-500 dark:text-gray-400">Ref: {{ payment.reference_no|truncate(20, true) }}</div>
+                                    {% endif %}
+                                    {% endif %}
+                                    {% set _ = row_counter.append(1) %}
+                                </td>
+                                <td class="px-2 py-4 whitespace-nowrap">
+                                    <span class="status-badge status-warning sm payment-method-badge">
+                                        <i class="fas fa-money-check"></i>Cheque
+                                    </span>
+                                </td>
+                                <td class="px-2 py-4">
+                                    {% if payment.cheque_number %}
+                                    <div class="text-sm text-gray-900 dark:text-gray-100">Cheque #{{ payment.cheque_number }}</div>
+                                    {% else %}
+                                    <div class="text-sm text-gray-900 dark:text-gray-100">Cheque payment</div>
+                                    {% endif %}
+                                    {% if payment.cheque_bank %}
+                                    <div class="text-sm text-gray-500 dark:text-gray-400">{{ payment.cheque_bank }}</div>
+                                    {% endif %}
+                                </td>
+                                <td class="px-2 py-4 whitespace-nowrap text-right">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        ₹{{ "%.2f"|format(payment.cheque_amount|float) }}
+                                    </div>
+                                </td>
+                                <td class="px-2 py-4 whitespace-nowrap text-center">
+                                    {{ payment_status_badge(payment.workflow_status|default('completed')) }}
+                                </td>
+                                <td class="px-2 py-4 whitespace-nowrap text-center">
+                                    <div class="payment-action-buttons">
+                                        <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) }}" 
+                                        class="payment-action-link view" title="View Payment Details">
+                                            <i class="fas fa-eye"></i>
+                                            <span class="action-text">View</span>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endif %}
+                            
+                            {% if bank_exists %}
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <td class="px-2 py-4 whitespace-nowrap">
+                                    {% if row_counter|length == 0 %}
+                                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.payment_date.strftime('%d/%m/%Y') if payment.payment_date is not string else payment.payment_date }}
+                                    </div>
+                                    <div class="text-sm text-gray-500 dark:text-gray-400">
+                                        {{ payment.payment_date.strftime('%A') if payment.payment_date is not string else '' }}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td class="px-2 py-4 whitespace-nowrap supplier-column" 
+                                    title="{{ payment.supplier_name if payment.supplier_name else 'N/A' }}">
+                                    {% if row_counter|length == 0 %}
+                                    <div class="supplier-name text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.supplier_name|truncate(25, true) if payment.supplier_name else 'N/A' }}
+                                    </div>
+                                    {% if payment.reference_no %}
+                                    <div class="supplier-secondary text-sm text-gray-500 dark:text-gray-400">Ref: {{ payment.reference_no|truncate(20, true) }}</div>
+                                    {% endif %}
+                                    {% endif %}
+                                    {% set _ = row_counter.append(1) %}
+                                </td>
+                                <td class="px-2 py-4 whitespace-nowrap">
+                                    <span class="status-badge status-info sm payment-method-badge">
+                                        <i class="fas fa-university"></i>Bank Transfer
+                                    </span>
+                                </td>
+                                <td class="px-2 py-4">
+                                    {% if payment.bank_reference_number %}
+                                    <div class="text-sm text-gray-900 dark:text-gray-100">Ref: {{ payment.bank_reference_number }}</div>
+                                    {% else %}
+                                    <div class="text-sm text-gray-900 dark:text-gray-100">Bank transfer</div>
+                                    {% endif %}
+                                    {% if payment.bank_account_name %}
+                                    <div class="text-sm text-gray-500 dark:text-gray-400">{{ payment.bank_account_name }}</div>
+                                    {% endif %}
+                                </td>
+                                <td class="px-2 py-4 whitespace-nowrap text-right">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        ₹{{ "%.2f"|format(payment.bank_transfer_amount|float) }}
+                                    </div>
+                                </td>
+                                <td class="px-2 py-4 whitespace-nowrap text-center">
+                                    {{ payment_status_badge(payment.workflow_status|default('completed')) }}
+                                </td>
+                                <td class="px-2 py-4 whitespace-nowrap text-center">
+                                    <div class="payment-action-buttons">
+                                        <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) }}" 
+                                        class="payment-action-link view" title="View Payment Details">
+                                            <i class="fas fa-eye"></i>
+                                            <span class="action-text">View</span>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endif %}
+                            
+                            {% if upi_exists %}
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <td class="px-2 py-4 whitespace-nowrap">
+                                    {% if row_counter|length == 0 %}
+                                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.payment_date.strftime('%d/%m/%Y') if payment.payment_date is not string else payment.payment_date }}
+                                    </div>
+                                    <div class="text-sm text-gray-500 dark:text-gray-400">
+                                        {{ payment.payment_date.strftime('%A') if payment.payment_date is not string else '' }}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td class="px-2 py-4 whitespace-nowrap supplier-column" 
+                                    title="{{ payment.supplier_name if payment.supplier_name else 'N/A' }}">
+                                    {% if row_counter|length == 0 %}
+                                    <div class="supplier-name text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.supplier_name|truncate(25, true) if payment.supplier_name else 'N/A' }}
+                                    </div>
+                                    {% if payment.reference_no %}
+                                    <div class="supplier-secondary text-sm text-gray-500 dark:text-gray-400">Ref: {{ payment.reference_no|truncate(20, true) }}</div>
+                                    {% endif %}
+                                    {% endif %}
+                                    {% set _ = row_counter.append(1) %}
+                                </td>
+                                <td class="px-2 py-4 whitespace-nowrap">
+                                    <span class="status-badge status-processing sm payment-method-badge">
+                                        <i class="fas fa-mobile-alt"></i>UPI
+                                    </span>
+                                </td>
+                                <td class="px-2 py-4">
+                                    {% if payment.upi_transaction_id %}
+                                    <div class="text-sm text-gray-900 dark:text-gray-100">ID: {{ payment.upi_transaction_id }}</div>
+                                    {% else %}
+                                    <div class="text-sm text-gray-900 dark:text-gray-100">UPI payment</div>
+                                    {% endif %}
+                                </td>
+                                <td class="px-2 py-4 whitespace-nowrap text-right">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        ₹{{ "%.2f"|format(payment.upi_amount|float) }}
+                                    </div>
+                                </td>
+                                <td class="px-2 py-4 whitespace-nowrap text-center">
+                                    {{ payment_status_badge(payment.workflow_status|default('completed')) }}
+                                </td>
+                                <td class="px-2 py-4 whitespace-nowrap text-center">
+                                    <div class="payment-action-buttons">
+                                        <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) }}" 
+                                        class="payment-action-link view" title="View Payment Details">
+                                            <i class="fas fa-eye"></i>
+                                            <span class="action-text">View</span>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endif %}
+                            
+                        {% else %}
+                            <!-- Single Payment Method -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <td class="px-2 py-4 whitespace-nowrap">
+                                    {% if row_counter|length == 0 %}
+                                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.payment_date.strftime('%d/%m/%Y') if payment.payment_date is not string else payment.payment_date }}
+                                    </div>
+                                    <div class="text-sm text-gray-500 dark:text-gray-400">
+                                        {{ payment.payment_date.strftime('%A') if payment.payment_date is not string else '' }}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                
+                                <td class="px-2 py-4 whitespace-nowrap supplier-column" 
+                                    title="{{ payment.supplier_name if payment.supplier_name else 'N/A' }}">
+                                    {% if row_counter|length == 0 %}
+                                    <div class="supplier-name text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        {{ payment.supplier_name|truncate(25, true) if payment.supplier_name else 'N/A' }}
+                                    </div>
+                                    {% if payment.reference_no %}
+                                    <div class="supplier-secondary text-sm text-gray-500 dark:text-gray-400">Ref: {{ payment.reference_no|truncate(20, true) }}</div>
+                                    {% endif %}
+                                </td>
+                                
+                                <td class="px-2 py-4 whitespace-nowrap">
+                                    {% if cash_exists %}
+                                        <span class="status-badge status-success sm payment-method-badge">
+                                            <i class="fas fa-money-bill-wave"></i>Cash
+                                        </span>
+                                    {% elif cheque_exists %}
+                                        <span class="status-badge status-warning sm payment-method-badge">
+                                            <i class="fas fa-money-check"></i>Cheque
+                                        </span>
+                                    {% elif bank_exists %}
+                                        <span class="status-badge status-info sm payment-method-badge">
+                                            <i class="fas fa-university"></i>Bank Transfer
+                                        </span>
+                                    {% elif upi_exists %}
+                                        <span class="status-badge status-processing sm payment-method-badge">
+                                            <i class="fas fa-mobile-alt"></i>UPI
+                                        </span>
+                                    {% else %}
+                                        <span class="status-badge status-inactive sm">
+                                            <i class="fas fa-question"></i> Unknown
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                
+                                <td class="px-2 py-4">
+                                    {% if cash_exists %}
+                                        <div class="text-sm text-gray-900 dark:text-gray-100">Cash payment</div>
+                                    {% elif cheque_exists %}
+                                        {% if payment.cheque_number %}
+                                            <div class="text-sm text-gray-900 dark:text-gray-100">Cheque #{{ payment.cheque_number }}</div>
+                                        {% else %}
+                                            <div class="text-sm text-gray-900 dark:text-gray-100">Cheque payment</div>
+                                        {% endif %}
+                                        {% if payment.cheque_bank %}
+                                            <div class="text-sm text-gray-500 dark:text-gray-400">{{ payment.cheque_bank }}</div>
+                                        {% endif %}
+                                    {% elif bank_exists %}
+                                        {% if payment.bank_reference_number %}
+                                            <div class="text-sm text-gray-900 dark:text-gray-100">Ref: {{ payment.bank_reference_number }}</div>
+                                        {% else %}
+                                            <div class="text-sm text-gray-900 dark:text-gray-100">Bank transfer</div>
+                                        {% endif %}
+                                        {% if payment.bank_account_name %}
+                                            <div class="text-sm text-gray-500 dark:text-gray-400">{{ payment.bank_account_name }}</div>
+                                        {% endif %}
+                                    {% elif upi_exists %}
+                                        {% if payment.upi_transaction_id %}
+                                            <div class="text-sm text-gray-900 dark:text-gray-100">ID: {{ payment.upi_transaction_id }}</div>
+                                        {% else %}
+                                            <div class="text-sm text-gray-900 dark:text-gray-100">UPI payment</div>
+                                        {% endif %}
+                                    {% else %}
+                                        <div class="text-sm text-gray-500 dark:text-gray-400">Payment details</div>
+                                    {% endif %}
+                                </td>
+                                
+                                <td class="px-2 py-4 whitespace-nowrap text-right">
+                                    {% set payment_amount = (payment.cash_amount|float if cash_exists else 0) + (payment.cheque_amount|float if cheque_exists else 0) + (payment.bank_transfer_amount|float if bank_exists else 0) + (payment.upi_amount|float if upi_exists else 0) %}
+                                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        ₹{{ "%.2f"|format(payment_amount) }}
+                                    </div>
+                                </td>
+                                
+                                <td class="px-2 py-4 whitespace-nowrap text-center">
+                                    {{ payment_status_badge(payment.workflow_status|default('completed')) }}
+                                </td>
+                                
+                                <td class="px-2 py-4 whitespace-nowrap text-center">
+                                    <div class="payment-action-buttons">
+                                        <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) }}" 
+                                        class="payment-action-link view" title="View Payment Details">
+                                            <i class="fas fa-eye"></i>
+                                            <span class="action-text">View</span>
+                                        </a>
+                                        {% if payment.workflow_status not in ['approved', 'rejected'] %}
+                                        <a href="{{ url_for('supplier_views.edit_payment', payment_id=payment.payment_id) }}" 
+                                        class="payment-action-link edit" title="Edit Payment">
+                                            <i class="fas fa-edit"></i>
+                                            <span class="action-text">Edit</span>
+                                        </a>
+                                        {% endif %}
+                                        <a href="{{ url_for('supplier_views.print_supplier_payment', payment_id=payment.payment_id) }}" 
+                                        class="payment-action-link receipt" title="Print Receipt" target="_blank">
+                                            <i class="fas fa-print"></i>
+                                            <span class="action-text">Print</span>
+                                        </a>
                                     </div>
                                 </td>
                             </tr>
                         {% endif %}
+                        {% endif %}
                     {% endfor %}
                 </tbody>
-                <tfoot>
-                    <tr class="bg-gray-100 dark:bg-gray-600 font-semibold">
-                        <td colspan="4" class="px-4 py-3 text-right text-gray-800 dark:text-gray-200">
-                            <strong>Total Payments:</strong>
-                        </td>
-                        <td class="px-4 py-3 text-right text-gray-800 dark:text-gray-200">
-                            <strong>Rs. {{ "%.2f"|format(payments|sum(attribute='amount')|default(0)|float) }}</strong>
-                        </td>
-                        <td colspan="2" class="px-4 py-3 text-center text-gray-600 dark:text-gray-400">
-                            <small>{{ payments|length }} payment(s)</small>
-                        </td>
-                    </tr>
-                </tfoot>
             </table>
+            {% else %}
+            <div class="grid-table-empty">
+                <div class="grid-table-empty-icon">
+                    <i class="fas fa-receipt"></i>
+                </div>
+                <h3 class="grid-table-empty-title">No Payments Found</h3>
+                <p class="grid-table-empty-description">No payment records match your current filters.</p>
+                <a href="{{ url_for('supplier_views.create_payment') }}" class="btn-primary">
+                    <i class="fas fa-plus icon-left"></i>Record First Payment
+                </a>
+            </div>
+            {% endif %}
         </div>
-        
-        <!-- Pagination -->
-        {% if total > per_page %}
-        {{ pagination(page, per_page, total, 'supplier_views.payment_list', filters) }}
-        {% endif %}
-        
-        {% else %}
-        <!-- Empty State -->
-        {{ empty_state(
-            title="No payments found",
-            description="Try adjusting your filters or create a new payment.",
-            action_url=url_for('supplier_views.create_payment'),
-            action_label="Record Payment"
-        ) }}
-        {% endif %}
     </div>
+
+    <!-- Pagination -->
+    {% if total > per_page %}
+    {% set filtered_args = {} %}
+    {% for key, value in request.args.items() %}
+        {% if key != 'page' %}
+            {% set _ = filtered_args.update({key: value}) %}
+        {% endif %}
+    {% endfor %}
+
+    <div class="info-card">
+        <div class="table-pagination">
+            <div class="pagination-info">
+                Showing {{ ((page - 1) * per_page) + 1 }} to {{ min(page * per_page, total) }} of {{ total }} results
+            </div>
+            <div class="pagination-buttons">
+                {% if page > 1 %}
+                    <a href="{{ url_for('supplier_views.payment_list', page=page-1, **filtered_args) }}" 
+                       class="pagination-button">Previous</a>
+                {% endif %}
+                
+                {% set start_page = max(1, page - 2) %}
+                {% set end_page = min((total // per_page) + (1 if total % per_page > 0 else 0), page + 2) %}
+                
+                {% for p in range(start_page, end_page + 1) %}
+                    {% if p == page %}
+                        <span class="pagination-button active">{{ p }}</span>
+                    {% else %}
+                        <a href="{{ url_for('supplier_views.payment_list', page=p, **filtered_args) }}" 
+                           class="pagination-button">{{ p }}</a>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if page * per_page < total %}
+                    <a href="{{ url_for('supplier_views.payment_list', page=page+1, **filtered_args) }}" 
+                       class="pagination-button">Next</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+
+<!-- DISABLE CONFLICTING STANDARD-FILTERS.JS -->
+<!-- <script src="{{ url_for('static', filename='js/components/standard-filters.js') }}"></script> -->
+<!-- <script src="{{ url_for('static', filename='js/app.js') }}"></script> -->
+
+<!-- COMPLETE PAYMENT LIST JAVASCRIPT - ALL FIXES -->
 
 <script>
-function exportPayments() {
-    // Construct URL with current filters
-    const url = new URL('{{ url_for("supplier_views.export_payments") }}', window.location.origin);
-    const searchParams = new URLSearchParams(window.location.search);
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('=== Payment List: Complete Restored with Refinements ===');
     
-    for (const [key, value] of searchParams) {
-        if (value) {
-            url.searchParams.set(key, value);
+    // DISABLE StandardFilters conflicts
+    disableStandardFilters();
+    
+    // Apply all fixes in correct order
+    setTimeout(() => {
+        removeDuplicateFields();
+    }, 200);
+    
+    fixMethodColumnSpacing();
+    
+    // Initialize ALL existing functionality
+    initializeDateFilters();
+    initializeAlwaysVisibleActiveFilters();
+    
+    setTimeout(() => {
+        initializeProperDropdowns();
+    }, 300);
+    
+    initializeSupplierDropdown();
+    
+       
+    setInitialDates();
+    updateActiveFiltersDisplay();
+    
+    
+    console.log('✅ All fixes applied with refinements');
+});
+
+/**
+ * RESTORED: Disable StandardFilters conflicts
+ */
+function disableStandardFilters() {
+    if (window.standardFilters) {
+        console.log('Disabling StandardFilters to prevent conflicts');
+        try {
+            window.standardFilters.destroy?.();
+        } catch (e) {
+            console.warn('Error disabling StandardFilters:', e);
+        }
+        window.standardFilters = null;
+    }
+}
+
+/**
+ * RESTORED: Remove duplicate fields below method and status
+ */
+function removeDuplicateFields() {
+    console.log('🔧 Removing duplicate fields...');
+    
+    // Remove duplicate payment method dropdowns
+    const paymentMethodElements = document.querySelectorAll('[name="payment_method"]');
+    console.log(`Found ${paymentMethodElements.length} payment_method elements`);
+    
+    if (paymentMethodElements.length > 1) {
+        for (let i = 1; i < paymentMethodElements.length; i++) {
+            const element = paymentMethodElements[i];
+            const wrapper = element.closest('.custom-dropdown-wrapper, .custom-multiple-select, .form-group');
+            if (wrapper) {
+                console.log('Removing duplicate payment_method wrapper');
+                wrapper.remove();
+            } else {
+                console.log('Removing duplicate payment_method element');
+                element.remove();
+            }
         }
     }
     
-    // Trigger download
-    window.location.href = url.toString();
+    // Remove duplicate status dropdowns
+    const statusElements = document.querySelectorAll('[name="status"]');
+    console.log(`Found ${statusElements.length} status elements`);
+    
+    if (statusElements.length > 1) {
+        for (let i = 1; i < statusElements.length; i++) {
+            const element = statusElements[i];
+            const wrapper = element.closest('.custom-dropdown-wrapper, .custom-multiple-select, .form-group');
+            if (wrapper) {
+                console.log('Removing duplicate status wrapper');
+                wrapper.remove();
+            } else {
+                console.log('Removing duplicate status element');
+                element.remove();
+            }
+        }
+    }
 }
 
-// Auto-submit form when filters change
-document.addEventListener('DOMContentLoaded', function() {
-    const filterSelects = document.querySelectorAll('#payment_method, #status, #supplier_id');
-    filterSelects.forEach(select => {
-        select.addEventListener('change', function() {
-            this.form.submit();
+/**
+ * RESTORED: Fix method column spacing issues
+ */
+function fixMethodColumnSpacing() {
+    const methodCells = document.querySelectorAll('td[data-column="payment_method"]');
+    methodCells.forEach(cell => {
+        const icons = cell.querySelectorAll('i');
+        icons.forEach((icon, index) => {
+            if (index > 0) {
+                icon.style.marginLeft = '0.25rem';
+            }
+        });
+    });
+}
+
+/**
+ * RESTORED: Set initial dates to current month
+ */
+function setInitialDates() {
+    const startDateInput = document.getElementById('start_date');
+    const endDateInput = document.getElementById('end_date');
+    
+    if (startDateInput && endDateInput && !startDateInput.value && !endDateInput.value) {
+        const now = new Date();
+        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        
+        startDateInput.value = firstDay.toISOString().split('T')[0];
+        endDateInput.value = lastDay.toISOString().split('T')[0];
+        
+        // Set "This Month" button as active
+        const monthButton = document.querySelectorAll('.date-filter-preset')[1];
+        if (monthButton) {
+            monthButton.classList.add('active');
+        }
+    }
+}
+
+/**
+ * RESTORED: Initialize always visible active filters with real-time updates
+ */
+function initializeAlwaysVisibleActiveFilters() {
+    // Ensure active filters container is always visible
+    ensureActiveFiltersContainer();
+    
+    // Add real-time listeners to all form fields
+    const form = document.getElementById('filter-form');
+    if (form) {
+        form.addEventListener('input', function(e) {
+            updateActiveFiltersDisplay();
+        });
+        
+        form.addEventListener('change', function(e) {
+            updateActiveFiltersDisplay();
+        });
+        
+        // Listen to date field changes
+        const dateFields = form.querySelectorAll('input[type="date"]');
+        dateFields.forEach(field => {
+            field.addEventListener('change', function() {
+                updateActiveFiltersDisplay();
+            });
+        });
+    }
+}
+
+/**
+ * RESTORED: Ensure active filters container exists and is always visible
+ */
+function ensureActiveFiltersContainer() {
+    const container = document.getElementById('active-filters-section');
+    if (container) {
+        container.style.display = 'block';
+    }
+}
+
+/**
+ * RESTORED: Update active filters display in real-time
+ */
+function updateActiveFiltersDisplay() {
+    const wrapper = document.getElementById('active-filters-wrapper');
+    
+    if (!wrapper) {
+        console.warn('Active filters wrapper not found');
+        return;
+    }
+    
+    const activeFilters = getCurrentActiveFilters();
+    
+    if (activeFilters.length > 0) {
+        wrapper.innerHTML = generateActiveFiltersHTML(activeFilters);
+    } else {
+        wrapper.innerHTML = `
+            <span class="text-sm text-gray-500 dark:text-gray-400">
+                <i class="fas fa-info-circle mr-1"></i>No active filters - use the controls above to filter results
+            </span>
+        `;
+    }
+    
+    // Ensure container is visible
+    const container = document.getElementById('active-filters-section');
+    if (container) {
+        container.style.display = 'block';
+    }
+}
+
+/**
+ * RESTORED: Get current active filters from form
+ */
+function getCurrentActiveFilters() {
+    const form = document.getElementById('filter-form');
+    if (!form) return [];
+    
+    const filters = [];
+    
+    // Check supplier dropdown
+    const supplierSelect = form.querySelector('[name="supplier_id"]');
+    if (supplierSelect && supplierSelect.value) {
+        const selectedText = supplierSelect.options[supplierSelect.selectedIndex].text;
+        filters.push({
+            key: 'supplier_id',
+            label: 'Supplier',
+            value: selectedText,
+            fieldValue: supplierSelect.value
+        });
+    }
+    
+    // Check multiple select fields
+    const multipleSelects = form.querySelectorAll('.form-select-multiple, select[multiple]');
+    multipleSelects.forEach(select => {
+        const selectedOptions = Array.from(select.selectedOptions);
+        if (selectedOptions.length > 0) {
+            const fieldName = select.name || select.id;
+            const prefix = select.dataset.prefix || '';
+            
+            selectedOptions.forEach(option => {
+                filters.push({
+                    key: fieldName,
+                    label: select.dataset.label || fieldName,
+                    value: prefix ? prefix + option.value : option.value,
+                    fieldValue: option.value
+                });
+            });
+        }
+    });
+    
+    // Check date range FIRST (to avoid duplicates)
+    const startDate = form.querySelector('[name="start_date"]')?.value;
+    const endDate = form.querySelector('[name="end_date"]')?.value;
+    let hasDateRange = false;
+    
+    if (startDate || endDate) {
+        let dateDisplay = '';
+        if (startDate && endDate) {
+            dateDisplay = `${formatDisplayDate(startDate)} to ${formatDisplayDate(endDate)}`;
+        } else if (startDate) {
+            dateDisplay = `From ${formatDisplayDate(startDate)}`;
+        } else if (endDate) {
+            dateDisplay = `Until ${formatDisplayDate(endDate)}`;
+        }
+        
+        if (dateDisplay) {
+            filters.push({
+                key: 'date_range',
+                label: 'Date Range',
+                value: dateDisplay,
+                fieldValue: ''
+            });
+            hasDateRange = true; // Mark that we have a date range
+        }
+    }
+    
+    // Check other form elements (SKIP individual date fields if we have a range)
+    const formElements = form.querySelectorAll('input, select, textarea');
+    formElements.forEach(element => {
+        if (element.type === 'submit' || element.type === 'button') return;
+        if (element.name === 'supplier_id') return; // Already handled above
+        if (element.classList.contains('form-select-multiple')) return; // Already handled above
+        if (element.multiple) return; // Already handled above
+        
+        // FIXED: Skip individual date fields if we have a date range
+        if (hasDateRange && (element.name === 'start_date' || element.name === 'end_date')) {
+            return; // Skip individual date fields when showing range
+        }
+        
+        if (element.value && element.value.trim()) {
+            const label = element.dataset.label || 
+                         (element.labels && element.labels[0] ? element.labels[0].textContent.trim() : element.name);
+            
+            filters.push({
+                key: element.name,
+                label: label,
+                value: element.dataset.prefix ? element.dataset.prefix + element.value : element.value,
+                fieldValue: element.value
+            });
+        }
+    });
+    
+    return filters;
+}
+
+/**
+ * RESTORED: Generate HTML for active filters
+ */
+function generateActiveFiltersHTML(filters) {
+    let html = `
+        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <i class="fas fa-filter mr-1"></i>Active filters:
+        </span>
+    `;
+    
+    filters.forEach(filter => {
+        html += `
+            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                ${filter.label}: ${filter.value}
+                <button type="button" 
+                        class="ml-1 text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-100" 
+                        onclick="removeActiveFilter('${filter.key}', '${filter.fieldValue}')"
+                        title="Remove this filter">
+                    <i class="fas fa-times text-xs"></i>
+                </button>
+            </span>
+        `;
+    });
+    
+    html += `
+        <button type="button" 
+                class="text-sm text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-200 ml-2"
+                onclick="clearAllFilters()">
+            <i class="fas fa-times-circle mr-1"></i>Clear all filters
+        </button>
+    `;
+    
+    return html;
+}
+
+/**
+ * RESTORED: Initialize proper dropdown behavior for multiple selects
+ */
+function initializeProperDropdowns() {
+    const multipleSelects = document.querySelectorAll('.form-select-multiple');
+    multipleSelects.forEach(select => {
+        createProperDropdown(select);
+    });
+}
+
+/**
+ * RESTORED: Create proper dropdown overlay
+ */
+function createProperDropdown(originalSelect) {
+    if (originalSelect.dataset.processed === 'true') {
+        return;
+    }
+    originalSelect.dataset.processed = 'true';
+    
+    originalSelect.style.display = 'none';
+    
+    const wrapper = document.createElement('div');
+    wrapper.className = 'custom-dropdown-wrapper relative';
+    originalSelect.parentNode.insertBefore(wrapper, originalSelect);
+    wrapper.appendChild(originalSelect);
+    
+    const trigger = document.createElement('div');
+    trigger.className = 'custom-dropdown-trigger form-select cursor-pointer';
+    trigger.innerHTML = '<span class="dropdown-text">Select options...</span><i class="fas fa-chevron-down ml-2"></i>';
+    
+    const dropdown = document.createElement('div');
+    dropdown.className = 'custom-dropdown-menu absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-md shadow-lg z-10 max-h-60 overflow-y-auto hidden';
+    
+    Array.from(originalSelect.options).forEach(option => {
+        const item = document.createElement('div');
+        item.className = 'dropdown-item px-3 py-2 hover:bg-gray-100 cursor-pointer flex items-center';
+        item.innerHTML = `
+            <input type="checkbox" class="mr-2" ${option.selected ? 'checked' : ''}>
+            <span>${option.text}</span>
+        `;
+        
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            const checkbox = item.querySelector('input[type="checkbox"]');
+            checkbox.checked = !checkbox.checked;
+            option.selected = checkbox.checked;
+            updateTriggerText();
+            updateActiveFiltersDisplay();
+        });
+        
+        dropdown.appendChild(item);
+    });
+    
+    wrapper.appendChild(trigger);
+    wrapper.appendChild(dropdown);
+    
+    trigger.addEventListener('click', function(e) {
+        e.preventDefault();
+        dropdown.classList.toggle('hidden');
+    });
+    
+    document.addEventListener('click', function(e) {
+        if (!wrapper.contains(e.target)) {
+            dropdown.classList.add('hidden');
+        }
+    });
+    
+    function updateTriggerText() {
+        const selectedOptions = Array.from(originalSelect.selectedOptions);
+        const triggerText = trigger.querySelector('.dropdown-text');
+        
+        if (selectedOptions.length === 0) {
+            triggerText.textContent = 'Select options...';
+        } else if (selectedOptions.length === 1) {
+            triggerText.textContent = selectedOptions[0].text;
+        } else {
+            triggerText.textContent = `${selectedOptions.length} selected`;
+        }
+    }
+    
+    updateTriggerText();
+}
+
+/**
+ * RESTORED: Initialize supplier dropdown behavior
+ */
+function initializeSupplierDropdown() {
+    const supplierSelect = document.getElementById('supplier_id');
+    
+    if (supplierSelect) {
+        supplierSelect.addEventListener('change', function() {
+            updateActiveFiltersDisplay(); // RESTORED real-time update
+            
+            // Visual feedback for selection
+            if (this.value) {
+                this.style.borderColor = 'rgb(59 130 246)';
+                this.style.backgroundColor = 'rgb(239 246 255)';
+            } else {
+                this.style.borderColor = 'rgb(209 213 219)';
+                this.style.backgroundColor = 'white';
+            }
+        });
+        
+        // Set initial state
+        if (supplierSelect.value) {
+            supplierSelect.style.borderColor = 'rgb(59 130 246)';
+            supplierSelect.style.backgroundColor = 'rgb(239 246 255)';
+        }
+    }
+}
+
+/**
+ * RESTORED: Initialize date filters with all presets
+ */
+function initializeDateFilters() {
+    const presetButtons = document.querySelectorAll('.date-filter-preset');
+    const startDateInput = document.getElementById('start_date');
+    const endDateInput = document.getElementById('end_date');
+    
+    if (!presetButtons.length || !startDateInput || !endDateInput) return;
+    
+    presetButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            presetButtons.forEach(btn => btn.classList.remove('active'));
+            this.classList.add('active');
+            
+            const buttonText = this.textContent.trim();
+            
+            switch(buttonText) {
+                case 'Today':
+                    setToday();
+                    break;
+                case 'This Month':
+                    setThisMonth();
+                    break;
+                case 'Financial Year':
+                    setFinancialYear();
+                    break;
+                case 'Clear':
+                    clearDates();
+                    break;
+            }
+            
+            updateActiveFiltersDisplay(); // RESTORED real-time update
         });
     });
     
-    // Auto-submit on date change
-    const dateInputs = document.querySelectorAll('#start_date, #end_date');
-    dateInputs.forEach(input => {
-        input.addEventListener('change', function() {
-            this.form.submit();
-        });
+    function setToday() {
+        const today = new Date();
+        startDateInput.value = formatDate(today);
+        endDateInput.value = formatDate(today);
+    }
+    
+    function setThisMonth() {
+        const now = new Date();
+        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        startDateInput.value = formatDate(firstDay);
+        endDateInput.value = formatDate(lastDay);
+    }
+    
+    function setFinancialYear() {
+        const now = new Date();
+        const year = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+        const startDate = new Date(year, 3, 1);
+        const endDate = new Date(year + 1, 2, 31);
+        startDateInput.value = formatDate(startDate);
+        endDateInput.value = formatDate(endDate);
+    }
+    
+    function clearDates() {
+        startDateInput.value = '';
+        endDateInput.value = '';
+    }
+    
+    function formatDate(date) {
+        return date.toISOString().split('T')[0];
+    }
+}
+
+/**
+ * RESTORED: Remove active filter function
+ */
+function removeActiveFilter(category, fieldValue) {
+    console.log(`Removing filter: ${category} = ${fieldValue}`);
+    
+    const form = document.getElementById('filter-form');
+    if (!form) return;
+    
+    switch(category) {
+        case 'supplier_id':
+            const supplierSelect = form.querySelector('[name="supplier_id"]');
+            if (supplierSelect) {
+                supplierSelect.value = '';
+                supplierSelect.style.borderColor = 'rgb(209 213 219)';
+                supplierSelect.style.backgroundColor = 'white';
+            }
+            break;
+            
+        case 'payment_method':
+            const methodSelect = form.querySelector('[name="payment_method"]');
+            if (methodSelect && fieldValue) {
+                Array.from(methodSelect.options).forEach(option => {
+                    if (option.value === fieldValue) {
+                        option.selected = false;
+                    }
+                });
+            }
+            break;
+            
+        case 'status':
+            const statusSelect = form.querySelector('[name="status"]');
+            if (statusSelect && fieldValue) {
+                Array.from(statusSelect.options).forEach(option => {
+                    if (option.value === fieldValue) {
+                        option.selected = false;
+                    }
+                });
+            }
+            break;
+            
+        case 'date_range':
+            const startDate = form.querySelector('[name="start_date"]');
+            const endDate = form.querySelector('[name="end_date"]');
+            if (startDate) startDate.value = '';
+            if (endDate) endDate.value = '';
+            document.querySelectorAll('.date-filter-preset').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            break;
+    }
+    
+    updateActiveFiltersDisplay(); // RESTORED real-time update
+    form.submit(); // Apply the filter removal
+}
+
+/**
+ * RESTORED: Clear all filters function
+ */
+function clearAllFilters() {
+    window.location.href = "{{ url_for('supplier_views.payment_list') }}#filter-middle";
+}
+
+/**
+ * RESTORED: Format display date helper
+ */
+function formatDisplayDate(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-GB', { 
+        day: '2-digit', 
+        month: 'short', 
+        year: 'numeric' 
     });
-});
+}
+
+/**
+ * FIXED: Export function with correct endpoint name
+ */
+function exportPayments() {
+    const form = document.getElementById('filter-form');
+    if (form) {
+        const exportForm = form.cloneNode(true);
+        
+        // FIXED: Use correct endpoint name
+        exportForm.action = "{{ url_for('supplier_views.export_payments') }}";
+        
+        exportForm.style.display = 'none';
+        document.body.appendChild(exportForm);
+        exportForm.submit();
+        document.body.removeChild(exportForm);
+    }
+}
+// ENHANCED: Direct navigation without scroll-to-top flash
+if (window.location.search && !window.location.hash) {
+    // Prevent default scroll restoration
+    if ('scrollRestoration' in history) {
+        history.scrollRestoration = 'manual';
+    }
+    
+    // Immediate scroll to filter bottom without delay
+    document.addEventListener('DOMContentLoaded', function() {
+        const filterBottom = document.getElementById('filter-middle');
+        if (filterBottom) {
+            // Use immediate scroll without smooth behavior to prevent flash
+            filterBottom.scrollIntoView({
+                behavior: 'auto',  // Changed from 'smooth' to 'auto'
+                block: 'start'
+            });
+            
+            // Then apply smooth scroll for subsequent interactions
+            setTimeout(function() {
+                if ('scrollRestoration' in history) {
+                    history.scrollRestoration = 'auto';
+                }
+            }, 100);
+        }
+    });
+}
+
 </script>
+
 {% endblock %}

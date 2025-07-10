@@ -141,6 +141,8 @@ class SafeUnicodeLogger:
             '🏥': '[HOSPITAL]',
             '📝': '[DOC]',
             '🔐': '[SECURITY]',
+            '🎯': '[TOTAL]',
+            '🔧': '[SETTINGS]',
             
             # Currency symbols
             '₹': 'Rs.',          # Indian Rupee

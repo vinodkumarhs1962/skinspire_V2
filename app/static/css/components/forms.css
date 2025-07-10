@@ -1,121 +1,1132 @@
-/* app/static/css/components/forms.css */
+/* ==========================================
+   FORM COMPONENTS
+   File: static/css/components/forms.css
+   All form elements for healthcare application
+   ========================================== */
 
-/* Basic Form Styles */
-.form-container {
-  @apply p-4 bg-white dark:bg-gray-800 shadow rounded-lg;
+/* ==========================================
+   FORM INPUT STYLES
+   ========================================== */
+
+.form-input {
+    display: block !important;
+    width: 100% !important;
+    padding: 0.5rem 0.75rem !important;
+    border: 1px solid rgb(209 213 219) !important; /* gray-300 */
+    border-radius: 0.375rem !important;
+    font-size: 0.875rem !important;
+    line-height: 1.25rem !important;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
+    background-color: white !important;
 }
 
-.form-group {
-  @apply mb-4;
+.form-input:focus {
+    outline: none !important;
+    border-color: rgb(59 130 246) !important; /* blue-500 */
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
 }
+
+.form-input:disabled {
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    color: rgb(107 114 128) !important; /* gray-500 */
+    cursor: not-allowed !important;
+}
+
+/* ==========================================
+   FORM SELECT STYLES
+   ========================================== */
+
+.form-select {
+    display: block !important;
+    width: 100% !important;
+    padding: 0.5rem 0.75rem !important;
+    border: 1px solid rgb(209 213 219) !important; /* gray-300 */
+    border-radius: 0.375rem !important;
+    font-size: 0.875rem !important;
+    line-height: 1.25rem !important;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
+    background-color: white !important;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") !important;
+    background-position: right 0.5rem center !important;
+    background-repeat: no-repeat !important;
+    background-size: 1.5em 1.5em !important;
+    padding-right: 2.5rem !important;
+}
+
+.form-select:focus {
+    outline: none !important;
+    border-color: rgb(59 130 246) !important; /* blue-500 */
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+.form-select:disabled {
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+    color: rgb(107 114 128) !important; /* gray-500 */
+    cursor: not-allowed !important;
+}
+
+/* ==========================================
+   FORM TEXTAREA STYLES
+   ========================================== */
+
+.form-textarea {
+    display: block !important;
+    width: 100% !important;
+    padding: 0.5rem 0.75rem !important;
+    border: 1px solid rgb(209 213 219) !important; /* gray-300 */
+    border-radius: 0.375rem !important;
+    font-size: 0.875rem !important;
+    line-height: 1.25rem !important;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
+    background-color: white !important;
+    resize: vertical !important;
+    min-height: 4rem !important;
+}
+
+.form-textarea:focus {
+    outline: none !important;
+    border-color: rgb(59 130 246) !important; /* blue-500 */
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* ==========================================
+   FORM VALIDATION STATES
+   ========================================== */
+
+/* Error state */
+.form-input.error,
+.form-select.error,
+.form-textarea.error {
+    border-color: rgb(239 68 68) !important; /* red-500 */
+}
+
+.form-input.error:focus,
+.form-select.error:focus,
+.form-textarea.error:focus {
+    border-color: rgb(239 68 68) !important;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
+}
+
+/* Success state */
+.form-input.success,
+.form-select.success,
+.form-textarea.success {
+    border-color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.form-input.success:focus,
+.form-select.success:focus,
+.form-textarea.success:focus {
+    border-color: rgb(34 197 94) !important;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1) !important;
+}
+
+/* ==========================================
+   FORM LABELS AND HELP TEXT
+   ========================================== */
 
 .form-label {
-  @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1;
+    display: block !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    margin-bottom: 0.5rem !important;
 }
 
-.form-input,
-.form-select,
-.form-textarea {
-  @apply appearance-none block w-full px-3 py-2 border border-gray-300 dark:border-gray-700 
-         rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-600
-         focus:outline-none focus:ring-blue-500 focus:border-blue-500
-         bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100;
+.form-label.required::after {
+    content: " *" !important;
+    color: rgb(239 68 68) !important; /* red-500 */
 }
 
-.form-input-sm {
-  @apply py-1 text-sm;
+.form-help {
+    display: block !important;
+    font-size: 0.75rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    margin-top: 0.25rem !important;
+}
+
+.form-error {
+    display: block !important;
+    font-size: 0.75rem !important;
+    color: rgb(239 68 68) !important; /* red-500 */
+    margin-top: 0.25rem !important;
+}
+
+.form-success {
+    display: block !important;
+    font-size: 0.75rem !important;
+    color: rgb(34 197 94) !important; /* green-500 */
+    margin-top: 0.25rem !important;
+}
+
+/* ==========================================
+   FORM GROUP LAYOUT
+   ========================================== */
+
+.form-group {
+    margin-bottom: 1rem !important;
+}
+
+.form-group.inline {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+}
+
+.form-group.inline .form-label {
+    margin-bottom: 0 !important;
+    flex-shrink: 0 !important;
+}
+
+/* ==========================================
+   CHECKBOX AND RADIO STYLES
+   ========================================== */
+
+.form-checkbox,
+.form-radio {
+    width: 1rem !important;
+    height: 1rem !important;
+    border: 1px solid rgb(209 213 219) !important; /* gray-300 */
+    background-color: white !important;
+    transition: all 0.15s ease-in-out !important;
 }
 
 .form-checkbox {
-  @apply rounded border-gray-300 dark:border-gray-700 text-blue-600 
-         focus:ring-blue-500 h-4 w-4 mr-2;
+    border-radius: 0.25rem !important;
 }
 
-.form-button {
-  @apply inline-flex justify-center py-2 px-4 border border-transparent shadow-sm 
-         text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 
-         focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500;
+.form-radio {
+    border-radius: 50% !important;
 }
 
-.form-button-sm {
-  @apply py-1 px-3 text-xs;
+.form-checkbox:checked,
+.form-radio:checked {
+    background-color: rgb(59 130 246) !important; /* blue-500 */
+    border-color: rgb(59 130 246) !important;
 }
 
-.form-button-secondary {
-  @apply bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white;
+.form-checkbox:focus,
+.form-radio:focus {
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
 }
 
-/* Error Styles */
-.form-error {
-  @apply mt-1 text-xs text-red-500 dark:text-red-400;
+/* ==========================================
+   DARK MODE FORM STYLES
+   ========================================== */
+
+.dark .form-input,
+.dark .form-select,
+.dark .form-textarea {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    color: white !important;
 }
 
-.input-error {
-  @apply border-red-500 dark:border-red-400 focus:ring-red-500 focus:border-red-500;
+.dark .form-input:focus,
+.dark .form-select:focus,
+.dark .form-textarea:focus {
+    border-color: rgb(96 165 250) !important; /* blue-400 */
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1) !important;
 }
 
-/* Form Layout */
-.form-grid {
-  @apply grid gap-4;
+.dark .form-input:disabled,
+.dark .form-select:disabled,
+.dark .form-textarea:disabled {
+    background-color: rgb(75 85 99) !important; /* gray-600 */
+    color: rgb(156 163 175) !important; /* gray-400 */
 }
 
-.form-grid-cols-2 {
-  @apply grid-cols-1 md:grid-cols-2;
+.dark .form-label {
+    color: rgb(209 213 219) !important; /* gray-300 */
 }
 
-.form-grid-cols-3 {
-  @apply grid-cols-1 md:grid-cols-3;
+.dark .form-help {
+    color: rgb(156 163 175) !important; /* gray-400 */
 }
 
-/* Autocomplete Components */
+.dark .form-checkbox,
+.dark .form-radio {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.dark .form-checkbox:checked,
+.dark .form-radio:checked {
+    background-color: rgb(96 165 250) !important; /* blue-400 */
+    border-color: rgb(96 165 250) !important;
+}
+
+/* ==========================================
+   FORM SIZE VARIANTS
+   ========================================== */
+
+/* Small form elements */
+.form-input.sm,
+.form-select.sm,
+.form-textarea.sm {
+    padding: 0.375rem 0.5rem !important;
+    font-size: 0.75rem !important;
+    line-height: 1rem !important;
+}
+
+/* Large form elements */
+.form-input.lg,
+.form-select.lg,
+.form-textarea.lg {
+    padding: 0.75rem 1rem !important;
+    font-size: 1rem !important;
+    line-height: 1.5rem !important;
+}
+
+/* ==========================================
+   FORM FIELD WITH ICON
+   ========================================== */
+
+.form-field-icon {
+    position: relative !important;
+}
+
+.form-field-icon .form-input {
+    padding-left: 2.5rem !important;
+}
+
+.form-field-icon .field-icon {
+    position: absolute !important;
+    left: 0.75rem !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    pointer-events: none !important;
+}
+
+.dark .form-field-icon .field-icon {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+/* ==========================================
+   FORM SEARCH INPUT
+   ========================================== */
+
+.form-search {
+    position: relative !important;
+}
+
+.form-search .form-input {
+    padding-left: 2.5rem !important;
+    padding-right: 2.5rem !important;
+}
+
+.form-search .search-icon {
+    position: absolute !important;
+    left: 0.75rem !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    pointer-events: none !important;
+}
+
+.form-search .clear-icon {
+    position: absolute !important;
+    right: 0.75rem !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    cursor: pointer !important;
+    padding: 0.25rem !important;
+    border-radius: 0.25rem !important;
+    transition: all 0.15s ease-in-out !important;
+}
+
+.form-search .clear-icon:hover {
+    color: rgb(55 65 81) !important; /* gray-700 */
+    background-color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.dark .form-search .search-icon,
+.dark .form-search .clear-icon {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.dark .form-search .clear-icon:hover {
+    color: rgb(209 213 219) !important; /* gray-300 */
+    background-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* ==========================================
+   AUTOCOMPLETE COMPONENTS
+   ========================================== */
+
 .autocomplete-container {
-  @apply relative;
+    position: relative !important;
 }
 
 .autocomplete-results {
-  @apply absolute z-10 mt-1 w-full bg-white dark:bg-gray-700 shadow-lg rounded-md py-1 overflow-auto 
-         max-h-60 border border-gray-300 dark:border-gray-600;
+    position: absolute !important;
+    z-index: 50 !important;
+    margin-top: 0.25rem !important;
+    width: 100% !important;
+    background-color: white !important;
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1) !important;
+    border-radius: 0.375rem !important;
+    padding: 0.25rem 0 !important;
+    overflow-y: auto !important;
+    max-height: 15rem !important;
+    border: 1px solid rgb(209 213 219) !important; /* gray-300 */
+}
+
+.dark .autocomplete-results {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
 }
 
 .autocomplete-result {
-  @apply px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer;
+    padding: 0.5rem 1rem !important;
+    cursor: pointer !important;
+    transition: background-color 0.15s ease-in-out !important;
+    font-size: 0.875rem !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
 }
 
-/* Date Inputs */
+.dark .autocomplete-result {
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.autocomplete-result:hover {
+    background-color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.dark .autocomplete-result:hover {
+    background-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.autocomplete-result.selected {
+    background-color: rgb(99 102 241) !important; /* indigo-500 */
+    color: white !important;
+}
+
+/* ==========================================
+   DATE PICKER COMPONENTS
+   ========================================== */
+
 .date-picker {
-  @apply relative;
+    position: relative !important;
 }
 
 .date-picker-calendar {
-  @apply absolute mt-1 z-20 bg-white dark:bg-gray-800 rounded-md shadow-lg p-2 border 
-         border-gray-300 dark:border-gray-700;
+    position: absolute !important;
+    margin-top: 0.25rem !important;
+    z-index: 50 !important;
+    background-color: white !important;
+    border-radius: 0.375rem !important;
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1) !important;
+    padding: 0.5rem !important;
+    border: 1px solid rgb(209 213 219) !important; /* gray-300 */
 }
 
-/* File Inputs */
+.dark .date-picker-calendar {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.date-picker-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    margin-bottom: 0.5rem !important;
+}
+
+.date-picker-nav {
+    background: none !important;
+    border: none !important;
+    cursor: pointer !important;
+    padding: 0.25rem !important;
+    border-radius: 0.25rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    transition: all 0.15s ease-in-out !important;
+}
+
+.date-picker-nav:hover {
+    background-color: rgb(243 244 246) !important; /* gray-100 */
+    color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+.dark .date-picker-nav {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.dark .date-picker-nav:hover {
+    background-color: rgb(75 85 99) !important; /* gray-600 */
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.date-picker-grid {
+    display: grid !important;
+    grid-template-columns: repeat(7, 1fr) !important;
+    gap: 0.125rem !important;
+}
+
+.date-picker-day {
+    padding: 0.5rem !important;
+    text-align: center !important;
+    cursor: pointer !important;
+    border-radius: 0.25rem !important;
+    font-size: 0.875rem !important;
+    transition: all 0.15s ease-in-out !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+.dark .date-picker-day {
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.date-picker-day:hover {
+    background-color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.dark .date-picker-day:hover {
+    background-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.date-picker-day.selected {
+    background-color: rgb(99 102 241) !important; /* indigo-500 */
+    color: white !important;
+}
+
+.date-picker-day.today {
+    background-color: rgb(238 242 255) !important; /* indigo-50 */
+    color: rgb(99 102 241) !important; /* indigo-500 */
+    font-weight: 600 !important;
+}
+
+.dark .date-picker-day.today {
+    background-color: rgba(67, 56, 202, 0.3) !important; /* indigo-800/30 */
+    color: rgb(165 180 252) !important; /* indigo-300 */
+}
+
+.date-picker-day.other-month {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.dark .date-picker-day.other-month {
+    color: rgb(107 114 128) !important; /* gray-500 */
+}
+
+/* ==========================================
+   FILE INPUT COMPONENTS
+   ========================================== */
+
 .file-input-container {
-  @apply relative border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-6 
-         text-center hover:border-gray-400 dark:hover:border-gray-600 transition-colors;
+    position: relative !important;
+    border: 2px dashed rgb(209 213 219) !important; /* gray-300 */
+    border-radius: 0.5rem !important;
+    padding: 1.5rem !important;
+    text-align: center !important;
+    transition: border-color 0.15s ease-in-out, background-color 0.15s ease-in-out !important;
+    background-color: rgb(249 250 251) !important; /* gray-50 */
+}
+
+.file-input-container:hover {
+    border-color: rgb(156 163 175) !important; /* gray-400 */
+    background-color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.dark .file-input-container {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+.dark .file-input-container:hover {
+    border-color: rgb(107 114 128) !important; /* gray-500 */
+    background-color: rgb(75 85 99) !important; /* gray-600 */
 }
 
 .file-input {
-  @apply absolute inset-0 w-full h-full opacity-0 cursor-pointer;
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    opacity: 0 !important;
+    cursor: pointer !important;
 }
 
 .file-input-label {
-  @apply text-sm text-gray-500 dark:text-gray-400;
+    font-size: 0.875rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    margin-bottom: 0.5rem !important;
+    display: block !important;
 }
 
+.dark .file-input-label {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.file-input-icon {
+    font-size: 2rem !important;
+    color: rgb(156 163 175) !important; /* gray-400 */
+    margin-bottom: 0.5rem !important;
+}
+
+.dark .file-input-icon {
+    color: rgb(107 114 128) !important; /* gray-500 */
+}
+
+.file-input-text {
+    font-size: 0.875rem !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    font-weight: 500 !important;
+}
+
+.dark .file-input-text {
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.file-input-subtext {
+    font-size: 0.75rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+    margin-top: 0.25rem !important;
+}
+
+.dark .file-input-subtext {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+/* File preview grid */
 .file-preview {
-  @apply mt-4 grid grid-cols-2 md:grid-cols-3 gap-2;
+    margin-top: 1rem !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.5rem !important;
 }
 
-/* Responsive Form Layouts */
-@media (max-width: 640px) {
-  .form-grid {
-    @apply grid-cols-1;
-  }
-  
-  .form-button {
-    @apply w-full;
-  }
+@media (min-width: 768px) {
+    .file-preview {
+        grid-template-columns: repeat(3, 1fr) !important;
+    }
 }
+
+.file-preview-item {
+    border: 1px solid rgb(229 231 235) !important; /* gray-200 */
+    border-radius: 0.375rem !important;
+    padding: 0.75rem !important;
+    background-color: white !important;
+    position: relative !important;
+}
+
+.dark .file-preview-item {
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+.file-preview-name {
+    font-size: 0.75rem !important;
+    color: rgb(55 65 81) !important; /* gray-700 */
+    font-weight: 500 !important;
+    margin-bottom: 0.25rem !important;
+    word-break: break-all !important;
+}
+
+.dark .file-preview-name {
+    color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.file-preview-size {
+    font-size: 0.625rem !important;
+    color: rgb(107 114 128) !important; /* gray-500 */
+}
+
+.dark .file-preview-size {
+    color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.file-preview-remove {
+    position: absolute !important;
+    top: 0.25rem !important;
+    right: 0.25rem !important;
+    background-color: rgb(239 68 68) !important; /* red-500 */
+    color: white !important;
+    border: none !important;
+    border-radius: 50% !important;
+    width: 1.25rem !important;
+    height: 1.25rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 0.75rem !important;
+    cursor: pointer !important;
+    transition: background-color 0.15s ease-in-out !important;
+}
+
+.file-preview-remove:hover {
+    background-color: rgb(220 38 38) !important; /* red-600 */
+}
+
+/* ==========================================
+   DARK MODE FORM STYLES
+   ========================================== */
+
+
+/* ==========================================
+   MULTIPLE SELECT DROPDOWN ENHANCEMENT
+   ========================================== */
+
+.form-select-multiple {
+    display: block !important;
+    width: 100% !important;
+    padding: 0.5rem 2.5rem 0.5rem 0.75rem !important;
+    border: 1px solid rgb(209 213 219) !important; /* gray-300 */
+    border-radius: 0.375rem !important;
+    font-size: 0.875rem !important;
+    line-height: 1.25rem !important;
+    transition: all 0.2s ease-in-out !important;
+    background-color: white !important;
+    
+    /* Dropdown arrow */
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") !important;
+    background-position: right 0.5rem center !important;
+    background-repeat: no-repeat !important;
+    background-size: 1.5em 1.5em !important;
+    
+    /* Force dropdown behavior */
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    
+    /* Collapsed state */
+    min-height: 2.5rem !important;
+    max-height: 2.5rem !important;
+    overflow: hidden !important;
+    cursor: pointer !important;
+    
+    /* Remove default multiple select styling */
+    size: 1 !important;
+}
+
+/* Focus state - expand dropdown */
+.form-select-multiple:focus {
+    outline: none !important;
+    border-color: rgb(59 130 246) !important; /* blue-500 */
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    
+    /* Expand on focus */
+    max-height: 150px !important;
+    overflow-y: auto !important;
+    z-index: 50 !important;
+    position: relative !important;
+    
+    /* Rotate arrow when expanded */
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M14 12l-4-4-4 4'/%3e%3c/svg%3e") !important;
+}
+
+/* When JavaScript adds expanded class */
+.form-select-multiple.expanded {
+    max-height: 150px !important;
+    overflow-y: auto !important;
+    z-index: 50 !important;
+    position: relative !important;
+    border-color: rgb(59 130 246) !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M14 12l-4-4-4 4'/%3e%3c/svg%3e") !important;
+}
+
+/* Option styling */
+.form-select-multiple option {
+    padding: 0.5rem 0.75rem !important;
+    background-color: white !important;
+    color: rgb(17 24 39) !important; /* gray-900 */
+    border: none !important;
+    cursor: pointer !important;
+    font-size: 0.875rem !important;
+    line-height: 1.25rem !important;
+}
+
+/* Selected options */
+.form-select-multiple option:checked {
+    background-color: rgb(59 130 246) !important; /* blue-500 */
+    color: white !important;
+    font-weight: 500 !important;
+}
+
+/* Option hover states */
+.form-select-multiple option:hover {
+    background-color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.form-select-multiple option:checked:hover {
+    background-color: rgb(37 99 235) !important; /* blue-600 */
+}
+
+/* Visual indicator for selections */
+.form-select-multiple.has-selections {
+    border-color: rgb(59 130 246) !important; /* blue-500 */
+    background-color: rgb(239 246 255) !important; /* blue-50 */
+}
+
+/* Dark mode support */
+.dark .form-select-multiple {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(75 85 99) !important; /* gray-600 */
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.dark .form-select-multiple:focus,
+.dark .form-select-multiple.expanded {
+    border-color: rgb(96 165 250) !important; /* blue-400 */
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1) !important;
+}
+
+.dark .form-select-multiple.has-selections {
+    border-color: rgb(96 165 250) !important; /* blue-400 */
+    background-color: rgba(59, 130, 246, 0.1) !important;
+}
+
+.dark .form-select-multiple option {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.dark .form-select-multiple option:checked {
+    background-color: rgb(96 165 250) !important; /* blue-400 */
+    color: rgb(17 24 39) !important; /* gray-900 */
+}
+
+.dark .form-select-multiple option:hover {
+    background-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.dark .form-select-multiple option:checked:hover {
+    background-color: rgb(59 130 246) !important; /* blue-500 */
+}
+
+/* Ensure proper scrollbar in dropdown */
+.form-select-multiple:focus,
+.form-select-multiple.expanded {
+    scrollbar-width: thin !important;
+    scrollbar-color: rgb(156 163 175) transparent !important;
+}
+
+.form-select-multiple:focus::-webkit-scrollbar,
+.form-select-multiple.expanded::-webkit-scrollbar {
+    width: 6px !important;
+}
+
+.form-select-multiple:focus::-webkit-scrollbar-track,
+.form-select-multiple.expanded::-webkit-scrollbar-track {
+    background: transparent !important;
+}
+
+.form-select-multiple:focus::-webkit-scrollbar-thumb,
+.form-select-multiple.expanded::-webkit-scrollbar-thumb {
+    background-color: rgb(156 163 175) !important;
+    border-radius: 3px !important;
+}
+
+.form-select-multiple:focus::-webkit-scrollbar-thumb:hover,
+.form-select-multiple.expanded::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(107 114 128) !important;
+}
+
+/* =============================================================================
+   PRODUCTION GRADE UNIVERSAL FORM COMPONENTS - CONSOLIDATED
+   Add to existing forms.css (enhance existing universal-form-input styles)
+   Matches gold standard payment_list.html form behavior
+   ============================================================================= */
+
+/* ==========================================
+   UNIVERSAL FILTER AUTO-SUBMIT - PRODUCTION GRADE
+   ========================================== */
+
+.universal-filter-auto-submit {
+    transition: all 0.15s ease-in-out !important;
+    position: relative !important;
+}
+
+.universal-filter-auto-submit:focus {
+    border-color: rgb(59 130 246) !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    transform: scale(1.005) !important;
+}
+
+.universal-filter-auto-submit.loading {
+    background-image: url("data:image/svg+xml,%3csvg width='20' height='20' xmlns='http://www.w3.org/2000/svg'%3e%3cg fill='none' fill-rule='evenodd'%3e%3cg transform='translate(1 1)' stroke='%23007bff' stroke-width='2'%3e%3ccircle stroke-opacity='.5' cx='9' cy='9' r='9'/%3e%3cpath d='m9 0a9 9 0 0 1 9 9'%3e%3canimateTransform attributeName='transform' type='rotate' from='0 9 9' to='360 9 9' dur='1s' repeatCount='indefinite'/%3e%3c/path%3e%3c/g%3e%3c/g%3e%3c/svg%3e") !important;
+    background-position: right 0.75rem center !important;
+    background-repeat: no-repeat !important;
+    background-size: 1rem 1rem !important;
+    padding-right: 2.5rem !important;
+}
+
+.universal-filter-auto-submit.success {
+    border-color: rgb(34 197 94) !important;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1) !important;
+}
+
+.universal-filter-auto-submit.error {
+    border-color: rgb(239 68 68) !important;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
+    animation: inputShake 0.3s ease-in-out !important;
+}
+
+@keyframes inputShake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+}
+
+/* ==========================================
+   ENHANCED UNIVERSAL FORM INPUTS
+   ========================================== */
+
+.universal-form-input:focus,
+.universal-form-select:focus {
+    outline: none !important;
+    border-color: rgb(59 130 246) !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    transform: scale(1.005) !important;
+}
+
+.universal-form-input:focus-within,
+.universal-form-select:focus-within {
+    border-color: rgb(59 130 246) !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* ==========================================
+   UNIVERSAL FORM VALIDATION STATES - CONSOLIDATED
+   ========================================== */
+
+.universal-form-input.error,
+.universal-form-select.error {
+    border-color: rgb(239 68 68) !important;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
+    background-color: rgb(254 242 242) !important;
+}
+
+.dark .universal-form-input.error,
+.dark .universal-form-select.error {
+    background-color: rgb(69 10 10) !important;
+    border-color: rgb(185 28 28) !important;
+}
+
+.universal-form-input.success,
+.universal-form-select.success {
+    border-color: rgb(34 197 94) !important;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1) !important;
+    background-color: rgb(240 253 244) !important;
+}
+
+.dark .universal-form-input.success,
+.dark .universal-form-select.success {
+    background-color: rgb(5 46 22) !important;
+    border-color: rgb(21 128 61) !important;
+}
+
+.universal-form-input.warning,
+.universal-form-select.warning {
+    border-color: rgb(245 158 11) !important;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1) !important;
+    background-color: rgb(255 251 235) !important;
+}
+
+.dark .universal-form-input.warning,
+.dark .universal-form-select.warning {
+    background-color: rgb(69 26 3) !important;
+    border-color: rgb(217 119 6) !important;
+}
+
+/* ==========================================
+   UNIVERSAL FORM HELP TEXT - CONSOLIDATED
+   ========================================== */
+
+.universal-form-help {
+    font-size: 0.75rem !important;
+    line-height: 1.4 !important;
+    margin-top: 0.25rem !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.25rem !important;
+}
+
+.universal-form-help.normal {
+    color: rgb(107 114 128) !important;
+}
+
+.dark .universal-form-help.normal {
+    color: rgb(156 163 175) !important;
+}
+
+.universal-form-help.error {
+    color: rgb(239 68 68) !important;
+}
+
+.universal-form-help.success {
+    color: rgb(34 197 94) !important;
+}
+
+.universal-form-help.warning {
+    color: rgb(245 158 11) !important;
+}
+
+.universal-form-help i {
+    font-size: 0.7rem !important;
+}
+
+/* ==========================================
+   UNIVERSAL FORM DISABLED STATES - CONSOLIDATED
+   ========================================== */
+
+.universal-form-input:disabled,
+.universal-form-select:disabled {
+    background-color: rgb(249 250 251) !important;
+    color: rgb(107 114 128) !important;
+    cursor: not-allowed !important;
+    opacity: 0.6 !important;
+    border-color: rgb(229 231 235) !important;
+}
+
+.dark .universal-form-input:disabled,
+.dark .universal-form-select:disabled {
+    background-color: rgb(55 65 81) !important;
+    color: rgb(156 163 175) !important;
+    border-color: rgb(75 85 99) !important;
+}
+
+.universal-form-input:disabled::placeholder {
+    color: rgb(156 163 175) !important;
+}
+
+.dark .universal-form-input:disabled::placeholder {
+    color: rgb(107 114 128) !important;
+}
+
+/* ==========================================
+   UNIVERSAL FORM LOADING STATES - CONSOLIDATED
+   ========================================== */
+
+.universal-form-loading {
+    position: relative !important;
+    pointer-events: none !important;
+}
+
+.universal-form-loading::after {
+    content: "" !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    background-color: rgba(255, 255, 255, 0.8) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 0.375rem !important;
+    z-index: 10 !important;
+}
+
+.dark .universal-form-loading::after {
+    background-color: rgba(31, 41, 55, 0.8) !important;
+}
+
+.universal-form-loading::before {
+    content: "" !important;
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    width: 1rem !important;
+    height: 1rem !important;
+    border: 2px solid rgb(229 231 235) !important;
+    border-top: 2px solid rgb(59 130 246) !important;
+    border-radius: 50% !important;
+    animation: formSpinner 1s linear infinite !important;
+    transform: translate(-50%, -50%) !important;
+    z-index: 11 !important;
+}
+
+@keyframes formSpinner {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* ==========================================
+   UNIVERSAL PLACEHOLDER ENHANCEMENTS - CONSOLIDATED
+   ========================================== */
+
+.universal-form-input::placeholder {
+    color: rgb(156 163 175) !important;
+    font-style: italic !important;
+    transition: color 0.15s ease-in-out !important;
+}
+
+.dark .universal-form-input::placeholder {
+    color: rgb(107 114 128) !important;
+}
+
+.universal-form-input:focus::placeholder {
+    color: rgb(107 114 128) !important;
+    font-style: normal !important;
+}
+
+.dark .universal-form-input:focus::placeholder {
+    color: rgb(75 85 99) !important;
+}
+
+/* ==========================================
+   UNIVERSAL FORM RESPONSIVE DESIGN - CONSOLIDATED
+   ========================================== */
+
+@media (max-width: 640px) {
+    .universal-form-input,
+    .universal-form-select {
+        font-size: 1rem !important; /* Prevent zoom on mobile */
+        padding: 0.75rem !important;
+    }
+    
+    .universal-form-group {
+        gap: 0.25rem !important;
+        margin-bottom: 0.75rem !important;
+    }
+    
+    .universal-form-group label {
+        font-size: 0.8rem !important;
+    }
+    
+    .universal-form-help {
+        font-size: 0.7rem !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .universal-form-input,
+    .universal-form-select {
+        padding: 0.625rem !important;
+    }
+    
+    .universal-form-group label {
+        font-size: 0.75rem !important;
+    }
+}
+
+/* ==========================================
+   UNIVERSAL FORM ANIMATION - PRODUCTION GRADE
+   ========================================== */
+
+.universal-form-group {
+    animation: formGroupFadeIn 0.3s ease-out !important;
+}
+
+@keyframes formGroupFadeIn {
+    from {
+        opacity: 0 !important;
+        transform: translateY(10px) !important;
+    }
+    to {
+        opacity: 1 !important;
+        transform: translateY(0) !important;
+    }
+}
+
+/* Staggered animation for form groups */
+.universal-form-group:nth-child(1) { animation-delay: 0.1s !important; }
+.universal-form-group:nth-child(2) { animation-delay: 0.2s !important; }
+.universal-form-group:nth-child(3) { animation-delay: 0.3s !important; }
+.universal-form-group:nth-child(4) { animation-delay: 0.4s !important; }
+.universal-form-group:nth-child(5) { animation-delay: 0.5s !important; }
