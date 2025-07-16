@@ -12,11 +12,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load environment variables
+
+# Load environment variables with ENHANCED error handling
 try:
     from dotenv import load_dotenv
-    load_dotenv()
-    load_dotenv(".flaskenv")
+    
+    # Load .env with error handling
+    if os.path.exists('.env'):
+        try:
+            load_dotenv('.env', verbose=False, override=False)
+        except Exception as e:
+            logger.warning(f"Error parsing .env file: {e}")
+            logger.warning("Please check .env file format - ensure no malformed lines around line 79")
+            logger.warning("Common issues: unclosed quotes, special characters, missing = signs")
+    
+    # Load .flaskenv if it exists
+    if os.path.exists('.flaskenv'):
+        try:
+            load_dotenv('.flaskenv', verbose=False, override=False)
+        except Exception as e:
+            logger.warning(f"Error parsing .flaskenv file: {e}")
+            
 except ImportError:
     logger.warning("python-dotenv not installed. Proceeding with existing environment variables.")
 

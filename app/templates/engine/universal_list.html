@@ -529,7 +529,7 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                                     
                                     {% if component_amount and component_amount > 0 %}
                                         <small class="component-amount">
-                                            ({{ component_label }} - ₹{{ "{:,.2f}".format(component_amount|float) }})
+                                            ({{ component_label }})<br>₹{{ "{:,.2f}".format(component_amount|float) }}
                                         </small>
                                     {% endif %}
                                 {% endif %}
@@ -553,7 +553,7 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                             {% endif %}
                         </td>
                         <td class="status-column">
-                            {% set status = item.status if hasattr(item, 'status') else item.get('status', 'pending') %}
+                            {% set status = item.status if hasattr(item, 'workflow_status') else item.get('workflow_status', 'pending') %}
                             <span class="status-badge status-{{ status }}">
                                 <i class="fas fa-{{ 'check-circle' if status == 'completed' else 'clock' if status == 'pending' else 'times-circle' }}"></i>
                                 {{ status.title() }}
@@ -662,14 +662,17 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
 
 <!-- Entity Configuration -->
 <script>
+// ✅ SAFEST: Manual object construction to avoid template issues<script>
 window.assembledData = {
     entity_config: {
-        entity_type: {{ (assembled_data.entity_config.entity_type if assembled_data and assembled_data.entity_config and assembled_data.entity_config.entity_type else 'universal') | tojson }},
-        enable_saved_filter_suggestions: {{ (assembled_data.entity_config.enable_saved_filter_suggestions if assembled_data and assembled_data.entity_config and hasattr(assembled_data.entity_config, 'enable_saved_filter_suggestions') else True) | tojson }},
-        enable_auto_submit: {{ auto_submit_enabled | tojson }}
-    },
+        entity_type: "supplier_payments",
+        enable_saved_filter_suggestions: true,
+        enable_auto_submit: true
+    }
+};
 
 console.log('📋 Universal List template loaded');
+console.log('🔧 Entity config:', window.assembledData.entity_config);
 </script>
 
 <!-- Utility Functions -->

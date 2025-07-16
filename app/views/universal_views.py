@@ -28,7 +28,7 @@ from app.security.authorization.decorators import (
 from app.services.database_service import get_db_session
 from app.config.entity_configurations import get_entity_config, is_valid_entity_type, list_entity_types
 from app.engine.data_assembler import EnhancedUniversalDataAssembler
-from app.engine.universal_services import get_universal_service
+from app.engine.universal_services import search_universal_entity_data, get_universal_service
 from app.utils.context_helpers import ensure_request_context, get_user_branch_context, get_branch_uuid_from_context_or_request
 from app.utils.unicode_logging import get_unicode_safe_logger
 
@@ -234,7 +234,7 @@ def get_universal_list_data(entity_type: str) -> Dict:
         from flask import request
         from app.utils.context_helpers import ensure_request_context, get_branch_uuid_from_context_or_request
         from app.config.entity_configurations import get_entity_config
-        from app.engine.universal_services import get_universal_service
+        from app.engine.universal_services import search_universal_entity_data
         from app.engine.data_assembler import EnhancedUniversalDataAssembler
         
         ensure_request_context()
@@ -251,92 +251,29 @@ def get_universal_list_data(entity_type: str) -> Dict:
         # Get branch context
         branch_uuid, branch_name = get_branch_uuid_from_context_or_request()
         
-        # Get universal service
-        service = get_universal_service(entity_type)
+        # # Get universal service
+        # service = get_universal_service(entity_type)
         
         # Extract filters from request
         filters = request.args.to_dict() if request else {}
         
-        # ✅ ENHANCED SERVICE CALL with data extraction
-        raw_data = None
+        # ✅ CORRECTED: Use proper Universal Service orchestration
+        logger.info(f"🔧 [ORCHESTRATION] Using universal service orchestration for {entity_type}")
         
-        # ✅ LOGGING: Service method selection
-        logger.info(f"🔧 [SERVICE_SELECTION] Entity: {entity_type}")
-        logger.info(f"🔧 [SERVICE_SELECTION] Service type: {type(service).__name__}")
-        logger.info(f"🔧 [SERVICE_SELECTION] Available methods: {[method for method in dir(service) if not method.startswith('_')]}")
-
-        # Try different service method patterns
-        if hasattr(service, 'search_data'):
-            logger.info(f"🔧 [SERVICE_SELECTION] Using search_data method")
-            logger.info(f"🔧 Calling {entity_type}.search_data")
-            try:
-                service_response = service.search_data(
-                    hospital_id=current_user.hospital_id,
-                    filters=filters,
-                    branch_id=branch_uuid,
-                    current_user_id=current_user.user_id,
-                    page=int(filters.get('page', 1)),
-                    per_page=int(filters.get('per_page', config.items_per_page))
-                )
-                
-                # ✅ LOGGING: Before universal enhancement
-                logger.info(f"🔧 [BREAKDOWN_TRIGGER] About to call universal breakdown enhancement")
-                logger.info(f"🔧 [BREAKDOWN_TRIGGER] Service response keys: {list(service_response.keys()) if isinstance(service_response, dict) else 'Not a dict'}")
-
-                # ✅ ENTITY-AGNOSTIC: Add breakdown calculations using existing architecture
-                from app.engine.universal_services import UniversalServiceRegistry
-                _service_registry = UniversalServiceRegistry()
-                service_response = _service_registry._enhance_result_with_breakdowns(
-                    entity_type, service_response, filters
-                )
-
-                # ✅ LOGGING: After universal enhancement
-                logger.info(f"🔧 [BREAKDOWN_RESULT] Universal enhancement completed")
-                logger.info(f"🔧 [BREAKDOWN_RESULT] Enhanced response keys: {list(service_response.keys()) if isinstance(service_response, dict) else 'Not a dict'}")
-                
-                # ✅ CRITICAL: Extract actual data from service response
-                raw_data = _extract_actual_data_from_service_response(service_response, entity_type)
-            except Exception as service_error:
-                logger.error(f"Service search_data error: {service_error}")
-                raw_data = {'items': [], 'total': 0, 'form_instance': None, 'error': str(service_error)}
-                
-        elif hasattr(service, 'search_payments_with_form_integration'):
-            logger.info(f"🔧 Calling {entity_type}.search_payments_with_form_integration")
-            try:
-                service_response = service.search_payments_with_form_integration(
-                    filters=filters,
-                    hospital_id=current_user.hospital_id,
-                    branch_id=branch_uuid,
-                    current_user_id=current_user.user_id,
-                    page=int(filters.get('page', 1)),
-                    per_page=int(filters.get('per_page', config.items_per_page))
-                )
-                
-                # ✅ LOGGING: Before universal enhancement
-                logger.info(f"🔧 [BREAKDOWN_TRIGGER] About to call universal breakdown enhancement")
-                logger.info(f"🔧 [BREAKDOWN_TRIGGER] Service response keys: {list(service_response.keys()) if isinstance(service_response, dict) else 'Not a dict'}")
-
-                # ✅ ENTITY-AGNOSTIC: Add breakdown calculations using existing architecture
-                from app.engine.universal_services import UniversalServiceRegistry
-                _service_registry = UniversalServiceRegistry()
-                service_response = _service_registry._enhance_result_with_breakdowns(
-                    entity_type, service_response, filters
-                )
-
-                # ✅ LOGGING: After universal enhancement
-                logger.info(f"🔧 [BREAKDOWN_RESULT] Universal enhancement completed")
-                logger.info(f"🔧 [BREAKDOWN_RESULT] Enhanced response keys: {list(service_response.keys()) if isinstance(service_response, dict) else 'Not a dict'}")
-
-                # ✅ CRITICAL: Extract actual data from service response
-                raw_data = _extract_actual_data_from_service_response(service_response, entity_type)
-                
-            except Exception as service_error:
-                logger.error(f"Service search_payments_with_form_integration error: {service_error}")
-                raw_data = {'items': [], 'total': 0, 'form_instance': None, 'error': str(service_error)}
-        else:
-            # Generic fallback
-            logger.info(f"🔧 Using generic fallback for {entity_type}")
-            raw_data = {'items': [], 'total': 0, 'form_instance': None}
+        raw_data = search_universal_entity_data(
+            entity_type=entity_type,
+            filters=filters,
+            hospital_id=current_user.hospital_id,
+            branch_id=branch_uuid,
+            page=int(filters.get('page', 1)),
+            per_page=int(filters.get('per_page', config.items_per_page))
+        )
+        
+        # ✅ ORCHESTRATION VERIFICATION
+        logger.info(f"✅ [ORCHESTRATION] Universal service returned data for {entity_type}")
+        logger.info(f"✅ [ORCHESTRATION] Items count: {len(raw_data.get('items', []))}")
+        logger.info(f"✅ [ORCHESTRATION] Orchestrated by: {raw_data.get('metadata', {}).get('orchestrated_by', 'unknown')}")
+        logger.info(f"✅ [ORCHESTRATION] Categorized filtering: {raw_data.get('metadata', {}).get('categorized_filtering', False)}")
         
         # Verify we have actual data
         logger.info(f"✅ Raw data extracted: {len(raw_data.get('items', []))} items")

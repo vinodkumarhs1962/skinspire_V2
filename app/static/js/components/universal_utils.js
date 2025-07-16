@@ -78,53 +78,53 @@ function showExportMessage(format) {
  * Handle date preset clicks
  * Sets date range in form and submits to Flask backend
  */
-function handleDatePreset(preset) {
-    const form = document.getElementById('universal-filter-form');
-    if (!form) return;
+// function handleDatePreset(preset) {
+//     const form = document.getElementById('universal-filter-form');
+//     if (!form) return;
     
-    // Get current date
-    const today = new Date();
-    let startDate, endDate;
+//     // Get current date
+//     const today = new Date();
+//     let startDate, endDate;
     
-    switch (preset) {
-        case 'today':
-            startDate = endDate = today.toISOString().split('T')[0];
-            break;
-        case 'yesterday':
-            const yesterday = new Date(today);
-            yesterday.setDate(yesterday.getDate() - 1);
-            startDate = endDate = yesterday.toISOString().split('T')[0];
-            break;
-        case 'this_week':
-            const weekStart = new Date(today);
-            weekStart.setDate(today.getDate() - today.getDay());
-            startDate = weekStart.toISOString().split('T')[0];
-            endDate = today.toISOString().split('T')[0];
-            break;
-        case 'this_month':
-            startDate = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
-            endDate = today.toISOString().split('T')[0];
-            break;
-        case 'last_30_days':
-            const thirtyDaysAgo = new Date(today);
-            thirtyDaysAgo.setDate(today.getDate() - 30);
-            startDate = thirtyDaysAgo.toISOString().split('T')[0];
-            endDate = today.toISOString().split('T')[0];
-            break;
-        default:
-            return;
-    }
+//     switch (preset) {
+//         case 'today':
+//             startDate = endDate = today.toISOString().split('T')[0];
+//             break;
+//         case 'yesterday':
+//             const yesterday = new Date(today);
+//             yesterday.setDate(yesterday.getDate() - 1);
+//             startDate = endDate = yesterday.toISOString().split('T')[0];
+//             break;
+//         case 'this_week':
+//             const weekStart = new Date(today);
+//             weekStart.setDate(today.getDate() - today.getDay());
+//             startDate = weekStart.toISOString().split('T')[0];
+//             endDate = today.toISOString().split('T')[0];
+//             break;
+//         case 'this_month':
+//             startDate = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+//             endDate = today.toISOString().split('T')[0];
+//             break;
+//         case 'last_30_days':
+//             const thirtyDaysAgo = new Date(today);
+//             thirtyDaysAgo.setDate(today.getDate() - 30);
+//             startDate = thirtyDaysAgo.toISOString().split('T')[0];
+//             endDate = today.toISOString().split('T')[0];
+//             break;
+//         default:
+//             return;
+//     }
     
-    // Set date inputs if they exist
-    const startDateInput = form.querySelector('[name="start_date"], [name="date_from"]');
-    const endDateInput = form.querySelector('[name="end_date"], [name="date_to"]');
+//     // Set date inputs if they exist
+//     const startDateInput = form.querySelector('[name="start_date"], [name="date_from"]');
+//     const endDateInput = form.querySelector('[name="end_date"], [name="date_to"]');
     
-    if (startDateInput) startDateInput.value = startDate;
-    if (endDateInput) endDateInput.value = endDate;
+//     if (startDateInput) startDateInput.value = startDate;
+//     if (endDateInput) endDateInput.value = endDate;
     
-    // Submit form to Flask backend
-    form.submit();
-}
+//     // Submit form to Flask backend
+//     form.submit();
+// }
 
 /**
  * Initialize universal components when page loads
@@ -155,6 +155,6 @@ window.handleUniversalSort = handleUniversalSort;
 window.handleUniversalPagination = handleUniversalPagination;
 window.handleUniversalExport = handleUniversalExport;
 window.clearUniversalFilters = clearUniversalFilters;
-window.handleDatePreset = handleDatePreset;
+// window.handleDatePreset = handleDatePreset;
 window.showLoadingState = showLoadingState;
 window.hideLoadingState = hideLoadingState;

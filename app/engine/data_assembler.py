@@ -88,6 +88,22 @@ class EnhancedUniversalDataAssembler:
                 # ✅ FALLBACK: Use old method if new service fails
                 filter_data = self._assemble_enhanced_filter_form_fallback(config, current_filters)
             
+            # ✅ CRITICAL FIX: Merge summary data from filter service with raw data
+            if filter_data.get('summary_data') and raw_data.get('summary'):
+                logger.info(f"[SUMMARY_MERGE] Merging filter service summary data with existing summary")
+                existing_summary = raw_data.get('summary', {})
+                filter_summary = filter_data.get('summary_data', {})
+                
+                # Preserve all existing fields and add missing ones from filter service
+                merged_summary = existing_summary.copy()
+                for key, value in filter_summary.items():
+                    if key not in merged_summary or merged_summary[key] == 0:
+                        merged_summary[key] = value
+                        logger.info(f"[SUMMARY_MERGE] Added missing field {key} = {value}")
+                
+                raw_data['summary'] = merged_summary
+                logger.info(f"[SUMMARY_MERGE] Final merged summary: {list(merged_summary.keys())}")
+
             template_safe_config = self._make_template_safe_config(config)
             # Assemble other data components
             
@@ -740,7 +756,7 @@ class EnhancedUniversalDataAssembler:
                     
                     # ✅ FIX: Log missing fields but continue processing
                     if raw_value == 0 and field_name not in summary_data:
-                        logger.warning(f"⚠️  Card {card_config.get('id', field_name)}: field '{field_name}' missing from summary, using default value 0")
+                        logger.warning(f"[WARNING]  Card {field_name}: field '{field_name}' missing from summary, using default value 0")
 
                     logger.info(f"✅ Card {card_config.get('id', field_name)}: field={field_name}, raw_value={raw_value}")
                     

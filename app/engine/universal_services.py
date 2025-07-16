@@ -2,7 +2,7 @@
 Universal Service Implementation - Connects Existing Services to Universal Engine
 File: app/engine/universal_services.py
 
-Adapts your existing service methods to work with the universal engine
+Adapts your existing service methods to work with the universal engine 
 Uses exact method signatures from your supplier_service.py
 http://localhost:5000/universal/supplier_payments/list
 """
@@ -21,6 +21,7 @@ from app.services.universal_supplier_service import EnhancedUniversalSupplierSer
 from app.services.database_service import get_db_session
 from app.utils.unicode_logging import get_unicode_safe_logger
 from app.engine.universal_filter_service import get_universal_filter_service
+from app.engine.categorized_filter_processor import get_categorized_filter_processor
 
 logger = get_unicode_safe_logger(__name__)
 
@@ -39,6 +40,7 @@ class UniversalServiceRegistry:
         }
         
         self.filter_service = get_universal_filter_service()
+        self.categorized_processor = get_categorized_filter_processor()
     
     def get_service(self, entity_type: str):
         """Get appropriate service for entity type"""
@@ -74,31 +76,147 @@ class UniversalServiceRegistry:
             return GenericUniversalService(entity_type)
     
     def search_entity_data(self, entity_type: str, filters: Dict, **kwargs) -> Dict:
-        """Universal search method that works for ANY entity"""
+        """
+        ✅ ENHANCED ORCHESTRATION: Universal search that properly delegates to entity services
+        """
         try:
-            # ✅ Get appropriate service
+            logger.info(f"🔄 [ORCHESTRATION] Starting universal search for {entity_type}")
+            logger.info(f"🔄 [ORCHESTRATION] Filters: {list(filters.keys())}")
+            
+            # Step 1: Get entity-specific service
             service = self.get_service(entity_type)
+            if not service:
+                logger.error(f"❌ No service available for {entity_type}")
+                return self._get_empty_result()
             
-            # ✅ Call service search method
-            if hasattr(service, 'search_data'):
-                result = service.search_data(
-                    hospital_id=current_user.hospital_id,
-                    filters=filters,
-                    **kwargs
-                )
-            elif hasattr(service, 'search_payments_with_form_integration'):
-                result = service.search_payments_with_form_integration(filters=filters, **kwargs)
-            else:
-                # ✅ Generic search fallback
-                result = self._generic_search(entity_type, filters, **kwargs)
+            # Step 2: Prepare parameters for entity service
+            search_params = self._prepare_search_parameters(entity_type, filters, **kwargs)
             
-            # ✅ UNIVERSAL: Add breakdown calculations if needed by entity configuration
-            result = self._enhance_result_with_breakdowns(entity_type, result, filters)
-            return result
+            # Step 3: Delegate to entity-specific service
+            result = self._delegate_to_entity_service(service, entity_type, search_params)
+            
+            # Step 4: Enhance result with universal features
+            enhanced_result = self._enhance_with_universal_features(entity_type, result, filters)
+            
+            logger.info(f"✅ [ORCHESTRATION] Universal search completed for {entity_type}")
+            return enhanced_result
                 
         except Exception as e:
-            logger.error(f"Error searching {entity_type}: {str(e)}")
-            return self._get_empty_result()
+            logger.error(f"❌ [ORCHESTRATION] Error in universal search for {entity_type}: {str(e)}")
+            return self._get_error_result(f"Universal search failed: {str(e)}", entity_type, **kwargs)
+
+    def _prepare_search_parameters(self, entity_type: str, filters: Dict, **kwargs) -> Dict:
+        """
+        ✅ PARAMETER PREPARATION: Prepare standardized parameters for entity services
+        """
+        try:
+            # Standard parameters that all entity services expect
+            search_params = {
+                'filters': filters,
+                'hospital_id': kwargs.get('hospital_id') or (current_user.hospital_id if current_user else None),
+                'branch_id': kwargs.get('branch_id'),
+                'page': kwargs.get('page', 1),
+                'per_page': kwargs.get('per_page', 20)
+            }
+            
+            # Add any additional parameters passed
+            additional_params = {k: v for k, v in kwargs.items() 
+                            if k not in ['hospital_id', 'branch_id', 'page', 'per_page']}
+            search_params.update(additional_params)
+            
+            logger.info(f"🔧 [ORCHESTRATION] Prepared search parameters: {list(search_params.keys())}")
+            return search_params
+            
+        except Exception as e:
+            logger.error(f"❌ Error preparing search parameters: {str(e)}")
+            return {'filters': filters}
+
+    def _delegate_to_entity_service(self, service, entity_type: str, search_params: Dict) -> Dict:
+        """
+        ✅ SERVICE DELEGATION: Call appropriate method on entity-specific service
+        """
+        try:
+            logger.info(f"🎯 [DELEGATION] Calling entity service for {entity_type}")
+            
+            # Try different service method patterns
+            if hasattr(service, 'search_data'):
+                logger.info(f"🎯 [DELEGATION] Using search_data method")
+                return service.search_data(**search_params)
+                
+            elif hasattr(service, 'search_payments_with_form_integration'):
+                logger.info(f"🎯 [DELEGATION] Using search_payments_with_form_integration method")
+                # Adapt parameters for this specific method signature
+                form_class = search_params.pop('form_class', None)
+                return service.search_payments_with_form_integration(form_class, **search_params)
+                
+            else:
+                logger.warning(f"⚠️ [DELEGATION] No recognized search method, using generic")
+                return self._generic_search(entity_type, search_params)
+                
+        except Exception as e:
+            logger.error(f"❌ [DELEGATION] Error calling entity service: {str(e)}")
+            return self._get_error_result(str(e))
+
+    def _enhance_with_universal_features(self, entity_type: str, result: Dict, filters: Dict) -> Dict:
+        """
+        ✅ UNIVERSAL ENHANCEMENT: Add universal features to entity-specific results
+        """
+        try:
+            enhanced_result = result.copy()
+            
+            # Add universal metadata
+            enhanced_result['metadata'] = enhanced_result.get('metadata', {})
+            enhanced_result['metadata'].update({
+                'entity_type': entity_type,
+                'orchestrated_by': 'universal_service',
+                'categorized_filtering': True,
+                'universal_features_applied': True
+            })
+            
+            # Add filter organization for frontend
+            try:
+                from app.engine.entity_config_manager import EntityConfigManager
+                categorized_filters = EntityConfigManager.organize_request_filters_by_category(
+                    filters, entity_type
+                )
+                enhanced_result['categorized_filters'] = categorized_filters
+            except Exception as e:
+                logger.warning(f"Could not organize filters by category: {str(e)}")
+            
+            # Add breakdown calculations if needed by entity configuration
+            enhanced_result = self._enhance_result_with_breakdowns(entity_type, enhanced_result, filters)
+            
+            logger.info(f"✅ [ENHANCEMENT] Universal features added to {entity_type} result")
+            return enhanced_result
+            
+        except Exception as e:
+            logger.error(f"❌ [ENHANCEMENT] Error enhancing result: {str(e)}")
+            return result  # Return original result if enhancement fails
+
+    def _get_error_result(self, error_message: str, entity_type: str = None, **kwargs) -> Dict:
+        """Universal error handler for all entities"""
+        from datetime import datetime
+        return {
+            'items': [],
+            'total': 0,
+            'page': kwargs.get('page', 1),
+            'per_page': kwargs.get('per_page', 20),
+            'summary': {'total_count': 0, 'total_amount': 0.00, 'pending_count': 0, 'this_month_count': 0},
+            'form_instance': None,
+            'branch_context': kwargs.get('branch_context', {}),
+            'request_args': kwargs.get('filters', {}),
+            'active_filters': {},
+            'filtered_args': {},
+            'error': error_message,
+            'error_timestamp': datetime.now(),
+            'success': False,
+            'metadata': {
+                'entity_type': entity_type,
+                'service_name': 'universal_service_registry',
+                'has_error': True,
+                'orchestrated_by': 'universal_service'
+            }
+        }
 
     def _enhance_result_with_breakdowns(self, entity_type: str, result: Dict, filters: Dict) -> Dict:
         """
@@ -125,8 +243,8 @@ class UniversalServiceRegistry:
                 return result
             
             # ✅ Calculate breakdowns for entities that need them
-            summary = result.get('summary', {})
-            
+            summary = result.get('summary', {}).copy()  # Make a copy to preserve existing fields
+
             for breakdown_config in breakdown_configs:
                 breakdown_data = self._calculate_universal_breakdown(
                     entity_type, 
@@ -134,9 +252,10 @@ class UniversalServiceRegistry:
                     filters,
                     existing_result=result
                 )
+                # ✅ PRESERVE existing summary fields while adding breakdown data
                 summary.update(breakdown_data)
                 logger.info(f"✅ Added {breakdown_config['id']} breakdown to {entity_type}: {breakdown_data}")
-            
+
             result['summary'] = summary
             return result
             
@@ -480,58 +599,54 @@ class UniversalServiceRegistry:
             logger.error(f"Error in generic search for {entity_type}: {str(e)}")
             return self._get_empty_result(entity_type, str(e))
     
-    def _get_empty_result(self, entity_type: str, error: str = None) -> Dict:
-        """Get empty result structure"""
+    def _get_empty_result(self) -> Dict:
+        """Standard empty result structure"""
         return {
             'items': [],
             'total': 0,
-            'pagination': {'total_count': 0, 'current_page': 1, 'per_page': 20, 'total_pages': 1},
+            'pagination': {'total_count': 0, 'page': 1, 'per_page': 20, 'total_pages': 1},
             'summary': {},
-            'success': False,
-            'error': error,
-            'entity_type': entity_type
+            'success': True,
+            'metadata': {'orchestrated_by': 'universal_service'}
         }
 
 class GenericUniversalService:
     """
-    ✅ ADD: Generic service for entities without specific implementations
+    ✅ ENTITY AGNOSTIC: Generic service for entities without specific implementations
+    Uses entity configuration to provide basic CRUD operations for ANY entity
     """
     
     def __init__(self, entity_type: str):
         self.entity_type = entity_type
-        self.filter_service = get_universal_filter_service()
-    
-    def search_data(self, hospital_id: uuid.UUID, filters: Dict, **kwargs) -> Dict:
-        """Generic search using configuration"""
+        logger.info(f"✅ Initialized generic service for {entity_type}")
+        
+    def search_data(self, **kwargs) -> dict:
+        """✅ ENTITY AGNOSTIC: Generic search implementation"""
         try:
-            logger.info(f"Generic search for {self.entity_type}")
+            logger.info(f"Generic search for entity: {self.entity_type}")
             
-            # Get filter data to ensure configuration is working
-            if self.filter_service:
-                filter_data = self.filter_service.get_complete_filter_data(
-                    entity_type=self.entity_type,
-                    hospital_id=hospital_id,
-                    branch_id=kwargs.get('branch_id'),
-                    current_filters=filters
-                )
-            else:
-                filter_data = {}
+            # Get filters parameter properly
+            filters = kwargs.get('filters', {})
+            page = kwargs.get('page', 1)
+            per_page = kwargs.get('per_page', 20)
             
-            # For generic entities, return empty result with proper structure
+            # TODO: Implement using entity configuration to determine:
+            # - Database table/model from entity_type
+            # - Searchable fields from configuration
+            # - Default ordering from configuration
+            
             return {
                 'items': [],
                 'total': 0,
                 'pagination': {
-                    'total_count': 0,
-                    'current_page': filters.get('page', 1),
-                    'per_page': filters.get('per_page', 20),
-                    'total_pages': 1,
-                    'has_prev': False,
-                    'has_next': False
+                    'total_count': 0, 
+                    'page': page, 
+                    'per_page': per_page, 
+                    'total_pages': 1
                 },
                 'summary': {},
                 'success': True,
-                'filter_data': filter_data
+                'message': f'Generic search for {self.entity_type} - implementation pending'
             }
             
         except Exception as e:
@@ -539,11 +654,35 @@ class GenericUniversalService:
             return {
                 'items': [],
                 'total': 0,
-                'pagination': {'total_count': 0},
+                'pagination': {'total_count': 0, 'page': 1, 'per_page': 20, 'total_pages': 1},
                 'summary': {},
                 'success': False,
                 'error': str(e)
             }
+
+    def get_by_id(self, item_id: str, **kwargs):
+        """✅ ENTITY AGNOSTIC: Generic get by ID"""
+        logger.info(f"Generic get_by_id for {self.entity_type}: {item_id}")
+        # TODO: Implement using entity configuration to determine table/model
+        return None
+    
+    def create(self, data: Dict, **kwargs):
+        """✅ ENTITY AGNOSTIC: Generic create"""
+        logger.info(f"Generic create for {self.entity_type}")
+        # TODO: Implement using entity configuration for field mapping
+        return None
+    
+    def update(self, item_id: str, data: Dict, **kwargs):
+        """✅ ENTITY AGNOSTIC: Generic update"""
+        logger.info(f"Generic update for {self.entity_type}: {item_id}")
+        # TODO: Implement using entity configuration for field mapping
+        return None
+    
+    def delete(self, item_id: str, **kwargs) -> bool:
+        """✅ ENTITY AGNOSTIC: Generic delete"""
+        logger.info(f"Generic delete for {self.entity_type}: {item_id}")
+        # TODO: Implement using entity configuration
+        return False
 
 
 class UniversalServiceInterface(Protocol):
@@ -570,702 +709,73 @@ class UniversalServiceInterface(Protocol):
         ...
 
 
-# class UniversalSupplierPaymentService:
-#     """
-#     Universal service adapter for supplier payments
-#     Connects universal engine to your existing SupplierPaymentService
-#     """
-    
-#     def __init__(self):
-#         self.filter_service = get_universal_filter_service()
-    
-#     def search_data(self, 
-#                    hospital_id: uuid.UUID, 
-#                    filters: Dict, 
-#                    branch_id: Optional[uuid.UUID] = None,  # ✅ FIXED: branch_id not branch_ids
-#                    current_user_id: Optional[str] = None,
-#                    page: int = 1, 
-#                    per_page: int = 20,
-#                    sort_field: Optional[str] = None,
-#                    sort_direction: Optional[str] = None,
-#                    session: Optional[Session] = None) -> Dict:
-#         """
-#         ✅ CRITICAL FIX: Search with correct parameter signature
-#         """
-#         try:
-#             from app.services.universal_supplier_service import EnhancedUniversalSupplierService
-#             enhanced_service = EnhancedUniversalSupplierService()
-#             result = enhanced_service._search_supplier_payments_universal(
-#                 hospital_id=hospital_id,
-#                 filters=filters,
-#                 branch_id=branch_id,  # ✅ FIXED: Use branch_id (singular)
-#                 current_user_id=current_user_id,
-#                 page=page,
-#                 per_page=per_page,
-#                 session=session
-#             )
-            
-#             # ✅ Standardize response format
-#             if result.get('success', True):
-#                 return {
-#                     'items': result.get('payments', []),
-#                     'total': result.get('pagination', {}).get('total_count', 0),
-#                     'pagination': result.get('pagination', {}),
-#                     'summary': result.get('summary', {}),
-#                     'suppliers': result.get('suppliers', []),
-#                     'success': True
-#                 }
-#             else:
-#                 return {
-#                     'items': [],
-#                     'total': 0,
-#                     'pagination': {'total_count': 0},
-#                     'summary': {},
-#                     'suppliers': [],
-#                     'success': False,
-#                     'error': result.get('error', 'Search failed')
-#                 }
-                
-#         except Exception as e:
-#             logger.error(f"Error in supplier payment search: {str(e)}")
-#             return {
-#                 'items': [],
-#                 'total': 0,
-#                 'pagination': {'total_count': 0},
-#                 'summary': {},
-#                 'suppliers': [],
-#                 'success': False,
-#                 'error': str(e)
-#             }
-    
-#     def get_filter_choices(self, hospital_id: Optional[uuid.UUID] = None) -> Dict:
-#         """
-#         ✅ ENHANCED: Get filter choices using UniversalFilterService
-#         """
-#         try:
-#             if not hospital_id and current_user:
-#                 hospital_id = current_user.hospital_id
-            
-#             # Use unified filter service for backend data
-#             if self.filter_service:
-#                 filter_data = self.filter_service.get_complete_filter_data(
-#                     entity_type='supplier_payments',
-#                     hospital_id=hospital_id,
-#                     branch_id=None,
-#                     current_filters={}
-#                 )
-                
-#                 # Extract choices from filter data
-#                 backend_data = filter_data.get('backend_data', {})
-                
-#                 # Return in expected format
-#                 return {
-#                     'suppliers': backend_data.get('supplier_id', []),
-#                     'payment_methods': backend_data.get('payment_method', []),
-#                     'statuses': backend_data.get('workflow_status', []),
-#                     'success': True
-#                 }
-#             else:
-#                 # Fallback to hardcoded choices if filter service not available
-#                 return {
-#                     'suppliers': [],
-#                     'payment_methods': [
-#                         {'value': 'cash', 'label': 'Cash'},
-#                         {'value': 'cheque', 'label': 'Cheque'},
-#                         {'value': 'bank_transfer', 'label': 'Bank Transfer'},
-#                         {'value': 'upi', 'label': 'UPI'}
-#                     ],
-#                     'statuses': [
-#                         {'value': 'pending', 'label': 'Pending'},
-#                         {'value': 'approved', 'label': 'Approved'},
-#                         {'value': 'rejected', 'label': 'Rejected'}
-#                     ],
-#                     'success': True
-#                 }
-            
-#         except Exception as e:
-#             logger.error(f"Error getting filter choices: {str(e)}")
-#             return {
-#                 'suppliers': [],
-#                 'payment_methods': [],
-#                 'statuses': [],
-#                 'success': False,
-#                 'error': str(e)
-#             }
-
-    
-#     def _convert_filters_to_service_format(self, universal_filters: Dict) -> Dict:
-#         """
-#         NEW METHOD: Convert universal engine filters to your service's expected format
-        
-#         BACKWARD COMPATIBLE: Handles all existing filter formats + new ones
-#         """
-#         service_filters = {}
-        
-#         try:
-#             # COMPREHENSIVE MAPPING: Maps universal filter names to your service's expected names
-#             filter_mapping = {
-#                 # Standard filters
-#                 'search': 'search',
-#                 'supplier_id': 'supplier_id',
-#                 'reference_no': 'reference_no',
-                
-#                 # Status handling (multiple formats for backward compatibility)
-#                 'status': 'statuses',           # Single status -> list
-#                 'workflow_status': 'statuses',  # Alternative name
-#                 'statuses': 'statuses',         # Direct mapping
-                
-#                 # Payment method handling (multiple formats)
-#                 'payment_method': 'payment_methods',   # Single -> list  
-#                 'payment_methods': 'payment_methods',  # Direct mapping
-
-#                 # ✅ FIX: Add direct payment_method mapping for database filtering
-#                 'payment_method_single': 'payment_method', # Single -> single for DB
-                
-#                 # Date filters
-#                 'start_date': 'start_date',
-#                 'end_date': 'end_date',
-#                 'payment_date': 'payment_date',
-#                 'date_range': 'date_range',
-                
-#                 # Amount filters
-#                 'min_amount': 'min_amount',
-#                 'max_amount': 'max_amount',
-#                 'amount': 'amount',
-                
-#                 # Other filters
-#                 'branch_id': 'branch_id',
-#                 'approval_level': 'approval_level',
-#                 'currency_code': 'currency_code',
-#                 'invoice_id': 'invoice_id'
-#             }
-            
-#             # BACKWARD COMPATIBLE: Convert filters using the mapping
-#             for universal_key, service_key in filter_mapping.items():
-#                 if universal_key in universal_filters and universal_filters[universal_key]:
-#                     value = universal_filters[universal_key]
-                    
-#                     # SPECIAL HANDLING: Convert formats your service expects
-#                     if service_key == 'statuses':
-#                         # Your service expects a list for status filtering
-#                         if isinstance(value, str):
-#                             service_filters[service_key] = [value]
-#                         elif isinstance(value, list):
-#                             service_filters[service_key] = value
-#                         else:
-#                             service_filters[service_key] = [str(value)]
-                            
-#                     elif service_key == 'payment_methods':
-#                         # Your service expects a list for payment method filtering
-#                         if isinstance(value, str):
-#                             service_filters[service_key] = [value]
-#                             # ✅ FIX: Also set single payment_method for database filtering
-#                             service_filters['payment_method'] = value
-#                         elif isinstance(value, list):
-#                             service_filters[service_key] = value
-#                             # ✅ FIX: Also set single payment_method for database filtering
-#                             service_filters['payment_method'] = value[0] if value else None
-#                         else:
-#                             service_filters[service_key] = [str(value)]
-#                             # ✅ FIX: Also set single payment_method for database filtering
-#                             service_filters['payment_method'] = str(value)
-                            
-#                     elif service_key in ['start_date', 'end_date']:
-#                         # FIX: Convert date objects to strings for service compatibility
-#                         if isinstance(value, date):
-#                             service_filters[service_key] = value.strftime('%Y-%m-%d')
-#                         elif isinstance(value, datetime):
-#                             service_filters[service_key] = value.date().strftime('%Y-%m-%d')
-#                         else:
-#                             # If it's already a string, leave it as is
-#                             service_filters[service_key] = value
-#                     else:
-#                         # Direct mapping for other filters
-#                         service_filters[service_key] = value
-            
-#             # DEFAULT FILTERING: Apply current month if no date filters (based on your requirements)
-#             if not any(key in service_filters for key in ['start_date', 'end_date', 'date_range']):
-#                 current_date = date.today()
-#                 current_month_start = current_date.replace(day=1)
-                
-#                 # FIX: Convert date objects to strings for service compatibility
-#                 service_filters['start_date'] = current_month_start.strftime('%Y-%m-%d')
-#                 service_filters['end_date'] = current_date.strftime('%Y-%m-%d')
-#                 logger.info(f"🔧 Applied default current month filter: {current_month_start} to {current_date}")
-
-#             # ✅ FIX: Only remove truly empty values, preserve user selections
-#             # Don't remove actual filter values that user selected
-#             service_filters = {k: v for k, v in service_filters.items() 
-#                             if v is not None and v != ''}
-#             # ❌ REMOVED: and v != [] - This was removing user-selected filter arrays
-            
-#             # ✅ FIX: Ensure payment_method is available for database filtering
-#             if 'payment_methods' in service_filters and not service_filters.get('payment_method'):
-#                 payment_methods = service_filters['payment_methods']
-#                 if isinstance(payment_methods, list) and payment_methods:
-#                     service_filters['payment_method'] = payment_methods[0]
-#                 elif isinstance(payment_methods, str):
-#                     service_filters['payment_method'] = payment_methods
-
-
-#             logger.debug(f"🔄 Filter conversion: {len(universal_filters)} -> {len(service_filters)} items")
-#             return service_filters
-            
-#         except Exception as e:
-#             logger.error(f"❌ Error converting filters: {str(e)}")
-#             # FALLBACK: Return safe minimal filters
-#             return {'start_date': date.today().replace(day=1), 'end_date': date.today()}
-    
-#     def _convert_date_preset(self, preset: str) -> tuple:
-#         """Convert date preset to start_date, end_date tuple"""
-#         today = date.today()
-        
-#         if preset == 'today':
-#             return today, today
-#         elif preset == 'yesterday':
-#             yesterday = today - timedelta(days=1)
-#             return yesterday, yesterday
-#         elif preset == 'this_week':
-#             start = today - timedelta(days=today.weekday())
-#             return start, today
-#         elif preset == 'last_week':
-#             start = today - timedelta(days=today.weekday() + 7)
-#             end = today - timedelta(days=today.weekday() + 1)
-#             return start, end
-#         elif preset == 'this_month':
-#             start = today.replace(day=1)
-#             # ✅ FIX: End should be last day of month
-#             if today.month == 12:
-#                 last_day = today.replace(year=today.year + 1, month=1, day=1) - timedelta(days=1)
-#             else:
-#                 last_day = today.replace(month=today.month + 1, day=1) - timedelta(days=1)
-#             return start, today
-#         elif preset == 'this_financial_year':
-#             # ✅ FIX: Financial year April to March (last day)
-#             if today.month >= 4:  # Current FY
-#                 fy_start = date(today.year, 4, 1)
-#                 fy_end = date(today.year + 1, 3, 31)
-#             else:  # Previous FY
-#                 fy_start = date(today.year - 1, 4, 1) 
-#                 fy_end = date(today.year, 3, 31)
-#             return fy_start, fy_end    
-#         elif preset == 'last_month':
-#             first_day = today.replace(day=1)
-#             last_month_end = first_day - timedelta(days=1)
-#             last_month_start = last_month_end.replace(day=1)
-#             return last_month_start, last_month_end
-#         elif preset == 'last_30_days':
-#             start = today - timedelta(days=30)
-#             return start, today
-#         elif preset == 'last_90_days':
-#             start = today - timedelta(days=90)
-#             return start, today
-        
-#         return None, None
-    
-   
-    
-#     def _get_this_month_count(self, hospital_id: uuid.UUID, branch_id: Optional[uuid.UUID]) -> int:
-#         """Get count of payments for current month"""
-#         try:
-#             today = date.today()
-#             month_start = today.replace(day=1)
-            
-#             # Use your existing service to get this month's count
-#             filters = {
-#                 'start_date': month_start,
-#                 'end_date': today
-#             }
-            
-#             with get_db_session() as db_session:
-#                 from app.services.universal_supplier_service import EnhancedUniversalSupplierService
-#                 universal_service = EnhancedUniversalSupplierService()
-#                 result = universal_service._search_supplier_payments_universal(
-#                     hospital_id=hospital_id,
-#                     filters=filters,
-#                     branch_id=branch_id,
-#                     current_user_id=None,
-#                     page=1,
-#                     per_page=1,  # We only need the count
-#                     session=db_session
-#                 )
-#                 return result.get('total', 0)
-                
-#         except Exception as e:
-#             logger.error(f"❌ Error getting this month count: {str(e)}")
-#             return 0
-    
-#     def get_by_id(self, 
-#                   item_id: str, 
-#                   hospital_id: uuid.UUID, 
-#                   current_user_id: Optional[str] = None,
-#                   include_related: bool = False,
-#                   session: Optional[Session] = None):
-#         """
-#         Get supplier payment by ID using your existing service method
-#         """
-#         try:
-#             with get_db_session() as db_session:
-#                 from app.services.supplier_service import get_supplier_payment_by_id  
-#                 payment = get_supplier_payment_by_id(
-#                     payment_id=item_id,
-#                     hospital_id=hospital_id,
-#                     include_documents=include_related,
-#                     include_approvals=include_related,
-#                     session=db_session
-#                 )
-                
-#                 if payment:
-#                     logger.info(f"✅ Payment retrieved: {payment.reference_no}")
-#                 else:
-#                     logger.warning(f"⚠️ Payment not found: {item_id}")
-                
-#                 return payment
-                
-#         except Exception as e:
-#             logger.error(f"❌ Error retrieving payment {item_id}: {str(e)}")
-#             return None
-    
-#     def create(self, 
-#                data: Dict, 
-#                hospital_id: uuid.UUID, 
-#                branch_id: Optional[uuid.UUID] = None,
-#                current_user_id: Optional[str] = None,
-#                session: Optional[Session] = None):
-#         """
-#         Create new supplier payment using your existing service method
-#         """
-#         try:
-#             # Convert universal form data to your service's expected format
-#             payment_data = self._convert_form_data_to_service_format(data)
-            
-#             # Add required system fields
-#             payment_data.update({
-#                 'hospital_id': hospital_id,
-#                 'branch_id': branch_id,
-#                 'created_by': current_user_id,
-#                 'created_at': datetime.utcnow()
-#             })
-            
-#             with get_db_session() as db_session:
-#                 # Use your existing create method
-#                 from app.services.supplier_service import record_supplier_payment  # ✅ Import correct function
-#                 new_payment = record_supplier_payment(  # ✅ Call function directly
-#                     payment_data=payment_data,
-#                     hospital_id=hospital_id,
-#                     current_user_id=current_user_id,
-#                     session=db_session
-#                 )
-                
-#                 if new_payment:
-#                     logger.info(f"✅ Payment created: {new_payment.reference_no}")
-                
-#                 return new_payment
-                
-#         except Exception as e:
-#             logger.error(f"❌ Error creating payment: {str(e)}")
-#             raise
-    
-#     def update(self, 
-#                item_id: str, 
-#                data: Dict, 
-#                hospital_id: uuid.UUID, 
-#                current_user_id: Optional[str] = None,
-#                session: Optional[Session] = None):
-#         """
-#         Update supplier payment using your existing service method
-#         """
-#         try:
-#             # Convert universal form data to your service's expected format
-#             payment_data = self._convert_form_data_to_service_format(data)
-            
-#             # Add update metadata
-#             payment_data.update({
-#                 'updated_by': current_user_id,
-#                 'updated_at': datetime.utcnow()
-#             })
-            
-#             with get_db_session() as db_session:
-#                 # Use your existing update method
-#                 from app.services.supplier_service import update_supplier_payment  # ✅ Import function  
-#                 updated_payment = update_supplier_payment(  # ✅ Call function directly
-#                     payment_id=item_id,
-#                     payment_data=payment_data,
-#                     hospital_id=hospital_id,
-#                     current_user_id=current_user_id,
-#                     session=db_session
-#                 )
-                
-#                 if updated_payment:
-#                     logger.info(f"✅ Payment updated: {updated_payment.reference_no}")
-                
-#                 return updated_payment
-                
-#         except Exception as e:
-#             logger.error(f"❌ Error updating payment {item_id}: {str(e)}")
-#             raise
-    
-#     def delete(self, 
-#                item_id: str, 
-#                hospital_id: uuid.UUID, 
-#                current_user_id: Optional[str] = None,
-#                session: Optional[Session] = None) -> bool:
-#         """
-#         Delete supplier payment using your existing service method
-#         """
-#         try:
-#             with get_db_session() as db_session:
-#                 # Use your existing delete method (likely soft delete)
-#                 from app.services.supplier_service import delete_supplier_payment  # ✅ Import function
-#                 success = delete_supplier_payment(  # ✅ Call function directly
-#                     payment_id=item_id,
-#                     hospital_id=hospital_id,
-#                     current_user_id=current_user_id,
-#                     session=db_session
-#                 )
-                
-#                 if success:
-#                     logger.info(f"✅ Payment deleted: {item_id}")
-#                 else:
-#                     logger.warning(f"⚠️ Payment deletion failed: {item_id}")
-                
-#                 return success
-                
-#         except Exception as e:
-#             logger.error(f"❌ Error deleting payment {item_id}: {str(e)}")
-#             return False
-    
-#     def bulk_delete(self, 
-#                     item_ids: List[str], 
-#                     hospital_id: uuid.UUID, 
-#                     current_user_id: Optional[str] = None) -> int:
-#         """
-#         Bulk delete supplier payments
-#         """
-#         try:
-#             success_count = 0
-            
-#             for item_id in item_ids:
-#                 if self.delete(item_id, hospital_id, current_user_id):
-#                     success_count += 1
-            
-#             logger.info(f"✅ Bulk delete completed: {success_count}/{len(item_ids)} payments deleted")
-#             return success_count
-            
-#         except Exception as e:
-#             logger.error(f"❌ Error in bulk delete: {str(e)}")
-#             return 0
-    
-#     def _convert_form_data_to_service_format(self, form_data: Dict) -> Dict:
-#         """
-#         Convert universal form data to your service's expected format
-#         Handle field name mapping and data type conversion
-#         """
-#         service_data = {}
-        
-#         # Direct field mappings (no conversion needed)
-#         direct_fields = [
-#             'reference_no', 'supplier_id', 'invoice_id', 'amount',
-#             'cash_amount', 'cheque_amount', 'bank_transfer_amount', 'upi_amount',
-#             'payment_method', 'workflow_status', 'currency_code', 'exchange_rate',
-#             'bank_reference', 'notes', 'approval_level'
-#         ]
-        
-#         for field in direct_fields:
-#             if field in form_data and form_data[field] is not None:
-#                 value = form_data[field]
-                
-#                 # Convert string values to appropriate types
-#                 if field in ['amount', 'cash_amount', 'cheque_amount', 'bank_transfer_amount', 'upi_amount', 'exchange_rate']:
-#                     try:
-#                         service_data[field] = Decimal(str(value)) if value else None
-#                     except (ValueError, TypeError):
-#                         service_data[field] = None
-#                 elif field == 'approval_level':
-#                     try:
-#                         service_data[field] = int(value) if value else None
-#                     except (ValueError, TypeError):
-#                         service_data[field] = None
-#                 else:
-#                     service_data[field] = value
-        
-#         # Handle date fields
-#         if 'payment_date' in form_data:
-#             try:
-#                 if isinstance(form_data['payment_date'], str):
-#                     service_data['payment_date'] = datetime.strptime(form_data['payment_date'], '%Y-%m-%d').date()
-#                 else:
-#                     service_data['payment_date'] = form_data['payment_date']
-#             except (ValueError, TypeError):
-#                 service_data['payment_date'] = None
-        
-#         # Handle UUID fields
-#         uuid_fields = ['supplier_id', 'invoice_id', 'branch_id']
-#         for field in uuid_fields:
-#             if field in form_data and form_data[field]:
-#                 try:
-#                     service_data[field] = uuid.UUID(str(form_data[field]))
-#                 except (ValueError, TypeError):
-#                     service_data[field] = None
-        
-#         logger.debug(f"🔄 Converted form data: {form_data} -> {service_data}")
-#         return service_data
-    
-#     def get_filter_choices(self, hospital_id: str = None) -> dict:
-#         """Get filter choices for dropdown population - FIX"""
-#         try:
-#             if not hospital_id and current_user:
-#                 hospital_id = current_user.hospital_id
-                
-#             choices = {
-#                 'suppliers': [],
-#                 'payment_methods': [
-#                     {'value': 'cash', 'label': 'Cash'},
-#                     {'value': 'cheque', 'label': 'Cheque'},
-#                     {'value': 'bank_transfer', 'label': 'Bank Transfer'},
-#                     {'value': 'upi', 'label': 'UPI'}
-#                 ],
-#                 'statuses': [
-#                     {'value': 'pending', 'label': 'Pending'},
-#                     {'value': 'approved', 'label': 'Approved'},
-#                     {'value': 'rejected', 'label': 'Rejected'}
-#                 ]
-#             }
-            
-#             # Get suppliers using existing service
-#             if hospital_id:
-#                 suppliers_result = get_suppliers_for_choice(hospital_id)
-#                 if suppliers_result.get('success') and suppliers_result.get('suppliers'):
-#                     choices['suppliers'] = [
-#                         {
-#                             'supplier_id': supplier.supplier_id,
-#                             'supplier_name': supplier.supplier_name
-#                         }
-#                         for supplier in suppliers_result['suppliers']
-#                     ]
-            
-#             return choices
-            
-#         except Exception as e:
-#             logger.error(f"Error getting filter choices: {str(e)}")
-#             return {
-#                 'suppliers': [],
-#                 'payment_methods': [],
-#                 'statuses': []
-#             }
-    
-#     def search_data(self, filters: dict, **kwargs) -> dict:
-#         """✅ FIXED: Search data using existing service with proper standardization"""
-#         try:
-#             logger.info(f"[ADAPTER] UniversalSupplierPaymentService.search_data called")
-#             logger.info(f"[ADAPTER] Filters: {filters}")
-#             logger.info(f"[ADAPTER] Kwargs: {list(kwargs.keys())}")
-            
-#             # Use existing search function with corrected parameters
-#             search_params = {
-#                 'hospital_id': kwargs.get('hospital_id') or (current_user.hospital_id if current_user else None),
-#                 'filters': filters,
-#                 'page': kwargs.get('page', 1),
-#                 'per_page': kwargs.get('per_page', 20),  # ✅ FIX: Changed from 10 to 20
-#                 'current_user_id': kwargs.get('current_user_id'),
-#                 'branch_id': kwargs.get('branch_id')
-#             }
-            
-#             # Remove None values to avoid parameter issues
-#             search_params = {k: v for k, v in search_params.items() if v is not None}
-            
-#             logger.info(f"[ADAPTER] Calling search_supplier_payments with: {list(search_params.keys())}")
-            
-#             from app.services.universal_supplier_service import EnhancedUniversalSupplierService
-#             universal_service = EnhancedUniversalSupplierService()
-#             result = universal_service._search_supplier_payments_universal(**search_params)
-            
-#             logger.info(f"[ADAPTER] Service returned: {type(result)}")
-#             if isinstance(result, dict):
-#                 logger.info(f"[ADAPTER] Service response keys: {list(result.keys())}")
-#                 payments_data = result.get('payments', [])
-#                 logger.info(f"[ADAPTER] Payments found: {len(payments_data) if payments_data else 0}")
-            
-#             # ✅ CRITICAL FIX: Properly standardize response format
-#             if result and result.get('success', True):  # Default to True if no success key
-#                 standardized = {
-#                     'items': result.get('payments', []),  # ✅ This should work
-#                     'pagination': result.get('pagination', {}),
-#                     'summary': result.get('summary', {}),
-#                     'suppliers': result.get('suppliers', []),
-#                     'metadata': result.get('metadata', {}),
-#                     'success': True
-#                 }
-                
-#                 logger.info(f"[ADAPTER] Standardized response: items={len(standardized['items'])}")
-#                 return standardized
-#             else:
-#                 logger.warning(f"[ADAPTER] Service returned unsuccessful result: {result.get('error', 'Unknown error')}")
-#                 return {
-#                     'items': [],
-#                     'pagination': {'total_count': 0},
-#                     'summary': {},
-#                     'suppliers': [],
-#                     'success': False,
-#                     'error': result.get('error', 'Service returned unsuccessful result')
-#                 }
-                
-#         except Exception as e:
-#             logger.error(f"[ADAPTER] Error in universal search: {str(e)}")
-#             return {
-#                 'items': [],
-#                 'pagination': {'total_count': 0},
-#                 'summary': {},
-#                 'suppliers': [],
-#                 'success': False,
-#                 'error': str(e)
-#         }
-
-
 class UniversalPatientService:
     """
-    Universal service adapter for patients
-    Example implementation for rapid entity rollout
+    ✅ ENTITY SPECIFIC: Stub implementation for patients
+    Move this to app/services/universal_patient_service.py when implementing
     """
     
     def __init__(self):
-        # Initialize your existing patient service here
-        # self.patient_service = PatientService()
-        pass
+        logger.info("✅ Initialized UniversalPatientService (stub implementation)")
     
-    def search_data(self, hospital_id: uuid.UUID, filters: Dict, **kwargs) -> Dict:
-        """Search patients - implement using your existing patient service"""
-        # TODO: Implement using your existing patient service
-        # Similar pattern to supplier payments above
-        return {
-            'items': [],
-            'total': 0,
-            'page': kwargs.get('page', 1),
-            'per_page': kwargs.get('per_page', 20),
-            'summary': {
-                'total_patients': 0,
-                'active_patients': 0,
-                'new_this_month': 0
+    def search_data(self, **kwargs) -> Dict:
+        """✅ STUB: Search patients - implement using your existing patient service"""
+        try:
+            filters = kwargs.get('filters', {})
+            page = kwargs.get('page', 1)
+            per_page = kwargs.get('per_page', 20)
+            
+            logger.info(f"Patient search called with {len(filters)} filters")
+            
+            # TODO: Implement using your existing patient service
+            return {
+                'items': [],
+                'total': 0,
+                'pagination': {
+                    'page': page,
+                    'per_page': per_page,
+                    'total_count': 0,
+                    'total_pages': 1
+                },
+                'summary': {
+                    'total_patients': 0,
+                    'active_patients': 0,
+                    'new_this_month': 0
+                },
+                'success': True,
+                'message': 'Patient service stub - implementation pending'
             }
-        }
+            
+        except Exception as e:
+            logger.error(f"Error in patient search: {str(e)}")
+            return {
+                'items': [],
+                'total': 0,
+                'pagination': {'total_count': 0},
+                'summary': {},
+                'success': False,
+                'error': str(e)
+            }
     
-    def get_by_id(self, item_id: str, hospital_id: uuid.UUID, **kwargs):
-        """Get patient by ID"""
-        # TODO: Implement using your existing patient service
+    def get_by_id(self, item_id: str, **kwargs):
+        """✅ STUB: Get patient by ID"""
+        logger.info(f"Patient get_by_id called: {item_id}")
         return None
     
-    # Implement other CRUD methods as needed...
-
-
-# Service registry - maps entity types to universal service classes
-UNIVERSAL_SERVICES = {
-    "supplier_payments": EnhancedUniversalSupplierService,
-    "patients": UniversalPatientService,
-    # Add more services as you implement them:
-    # "medicines": UniversalMedicineService,
-    # "invoices": UniversalInvoiceService,
-}
-
+    def create(self, data: Dict, **kwargs):
+        """✅ STUB: Create patient"""
+        logger.info("Patient create called")
+        return None
+    
+    def update(self, item_id: str, data: Dict, **kwargs):
+        """✅ STUB: Update patient"""
+        logger.info(f"Patient update called: {item_id}")
+        return None
+    
+    def delete(self, item_id: str, **kwargs) -> bool:
+        """✅ STUB: Delete patient"""
+        logger.info(f"Patient delete called: {item_id}")
+        return False
 
 # Global registry instance
 _service_registry = UniversalServiceRegistry()
@@ -1325,19 +835,24 @@ def get_universal_filter_choices(entity_type: str, hospital_id: Optional[uuid.UU
 logger.info("✅ Universal Services loaded with enhanced registry and parameter fixes")
 
 
-def register_universal_service(entity_type: str, service_class):
+def register_universal_service(entity_type: str, service_path: str):
     """
-    Register a new universal service class
+    ✅ ENTITY AGNOSTIC: Register a new universal service for ANY entity type
     
-    Allows dynamic registration of services for new entities
+    Args:
+        entity_type: The entity type (e.g., 'medicines', 'invoices')
+        service_path: Full path to service class (e.g., 'app.services.medicine_service.UniversalMedicineService')
     """
-    UNIVERSAL_SERVICES[entity_type] = service_class
-    logger.info(f"✅ Universal service registered for {entity_type}")
+    try:
+        _service_registry.service_registry[entity_type] = service_path
+        logger.info(f"✅ Universal service registered for {entity_type}: {service_path}")
+    except Exception as e:
+        logger.error(f"Error registering service for {entity_type}: {str(e)}")
 
 
 def list_registered_services() -> List[str]:
-    """Get list of all registered universal service entity types"""
-    return list(UNIVERSAL_SERVICES.keys())
+    """✅ ENTITY AGNOSTIC: Get list of all registered universal service entity types"""
+    return list(_service_registry.service_registry.keys())
 
 
 # Validation and testing functions
@@ -1384,7 +899,7 @@ def test_universal_service(entity_type: str) -> bool:
 def test_all_services():
     """Test all registered universal services"""
     results = {}
-    for entity_type in UNIVERSAL_SERVICES.keys():
+    for entity_type in _service_registry.service_registry.keys():
         results[entity_type] = test_universal_service(entity_type)
     
     # Print results

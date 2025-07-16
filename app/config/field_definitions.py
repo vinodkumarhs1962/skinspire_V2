@@ -11,6 +11,7 @@ class FieldType(Enum):
     TEXT = "text"
     NUMBER = "number"
     AMOUNT = "amount"
+    CURRENCY = "currency"
     DATE = "date"
     DATETIME = "datetime"
     SELECT = "select"

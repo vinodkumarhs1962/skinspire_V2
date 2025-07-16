@@ -10,6 +10,9 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 from enum import Enum
 from app.config.field_definitions import EntitySearchConfiguration
+from app.config.field_definitions import FieldDefinition, FieldType, EntityConfiguration
+from app.config.filter_categories import FilterCategory
+
 
 class FieldType(Enum):
     """Field types matching your model field types"""
@@ -59,6 +62,9 @@ class FieldDefinition:
     autocomplete_enabled: bool = False
     autocomplete_source: Optional[str] = None
     entity_search_config: Optional[Any] = None
+    # ✅ NEW: Configuration-driven filter mappings
+    filter_aliases: List[str] = field(default_factory=list)  # Alternative input parameter names
+    filter_type: str = "exact"  # exact, range, search, etc.
 
 @dataclass
 class EntityFilterConfiguration:
@@ -182,6 +188,9 @@ SUPPLIER_PAYMENT_CONFIG = EntityConfiguration(
             searchable=False,
             sortable=True,
             filterable=True,
+            # ✅ CONFIGURATION-DRIVEN: Define date range parameter names
+            filter_aliases=["start_date", "end_date", "date_from", "date_to"],
+            filter_type="date_range",
             required=True,
             help_text="Date when payment was made",
             options=[
@@ -227,13 +236,16 @@ SUPPLIER_PAYMENT_CONFIG = EntityConfiguration(
         FieldDefinition(
             name="reference_no",  # Exact field name from your model
             label="Payment Reference",
-            field_type=FieldType.ENTITY_SEARCH,
+            field_type=FieldType.TEXT,
             show_in_list=True,
             show_in_detail=True,
             show_in_form=True,
             searchable=True,
             sortable=True,
-            filterable=False,
+            filterable=True,
+            # ✅ CONFIGURATION-DRIVEN: Define alternative parameter names
+            filter_aliases=["ref_no", "reference_number"],
+            filter_type="search",
             required=True,
             placeholder="e.g., PAY-2024-001",
             help_text="Unique payment reference number",
@@ -263,10 +275,12 @@ SUPPLIER_PAYMENT_CONFIG = EntityConfiguration(
             options=[],  # Will be populated dynamically from Supplier model
             help_text="Select the supplier for this payment",
             related_field="supplier",
+            autocomplete_enabled=True,      # ✅ ADD only if missing
+            autocomplete_source="suppliers", # ✅ ADD only if missing
             entity_search_config=EntitySearchConfiguration(
                 target_entity="suppliers",
-                search_fields=["supplier_name", "supplier_code", "contact_person_name"],
-                display_template="{supplier_name} ({supplier_code})",
+                search_fields=["supplier_name", "contact_person_name"],
+                display_template="{supplier_name}",
                 min_chars=2,
                 max_results=10,
                 additional_filters={"status": "active"},
@@ -284,7 +298,11 @@ SUPPLIER_PAYMENT_CONFIG = EntityConfiguration(
             searchable=True,
             sortable=True,
             filterable=True,
-            readonly=True
+            readonly=True,
+            # ✅ CONFIGURATION-DRIVEN: Define all possible search parameter names
+            filter_aliases=["supplier_name_search", "search", "supplier_search", "supplier_text"],
+            filter_type="search",  # Uses LIKE/ILIKE
+            related_field="supplier"  # Indicates relationship join needed
         ),
         
         # Invoice relationship - exact field name from your model
@@ -314,7 +332,10 @@ SUPPLIER_PAYMENT_CONFIG = EntityConfiguration(
             show_in_form=True,
             searchable=False,
             sortable=True,
-            filterable=False,
+            filterable=True,
+            # ✅ CONFIGURATION-DRIVEN: Define range parameter names
+            filter_aliases=["min_amount", "max_amount", "amount_min", "amount_max"],
+            filter_type="range",  # Handles >= and <= operations
             required=True,
             help_text="Total payment amount"
         ),
@@ -384,6 +405,7 @@ SUPPLIER_PAYMENT_CONFIG = EntityConfiguration(
             searchable=False,
             sortable=False,
             filterable=True,
+            filter_aliases=["payment_methods", "pay_method"],
             required=True,
             options=[
                 {"value": "bank_transfer", "label": "Bank Transfer"},
@@ -407,6 +429,9 @@ SUPPLIER_PAYMENT_CONFIG = EntityConfiguration(
             sortable=True,
             filterable=True,
             required=True,
+            # ✅ CONFIGURATION-DRIVEN: Define all possible input parameter names
+            filter_aliases=["statuses", "status", "approval_status"],
+            filter_type="exact",
             options=[
                 {"value": "draft", "label": "Draft", "css_class": "universal-status-draft"},
                 {"value": "pending", "label": "Pending Approval", "css_class": "universal-status-pending"},
@@ -808,6 +833,75 @@ SUPPLIER_PAYMENT_CONFIG = EntityConfiguration(
     }
 )
 
+
+SUPPLIER_PAYMENT_FILTER_CATEGORY_MAPPING = {
+    # Date category fields
+    'start_date': FilterCategory.DATE,
+    'end_date': FilterCategory.DATE,
+    'payment_date': FilterCategory.DATE,
+    'financial_year': FilterCategory.DATE,
+    
+    # Amount category fields
+    'min_amount': FilterCategory.AMOUNT,
+    'max_amount': FilterCategory.AMOUNT,
+    'amount_min': FilterCategory.AMOUNT,
+    'amount_max': FilterCategory.AMOUNT,
+    'amount': FilterCategory.AMOUNT,
+    
+    # Search category fields
+    'supplier_name_search': FilterCategory.SEARCH,
+    'search': FilterCategory.SEARCH,
+    'reference_no': FilterCategory.SEARCH,
+    'invoice_id': FilterCategory.SEARCH,
+    
+    # Selection category fields
+    'workflow_status': FilterCategory.SELECTION,  # ✅ Main field
+    'statuses': FilterCategory.SELECTION,         # ✅ Alias
+    'status': FilterCategory.SELECTION,           # ✅ Alias  
+    'payment_method': FilterCategory.SELECTION,   # ✅ Main field
+    'payment_methods': FilterCategory.SELECTION,  # ✅ Alias     
+    
+    # Relationship category fields
+    'supplier_id': FilterCategory.RELATIONSHIP,
+    'branch_id': FilterCategory.RELATIONSHIP,
+}
+
+SUPPLIER_PAYMENT_DEFAULT_FILTERS = {
+    'financial_year': 'current',
+    'workflow_status': None,
+}
+
+SUPPLIER_PAYMENT_CATEGORY_CONFIGS = {
+    FilterCategory.DATE: {
+        'default_preset': 'current_financial_year',
+        'auto_apply_financial_year': True
+    },
+    FilterCategory.AMOUNT: {
+        'currency_symbol': '₹',
+        'decimal_places': 2
+    },
+    FilterCategory.SEARCH: {
+        'min_search_length': 2,
+        'auto_submit': False
+    },
+    FilterCategory.SELECTION: {
+        'auto_submit': True,
+        'include_empty_options': True
+    },
+    FilterCategory.RELATIONSHIP: {
+        'lazy_load': True,
+        'cache_duration': 300
+    }
+}
+
+# ✅ UNIVERSAL FIX: Ensure filter_category_mapping is properly set
+if not hasattr(SUPPLIER_PAYMENT_CONFIG, 'filter_category_mapping'):
+    SUPPLIER_PAYMENT_CONFIG.filter_category_mapping = {}
+SUPPLIER_PAYMENT_CONFIG.filter_category_mapping.update(SUPPLIER_PAYMENT_FILTER_CATEGORY_MAPPING)
+SUPPLIER_PAYMENT_CONFIG.default_filters = SUPPLIER_PAYMENT_DEFAULT_FILTERS  
+SUPPLIER_PAYMENT_CONFIG.category_configs = SUPPLIER_PAYMENT_CATEGORY_CONFIGS
+
+
 # =============================================================================
 # SUPPLIER CONFIGURATION - Based on Your Supplier Model
 # =============================================================================
@@ -1044,8 +1138,8 @@ def get_entity_filter_config(entity_type: str) -> Optional[EntityFilterConfigura
 ENTITY_SEARCH_CONFIGS = {
     'suppliers': EntitySearchConfiguration(
         target_entity='suppliers',
-        search_fields=['supplier_name', 'supplier_code', 'contact_person_name'],
-        display_template='{supplier_name} ({supplier_code})',
+        search_fields=['supplier_name', 'contact_person_name'],
+        display_template='{supplier_name}',
         model_path='app.models.master.Supplier',
         min_chars=2,
         max_results=10,

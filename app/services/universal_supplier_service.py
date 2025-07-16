@@ -26,6 +26,7 @@ from app.models.master import Supplier, Branch
 from app.models.transaction import SupplierInvoice
 from app.config.entity_configurations import get_entity_config, get_service_filter_mapping
 from app.config.field_definitions import FieldDefinition, FieldType, ComplexDisplayType
+from app.engine.categorized_filter_processor import get_categorized_filter_processor
 from app.utils.unicode_logging import get_unicode_safe_logger
 
 logger = get_unicode_safe_logger(__name__)
@@ -38,6 +39,7 @@ class EnhancedUniversalSupplierService:
     
     def __init__(self):
         self.form_instance = None
+        self.filter_processor = get_categorized_filter_processor()
 
 
     def search_data(self, filters: dict, **kwargs) -> dict:
@@ -80,13 +82,14 @@ class EnhancedUniversalSupplierService:
 
     def search_payments_with_form_integration(self, form_class, **kwargs) -> Dict:
         """
-        FIXED: Enhanced search with existing service integration
-        Removes parameter conflict by properly handling filters
+        ✅ ENHANCED: Uses categorized filter processor while preserving all existing functionality
+        Same signature and return structure, cleaner internal implementation
         """
         try:
-            logger.info("🔄 Starting enhanced search with form integration")
+            start_time = datetime.now()
+            logger.info("🔄 Enhanced search with categorized filtering started")
             
-            # Form validation and population
+            # ✅ PRESERVE: Form validation and population (same as before)
             if form_class is None:
                 from flask_wtf import FlaskForm
                 form_instance = FlaskForm()
@@ -94,41 +97,38 @@ class EnhancedUniversalSupplierService:
             else:
                 form_instance = form_class()
             
-            # # Enhanced form population with hospital context
-            # if hasattr(form_instance, 'populate_choices'):
-            #     try:
-            #         from app.engine.service_integration import get_form_population_function
-            #         populate_func = get_form_population_function('supplier_payments')
-            #         if populate_func:
-            #             populate_func(form_instance, current_user)
-            #             logger.debug(f"✅ Applied form population function: {populate_func.__name__}")
-            #     except Exception as e:
-            #         logger.warning(f"Error in form population: {str(e)}")
-            
-            # Additional supplier-specific form population
+            # ✅ PRESERVE: Supplier-specific form population (same as before)
             self._populate_form_with_suppliers(form_instance)
             logger.debug("✅ Form population completed for supplier fields")
             
-            # Extract filters with full parameter compatibility
+            # ✅ PRESERVE: Extract filters (same as before)
             filters = self._extract_complex_filters()
             
-            # FIXED: Remove filters from kwargs to prevent duplicate parameter
+            # ✅ PRESERVE: Parameter handling (same as before)
             branch_id = kwargs.pop('branch_id', None)
             current_user_id = kwargs.pop('current_user_id', None)
             
-            # Clean kwargs to remove any conflicting parameters
-            clean_kwargs = {k: v for k, v in kwargs.items() 
-                        if k not in ['filters', 'branch_id', 'current_user_id']}
+            # Extract standard parameters
+            hospital_id = kwargs.get('hospital_id') or (current_user.hospital_id if current_user else None)
+            page = kwargs.get('page', 1)
+            per_page = kwargs.get('per_page', 20)
             
-            # Call existing service with clean parameters
-            result = self._search_payments_enhanced(
+            if not hospital_id:
+                return self._get_error_fallback_result(form_class, "Hospital ID required")
+            
+            logger.info(f"🔍 Extracted filters: {list(filters.keys())}")
+            
+            # ✅ NEW: Call categorized filtering method instead of old complex method
+            result = self._search_supplier_payments_with_categorized_filtering(
+                hospital_id=hospital_id,
                 filters=filters,
                 branch_id=branch_id or request.args.get('branch_id'),
-                current_user_id=current_user_id or current_user.user_id,
-                **clean_kwargs  # Now clean of conflicts
+                current_user_id=current_user_id or (current_user.user_id if current_user else None),
+                page=page,
+                per_page=per_page
             )
             
-            # Enhance result with complete template data
+            # ✅ PRESERVE: Enhance result with complete template data (same as before)
             enhanced_result = result.copy()
             enhanced_result.update({
                 'form_instance': form_instance,
@@ -149,13 +149,123 @@ class EnhancedUniversalSupplierService:
                 }
             })
             
-            logger.info("✅ Enhanced search completed with complete form integration")
+            elapsed_time = (datetime.now() - start_time).total_seconds()
+            logger.info(f"✅ Enhanced search with categorized filtering completed in {elapsed_time:.3f}s")
+            
             return enhanced_result
             
         except Exception as e:
             logger.error(f"❌ Error in enhanced search: {str(e)}")
             return self._get_error_fallback_result(form_class, str(e))
     
+    def _search_supplier_payments_with_categorized_filtering(self, hospital_id: uuid.UUID, 
+                                                       filters: Dict, 
+                                                       branch_id: Optional[uuid.UUID] = None,
+                                                       current_user_id: Optional[str] = None,
+                                                       page: int = 1, per_page: int = 20) -> Dict:
+        """
+        ✅ NEW METHOD: Clean search using categorized filter processor
+        Same return structure, much cleaner implementation
+        """
+        try:
+            logger.info(f"🔍 Categorized filtering search started")
+            logger.info(f"🔍 Hospital: {hospital_id}, Branch: {branch_id}")
+            logger.info(f"🔍 Filters: {filters}")
+            
+            with get_db_session() as session:
+                # STEP 1: Base query - same as before
+                query = session.query(SupplierPayment).filter_by(hospital_id=hospital_id)
+                
+                # STEP 2: Branch filtering - same as before
+                if branch_id:
+                    query = query.filter(SupplierPayment.branch_id == branch_id)
+                    logger.info(f"Applied branch filter: {branch_id}")
+                
+                # STEP 3: Apply categorized filters - ✅ NEW CLEAN IMPLEMENTATION
+                config = get_entity_config('supplier_payments')
+                
+                query, applied_filters, filter_count = self.filter_processor.process_entity_filters(
+                    entity_type='supplier_payments',
+                    filters=filters,
+                    query=query,
+                    session=session,
+                    config=config
+                )
+                
+                logger.info(f"✅ Categorized processor applied {filter_count} filters: {applied_filters}")
+                
+                # STEP 4: Sorting - preserve existing logic
+                sort_field = filters.get('sort_field', 'payment_date')
+                sort_direction = filters.get('sort_direction', 'desc')
+                
+                if hasattr(SupplierPayment, sort_field):
+                    sort_attr = getattr(SupplierPayment, sort_field)
+                    if sort_direction.lower() == 'desc':
+                        query = query.order_by(desc(sort_attr))
+                    else:
+                        query = query.order_by(asc(sort_attr))
+                else:
+                    query = query.order_by(desc(SupplierPayment.payment_date))
+                
+                # STEP 5: Get total count before pagination - same as before
+                total_count = query.count()
+                
+                # STEP 6: Apply pagination - same as before
+                offset = (page - 1) * per_page
+                paginated_query = query.offset(offset).limit(per_page)
+                
+                # STEP 7: Execute query and get results
+                payments = paginated_query.all()
+                
+                logger.info(f"✅ Query executed: {len(payments)} payments found")
+                
+                # STEP 8: Convert to dictionaries - preserve existing logic
+                payment_dicts = []
+                for payment in payments:
+                    payment_dict = get_entity_dict(payment)
+                    
+                    # Add supplier information if available - same logic as before
+                    if hasattr(payment, 'supplier') and payment.supplier:
+                        payment_dict['supplier_name'] = payment.supplier.supplier_name
+                        payment_dict['supplier_id'] = payment.supplier.supplier_id
+                    
+                    payment_dicts.append(payment_dict)
+                
+                # STEP 9: Calculate summary - preserve existing logic
+                summary = self._calculate_basic_summary_from_filtered_results()
+                
+                # STEP 10: Build pagination info - same as before
+                pagination = {
+                    'page': page,
+                    'per_page': per_page,
+                    'total_count': total_count,
+                    'total_pages': (total_count + per_page - 1) // per_page,
+                    'has_prev': page > 1,
+                    'has_next': page < ((total_count + per_page - 1) // per_page)
+                }
+                
+                # STEP 11: Get suppliers for dropdown - preserve existing logic
+                suppliers = self._get_suppliers_for_dropdown()
+                
+                return {
+                    'items': payment_dicts,
+                    'total': total_count,
+                    'pagination': pagination,
+                    'summary': summary,
+                    'suppliers': suppliers,
+                    'success': True,
+                    'metadata': {
+                        'applied_filters': list(applied_filters),
+                        'filter_count': filter_count,
+                        'search_executed': True,
+                        'processing_method': 'categorized_filtering'
+                    }
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Error in categorized filtering search: {str(e)}")
+            return self._get_error_result(str(e))
+
     def _extract_complex_filters(self) -> Dict:
         """Extract filters matching EXACT existing payment_list filter logic"""
         try:
@@ -219,10 +329,22 @@ class EnhancedUniversalSupplierService:
             statuses = [status.strip() for status in statuses if status.strip()]
             if statuses:
                 filters['statuses'] = statuses
+                # ✅ FIX: Also set single status for table query compatibility
+                filters['status'] = statuses[0]
+                filters['workflow_status'] = statuses[0]
+                logger.info(f"🔍 [TABLE_FIX] Set status='{statuses[0]}' for table query")
             elif request.args.get('status'):
-                filters['statuses'] = [request.args.get('status').strip()]
+                single_status = request.args.get('status').strip()
+                filters['statuses'] = [single_status]
+                filters['status'] = single_status
+                filters['workflow_status'] = single_status
+                logger.info(f"🔍 [TABLE_FIX] Set status='{single_status}' for table query")
             elif request.args.get('workflow_status'):
-                filters['statuses'] = [request.args.get('workflow_status').strip()]
+                workflow_status = request.args.get('workflow_status').strip()
+                filters['statuses'] = [workflow_status]
+                filters['status'] = workflow_status
+                filters['workflow_status'] = workflow_status
+                logger.info(f"🔍 [TABLE_FIX] Set workflow_status='{workflow_status}' for table query")
             
             # DATE FILTERING with financial year default
             start_date = request.args.get('start_date')
@@ -347,238 +469,21 @@ class EnhancedUniversalSupplierService:
                     logger.info(f"Applied direct branch filter: {branch_id}")
                 logger.info(f"✅ [UNIVERSAL] STEP 2 - Branch filter: {time.time() - step_start:.3f}s")
                 
-                # STEP 3: Apply filters - READ FROM FILTERS FIRST, THEN REQUEST.ARGS
                 
-                # 3a: Supplier ID filtering
-                supplier_id = filters.get('supplier_id') or request.args.get('supplier_id')
-                if supplier_id and str(supplier_id).strip():
-                    step_start = time.time()
-                    query = query.filter(SupplierPayment.supplier_id == supplier_id)
-                    logger.info(f"✅ [UNIVERSAL] STEP 3a - Supplier ID: {time.time() - step_start:.3f}s")
+                # STEP 3: Apply categorized filters
+                step_start = time.time()
+                config = get_entity_config('supplier_payments')
                 
-                # 3b: Payment method filtering - THE MAIN FIX
-                payment_method = filters.get('payment_method') or request.args.get('payment_method')
-                payment_methods = filters.get('payment_methods') or request.args.getlist('payment_method')
+                query, applied_filters, filter_count = self.filter_processor.process_entity_filters(
+                    entity_type='supplier_payments',
+                    filters=filters,
+                    query=query,
+                    session=session_scope,
+                    config=config
+                )
                 
-                if payment_method and str(payment_method).strip():
-                    step_start = time.time()
-                    logger.info(f"🔍 [UNIVERSAL] Applying single payment method: {payment_method}")
-                    
-                    if payment_method == 'bank_transfer_inclusive':
-                        query = query.filter(
-                            or_(
-                                SupplierPayment.payment_method == 'bank_transfer',
-                                and_(
-                                    SupplierPayment.payment_method == 'mixed',
-                                    SupplierPayment.bank_transfer_amount > 0
-                                )
-                            )
-                        )
-                    elif payment_method == 'cash':
-                        query = query.filter(
-                            or_(
-                                SupplierPayment.payment_method == 'cash',
-                                and_(
-                                    SupplierPayment.payment_method == 'mixed',
-                                    SupplierPayment.cash_amount > 0
-                                )
-                            )
-                        )
-                    elif payment_method == 'cheque':
-                        query = query.filter(
-                            or_(
-                                SupplierPayment.payment_method == 'cheque',
-                                and_(
-                                    SupplierPayment.payment_method == 'mixed',
-                                    SupplierPayment.cheque_amount > 0
-                                )
-                            )
-                        )
-                    elif payment_method == 'bank_transfer':
-                        query = query.filter(
-                            or_(
-                                SupplierPayment.payment_method == 'bank_transfer',
-                                and_(
-                                    SupplierPayment.payment_method == 'mixed',
-                                    SupplierPayment.bank_transfer_amount > 0
-                                )
-                            )
-                        )
-                    elif payment_method == 'upi':
-                        query = query.filter(
-                            or_(
-                                SupplierPayment.payment_method == 'upi',
-                                and_(
-                                    SupplierPayment.payment_method == 'mixed',
-                                    SupplierPayment.upi_amount > 0
-                                )
-                            )
-                        )
-                    else:
-                        query = query.filter(SupplierPayment.payment_method == payment_method)
-                    logger.info(f"✅ [UNIVERSAL] STEP 3b - Single payment method: {time.time() - step_start:.3f}s")
-                    
-                elif payment_methods and len(payment_methods) > 0:
-                    step_start = time.time()
-                    logger.info(f"🔍 [UNIVERSAL] Applying multiple payment methods: {payment_methods}")
-                    payment_method_filters = []
-                    for method in payment_methods:
-                        if method and str(method).strip():
-                            if method == 'bank_transfer_inclusive':
-                                payment_method_filters.append(
-                                    or_(
-                                        SupplierPayment.payment_method == 'bank_transfer',
-                                        and_(
-                                            SupplierPayment.payment_method == 'mixed',
-                                            SupplierPayment.bank_transfer_amount > 0
-                                        )
-                                    )
-                                )
-                            elif method == 'cash':
-                                payment_method_filters.append(
-                                    or_(
-                                        SupplierPayment.payment_method == 'cash',
-                                        and_(
-                                            SupplierPayment.payment_method == 'mixed',
-                                            SupplierPayment.cash_amount > 0
-                                        )
-                                    )
-                                )
-                            elif method == 'cheque':
-                                payment_method_filters.append(
-                                    or_(
-                                        SupplierPayment.payment_method == 'cheque',
-                                        and_(
-                                            SupplierPayment.payment_method == 'mixed',
-                                            SupplierPayment.cheque_amount > 0
-                                        )
-                                    )
-                                )
-                            elif method == 'bank_transfer':
-                                payment_method_filters.append(
-                                    or_(
-                                        SupplierPayment.payment_method == 'bank_transfer',
-                                        and_(
-                                            SupplierPayment.payment_method == 'mixed',
-                                            SupplierPayment.bank_transfer_amount > 0
-                                        )
-                                    )
-                                )
-                            elif method == 'upi':
-                                payment_method_filters.append(
-                                    or_(
-                                        SupplierPayment.payment_method == 'upi',
-                                        and_(
-                                            SupplierPayment.payment_method == 'mixed',
-                                            SupplierPayment.upi_amount > 0
-                                        )
-                                    )
-                                )
-                            else:
-                                payment_method_filters.append(SupplierPayment.payment_method == method)
-                    
-                    if payment_method_filters:
-                        query = query.filter(or_(*payment_method_filters))
-                    logger.info(f"✅ [UNIVERSAL] STEP 3b - Multiple payment methods: {time.time() - step_start:.3f}s")
-                
-                # 3c: Status filtering
-                workflow_status = filters.get('workflow_status') or request.args.get('workflow_status')
-                status = filters.get('status') or request.args.get('status')
-                statuses = filters.get('statuses') or request.args.getlist('status')
-                
-                if workflow_status and str(workflow_status).strip():
-                    step_start = time.time()
-                    query = query.filter(SupplierPayment.workflow_status == workflow_status)
-                    logger.info(f"✅ [UNIVERSAL] STEP 3c - Workflow status: {time.time() - step_start:.3f}s")
-                elif status and str(status).strip():
-                    step_start = time.time()
-                    query = query.filter(SupplierPayment.workflow_status == status)
-                    logger.info(f"✅ [UNIVERSAL] STEP 3c - Status: {time.time() - step_start:.3f}s")
-                elif statuses and len(statuses) > 0:
-                    step_start = time.time()
-                    valid_statuses = [s for s in statuses if s and str(s).strip()]
-                    if valid_statuses:
-                        query = query.filter(SupplierPayment.workflow_status.in_(valid_statuses))
-                    logger.info(f"✅ [UNIVERSAL] STEP 3c - Multiple statuses: {time.time() - step_start:.3f}s")
-                
-                # 3d: Amount filtering
-                min_amount = filters.get('min_amount') or filters.get('amount_min') or request.args.get('min_amount') or request.args.get('amount_min')
-                max_amount = filters.get('max_amount') or filters.get('amount_max') or request.args.get('max_amount') or request.args.get('amount_max')
-                
-                if min_amount:
-                    try:
-                        step_start = time.time()
-                        min_val = float(min_amount)
-                        query = query.filter(SupplierPayment.amount >= min_val)
-                        logger.info(f"✅ [UNIVERSAL] STEP 3d - Min amount: {time.time() - step_start:.3f}s")
-                    except ValueError:
-                        pass
-                        
-                if max_amount:
-                    try:
-                        step_start = time.time()
-                        max_val = float(max_amount)
-                        query = query.filter(SupplierPayment.amount <= max_val)
-                        logger.info(f"✅ [UNIVERSAL] STEP 3e - Max amount: {time.time() - step_start:.3f}s")
-                    except ValueError:
-                        pass
-                
-                # 3f: Date filtering
-                start_date = filters.get('start_date') or request.args.get('start_date')
-                end_date = filters.get('end_date') or request.args.get('end_date')
-                
-                if start_date:
-                    try:
-                        step_start = time.time()
-                        start_date_obj = datetime.strptime(str(start_date), '%Y-%m-%d').date()
-                        query = query.filter(SupplierPayment.payment_date >= start_date_obj)
-                        logger.info(f"✅ [UNIVERSAL] STEP 3f - Start date: {time.time() - step_start:.3f}s")
-                    except ValueError:
-                        pass
-                        
-                if end_date:
-                    try:
-                        step_start = time.time()
-                        end_date_obj = datetime.strptime(str(end_date), '%Y-%m-%d').date()
-                        query = query.filter(SupplierPayment.payment_date <= end_date_obj)
-                        logger.info(f"✅ [UNIVERSAL] STEP 3g - End date: {time.time() - step_start:.3f}s")
-                    except ValueError:
-                        pass
-                
-                # 3h: Reference number filtering
-                reference_no = filters.get('reference_no') or request.args.get('reference_no') or request.args.get('ref_no')
-                if reference_no and str(reference_no).strip():
-                    step_start = time.time()
-                    query = query.filter(SupplierPayment.reference_no.ilike(f'%{reference_no}%'))
-                    logger.info(f"✅ [UNIVERSAL] STEP 3h - Reference number: {time.time() - step_start:.3f}s")
-                
-                # 3i: Invoice filtering
-                invoice_id = filters.get('invoice_id') or request.args.get('invoice_id')
-                if invoice_id and str(invoice_id).strip():
-                    step_start = time.time()
-                    query = query.filter(SupplierPayment.invoice_id == invoice_id)
-                    logger.info(f"✅ [UNIVERSAL] STEP 3i - Invoice ID: {time.time() - step_start:.3f}s")
-                
-                # 3j: Supplier name search
-                supplier_name_search = filters.get('supplier_name_search') or request.args.get('supplier_name_search') or request.args.get('search')
-                if supplier_name_search and str(supplier_name_search).strip() and not supplier_id:
-                    step_start = time.time()
-                    supplier_subquery = session_scope.query(Supplier.supplier_id).filter(
-                        Supplier.hospital_id == hospital_id,
-                        Supplier.supplier_name.ilike(f'%{supplier_name_search}%')
-                    ).subquery()
-                    query = query.filter(SupplierPayment.supplier_id.in_(supplier_subquery))
-                    logger.info(f"✅ [UNIVERSAL] STEP 3j - Supplier name search: {time.time() - step_start:.3f}s")
-                
-                # 3k: Reference number search from filters
-                reference_no_search = filters.get('reference_no_search')
-                if reference_no_search and str(reference_no_search).strip():
-                    step_start = time.time()
-                    query = query.filter(SupplierPayment.reference_no.ilike(f'%{reference_no_search}%'))
-                    logger.info(f"✅ [UNIVERSAL] STEP 3k - Reference number search: {time.time() - step_start:.3f}s")
-                
-                # STEP 4: Query execution
-                logger.info(f"🔍 [UNIVERSAL] CRITICAL: About to execute query with {len([f for f in filters.values() if f])} filters")
+                logger.info(f"✅ [CATEGORIZED] Applied {filter_count} filters: {applied_filters}")
+                logger.info(f"✅ [UNIVERSAL] STEP 3 - Categorized filtering: {time.time() - step_start:.3f}s")
                 
                 # 4a: Ordering
                 step_start = time.time()
@@ -609,7 +514,7 @@ class EnhancedUniversalSupplierService:
                     supplier = session_scope.query(Supplier).filter_by(supplier_id=payment.supplier_id).first()
                     if supplier:
                         payment_dict['supplier_name'] = supplier.supplier_name
-                        payment_dict['supplier_code'] = getattr(supplier, 'supplier_code', supplier.supplier_id)
+                        payment_dict['supplier_code'] = getattr(supplier, supplier.supplier_id)
                     else:
                         payment_dict['supplier_name'] = 'N/A'
                         payment_dict['supplier_code'] = 'N/A'
@@ -744,8 +649,15 @@ class EnhancedUniversalSupplierService:
             # Standardize response format for universal engine
             if result and result.get('success', True):
 
-                payments = result.get('payments', [])
+                payments = result.get('payments', []) or result.get('items', []) or result.get('data', [])
+                if not payments and 'results' in result:
+                    payments = result['results']
+                    
                 existing_summary = result.get('summary', {})
+
+                # Also ensure total count is properly set
+                if 'total' not in result and payments:
+                    result['total'] = len(payments)
                 
                 # Apply enhanced summary calculation
                 logger.info(f"🔧 BEFORE Enhancement - Summary fields: {list(existing_summary.keys())}")
@@ -1494,24 +1406,94 @@ class EnhancedUniversalSupplierService:
     # ========================================================================
     
     def _populate_form_with_suppliers(self, form_instance: FlaskForm):
-        """Populate form with supplier choices"""
-        
+        """
+        ✅ FIX: Fixed form population with proper supplier choice handling
+        """
         try:
-            if hasattr(form_instance, 'supplier_id'):
-                from app.utils.form_helpers import populate_supplier_choices
-                # ✅ FIX: Pass SelectField object and current_user object 
-                populate_supplier_choices(form_instance.supplier_id, current_user)
-                logger.debug("✅ Populated supplier choices in form")
+            # ✅ TRY CONFIGURATION-DRIVEN APPROACH FIRST
+            config_populated = False
+            
+            config_success, config = self._get_validated_entity_config('supplier_payments')
+            
+            if config_success and hasattr(config, 'fields'):
+                logger.debug("🔧 Attempting configuration-driven form population")
+                
+                for field in config.fields:
+                    if (hasattr(field, 'autocomplete_enabled') and 
+                        field.autocomplete_enabled and 
+                        hasattr(form_instance, field.name)):
+                        
+                        autocomplete_source = getattr(field, 'autocomplete_source', None)
+                        form_field = getattr(form_instance, field.name)
+                        
+                        if autocomplete_source == 'suppliers':
+                            try:
+                                from app.utils.form_helpers import populate_supplier_choices
+                                # ✅ FIX: Pass the form field correctly
+                                populate_supplier_choices(form_field, current_user)
+                                config_populated = True
+                                logger.debug(f"✅ Config-driven population: {field.name}")
+                            except Exception as e:
+                                logger.debug(f"❌ Config population failed for {field.name}: {str(e)}")
+
+                        # ✅ FALLBACK TO EXISTING LOGIC - Fix the hasattr check
+                        if not config_populated:
+                            logger.debug("🔧 Using fallback form population logic")
+                            if hasattr(form_instance, 'supplier_id'):
+                                try:
+                                    from app.utils.form_helpers import populate_supplier_choices
+                                    # ✅ FIX: Access supplier_id field from form_instance correctly
+                                    supplier_field = getattr(form_instance, 'supplier_id', None)
+                                    if supplier_field and hasattr(supplier_field, 'choices'):
+                                        populate_supplier_choices(supplier_field, current_user)
+                                        logger.debug("✅ Fallback population: supplier_id")
+                                    else:
+                                        logger.debug("❌ No supplier_id field or choices attribute found")
+                                except Exception as e:
+                                    logger.debug(f"❌ Fallback population failed: {str(e)}")
+                            else:
+                                logger.debug("❌ No supplier_id field found")
+                
+                logger.debug("✅ Form population completed")
+                
         except Exception as e:
-            logger.warning(f"Error populating supplier choices: {str(e)}")
+            logger.warning(f"❌ Error populating form choices: {str(e)}")
     
+    def _populate_backend_autocomplete(self, form_field, field_config, current_user):
+        """Helper method for backend-driven autocomplete population"""
+        # Implementation depends on your specific backend autocomplete needs
+        # This can be expanded as needed
+        pass
+
     def _get_suppliers_for_dropdown(self) -> List[Dict]:
-        """Get suppliers for dropdown choices"""
+        """
+        ✅ FIX: Fixed supplier dropdown function with proper error handling
+        """
         try:
             from app.services.supplier_service import get_suppliers_for_choice
-            return get_suppliers_for_choice(current_user.hospital_id)
+            
+            # ✅ FIX: Try with hospital_id first, fallback to no parameters
+            try:
+                # New signature: get_suppliers_for_choice(hospital_id)
+                return get_suppliers_for_choice(current_user.hospital_id)
+            except TypeError:
+                # Old signature: get_suppliers_for_choice()
+                logger.info("✅ [FALLBACK] Using get_suppliers_for_choice() without parameters")
+                return get_suppliers_for_choice()
+            except Exception as e:
+                logger.warning(f"❌ Error calling get_suppliers_for_choice with hospital_id: {str(e)}")
+                # Try without parameters as fallback
+                try:
+                    return get_suppliers_for_choice()
+                except Exception as e2:
+                    logger.error(f"❌ Error calling get_suppliers_for_choice without parameters: {str(e2)}")
+                    return []
+                    
+        except ImportError:
+            logger.warning("❌ Could not import get_suppliers_for_choice")
+            return []
         except Exception as e:
-            logger.warning(f"Error getting suppliers for dropdown: {str(e)}")
+            logger.warning(f"❌ Error getting suppliers for dropdown: {str(e)}")
             return []
     
     def _get_payment_config_object(self):
@@ -1602,7 +1584,239 @@ class EnhancedUniversalSupplierService:
             'error': error,
             'error_timestamp': datetime.now().isoformat()
         }
+    
+    """
+    MINIMAL CHANGES: Update existing _apply_configuration_filters_if_available method
+    to use universal database filtering with entity-specific fallback
+    """
 
+    
+    # def _apply_original_filter_logic_complete_fallback(self, query, filters: Dict, session_scope):
+    #     """
+    #     ✅ PRESERVED: Complete original filter logic as final fallback
+    #     This ensures 100% backward compatibility if universal filtering fails
+    #     """
+    #     try:
+    #         logger.info(f"🔄 [FALLBACK] Using complete original filter logic")
+            
+    #         # ✅ COPY: Exact copy of working original filter logic
+    #         # (Copy the entire working _apply_configuration_filters_if_available method here)
+    #         # This ensures we never lose functionality
+            
+    #         # For brevity, showing structure - in real implementation, copy the entire original method
+            
+    #         applied_by_config = 0
+    #         config_applied_filters = set()
+            
+    #         # Existing debug lines
+    #         logger.info(f"🔍 [MINIMAL_DEBUG] Input filters: {list(filters.keys())}")
+    #         config_success, config = self._get_validated_entity_config('supplier_payments')
+    #         if config_success: 
+    #             logger.info(f"🔍 [MINIMAL_DEBUG] Filterable fields: {[f.name for f in config.fields if f.filterable]}")
+            
+    #         if not config_success or not hasattr(config, 'fields'):
+    #             return query, config_applied_filters, applied_by_config
+            
+    #         # ✅ BUILD DYNAMIC MAPPING FROM CONFIGURATION
+    #         filter_mapping = {}
+    #         field_configs = {}
+            
+    #         for field in config.fields:
+    #             if field.filterable:
+    #                 # Map field name to itself
+    #                 filter_mapping[field.name] = field.name
+    #                 field_configs[field.name] = field
+                    
+    #                 # Map all aliases to the main field name
+    #                 if hasattr(field, 'filter_aliases') and field.filter_aliases:
+    #                     for alias in field.filter_aliases:
+    #                         filter_mapping[alias] = field.name
+                            
+    #         logger.info(f"🔍 [CONFIG_DEBUG] Built dynamic mapping: {filter_mapping}")
+            
+    #         # Process each filter using configuration
+    #         for filter_name, filter_value in filters.items():
+    #             if not filter_value or filter_value == '' or filter_name in ['page', 'per_page']:
+    #                 continue
+                    
+    #             logger.info(f"🔍 [FIX_DEBUG] Processing: {filter_name} = {filter_value}")
+                
+    #             # ✅ GET MAPPED FIELD NAME FROM CONFIGURATION
+    #             config_field_name = filter_mapping.get(filter_name)
+    #             if not config_field_name:
+    #                 logger.info(f"❌ [FIX_DEBUG] No mapping found for: {filter_name}")
+    #                 continue
+                    
+    #             # ✅ GET FIELD CONFIGURATION
+    #             field_config = field_configs.get(config_field_name)
+    #             if not field_config:
+    #                 logger.info(f"❌ [FIX_DEBUG] No field config found for: {config_field_name}")
+    #                 continue
+                    
+    #             logger.info(f"✅ [FIX_DEBUG] Found filterable field: {config_field_name}")
+                
+    #             try:
+    #                 from app.models.transaction import SupplierPayment
+                    
+    #                 # ✅ VIRTUAL FIELD HANDLING - Add this block
+    #                 if config_field_name == 'start_date':
+    #                     from datetime import datetime
+    #                     start_date = datetime.strptime(filter_value, '%Y-%m-%d').date()
+    #                     query = query.filter(SupplierPayment.payment_date >= start_date)
+    #                     applied_by_config += 1
+    #                     config_applied_filters.add(filter_name)
+    #                     logger.info(f"✅ [FIX_DEBUG] Applied virtual start_date filter: payment_date >= {start_date}")
+                        
+    #                 elif config_field_name == 'end_date':
+    #                     from datetime import datetime
+    #                     end_date = datetime.strptime(filter_value, '%Y-%m-%d').date()
+    #                     query = query.filter(SupplierPayment.payment_date <= end_date)
+    #                     applied_by_config += 1
+    #                     config_applied_filters.add(filter_name)
+    #                     logger.info(f"✅ [FIX_DEBUG] Applied virtual end_date filter: payment_date <= {end_date}")
+
+    #                 # ✅ APPLY FILTER BASED ON CONFIGURATION TYPE
+    #                 elif field_config.filter_type == "search" and field_config.related_field == "supplier":
+    #                     # Handle supplier relationship search
+    #                     from app.models.master import Supplier
+    #                     hospital_id = current_user.hospital_id
+                        
+    #                     supplier_subquery = session_scope.query(Supplier.supplier_id).filter(
+    #                         Supplier.hospital_id == hospital_id,
+    #                         Supplier.supplier_name.ilike(f'%{filter_value}%')
+    #                     ).subquery()
+                        
+    #                     query = query.filter(SupplierPayment.supplier_id.in_(supplier_subquery))
+    #                     applied_by_config += 1
+    #                     config_applied_filters.add(filter_name)
+    #                     logger.info(f"✅ [FIX_DEBUG] Applied supplier relationship search")
+                        
+    #                 elif field_config.filter_type == "exact":
+    #                     # Handle exact match (single value or list)
+    #                     model_attr = getattr(SupplierPayment, config_field_name)
+                        
+    #                     if isinstance(filter_value, list):
+    #                         query = query.filter(model_attr.in_(filter_value))
+    #                     else:
+    #                         query = query.filter(model_attr == filter_value)
+                        
+    #                     applied_by_config += 1
+    #                     config_applied_filters.add(filter_name)
+    #                     logger.info(f"✅ [FIX_DEBUG] Applied exact filter: {config_field_name}")
+                        
+    #                 elif field_config.filter_type == "range":
+    #                     # Handle range filters (amount, etc.)
+    #                     model_attr = getattr(SupplierPayment, config_field_name)
+                        
+    #                     if filter_name in ['min_amount', 'amount_min']:
+    #                         min_val = float(filter_value)
+    #                         query = query.filter(model_attr >= min_val)
+    #                         logger.info(f"✅ [FIX_DEBUG] Applied min range filter: >= {min_val}")
+    #                     elif filter_name in ['max_amount', 'amount_max']:
+    #                         max_val = float(filter_value)
+    #                         query = query.filter(model_attr <= max_val)
+    #                         logger.info(f"✅ [FIX_DEBUG] Applied max range filter: <= {max_val}")
+    #                     else:
+    #                         # Exact amount match
+    #                         query = query.filter(model_attr == float(filter_value))
+    #                         logger.info(f"✅ [FIX_DEBUG] Applied exact amount filter")
+                        
+    #                     applied_by_config += 1
+    #                     config_applied_filters.add(filter_name)
+                        
+    #                 # elif field_config.filter_type == "date_range":
+    #                 #     # Handle date range filters
+    #                 #     from datetime import datetime
+    #                 #     model_attr = getattr(SupplierPayment, config_field_name)
+                        
+    #                 #     if filter_name in ['start_date', 'date_from']:
+    #                 #         start_date = datetime.strptime(filter_value, '%Y-%m-%d').date()
+    #                 #         query = query.filter(model_attr >= start_date)
+    #                 #         logger.info(f"✅ [FIX_DEBUG] Applied start date filter: >= {start_date}")
+    #                 #     elif filter_name in ['end_date', 'date_to']:
+    #                 #         end_date = datetime.strptime(filter_value, '%Y-%m-%d').date()
+    #                 #         query = query.filter(model_attr <= end_date)
+    #                 #         logger.info(f"✅ [FIX_DEBUG] Applied end date filter: <= {end_date}")
+                        
+    #                 #     applied_by_config += 1
+    #                 #     config_applied_filters.add(filter_name)
+                        
+    #                 elif field_config.filter_type == "search":
+    #                     # Handle text search
+    #                     model_attr = getattr(SupplierPayment, config_field_name)
+    #                     query = query.filter(model_attr.ilike(f'%{filter_value}%'))
+    #                     applied_by_config += 1
+    #                     config_applied_filters.add(filter_name)
+    #                     logger.info(f"✅ [FIX_DEBUG] Applied text search filter")
+                        
+    #                 else:
+    #                     # Fallback to direct field mapping
+    #                     if hasattr(SupplierPayment, config_field_name):
+    #                         model_attr = getattr(SupplierPayment, config_field_name)
+    #                         query = query.filter(model_attr == filter_value)
+    #                         applied_by_config += 1
+    #                         config_applied_filters.add(filter_name)
+    #                         logger.info(f"✅ [FIX_DEBUG] Applied direct field filter")
+                        
+    #             except Exception as e:
+    #                 logger.error(f"❌ [FIX_DEBUG] Error applying {config_field_name}: {str(e)}")
+            
+    #         logger.info(f"🔍 [FIX_DEBUG] Final result: {applied_by_config} filters applied")
+    #         logger.info(f"✅ Configuration applied {applied_by_config} filters: {config_applied_filters}")
+            
+    #         return query, config_applied_filters, applied_by_config
+            
+                        
+    #     except Exception as e:
+    #         logger.error(f"❌ [FALLBACK] Even fallback failed: {str(e)}")
+    #         return query, set(), 0
+    
+    def _get_validated_entity_config(self, entity_type: str = 'supplier_payments') -> tuple[bool, Any]:
+        """
+        ✅ HELPER: Get and validate entity configuration
+        Returns (success: bool, config: EntityConfiguration)
+        """
+        try:
+            from app.config.entity_configurations import get_entity_config
+            config = get_entity_config(entity_type)
+            
+            if not config:
+                logger.debug(f"No configuration found for {entity_type}")
+                return False, None
+            
+            # Validate required attributes exist
+            required_attrs = ['fields']
+            for attr in required_attrs:
+                if not hasattr(config, attr):
+                    logger.debug(f"Configuration missing {attr} for {entity_type}")
+                    return False, None
+            
+            return True, config
+            
+        except Exception as e:
+            logger.debug(f"Configuration validation failed for {entity_type}: {str(e)}")
+            return False, None
+
+    def _get_error_result(self, error_message: str, form_class=None) -> dict:
+        """Error result structure - local implementation to avoid circular import"""
+        return {
+            'items': [],
+            'payments': [],  # backward compatibility
+            'total': 0,
+            'page': 1,
+            'per_page': 20,
+            'summary': {
+                'total_count': 0,
+                'total_amount': Decimal('0.00'),
+                'pending_count': 0,
+                'this_month_count': 0
+            },
+            'form_instance': form_class() if form_class else None,
+            'branch_context': {},
+            'error': error_message,
+            'error_timestamp': datetime.now().isoformat(),
+            'success': False
+        }
 # =============================================================================
 # SUPPLIER PAYMENT RENDERER (Entity-Specific Rendering for Data Assembler)
 # =============================================================================
@@ -1731,15 +1945,15 @@ class SupplierPaymentRenderer:
         """SUPPLIER-SPECIFIC: Supplier column rendering (exact from existing payment_list)"""
         
         supplier_name = item.get('supplier_name', '')
-        supplier_code = item.get('supplier_code', '')
+        supplier_id = item.get('supplier_id', '')
         reference_no = item.get('reference_no', '')
         
         # Build supplier column HTML (exact structure as existing payment_list)
         supplier_html = f'<div class="supplier-name">{supplier_name}</div>'
         if reference_no:
             supplier_html += f'<div class="supplier-secondary">Ref: {reference_no}</div>'
-        elif supplier_code:
-            supplier_html += f'<div class="supplier-secondary">Code: {supplier_code}</div>'
+        elif supplier_id:
+            supplier_html += f'<div class="supplier-secondary">Code: {supplier_id}</div>'
         
         return {
             'field_name': field.name,
@@ -1750,7 +1964,6 @@ class SupplierPaymentRenderer:
             'formatted_value': supplier_html,
             'component': 'supplier_column',
             'supplier_name': supplier_name,
-            'supplier_code': supplier_code,
             'reference_no': reference_no
         }
     
@@ -1809,7 +2022,7 @@ class SupplierPaymentRenderer:
                 # If we found a component amount, add it to the formatted display
                 if component_amount and float(component_amount) > 0:
                     component_formatted = f"₹{float(component_amount):,.2f}"
-                    formatted += f'<br><small style="font-size: 0.75em; color: #666; font-weight: normal;">({component_label} - {component_formatted})</small>'
+                    formatted += f'<br><small style="font-size: 0.75em; color: #666; font-weight: normal;">({component_label})<br>{component_formatted}</small>'
         else:
             formatted = str(value) if value is not None else "₹0.00"
         
@@ -1848,8 +2061,12 @@ class SupplierPaymentRenderer:
         
         try:
             from app.services.supplier_service import get_suppliers_for_choice
+            try:
+                suppliers = get_suppliers_for_choice(current_user.hospital_id)
+            except TypeError:
+                suppliers = get_suppliers_for_choice()
             return {
-                'suppliers': get_suppliers_for_choice(current_user.hospital_id)
+                'suppliers': suppliers
             }
         except Exception as e:
             logger.warning(f"Error getting supplier dropdown choices: {str(e)}")

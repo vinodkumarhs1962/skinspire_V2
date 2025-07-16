@@ -56,7 +56,28 @@ from flask_login import LoginManager, current_user
 from .security.bridge import initialize_security
 from app.views.test import test_bp
 from pathlib import Path
-from app.utils.filters import format_currency, dateformat, datetimeformat, timeago, register_filters
+try:
+    from app.utils.filters import format_currency, dateformat, datetimeformat, timeago, register_filters
+except ImportError:
+    # Fallback functions if import fails
+    def format_currency(value):
+        return f"Rs.{float(value or 0):,.2f}"
+    def dateformat(value, fmt='%Y-%m-%d'):
+        return value.strftime(fmt) if value else ""
+    def datetimeformat(value, fmt='%Y-%m-%d %H:%M:%S'):
+        return value.strftime(fmt) if value else ""
+    def timeago(value):
+        return str(value) if value else ""
+    def register_filters(app):
+        # Basic registration
+        app.jinja_env.filters['format_currency'] = format_currency
+        app.jinja_env.filters['dateformat'] = dateformat
+        app.jinja_env.filters['datetimeformat'] = datetimeformat
+        app.jinja_env.filters['timeago'] = timeago
+
+    def register_jinja_filters(app):
+        """Wrapper function that calls register_filters"""
+        return register_filters(app)
 
 
 # Try to load settings, with improved error handling
@@ -93,20 +114,23 @@ def create_app() -> Flask:
         
         fix_logging_rotation_error(app)
 
-        # Add file logging for the application
-        logs_dir = os.path.join(app.root_path, 'logs')
-        os.makedirs(logs_dir, exist_ok=True)
+        # NEW: Ensure Flask app logger uses Unicode-safe formatters
+        setup_flask_unicode_logging(app)
+
+        # # Add file logging for the application
+        # logs_dir = os.path.join(app.root_path, 'logs')
+        # os.makedirs(logs_dir, exist_ok=True)
         
-        # Create a file handler for application logs
-        log_file_path = os.path.join(logs_dir, 'app.log')
-        file_handler = logging.FileHandler(log_file_path)
-        file_handler.setLevel(logging.INFO)
-        file_handler.setFormatter(logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        ))
+        # # Create a file handler for application logs
+        # log_file_path = os.path.join(logs_dir, 'app.log')
+        # file_handler = logging.FileHandler(log_file_path)
+        # file_handler.setLevel(logging.INFO)
+        # file_handler.setFormatter(logging.Formatter(
+        #     '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        # ))
         
-        # Add the file handler to the app logger
-        app.logger.addHandler(file_handler)
+        # # Add the file handler to the app logger
+        # app.logger.addHandler(file_handler)
 
         # Get database URL - use centralized Environment if available
         if ENVIRONMENT_MODULE_AVAILABLE:
@@ -204,8 +228,24 @@ def create_app() -> Flask:
         # Register error handlers
         register_error_handlers(app)
 
-        # Register custom filters
-        register_jinja_filters(app)
+        # Register custom filters - FIXED
+        try:
+            # Use the imported register_filters function directly
+            register_filters(app)
+            app.logger.info("Successfully registered Jinja filters")
+        except NameError as e:
+            app.logger.error(f"register_filters not available: {e}")
+            # Basic fallback registration
+            app.jinja_env.filters['format_currency'] = lambda value: f"Rs.{float(value or 0):,.2f}"
+            app.jinja_env.filters['dateformat'] = lambda value, fmt='%Y-%m-%d': value.strftime(fmt) if value else ""
+            app.jinja_env.filters['datetimeformat'] = lambda value, fmt='%Y-%m-%d %H:%M:%S': value.strftime(fmt) if value else ""
+            app.jinja_env.filters['timeago'] = lambda value: str(value) if value else ""
+            app.logger.warning("Using basic filter fallback")
+        except Exception as e:
+            app.logger.error(f"Unexpected filter registration error: {e}")
+            # Emergency minimal filters
+            app.jinja_env.filters['format_currency'] = lambda v: f"Rs.{float(v or 0):,.2f}"
+            app.logger.warning("Emergency filter fallback activated")
         
         # Add request middleware for authentication token
         @app.before_request
@@ -283,7 +323,7 @@ def format_currency(value):
         return " Rs.0.00"
    
 def register_view_blueprints(app: Flask) -> None:
-    """Register frontend view blueprints"""
+    """UPDATED: Register frontend view blueprints with safe logging"""
     view_blueprints = []
     
     try:
@@ -299,16 +339,16 @@ def register_view_blueprints(app: Flask) -> None:
         from app.views.admin_views import admin_views_bp
         view_blueprints.append(admin_views_bp)
         
-        # ✅ Universal Views Blueprint
+        # SAFE: Universal Views Blueprint - NO EMOJI
         try:
-            app.logger.info("🔧 Attempting to import universal views...")
+            app.logger.info("[PROCESS] Attempting to import universal views...")
             from app.views.universal_views import universal_bp
             view_blueprints.append(universal_bp)
-            app.logger.info("✅ Successfully imported universal views blueprint")
+            app.logger.info("[SUCCESS] Successfully imported universal views blueprint")
         except ImportError as e:
-            app.logger.warning(f"⚠️ Universal views blueprint could not be loaded: {str(e)}")
+            app.logger.warning(f"[WARNING] Universal views blueprint could not be loaded: {str(e)}")
         except Exception as e:
-            app.logger.error(f"❌ Error importing universal views: {str(e)}")
+            app.logger.error(f"[ERROR] Error importing universal views: {str(e)}")
 
         # Import new GL, inventory, and supplier blueprints
         try:
@@ -322,43 +362,25 @@ def register_view_blueprints(app: Flask) -> None:
             view_blueprints.append(inventory_views_bp)
             app.logger.info("Successfully imported inventory views blueprint")
             
-            # Supplier views
-
-            # Debug the import
+            # Supplier views - SAFE LOGGING
             app.logger.info("Attempting to import supplier views...")
-            try:
-                app.logger.info("Attempting to import supplier views...")
-                from app.views import supplier_views
-                app.logger.info(f"supplier_views module: {supplier_views}")
-                
-                from app.views.supplier_views import supplier_views_bp
-                app.logger.info(f"supplier_views_bp: {supplier_views_bp}")
-                
-                view_blueprints.append(supplier_views_bp)
-                app.logger.info("Successfully imported supplier views blueprint")
-            except Exception as e:
-                app.logger.error(f"Supplier views blueprint could not be loaded: {type(e).__name__}: {str(e)}")
-                import traceback
-                app.logger.error(traceback.format_exc())
-
-            # from app.views.supplier_views import supplier_views_bp
-            # view_blueprints.append(supplier_views_bp)
-            # app.logger.info("Successfully imported supplier views blueprint")
+            app.logger.info("Attempting to import supplier views...")
+            from app.views.supplier_views import supplier_views_bp
+            app.logger.info(f"supplier_views_bp: {supplier_views_bp}")
+            view_blueprints.append(supplier_views_bp)
+            app.logger.info("Successfully imported supplier views blueprint")
+            
         except ImportError as e:
-            app.logger.warning(f"One or more new module blueprints could not be loaded: {str(e)}")
-
-            # Import billing views blueprint
+            app.logger.warning(f"Additional views blueprint could not be loaded: {str(e)}")
+        
         try:
+            # Billing views
             from app.views.billing_views import billing_views_bp
             view_blueprints.append(billing_views_bp)
             app.logger.info("Successfully imported billing views blueprint")
         except ImportError as e:
             app.logger.warning(f"Billing views blueprint could not be loaded: {str(e)}")
 
-        # Import other view blueprints as they're developed
-        # from app.views.user_views import user_views_bp
-        # view_blueprints.append(user_views_bp)
-        
         app.logger.info("Registered view blueprints")
     except ImportError as e:
         app.logger.warning(f"View blueprints could not be loaded: {str(e)}")
@@ -373,7 +395,7 @@ def register_view_blueprints(app: Flask) -> None:
         except Exception as e:
             app.logger.error(f"Failed to register view blueprint {getattr(blueprint, 'name', 'unknown')}: {str(e)}")
 
-    # Debug: Check if supplier blueprint is actually registered
+    # Debug: Check if supplier blueprint is actually registered - SAFE LOGGING
     if 'supplier_views' in app.blueprints:
         app.logger.info("supplier_views blueprint is registered")
         app.logger.info(f"  URL prefix: {app.blueprints['supplier_views'].url_prefix}")
@@ -381,13 +403,13 @@ def register_view_blueprints(app: Flask) -> None:
         app.logger.error("supplier_views blueprint is NOT registered")
         app.logger.error(f"  Registered blueprints: {list(app.blueprints.keys())}")
 
-    # Debug: Check if universal views blueprint is registered
+    # Debug: Check if universal views blueprint is registered - SAFE LOGGING
     if 'universal_views' in app.blueprints:
-        app.logger.info("✅ universal_views blueprint is registered")
+        app.logger.info("[SUCCESS] universal_views blueprint is registered")
         app.logger.info(f"  URL prefix: {app.blueprints['universal_views'].url_prefix}")
-        app.logger.info("🚀 Universal Engine is ready!")
+        app.logger.info("[READY] Universal Engine is ready!")
     else:
-        app.logger.error("❌ universal_views blueprint is NOT registered")
+        app.logger.error("[ERROR] universal_views blueprint is NOT registered")
         app.logger.error(f"  Registered blueprints: {list(app.blueprints.keys())}")
 
 def register_api_blueprints(app: Flask) -> None:
@@ -504,34 +526,71 @@ def setup_unicode_logging():
     
     return success
 
+def setup_flask_unicode_logging(app):
+    """
+    TARGETED FIX: Ensure Flask app logger uses existing Unicode-safe formatters
+    """
+    try:
+        # Import existing Unicode classes from your utils
+        from app.utils.unicode_logging import UnicodeFormatter, UnicodeConsoleHandler
+        
+        # Only add handler if app.logger doesn't have any
+        if not app.logger.handlers:
+            # Add Unicode-safe console handler
+            console_handler = UnicodeConsoleHandler()
+            console_handler.setLevel(logging.INFO)
+            
+            # Use UnicodeFormatter with emoji disabled for Flask logger to prevent issues
+            console_formatter = UnicodeFormatter(
+                '[%(asctime)s] %(levelname)s in %(name)s: %(message)s',
+                use_emoji=False  # Disable emoji for Flask logger
+            )
+            console_handler.setFormatter(console_formatter)
+            app.logger.addHandler(console_handler)
+            
+            # Add Unicode-safe file handler if needed
+            logs_dir = os.path.join(app.root_path, '..', 'logs')
+            os.makedirs(logs_dir, exist_ok=True)
+            
+            from logging.handlers import RotatingFileHandler
+            file_handler = RotatingFileHandler(
+                os.path.join(logs_dir, 'app.log'),
+                maxBytes=10*1024*1024,  # 10MB
+                backupCount=5,
+                encoding='utf-8'
+            )
+            file_handler.setLevel(logging.INFO)
+            file_formatter = UnicodeFormatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                use_emoji=False  # Disable emoji for file logging
+            )
+            file_handler.setFormatter(file_formatter)
+            app.logger.addHandler(file_handler)
+        
+        app.logger.setLevel(logging.INFO)
+        app.logger.info("[SUCCESS] Flask Unicode logging configured using existing utils")
+        
+    except Exception as e:
+        app.logger.warning(f"[WARNING] Could not setup Flask Unicode logging: {e}")
+
 def fix_logging_rotation_error(app):
-    """Fix Windows log rotation permission errors"""
+    """UPDATED: Fix Windows log rotation AND use Unicode-safe formatters"""
     import logging.handlers
     import os
     
     try:
-        # Remove any existing RotatingFileHandler
+        # Remove any existing RotatingFileHandler from app.logger
         for handler in app.logger.handlers[:]:
             if isinstance(handler, logging.handlers.RotatingFileHandler):
                 app.logger.removeHandler(handler)
         
-        log_dir = os.path.join(app.root_path, '..', 'logs')
-        os.makedirs(log_dir, exist_ok=True)
-        log_file = os.path.join(log_dir, 'app.log')
+        # FIXED: Clear ALL app logger handlers to prevent duplicate/conflicting formatters
+        app.logger.handlers.clear()
         
-        file_handler = logging.handlers.TimedRotatingFileHandler(
-            log_file, when='midnight', interval=1, backupCount=7, encoding='utf-8'
-        )
-        
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        file_handler.setFormatter(formatter)
-        file_handler.setLevel(logging.INFO)
-        
-        app.logger.addHandler(file_handler)
-        app.logger.info("✅ Fixed logging rotation error")
+        app.logger.info("[SUCCESS] Fixed logging rotation error and cleared conflicting handlers")
         
     except Exception as e:
-        app.logger.error(f"Logging fix error: {str(e)}")
+        app.logger.warning(f"Could not fix logging rotation: {e}")
 
 def register_jinja_filters(app):
     """Register custom Jinja2 filters - BACKWARD COMPATIBLE FIX"""

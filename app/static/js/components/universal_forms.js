@@ -244,6 +244,8 @@ class UniversalFormsEngine {
             clearAllFilters: () => this.clearAllFilters(),
             submitFilterForm: () => this.submitFilterForm()
         };
+        // ✅ BACKUP: Direct window exposure for compatibility
+        window.handleDatePreset = (preset) => this.applyDatePreset(preset); 
     }
 
     // =============================================================================
@@ -251,6 +253,8 @@ class UniversalFormsEngine {
     // =============================================================================
 
     setDefaultDatePreset() {
+        console.log('🚫 Auto date preset temporarily disabled for testing');
+        return; // Exit early
         const startDateField = document.getElementById('start_date');
         const endDateField = document.getElementById('end_date');
         
@@ -285,8 +289,21 @@ class UniversalFormsEngine {
 
             // ✅ If no dates in URL or fields, apply Financial Year default ONLY if no other filters
             if (!hasUrlStartDate && !hasUrlEndDate && !hasFieldStartDate && !hasFieldEndDate && !hasOtherFilters) {
-                console.log('✅ No dates detected - applying Financial Year preset');
-                this.applyDatePreset('financial_year', false); // false = don't auto-submit on init
+                
+                // ✅ SMART CHECK: Is this a fresh page visit or navigation from filters?
+                const isPageRefresh = performance.navigation.type === 1; // TYPE_RELOAD
+                const isBackNavigation = performance.navigation.type === 2; // TYPE_BACK_FORWARD
+                const hasNavigationContext = document.referrer.includes('/universal/');
+                
+                // ✅ ONLY auto-apply FY on truly fresh visits, not when user is navigating/filtering
+                if (!isPageRefresh && !isBackNavigation && !hasNavigationContext) {
+                    console.log('✅ Fresh visit - applying Financial Year preset');
+                    this.applyDatePreset('financial_year', false);
+                } else {
+                    console.log('🔧 User navigation detected - skipping auto Financial Year');
+                    // ✅ Still detect what preset is active based on current dates
+                    this.updateActiveDatePreset();
+                }
                 return;
             }
             
@@ -329,6 +346,7 @@ class UniversalFormsEngine {
 
     calculatePresetDates(presetValue) {
         const today = new Date();
+        today.setHours(0, 0, 0, 0); // Reset time to midnight for consistency
         let startDate = '';
         let endDate = '';
         
@@ -351,9 +369,10 @@ class UniversalFormsEngine {
                 break;
                 
             case 'this_month':
-                const firstDayMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-                startDate = this.formatDateForInput(firstDayMonth);
-                endDate = this.formatDateForInput(today);
+                const currentDate = new Date(); // Always get fresh current date
+                const firstDayOfCurrentMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+                startDate = this.formatDateForInput(firstDayOfCurrentMonth);
+                endDate = this.formatDateForInput(currentDate);
                 break;
                 
             case 'last_30_days':
@@ -849,7 +868,13 @@ class UniversalFormsEngine {
     }
 
     formatDateForInput(date) {
-        return date.toISOString().split('T')[0];
+        // Fix timezone issue by using local date components
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0'); // getMonth() is 0-based
+        const day = String(date.getDate()).padStart(2, '0');
+        const formattedDate = `${year}-${month}-${day}`;
+        console.log(`📅 [DATE_FIX] Formatted date: ${formattedDate} (original: ${date})`);
+        return formattedDate;
     }
 
     formatDateForDisplay(dateString) {
