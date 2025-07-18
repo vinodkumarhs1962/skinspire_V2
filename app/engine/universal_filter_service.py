@@ -85,7 +85,7 @@ class UniversalFilterService:
             logger.info(f"🔄 Current filters: {current_filters}")
             
             # 1. Get dropdown options for filter forms (same as before)
-            backend_data = self._get_backend_dropdown_data(
+            backend_data = self.categorized_processor.get_backend_dropdown_data(
                 entity_type, hospital_id, branch_id
             )
             
@@ -169,13 +169,31 @@ class UniversalFilterService:
             from app.models.transaction import SupplierPayment
             from sqlalchemy import or_, and_, func
             
+            # ✅ CONFIGURATION-DRIVEN: Get model class from config
+            model_class = self.categorized_processor._get_model_class('supplier_payments')
+            if not model_class:
+                from app.models.transaction import SupplierPayment  # Fallback
+                model_class = SupplierPayment
+
+            # ✅ FIX: Use the same filter extraction as main service
+            from app.engine.universal_services import get_universal_service
+            service = get_universal_service('supplier_payments')
+            
+            # Get the processed filters using the same logic as main query
+            if hasattr(service, '_extract_filters'):
+                processed_filters = service._extract_filters()
+                logger.info(f"🔧 [SUMMARY_FIX] Using service extracted filters: {processed_filters}")
+            else:
+                processed_filters = filters
+                logger.info(f"🔧 [SUMMARY_FIX] Using fallback filters: {filters}")
+
             with get_db_session() as session:
                 # Start with base query (same as main search)
-                base_query = session.query(SupplierPayment).filter_by(hospital_id=hospital_id)
+                base_query = session.query(model_class).filter_by(hospital_id=hospital_id)
                 
                 # Apply branch filter (same as main search)
                 if branch_id:
-                    base_query = base_query.filter(SupplierPayment.branch_id == branch_id)
+                    base_query = base_query.filter(model_class.branch_id == branch_id)
                 
                 # Apply categorized filters - SAME LOGIC AS MAIN SEARCH
                 filtered_query, applied_filters, filter_count = self.categorized_processor.process_entity_filters(
@@ -191,18 +209,43 @@ class UniversalFilterService:
                 # Calculate summary statistics from the SAME filtered query
                 total_count = filtered_query.count()
                 
+                # ✅ CONFIGURATION-DRIVEN: Using existing helper methods
+                # Extract status field and values from config using existing pattern
+                status_field_name = 'workflow_status'  # Default
+                status_mappings = {}
+
+                # Use existing pattern to extract from config 
+                if hasattr(config, 'summary_cards') and config.summary_cards:
+                    for card in config.summary_cards:
+                        card_field = card.get('field')
+                        filter_field = card.get('filter_field') 
+                        filter_value = card.get('filter_value')
+                        
+                        # Extract status mappings same way as existing code
+                        if (filter_field == 'workflow_status' and 
+                            card_field and filter_value and 
+                            card_field.endswith('_count')):
+                            status_mappings[card_field] = filter_value
+
+                # Use extracted values or fallback to hardcoded (same as existing error handling pattern)
+                approved_status = status_mappings.get('approved_count', 'approved')
+                pending_status = status_mappings.get('pending_count', 'pending')  
+                completed_status = status_mappings.get('completed_count', 'completed')
+
+                # Same calculation logic, just using config values
                 approved_count = filtered_query.filter(
-                    SupplierPayment.workflow_status == 'approved'
+                    getattr(model_class, status_field_name) == approved_status
                 ).count()
-                
+
                 completed_count = filtered_query.filter(
-                    SupplierPayment.workflow_status == 'completed'
+                    getattr(model_class, status_field_name) == completed_status
                 ).count()
-                
+
                 pending_count = filtered_query.filter(
-                    SupplierPayment.workflow_status == 'pending'
+                    getattr(model_class, status_field_name) == pending_status
                 ).count()
-                
+
+                # ✅ KEEP EXISTING: Bank transfer logic unchanged for now (can be Step 2)
                 bank_transfer_count = filtered_query.filter(
                     or_(
                         SupplierPayment.payment_method == 'bank_transfer',
@@ -215,10 +258,29 @@ class UniversalFilterService:
                 
                 # Calculate total amount from filtered results
                 total_amount_result = filtered_query.with_entities(
-                    func.sum(SupplierPayment.amount)
+                    func.sum(getattr(model_class, 'amount'))
                 ).scalar()
                 total_amount = float(total_amount_result or 0)
                 
+                # ✅ FINAL FIX: Calculate this month data separately (truly unfiltered for non-filterable cards)
+                current_month = date.today().month
+                current_year = date.today().year
+
+                # For non-filterable cards, use PURE base query with ONLY date filter
+                this_month_query = base_query.filter(
+                    func.extract('month', getattr(model_class, 'payment_date')) == current_month,
+                    func.extract('year', getattr(model_class, 'payment_date')) == current_year
+                )
+
+                # ✅ NO OTHER FILTERS: Since these cards are configured as filterable=False
+                # They should show ALL this month data regardless of status, supplier, reference, etc.
+
+                this_month_count = this_month_query.count()
+                this_month_amount_result = this_month_query.with_entities(func.sum(SupplierPayment.amount)).scalar()
+                this_month_amount = float(this_month_amount_result or 0)
+
+                logger.info(f"🔧 [THIS_MONTH_FINAL_FIX] Truly unfiltered calculation: Count={this_month_count}, Amount={this_month_amount}")
+
                 summary = {
                     'total_count': total_count,
                     'total_amount': total_amount,
@@ -226,20 +288,37 @@ class UniversalFilterService:
                     'approved_count': approved_count,
                     'completed_count': completed_count,
                     'bank_transfer_count': bank_transfer_count,
+                    'this_month_count': this_month_count,     
+                    'this_month_amount': this_month_amount,    
                     'applied_filters': list(applied_filters),
                     'filter_count': filter_count,
                     'filtering_method': 'categorized_unified'
                 }
                 
-                logger.info(f"✅ Unified summary calculated: Total={total_count}, Approved={approved_count}")
+                logger.info(f"✅ Unified summary calculated: Total={total_count}, Approved={approved_count}, ThisMonth={this_month_count}")
                 return summary
                 
         except Exception as e:
             logger.error(f"❌ Error calculating unified supplier payment summary: {str(e)}")
-            return {
-                'total_count': 0, 'approved_count': 0, 'completed_count': 0, 
-                'pending_count': 0, 'bank_transfer_count': 0, 'total_amount': 0
+            # ✅ CONFIGURATION-DRIVEN: Use same config extraction for error case
+            error_defaults = {'approved_count': 0, 'completed_count': 0, 'pending_count': 0}
+
+            # Extract from config for consistency (reuse same pattern)
+            if hasattr(config, 'summary_cards') and config.summary_cards:
+                for card in config.summary_cards:
+                    card_field = card.get('field')
+                    if card_field and card_field.endswith('_count'):
+                        error_defaults[card_field] = 0
+
+            # Build error response using config
+            error_response = {
+                'total_count': 0,
+                'total_amount': 0,
+                'bank_transfer_count': 0
             }
+            error_response.update(error_defaults)
+
+            return error_response
 
     def _get_supplier_unified_summary(self, filters: Dict, hospital_id: uuid.UUID, 
                                     branch_id: Optional[uuid.UUID], config) -> Dict:
@@ -295,63 +374,7 @@ class UniversalFilterService:
             logger.error(f"❌ Error calculating generic summary for {entity_type}: {str(e)}")
             return {'total_count': 0}
 
-    # =============================================================================
-    # BACKEND DROPDOWN DATA - PRESERVED AS-IS
-    # =============================================================================
-
-    def _get_backend_dropdown_data(self, entity_type: str, hospital_id: uuid.UUID, 
-                                 branch_id: Optional[uuid.UUID]) -> Dict:
-        """
-        PRESERVED: Backend dropdown data logic (same as before)
-        Provides options for filter dropdowns
-        """
-        try:
-            backend_data = {}
-            
-            if entity_type == 'supplier_payments':
-                # Get suppliers for dropdown
-                from app.services.supplier_service import get_suppliers_for_choice
-                suppliers = get_suppliers_for_choice(hospital_id)
-                backend_data['supplier_id'] = [
-                    {'value': s['supplier_id'], 'label': s['supplier_name']} 
-                    for s in suppliers
-                ]
-                
-                # Static dropdown options
-                backend_data['workflow_status'] = [
-                    {'value': 'pending', 'label': 'Pending'},
-                    {'value': 'approved', 'label': 'Approved'},
-                    {'value': 'completed', 'label': 'Completed'},
-                    {'value': 'cancelled', 'label': 'Cancelled'}
-                ]
-                
-                backend_data['payment_method'] = [
-                    {'value': 'cash', 'label': 'Cash'},
-                    {'value': 'bank_transfer', 'label': 'Bank Transfer'},
-                    {'value': 'cheque', 'label': 'Cheque'},
-                    {'value': 'upi', 'label': 'UPI'},
-                    {'value': 'mixed', 'label': 'Mixed'}
-                ]
-                
-            elif entity_type == 'suppliers':
-                # Static options for suppliers
-                backend_data['status'] = [
-                    {'value': 'active', 'label': 'Active'},
-                    {'value': 'inactive', 'label': 'Inactive'}
-                ]
-                
-                backend_data['supplier_category'] = [
-                    {'value': 'medicine', 'label': 'Medicine Supplier'},
-                    {'value': 'equipment', 'label': 'Equipment Supplier'},
-                    {'value': 'service', 'label': 'Service Provider'}
-                ]
-            
-            return backend_data
-            
-        except Exception as e:
-            logger.error(f"❌ Error getting backend data for {entity_type}: {str(e)}")
-            return {}
-
+    
     def _get_filter_metadata(self, entity_type: str, current_filters: Dict, config) -> Dict:
         """
         NEW: Get filter metadata for enhanced UI functionality
@@ -419,7 +442,9 @@ class UniversalFilterService:
                 return []
             
             # Get backend data for all fields
-            backend_data = self._get_unified_backend_data(config, hospital_id, branch_id)
+            backend_data = self.categorized_processor.get_backend_dropdown_data(
+                config.entity_type, hospital_id, branch_id
+            )
             
             # Separate date fields from others
             date_fields = [f for f in filterable_fields if self._get_field_type_safe(f) == 'date']
@@ -500,9 +525,18 @@ class UniversalFilterService:
 
     def _enhance_date_field(self, field, current_value: str) -> Dict:
         """Enhance date field with preset support"""
+        # DIRECT CALL: Use categorized processor directly
+        preset_choices = self.categorized_processor.get_date_preset_choices()
+        
+        # Convert to dict format for compatibility
+        preset_options = [
+            {'value': value, 'label': label, 'icon': 'fas fa-calendar'}
+            for value, label in preset_choices
+        ]
+        
         return {
             'supports_presets': True,
-            'preset_options': self._get_date_preset_options(),
+            'preset_options': preset_options,  # Direct use
             'active_preset': self._detect_single_field_preset(field.name, current_value),
             'financial_year_aware': True
         }
@@ -533,122 +567,16 @@ class UniversalFilterService:
             'display_value': self._get_entity_display_value(field, current_value, backend_data)
         }
 
-    # =============================================================================
-    # UNIFIED BACKEND DATA RETRIEVAL
-    # =============================================================================
-
-    def _get_unified_backend_data(self, config, hospital_id: uuid.UUID, 
-                                 branch_id: Optional[uuid.UUID]) -> Dict:
-        """
-        Single method to get all backend data for filter dropdowns
-        Consolidates all scattered logic into one place
-        """
-        try:
-            cache_key = f"{config.entity_type}_{hospital_id}_{branch_id}"
-            
-            # Check cache first
-            if cache_key in self.cache:
-                return self.cache[cache_key]
-            
-            backend_data = {}
-            
-            # Process each filterable field
-            for field in config.fields:
-                if not getattr(field, 'filterable', False):
-                    continue
-                
-                field_type = self._get_field_type_safe(field)
-                
-                if field_type == 'select':
-                # FIX: Add error handling for field data access
-                    try:
-                        backend_data[field.name] = self._get_select_field_options(
-                            field, config.entity_type, hospital_id, branch_id)
-                    except (AttributeError, TypeError) as e:
-                        logger.warning(f"Skipping field {field.name}: {str(e)}")
-                        backend_data[field.name] = []
-                
-                elif field_type == 'entity_search':
-                    backend_data[field.name] = self._get_entity_search_options(
-                        field, hospital_id, branch_id)
-            
-            # Add entity-specific backend data
-            entity_specific_data = self._get_entity_specific_backend_data(
-                config.entity_type, hospital_id, branch_id)
-            backend_data.update(entity_specific_data)
-            
-            # Cache result
-            self.cache[cache_key] = backend_data
-            
-            logger.debug(f"✅ Built unified backend data for {config.entity_type}: "
-                        f"{list(backend_data.keys())}")
-            
-            return backend_data
-            
-        except Exception as e:
-            logger.error(f"Error getting unified backend data: {str(e)}")
-            return {}
-
-    def _get_select_field_options(self, field, entity_type: str, 
-                                 hospital_id: uuid.UUID, branch_id: Optional[uuid.UUID]) -> List[Dict]:
-        """Get options for select fields"""
-        try:
-            # First try field configuration
-            if hasattr(field, 'options') and field.options:
-                return self._format_select_options(field.options)
-            
-            # Then try entity filter configuration
-            filter_config = get_entity_filter_config(entity_type)
-            if filter_config and field.name in filter_config.filter_mappings:
-                options = filter_config.filter_mappings[field.name].get('options', [])
-                return self._format_select_options(options)
-            
-            # Fallback to pattern-based options
-            return self._get_pattern_based_options(field.name)
-            
-        except Exception as e:
-            logger.error(f"Error getting select options for {field.name}: {str(e)}")
-            return []
-
-    def _get_pattern_based_options(self, field_name: str) -> List[Dict]:
-        """Get options based on field name patterns"""
-        pattern_options = {
-            'status': [
-                {'value': 'active', 'label': 'Active'},
-                {'value': 'inactive', 'label': 'Inactive'},
-                {'value': 'pending', 'label': 'Pending'}
-            ],
-            'payment_method': [
-                {'value': 'cash', 'label': 'Cash'},
-                {'value': 'cheque', 'label': 'Cheque'},
-                {'value': 'bank_transfer', 'label': 'Bank Transfer'},
-                {'value': 'upi', 'label': 'UPI'}
-            ],
-            'workflow_status': [
-                {'value': 'pending', 'label': 'Pending'},
-                {'value': 'approved', 'label': 'Approved'},
-                {'value': 'completed', 'label': 'Completed'},
-                {'value': 'rejected', 'label': 'Rejected'}
-            ]
-        }
-        
-        for pattern, options in pattern_options.items():
-            if pattern in field_name.lower():
-                return options
-        
-        return []
-
+    
     def _get_entity_specific_backend_data(self, entity_type: str, 
-                                        hospital_id: uuid.UUID, branch_id: Optional[uuid.UUID]) -> Dict:
+                                    hospital_id: uuid.UUID, branch_id: Optional[uuid.UUID]) -> Dict:
         """Get entity-specific backend data using service delegation"""
         try:
             if entity_type == 'supplier_payments':
-                backend_data = self._get_supplier_payment_backend_data(hospital_id, branch_id)
-                # FIX: Ensure result is always a dictionary
-                if isinstance(backend_data, str):
-                    logger.error(f"Backend data returned string instead of dict: {backend_data}")
-                    return {}
-                return backend_data if isinstance(backend_data, dict) else {}
+                # DIRECT CALL: Use categorized processor directly
+                return self.categorized_processor.get_backend_dropdown_data(
+                    entity_type, hospital_id, branch_id
+                )
             elif entity_type == 'suppliers':
                 return self._get_supplier_backend_data(hospital_id, branch_id)
             # Add more entities as needed
@@ -659,29 +587,7 @@ class UniversalFilterService:
             logger.error(f"Error getting entity-specific data for {entity_type}: {str(e)}")
             return {}
 
-    def _get_entity_specific_backend_data(self, entity_type: str, 
-                                    hospital_id: uuid.UUID, branch_id: Optional[uuid.UUID]) -> Dict:
-        """Get entity-specific backend data using service delegation"""
-        try:
-            if entity_type == 'supplier_payments':
-                backend_data = self._get_supplier_payment_backend_data(hospital_id, branch_id)
-                
-                # ✅ FIX: Comprehensive type checking and error handling
-                if isinstance(backend_data, str):
-                    logger.error(f"Backend data returned string instead of dict: {backend_data}")
-                    return {}
-                elif isinstance(backend_data, dict):
-                    return backend_data
-                elif backend_data is None:
-                    logger.warning("Backend data returned None, using empty dict")
-                    return {}
-                else:
-                    logger.error(f"Backend data returned unexpected type {type(backend_data)}: {backend_data}")
-                    return {}
-            
-        except Exception as e:
-            logger.error(f"Error getting supplier payment backend data: {str(e)}")
-            return {}
+    
 
     # =============================================================================
     # DATE PRESET ANALYSIS
@@ -693,9 +599,18 @@ class UniversalFilterService:
             start_date = current_filters.get('start_date')
             end_date = current_filters.get('end_date')
             
+            # DIRECT CALL: Use categorized processor directly
+            preset_options = self.categorized_processor.get_date_preset_choices()
+            
+            # Convert to dict format for compatibility
+            formatted_options = [
+                {'value': value, 'label': label, 'icon': 'fas fa-calendar'}
+                for value, label in preset_options
+            ]
+            
             preset_data = {
                 'active_preset': 'none',
-                'preset_options': self._get_date_preset_options(),
+                'preset_options': formatted_options,  # Direct use
                 'start_date': start_date,
                 'end_date': end_date,
                 'has_dates': bool(start_date or end_date),
@@ -757,17 +672,7 @@ class UniversalFilterService:
         
         return fy_start, fy_end
 
-    def _get_date_preset_options(self) -> List[Dict]:
-        """Get available date preset options"""
-        return [
-            {'value': 'today', 'label': 'Today', 'icon': 'fas fa-calendar-day'},
-            {'value': 'this_week', 'label': 'This Week', 'icon': 'fas fa-calendar-week'},
-            {'value': 'this_month', 'label': 'This Month', 'icon': 'fas fa-calendar-alt'},
-            {'value': 'last_30_days', 'label': 'Last 30 Days', 'icon': 'fas fa-calendar-minus'},
-            {'value': 'financial_year', 'label': 'Financial Year', 'icon': 'fas fa-calendar-year'},
-            {'value': 'clear', 'label': 'Clear', 'icon': 'fas fa-times'}
-        ]
-
+    
     # =============================================================================
     # ACTIVE FILTER ANALYSIS
     # =============================================================================
@@ -1116,33 +1021,4 @@ def get_universal_filter_service() -> UniversalFilterService:
     """Get the global universal filter service instance"""
     return universal_filter_service
 
-# =============================================================================
-# INTEGRATION SUMMARY
-# =============================================================================
 
-"""
-INTEGRATION SUMMARY - HOW IT ALL WORKS TOGETHER:
-
-1. DATA_ASSEMBLER calls universal_filter_service.get_complete_filter_data()
-   └── Gets dropdown options + summary data + organized filters
-
-2. UNIVERSAL_FILTER_SERVICE now uses categorized_filter_processor 
-   └── Same filtering logic for both main list AND summary cards
-
-3. SUMMARY CARDS get data from unified filtering
-   └── Counts now match pagination totals exactly
-   └── No more separate filtering logic
-
-4. FRONTEND gets organized filter data by category
-   └── Better UI grouping and user experience
-
-5. ALL EXISTING SIGNATURES preserved
-   └── No breaking changes to views, templates, or controllers
-
-RESULT: 
-✅ Summary cards match list totals
-✅ Single source of truth for filtering
-✅ Better organized filter UI
-✅ Same user experience
-✅ Cleaner, more maintainable code
-"""

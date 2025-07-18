@@ -117,21 +117,7 @@ def create_app() -> Flask:
         # NEW: Ensure Flask app logger uses Unicode-safe formatters
         setup_flask_unicode_logging(app)
 
-        # # Add file logging for the application
-        # logs_dir = os.path.join(app.root_path, 'logs')
-        # os.makedirs(logs_dir, exist_ok=True)
         
-        # # Create a file handler for application logs
-        # log_file_path = os.path.join(logs_dir, 'app.log')
-        # file_handler = logging.FileHandler(log_file_path)
-        # file_handler.setLevel(logging.INFO)
-        # file_handler.setFormatter(logging.Formatter(
-        #     '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        # ))
-        
-        # # Add the file handler to the app logger
-        # app.logger.addHandler(file_handler)
-
         # Get database URL - use centralized Environment if available
         if ENVIRONMENT_MODULE_AVAILABLE:
             try:
@@ -163,12 +149,6 @@ def create_app() -> Flask:
         # Add hasattr to Jinja globals
         app.jinja_env.globals['hasattr'] = hasattr
         
-        # Add currency formatting filter to Jinja
-        # app.jinja_env.filters['format_currency'] = format_currency
-        # app.jinja_env.filters['dateformat'] = dateformat
-        # app.jinja_env.filters['datetimeformat'] = datetimeformat
-        # app.jinja_env.filters['timeago'] = timeago
-
         # Exempt API endpoints from CSRF
         csrf.exempt(r"/api/*")
 

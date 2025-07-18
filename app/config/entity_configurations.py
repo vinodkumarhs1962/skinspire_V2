@@ -900,6 +900,13 @@ if not hasattr(SUPPLIER_PAYMENT_CONFIG, 'filter_category_mapping'):
 SUPPLIER_PAYMENT_CONFIG.filter_category_mapping.update(SUPPLIER_PAYMENT_FILTER_CATEGORY_MAPPING)
 SUPPLIER_PAYMENT_CONFIG.default_filters = SUPPLIER_PAYMENT_DEFAULT_FILTERS  
 SUPPLIER_PAYMENT_CONFIG.category_configs = SUPPLIER_PAYMENT_CATEGORY_CONFIGS
+SUPPLIER_PAYMENT_CONFIG.model_class = 'app.models.transaction.SupplierPayment'
+# ✅ PRIMARY DATE FIELD CONFIGURATION
+SUPPLIER_PAYMENT_CONFIG.primary_date_field = "payment_date"
+
+# ✅ PRIMARY AMOUNT FIELD CONFIGURATION
+SUPPLIER_PAYMENT_CONFIG.primary_amount_field = "amount"
+
 
 
 # =============================================================================
@@ -1147,6 +1154,16 @@ ENTITY_SEARCH_CONFIGS = {
         additional_filters={'status': 'active'}
     )
 }
+
+ENTITY_SEARCH_CONFIGS['supplier_payments'] = EntitySearchConfiguration(
+    target_entity='supplier_payments',
+    search_fields=['reference_no'],  # For reference number search
+    display_template='{reference_no}',
+    model_path='app.models.transaction.SupplierPayment',
+    min_chars=1,
+    max_results=10,
+    sort_field='reference_no'
+)
 
 # =============================================================================
 # ENTITY REGISTRY

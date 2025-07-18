@@ -30,6 +30,10 @@ class UniversalServiceRegistry:
     ✅ ADD: Enhanced service registry with parameter fixing
     Much more sophisticated than simple UNIVERSAL_SERVICES dict
     """
+    """
+    ✅ FOCUSED: Pure service routing registry
+    No database operations, no data processing - just routing
+    """
     
     def __init__(self):
         self.service_registry = {
@@ -77,121 +81,71 @@ class UniversalServiceRegistry:
     
     def search_entity_data(self, entity_type: str, filters: Dict, **kwargs) -> Dict:
         """
-        ✅ ENHANCED ORCHESTRATION: Universal search that properly delegates to entity services
+        ✅ CLEAN ROUTING: Route to existing complete filtering system
+        Uses existing infrastructure - no duplicate logic
         """
         try:
-            logger.info(f"🔄 [ORCHESTRATION] Starting universal search for {entity_type}")
-            logger.info(f"🔄 [ORCHESTRATION] Filters: {list(filters.keys())}")
+            logger.info(f"🔄 [CLEAN_ROUTING] Routing {entity_type} to existing complete system")
             
-            # Step 1: Get entity-specific service
-            service = self.get_service(entity_type)
-            if not service:
-                logger.error(f"❌ No service available for {entity_type}")
-                return self._get_empty_result()
+            # Extract basic parameters
+            hospital_id = kwargs.get('hospital_id') or (current_user.hospital_id if current_user else None)
+            branch_id = kwargs.get('branch_id')
+            page = kwargs.get('page', 1)
+            per_page = kwargs.get('per_page', 20)
             
-            # Step 2: Prepare parameters for entity service
-            search_params = self._prepare_search_parameters(entity_type, filters, **kwargs)
+            if not hospital_id:
+                raise ValueError("Hospital ID is required")
             
-            # Step 3: Delegate to entity-specific service
-            result = self._delegate_to_entity_service(service, entity_type, search_params)
+            # Route to existing complete filter system
+            filter_data = self.filter_service.get_complete_filter_data(
+                entity_type=entity_type,
+                hospital_id=hospital_id,
+                branch_id=branch_id,
+                current_filters=filters
+            )
             
-            # Step 4: Enhance result with universal features
-            enhanced_result = self._enhance_with_universal_features(entity_type, result, filters)
+            logger.info(f"✅ [COMPLETE_SYSTEM] Filter data obtained for {entity_type}")
             
-            logger.info(f"✅ [ORCHESTRATION] Universal search completed for {entity_type}")
-            return enhanced_result
-                
-        except Exception as e:
-            logger.error(f"❌ [ORCHESTRATION] Error in universal search for {entity_type}: {str(e)}")
-            return self._get_error_result(f"Universal search failed: {str(e)}", entity_type, **kwargs)
-
-    def _prepare_search_parameters(self, entity_type: str, filters: Dict, **kwargs) -> Dict:
-        """
-        ✅ PARAMETER PREPARATION: Prepare standardized parameters for entity services
-        """
-        try:
-            # Standard parameters that all entity services expect
-            search_params = {
-                'filters': filters,
-                'hospital_id': kwargs.get('hospital_id') or (current_user.hospital_id if current_user else None),
-                'branch_id': kwargs.get('branch_id'),
-                'page': kwargs.get('page', 1),
-                'per_page': kwargs.get('per_page', 20)
-            }
+            # Route query execution to categorized processor (where DB logic belongs)
+            result = self.categorized_processor.execute_complete_search(
+                entity_type=entity_type,
+                filters=filters,
+                filter_data=filter_data,
+                hospital_id=hospital_id,
+                branch_id=branch_id,
+                page=page,
+                per_page=per_page
+            )
             
-            # Add any additional parameters passed
-            additional_params = {k: v for k, v in kwargs.items() 
-                            if k not in ['hospital_id', 'branch_id', 'page', 'per_page']}
-            search_params.update(additional_params)
-            
-            logger.info(f"🔧 [ORCHESTRATION] Prepared search parameters: {list(search_params.keys())}")
-            return search_params
-            
-        except Exception as e:
-            logger.error(f"❌ Error preparing search parameters: {str(e)}")
-            return {'filters': filters}
-
-    def _delegate_to_entity_service(self, service, entity_type: str, search_params: Dict) -> Dict:
-        """
-        ✅ SERVICE DELEGATION: Call appropriate method on entity-specific service
-        """
-        try:
-            logger.info(f"🎯 [DELEGATION] Calling entity service for {entity_type}")
-            
-            # Try different service method patterns
-            if hasattr(service, 'search_data'):
-                logger.info(f"🎯 [DELEGATION] Using search_data method")
-                return service.search_data(**search_params)
-                
-            elif hasattr(service, 'search_payments_with_form_integration'):
-                logger.info(f"🎯 [DELEGATION] Using search_payments_with_form_integration method")
-                # Adapt parameters for this specific method signature
-                form_class = search_params.pop('form_class', None)
-                return service.search_payments_with_form_integration(form_class, **search_params)
-                
+            if result:
+                logger.info(f"✅ [CLEAN_ROUTING] {entity_type} handled by existing system: {len(result.get('items', []))} items")
+                return result
             else:
-                logger.warning(f"⚠️ [DELEGATION] No recognized search method, using generic")
-                return self._generic_search(entity_type, search_params)
+                logger.info(f"⚠️ [FALLBACK] Existing system unsuccessful for {entity_type}, using entity service")
+                raise Exception("Existing system returned None")
                 
         except Exception as e:
-            logger.error(f"❌ [DELEGATION] Error calling entity service: {str(e)}")
-            return self._get_error_result(str(e))
-
-    def _enhance_with_universal_features(self, entity_type: str, result: Dict, filters: Dict) -> Dict:
-        """
-        ✅ UNIVERSAL ENHANCEMENT: Add universal features to entity-specific results
-        """
-        try:
-            enhanced_result = result.copy()
+            logger.warning(f"⚠️ [FALLBACK] Routing to entity service for {entity_type}: {str(e)}")
             
-            # Add universal metadata
-            enhanced_result['metadata'] = enhanced_result.get('metadata', {})
-            enhanced_result['metadata'].update({
-                'entity_type': entity_type,
-                'orchestrated_by': 'universal_service',
-                'categorized_filtering': True,
-                'universal_features_applied': True
-            })
-            
-            # Add filter organization for frontend
+            # Simple fallback to entity service
             try:
-                from app.engine.entity_config_manager import EntityConfigManager
-                categorized_filters = EntityConfigManager.organize_request_filters_by_category(
-                    filters, entity_type
-                )
-                enhanced_result['categorized_filters'] = categorized_filters
-            except Exception as e:
-                logger.warning(f"Could not organize filters by category: {str(e)}")
-            
-            # Add breakdown calculations if needed by entity configuration
-            enhanced_result = self._enhance_result_with_breakdowns(entity_type, enhanced_result, filters)
-            
-            logger.info(f"✅ [ENHANCEMENT] Universal features added to {entity_type} result")
-            return enhanced_result
-            
-        except Exception as e:
-            logger.error(f"❌ [ENHANCEMENT] Error enhancing result: {str(e)}")
-            return result  # Return original result if enhancement fails
+                service = self.get_service(entity_type)
+                if service and hasattr(service, 'search_data'):
+                    result = service.search_data(filters=filters, **kwargs)
+                    # Add metadata to indicate fallback
+                    if result and isinstance(result, dict):
+                        result['metadata'] = result.get('metadata', {})
+                        result['metadata'].update({
+                            'routing_method': 'entity_service_fallback',
+                            'complete_system_attempted': True
+                        })
+                    return result
+                else:
+                    return self._get_error_result(f"No service available for {entity_type}", entity_type, **kwargs)
+            except Exception as fallback_error:
+                logger.error(f"❌ [FALLBACK_ERROR] Entity service failed for {entity_type}: {str(fallback_error)}")
+                return self._get_error_result(str(fallback_error), entity_type, **kwargs)
+        
 
     def _get_error_result(self, error_message: str, entity_type: str = None, **kwargs) -> Dict:
         """Universal error handler for all entities"""

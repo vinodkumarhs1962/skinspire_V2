@@ -8,13 +8,6 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
 
 <div class="container mx-auto px-4 py-6" data-entity-type="{{ assembled_data.entity_config.entity_type if assembled_data and assembled_data.entity_config and assembled_data.entity_config.entity_type else 'supplier_payments' }}">
     {% set auto_submit_enabled = assembled_data.entity_config.get('enable_auto_submit', True) if assembled_data and assembled_data.entity_config else True %}
-    <!-- ✅ DEBUG: Auto-submit configuration (REMOVE after verification)
-    <div style="background: #ffffcc; border: 2px solid #ffcc00; padding: 10px; margin: 10px 0; font-family: monospace; font-size: 12px;">
-        <strong>🔧 AUTO-SUBMIT DEBUG:</strong><br>
-        auto_submit_enabled: {{ auto_submit_enabled }}<br>
-        entity_type: {{ assembled_data.entity_config.entity_type if assembled_data and assembled_data.entity_config else 'None' }}<br>
-        enable_auto_submit raw: {{ assembled_data.entity_config.enable_auto_submit if assembled_data and assembled_data.entity_config and hasattr(assembled_data.entity_config, 'enable_auto_submit') else 'NOT FOUND' }}<br>
-    </div> -->
     <!-- ✅ Page Header using gold standard structure -->
     <div class="flex flex-col md:flex-row items-start md:items-center justify-between mb-6">
         <div>
@@ -81,15 +74,6 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
     {% set safe_items = assembled_data.get('items', []) if assembled_data else [] %}
     {% set safe_total_count = safe_pagination.get('total_count', safe_summary.get('total_count', safe_items|length)) %}
     
-    <!-- ✅ DEBUG: Add this div before summary cards section
-    <div style="background: #ffffcc; border: 2px solid #ffcc00; padding: 10px; margin: 10px 0; font-family: monospace;">
-        <strong>🔍 SUMMARY CARDS TEMPLATE DEBUG:</strong><br>
-        assembled_data exists: {{ 'Yes' if assembled_data else 'No' }}<br>
-        assembled_data.summary_cards exists: {{ 'Yes' if assembled_data.summary_cards else 'No' }}<br>
-        summary_cards count: {{ assembled_data.summary_cards|length if assembled_data.summary_cards else 0 }}<br>
-        summary_data: {{ assembled_data.summary if assembled_data.summary else 'None' }}<br>
-        entity_type: {{ assembled_data.entity_type if assembled_data.entity_type else 'None' }}<br>
-    </div> -->
 
     <!-- ✅ Configuration-Driven Summary Cards using backend assembled data -->
     {% if assembled_data and assembled_data.summary_cards %}

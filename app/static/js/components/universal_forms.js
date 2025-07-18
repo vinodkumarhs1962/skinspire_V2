@@ -275,10 +275,6 @@ class UniversalFormsEngine {
                 hasFieldEndDate
             });
             
-            // // ✅ Check if user has submitted form with other filters (intentional filter application)
-            // const hasOtherFilters = urlParams.get('supplier_id') || urlParams.get('supplier_search') || 
-            //                     urlParams.get('search') || urlParams.get('workflow_status') || 
-            //                     urlParams.get('payment_method') || urlParams.get('reference_no');
 
             // ✅ Check if user has submitted form with other filters (intentional filter application)
             const hasOtherFilters = urlParams.get('supplier_id') || urlParams.get('supplier_search') || 

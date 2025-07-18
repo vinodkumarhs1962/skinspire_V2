@@ -251,8 +251,6 @@ def get_universal_list_data(entity_type: str) -> Dict:
         # Get branch context
         branch_uuid, branch_name = get_branch_uuid_from_context_or_request()
         
-        # # Get universal service
-        # service = get_universal_service(entity_type)
         
         # Extract filters from request
         filters = request.args.to_dict() if request else {}
@@ -308,7 +306,6 @@ def get_universal_list_data(entity_type: str) -> Dict:
                 'error': str(assembler_error)
             }
         
-        # Add branch context and other required data
         # Add branch context and other required data (ensure branch_context is properly cleaned)
         if assembled_data.get('branch_context'):
             # Keep the cleaned branch_context from data assembler
@@ -687,12 +684,26 @@ def get_universal_list_data_safe(entity_type: str) -> Dict:
             logger.error(f"Error getting branch context: {str(e)}")
             branch_context = {}
         
-        # Extract filters from request
-        current_filters = request.args.to_dict() if request else {}
-        
-        # ✅ FIXED: Get service and call with correct parameters
+        # ✅ ENTITY-AGNOSTIC FIX: Use service's processed filters for consistency
+        if request:
+            current_filters = request.args.to_dict()
+        else:
+            current_filters = {}
+
+        # ✅ FIXED: Get service and call with correct parameters  
         raw_data = get_service_data_safe(entity_type, config, current_filters, branch_uuid)
-        
+
+        # ✅ CRITICAL FIX: Use the service's processed filters (with aliases resolved)
+        # This ensures summary cards use the SAME filters as the main query
+        if raw_data.get('filters'):
+            # Use the processed filters from the service (includes parameter aliases)
+            raw_data['request_args'] = raw_data['filters']
+            logger.info(f"[FILTER_SYNC] Using service processed filters: {raw_data['filters']}")
+        else:
+            # Fallback to original request filters
+            raw_data['request_args'] = current_filters
+            logger.info(f"[FILTER_SYNC] Using fallback request filters: {current_filters}")
+
         # ✅ NEW: Get the enhanced filters from the service (including FY defaults)
         enhanced_filters = raw_data.get('filters', current_filters)
         if not enhanced_filters:

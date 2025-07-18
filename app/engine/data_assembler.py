@@ -59,8 +59,18 @@ class EnhancedUniversalDataAssembler:
         try:
             logger.info(f"🔧 Assembling data for {config.entity_type}")
             
-            # Get current filters
-            current_filters = filters or (request.args.to_dict() if request else {})
+            # ✅ FIX: Use the same filters that the main query used
+            if raw_data.get('request_args'):
+                # Use the exact same filters that the main entity service used
+                current_filters = raw_data['request_args']
+                logger.info(f"[FILTER_SYNC] Using main query filters: {current_filters}")
+            elif filters:
+                current_filters = filters  
+                logger.info(f"[FILTER_SYNC] Using passed filters: {current_filters}")
+            else:
+                # Fallback to request.args as last resort
+                current_filters = request.args.to_dict() if request else {}
+                logger.info(f"[FILTER_SYNC] Using fallback request filters: {current_filters}")
             
             # Get branch context
             if not branch_context and current_user:
