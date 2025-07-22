@@ -25,9 +25,10 @@ from app.models.transaction import SupplierPayment
 from app.models.master import Supplier, Branch
 from app.models.transaction import SupplierInvoice
 from app.config.entity_configurations import get_entity_config, get_service_filter_mapping
-from app.config.field_definitions import FieldDefinition, FieldType, ComplexDisplayType
+from app.config.core_definitions import FieldDefinition, FieldType, ComplexDisplayType
 from app.engine.categorized_filter_processor import get_categorized_filter_processor
 from app.utils.unicode_logging import get_unicode_safe_logger
+# from app.engine.universal_services import GenericEntitySearchService
 
 logger = get_unicode_safe_logger(__name__)
 

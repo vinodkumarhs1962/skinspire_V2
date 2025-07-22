@@ -28,7 +28,8 @@ from app.config.filter_categories import (
     enhance_entity_config_with_categories,
     FILTER_CATEGORY_CONFIG
 )
-from app.config.entity_configurations import get_entity_config, FieldType
+from app.config.entity_configurations import get_entity_config
+from app.config.core_definitions import FieldType
 from app.utils.unicode_logging import get_unicode_safe_logger
 
 logger = get_unicode_safe_logger(__name__)
@@ -172,22 +173,15 @@ class CategorizedFilterProcessor:
             else:
                 logger.info(f"🔧 [CATEGORIZATION] Using filter_category_mapping: {list(config.filter_category_mapping.keys())}")
 
-            # Organize filters by category
-            # ✅ UNIVERSAL FIX: Replace faulty organize_current_filters_by_category with working logic
-            categorized_filters = {}
-            filter_mapping = getattr(config, 'filter_category_mapping', {})
+            # Organize filters by category using the smart function from filter_categories
+            from app.config.filter_categories import organize_current_filters_by_category
 
-            for filter_key, filter_value in filters.items():
-                # Skip empty values and pagination
-                if not filter_value or (isinstance(filter_value, str) and not filter_value.strip()) or filter_key in ['page', 'per_page']:
-                    continue
-                
-                # Get category from mapping
-                category = filter_mapping.get(filter_key)
-                if category:
-                    if category not in categorized_filters:
-                        categorized_filters[category] = {}
-                    categorized_filters[category][filter_key] = filter_value
+            # This function already has fallback detection for date filters!
+            categorized_filters = organize_current_filters_by_category(filters, config)
+
+            # Log the categorization results
+            for category, category_filters in categorized_filters.items():
+                for filter_key in category_filters:
                     logger.info(f"✅ [CATEGORIZATION_FIX] {filter_key} → {category.value}")
 
             # Debug categorization results  

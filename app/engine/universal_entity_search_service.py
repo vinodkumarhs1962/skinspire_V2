@@ -7,8 +7,8 @@ from typing import Dict, List, Any, Optional
 import uuid
 from flask_login import current_user
 from app.services.database_service import get_db_session
-from app.config.entity_configurations import FieldDefinition, get_entity_config, get_entity_filter_config
-from app.config.field_definitions import EntitySearchConfiguration, FieldType
+from app.config.entity_configurations import get_entity_config, get_entity_filter_config
+from app.config.core_definitions import FieldDefinition, FieldType, EntitySearchConfiguration
 from app.utils.unicode_logging import get_unicode_safe_logger
 
 logger = get_unicode_safe_logger(__name__)

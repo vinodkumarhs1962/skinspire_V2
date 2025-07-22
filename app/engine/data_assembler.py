@@ -21,7 +21,7 @@ from flask import request, url_for, current_app
 from flask_login import current_user
 from flask_wtf import FlaskForm
 
-from app.config.entity_configurations import EntityConfiguration
+from app.config.core_definitions import EntityConfiguration
 from app.utils.unicode_logging import get_unicode_safe_logger
 
 logger = get_unicode_safe_logger(__name__)

@@ -11,7 +11,7 @@ Backward compatible - enhances existing system without breaking changes
 from enum import Enum
 from typing import Dict, Any, List, Optional, Set
 from dataclasses import dataclass
-from app.config.field_definitions import FieldDefinition, FieldType
+from app.config.core_definitions import FieldDefinition, FieldType
 
 class FilterCategory(Enum):
     """

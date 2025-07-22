@@ -1,12 +1,12 @@
 {
-  "timestamp": "2025-07-18T23:18:07.323119",
-  "execution_time": 3.22638,
+  "timestamp": "2025-07-22T13:03:42.353422",
+  "execution_time": 1.901527,
   "overall_success": true,
   "go_no_go": "GO",
-  "total_tests": 27,
-  "passed_tests": 27,
+  "total_tests": 34,
+  "passed_tests": 32,
   "failed_tests": [],
-  "success_rate": 100.0,
+  "success_rate": 94.11764705882352,
   "workflow_stats": {
     "Configuration Loading": {
       "passed": 3,
@@ -15,10 +15,13 @@
       "failed_tests": []
     },
     "List View Workflow": {
-      "passed": 3,
-      "total": 3,
-      "success_rate": 100.0,
-      "failed_tests": []
+      "passed": 8,
+      "total": 10,
+      "success_rate": 80.0,
+      "failed_tests": [
+        "universal_filter_service",
+        "universal_list_template"
+      ]
     },
     "Entity Search Workflow": {
       "passed": 3,
@@ -60,7 +63,14 @@
     "List View Workflow": [
       "TestResult(method_name='get_universal_service', workflow='List View Workflow', success=True, error_message='', execution_time=0.0, details=None)",
       "TestResult(method_name='service.search_data', workflow='List View Workflow', success=True, error_message='', execution_time=0.0, details=None)",
-      "TestResult(method_name='search_universal_entity_data', workflow='List View Workflow', success=True, error_message='', execution_time=0.0, details=None)"
+      "TestResult(method_name='search_universal_entity_data', workflow='List View Workflow', success=True, error_message='', execution_time=0.0, details=None)",
+      "TestResult(method_name='universal_views_blueprint', workflow='List View Workflow', success=True, error_message='', execution_time=0.0, details=None)",
+      "TestResult(method_name='data_assembler.assemble_complex_list_data', workflow='List View Workflow', success=True, error_message='', execution_time=0.0, details=None)",
+      "TestResult(method_name='data_assembler_callable', workflow='List View Workflow', success=True, error_message='', execution_time=0.0, details=None)",
+      "TestResult(method_name='universal_filter_service', workflow='List View Workflow', success=False, error_message='get_complete_filter_backend_data method missing', execution_time=0.0, details=None)",
+      "TestResult(method_name='entity_config_supplier_payments', workflow='List View Workflow', success=True, error_message='', execution_time=0.0, details=None)",
+      "TestResult(method_name='entity_config_structure', workflow='List View Workflow', success=True, error_message='', execution_time=0.0, details=None)",
+      "TestResult(method_name='universal_list_template', workflow='List View Workflow', success=False, error_message='Template check failed: universal/list.html', execution_time=0.0, details=None)"
     ],
     "Entity Search Workflow": [
       "TestResult(method_name='UniversalEntitySearchService.__init__', workflow='Entity Search Workflow', success=True, error_message='', execution_time=0.0, details=None)",
@@ -96,14 +106,12 @@
   },
   "phase_progress": {
     "Phase 1 - Commented Code": {
-      "completion_percentage": 20.0,
-      "removed_count": 2,
-      "remaining_count": 8,
+      "completion_percentage": 100.0,
+      "removed_count": 10,
+      "remaining_count": 0,
       "removed_methods": [
         "search_data_service",
-        "_convert_form_data_to_service_format"
-      ],
-      "remaining_methods": [
+        "_convert_form_data_to_service_format",
         "commented_filter_methods",
         "deprecated_compatibility_wrappers",
         "unused_commented_blocks_1",
@@ -112,74 +120,76 @@
         "unused_commented_blocks_4",
         "unused_commented_blocks_5",
         "unused_commented_blocks_6"
-      ]
+      ],
+      "remaining_methods": []
     },
     "Phase 2 - Testing Utilities": {
-      "completion_percentage": 37.5,
-      "removed_count": 3,
-      "remaining_count": 5,
+      "completion_percentage": 100.0,
+      "removed_count": 8,
+      "remaining_count": 0,
       "removed_methods": [
-        "validate_filter_categories",
-        "get_category_statistics",
-        "reset_filter_cache"
-      ],
-      "remaining_methods": [
         "test_universal_service",
         "validate_service_interface",
         "test_all_services",
         "list_registered_services",
-        "register_universal_service"
-      ]
+        "register_universal_service",
+        "validate_filter_categories",
+        "get_category_statistics",
+        "reset_filter_cache"
+      ],
+      "remaining_methods": []
     },
     "Phase 3 - Legacy Methods": {
-      "completion_percentage": 66.66666666666666,
-      "removed_count": 8,
-      "remaining_count": 4,
+      "completion_percentage": 8.333333333333332,
+      "removed_count": 1,
+      "remaining_count": 11,
       "removed_methods": [
+        "deprecated_filter_method"
+      ],
+      "remaining_methods": [
         "_get_filter_dropdown_data",
         "_get_supplier_choices",
         "_get_status_choices",
         "_build_filter_options",
-        "_get_supplier_payment_filter_data",
-        "_get_supplier_filter_data",
-        "get_dropdown_choices",
-        "get_config_object"
-      ],
-      "remaining_methods": [
         "get_filter_backend_data",
         "_get_entity_specific_filter_data",
+        "_get_supplier_payment_filter_data",
+        "_get_supplier_filter_data",
         "_get_entity_search_filter_data",
-        "deprecated_filter_method"
+        "get_dropdown_choices",
+        "get_config_object"
       ]
     },
     "Phase 4 - Complex CRUD": {
-      "completion_percentage": 47.368421052631575,
-      "removed_count": 9,
-      "remaining_count": 10,
-      "removed_methods": [
+      "completion_percentage": 0.0,
+      "removed_count": 0,
+      "remaining_count": 19,
+      "removed_methods": [],
+      "remaining_methods": [
         "create_payment",
         "update_payment",
+        "delete_payment",
+        "get_by_id",
         "validate_payment_data",
         "_format_single_payment",
         "assemble_create_form_data",
         "assemble_edit_form_data",
+        "assemble_detail_view_data",
         "_validate_form_data",
         "_get_form_choices",
-        "universal_bulk_action_view"
-      ],
-      "remaining_methods": [
-        "delete_payment",
-        "get_by_id",
-        "assemble_detail_view_data",
         "_assemble_breadcrumb_data",
         "_get_action_permissions",
         "universal_create_view",
         "universal_edit_view",
         "universal_detail_view",
         "universal_delete_view",
+        "universal_bulk_action_view",
         "universal_export_view"
       ]
     }
   },
-  "failed_methods": []
+  "failed_methods": [
+    "List View Workflow.universal_filter_service: get_complete_filter_backend_data method missing",
+    "List View Workflow.universal_list_template: Template check failed: universal/list.html"
+  ]
 }

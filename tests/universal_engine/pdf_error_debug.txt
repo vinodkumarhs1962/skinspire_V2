@@ -1,0 +1,7 @@
+PDF Generation Error: UniversalEngineTestSuite.generate_pdf_report() missing 1 required positional argument: 'output_dir'
+Full traceback:
+Traceback (most recent call last):
+  File "C:\Users\vinod\AppData\Local\Programs\Skinspire Repository\skinspire_v2\tests\universal_engine\test_universal_engine.py", line 337, in save_results_to_file
+    self.generate_pdf_report(report)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+TypeError: UniversalEngineTestSuite.generate_pdf_report() missing 1 required positional argument: 'output_dir'

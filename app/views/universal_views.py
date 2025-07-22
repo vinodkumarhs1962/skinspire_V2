@@ -1691,7 +1691,7 @@ def entity_search_api():
         data = request.get_json()
         
         # ✅ Build configuration from request
-        from app.config.field_definitions import EntitySearchConfiguration
+        from app.config.core_definitions import EntitySearchConfiguration
         search_config = EntitySearchConfiguration(
             target_entity=data['entity_type'],
             search_fields=data['search_fields'],

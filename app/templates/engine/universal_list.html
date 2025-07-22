@@ -433,137 +433,153 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                         <th class="universal-bulk-select-column">
                             <input type="checkbox" id="select-all" onchange="toggleAllSelection(this)">
                         </th>
-                        {% if assembled_data and assembled_data.entity_config and assembled_data.entity_config.entity_type == 'supplier_payments' %}
-                        <th class="universal-table-header universal-sortable-header" onclick="handleUniversalSort('payment_date')">
-                            Payment Date
-                            <i class="fas fa-sort universal-sort-indicator"></i>
-                        </th>
-                        <th class="universal-table-header universal-sortable-header" onclick="handleUniversalSort('reference_no')">
-                            Supplier Invoice No.
-                            <i class="fas fa-sort universal-sort-indicator"></i>
-                        </th>
-                        <th class="universal-table-header universal-sortable-header supplier-column" onclick="handleUniversalSort('supplier_name')">
-                            Supplier
-                            <i class="fas fa-sort universal-sort-indicator"></i>
-                        </th>
-                        <th class="universal-table-header universal-sortable-header amount-column" onclick="handleUniversalSort('amount')">
-                            Amount
-                            <i class="fas fa-sort universal-sort-indicator"></i>
-                        </th>
-                        <th class="universal-table-header payment-method-column">Payment Method</th>
-                        <th class="universal-table-header">Status</th>
-                        <th class="universal-table-header actions-column">Actions</th>
-                        {% else %}
-                        <!-- Generic columns for other entities -->
-                        <th class="universal-table-header">ID</th>
-                        <th class="universal-table-header">Name</th>
-                        <th class="universal-table-header">Status</th>
-                        <th class="universal-table-header actions-column">Actions</th>
+                        
+                        <!-- DYNAMIC COLUMN HEADERS FROM CONFIGURATION -->
+                        {% set table_columns = assembled_data.get('table_columns', []) %}
+                        {% if table_columns %}
+                            {% for column in table_columns %}
+                                <th class="universal-table-header {% if column.sortable %}universal-sortable-header{% endif %} {{ column.css_class }}"
+                                    {% if column.sortable %}onclick="handleUniversalSort('{{ column.name }}')"{% endif %}
+                                    style="{% if column.width and column.width != 'auto' %}width: {{ column.width }};{% endif %} text-align: {{ column.align|default('left') }};">
+                                    {{ column.label }}
+                                    {% if column.sortable %}
+                                        <i class="fas fa-sort universal-sort-indicator"></i>
+                                    {% endif %}
+                                </th>
+                            {% endfor %}
                         {% endif %}
+                        
+                        <th class="universal-table-header actions-column">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for item in safe_items %}
-                    <tr class="universal-table-row universal-clickable-row" onclick="handleRowClick(event, '{{ item.payment_id if hasattr(item, 'payment_id') else item.get('payment_id', '') }}')">
-                        <td class="universal-bulk-select-column" onclick="event.stopPropagation()">
-                            <input type="checkbox" class="row-select" value="{{ item.payment_id if hasattr(item, 'payment_id') else item.get('payment_id', loop.index) }}">
-                        </td>
-                        {% if assembled_data and assembled_data.entity_config and assembled_data.entity_config.entity_type == 'supplier_payments' %}
-                        <td class="date-column">
-                            {% set payment_date = item.payment_date if hasattr(item, 'payment_date') else item.get('payment_date') %}
-                            {% if payment_date %}
-                                {% if payment_date.strftime %}
-                                    {{ payment_date.strftime('%d-%b-%Y') }}
-                                {% else %}
-                                    {{ payment_date }}
-                                {% endif %}
-                            {% else %}
-                                N/A
-                            {% endif %}
-                        </td>
-                        <td class="reference-column">{{ item.reference_no if hasattr(item, 'reference_no') else item.get('reference_no', 'N/A') }}</td>
-                        <td class="supplier-column">
-                            <div class="supplier-name">{{ item.supplier_name if hasattr(item, 'supplier_name') else item.get('supplier_name', 'Unknown') }}</div>
-                        </td>
-                        <td class="amount-column">
-                            {% set amount_value = item.amount if hasattr(item, 'amount') else item.get('amount', 0) %}
-                            {% set payment_method = item.payment_method if hasattr(item, 'payment_method') else item.get('payment_method', '') %}
-                            {% set active_filter = request.args.get('payment_method', '') %}
+                    {% set items_list = assembled_data.get('items', []) %}
+                    {% if items_list and items_list|length > 0 %}
+                        {% for item in items_list %}
+                        <tr class="universal-table-row universal-clickable-row" 
+                            onclick="handleRowClick(event, '{{ item.get(assembled_data.entity_config.primary_key, '') }}')">
                             
-                            <div class="amount-display">
-                                <span class="currency">₹{{ "{:,.2f}".format(amount_value|float) if amount_value else '0.00' }}</span>
-                                
-                                {% if active_filter and active_filter != 'bank_transfer_inclusive' and payment_method == 'mixed' %}
-                                    {% set component_amount = 0 %}
-                                    {% set component_label = '' %}
+                            <td class="universal-bulk-select-column" onclick="event.stopPropagation()">
+                                <input type="checkbox" class="row-select" value="{{ item.get(assembled_data.entity_config.primary_key, '') }}">
+                            </td>
+                            
+                            <!-- DYNAMIC CELLS BASED ON COLUMNS -->
+                            {% for column in table_columns %}
+                                <td class="{{ column.css_class }}" 
+                                    style="{% if column.width and column.width != 'auto' %}width: {{ column.width }};{% endif %} text-align: {{ column.align|default('left') }};">
                                     
-                                    {% if active_filter == 'cash' and item.get('cash_amount', 0) > 0 %}
-                                        {% set component_amount = item.get('cash_amount') %}
-                                        {% set component_label = 'Cash' %}
-                                    {% elif active_filter == 'cheque' and item.get('cheque_amount', 0) > 0 %}
-                                        {% set component_amount = item.get('cheque_amount') %}
-                                        {% set component_label = 'Chq' %}
-                                    {% elif active_filter == 'bank_transfer' and item.get('bank_transfer_amount', 0) > 0 %}
-                                        {% set component_amount = item.get('bank_transfer_amount') %}
-                                        {% set component_label = 'Bank' %}
-                                    {% elif active_filter == 'upi' and item.get('upi_amount', 0) > 0 %}
-                                        {% set component_amount = item.get('upi_amount') %}
-                                        {% set component_label = 'UPI' %}
-                                    {% endif %}
+                                    {% set value = item.get(column.name, '') %}
                                     
-                                    {% if component_amount and component_amount > 0 %}
-                                        <small class="component-amount">
-                                            ({{ component_label }})<br>₹{{ "{:,.2f}".format(component_amount|float) }}
-                                        </small>
+                                    <!-- Format based on field type -->
+                                    {% if column.field_type == 'currency' or column.field_type == 'amount' %}
+                                        {% if value %}
+                                            ₹{{ "{:,.2f}".format(value|float) }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                        
+                                    {% elif column.field_type == 'date' %}
+                                        {% if value %}
+                                            <!-- Format date as "Jan 15, 2024" -->
+                                            {% if value is string %}
+                                                {{ value[:10] }}
+                                            {% else %}
+                                                {{ value.strftime('%b %d, %Y') if value else '—' }}
+                                            {% endif %}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                        
+                                    {% elif column.field_type == 'status_badge' %}
+                                        {% if value %}
+                                            <span class="status-badge status-{{ value|lower|replace(' ', '-') }}">
+                                                {{ value|title }}
+                                            </span>
+                                        {% else %}
+                                            <span class="status-badge status-default">—</span>
+                                        {% endif %}
+                                        
+                                    {% elif column.field_type == 'boolean' %}
+                                        {% if value %}
+                                            <i class="fas fa-check text-success"></i>
+                                        {% else %}
+                                            <i class="fas fa-times text-danger"></i>
+                                        {% endif %}
+                                        
+                                    {% elif column.field_type == 'email' %}
+                                        {% if value %}
+                                            <a href="mailto:{{ value }}">{{ value }}</a>
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                        
+                                    {% elif column.field_type == 'select' and column.name == 'payment_method' %}
+                                        <!-- Special handling for payment method with icons -->
+                                        {% if value %}
+                                            {% set method_icons = {
+                                                'cash': 'fas fa-money-bill text-green-600',
+                                                'cheque': 'fas fa-money-check text-blue-600',
+                                                'bank_transfer': 'fas fa-university text-blue-600',
+                                                'upi': 'fas fa-mobile-alt text-purple-600',
+                                                'mixed': 'fas fa-coins text-warning'
+                                            } %}
+                                            <i class="{{ method_icons.get(value|lower, 'fas fa-credit-card') }}"></i>
+                                            {{ value|title }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                        
+                                    {% else %}
+                                        <!-- Default text display -->
+                                        {{ value|default('—', true) }}
                                     {% endif %}
-                                {% endif %}
-                            </div>
-                        </td>
-                        <td class="payment-method-column">
-                            {% set payment_method = item.payment_method if hasattr(item, 'payment_method') else item.get('payment_method', '') %}
-                            {% if payment_method %}
-                            <span class="status-badge method-{{ payment_method }}">
-                                <i class="fas fa-{{ 'money-bill' if payment_method == 'cash' else 'university' if payment_method == 'bank_transfer' else 'money-check' if payment_method == 'cheque' else 'mobile-alt' }}"></i>
-                                {% if payment_method == 'bank_transfer' %}Bank
-                                {% elif payment_method == 'cheque' %}CHQ
-                                {% elif payment_method == 'cash' %}Cash
-                                {% elif payment_method == 'upi' %}UPI
-                                {% elif payment_method == 'mixed' %}Mixed
-                                {% else %}{{ payment_method.replace('_', ' ').title() }}
-                                {% endif %}
-                            </span>
-                            {% else %}
-                            N/A
-                            {% endif %}
-                        </td>
-                        <td class="status-column">
-                            {% set status = item.status if hasattr(item, 'workflow_status') else item.get('workflow_status', 'pending') %}
-                            <span class="status-badge status-{{ status }}">
-                                <i class="fas fa-{{ 'check-circle' if status == 'completed' else 'clock' if status == 'pending' else 'times-circle' }}"></i>
-                                {{ status.title() }}
-                            </span>
-                        </td>
-                        {% else %}
-                        <!-- Generic columns for other entities -->
-                        <td>{{ item.get('id', loop.index) }}</td>
-                        <td>{{ item.get('name', 'N/A') }}</td>
-                        <td>{{ item.get('status', 'active') }}</td>
-                        {% endif %}
-                        <td class="actions-column" onclick="event.stopPropagation()">
-                            <div class="universal-table-actions">
-                                <a href="{{ url_for('supplier_views.view_payment', payment_id=item.payment_id) if hasattr(item, 'payment_id') else '#' }}" class="btn-outline btn-sm" title="View Details">
-                                    <i class="fas fa-eye"></i>
-                                </a>
-                                <a href="{{ url_for('supplier_views.print_supplier_payment', payment_id=item.payment_id) if hasattr(item, 'payment_id') else '#' }}" class="btn-secondary btn-sm" title="Print">
-                                    <i class="fas fa-print"></i>
-                                </a>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
+                                </td>
+                            {% endfor %}
+                            
+                            <!-- Actions column -->
+                            <td class="actions-column" onclick="event.stopPropagation()">
+                                <div class="universal-table-actions">
+                                    <!-- Dynamic actions based on entity type -->
+                                    {% if assembled_data.entity_config.entity_type == 'supplier_payments' %}
+                                        <a href="{{ url_for('supplier_views.view_payment', payment_id=item.get('payment_id', '')) }}" 
+                                        class="btn-outline btn-sm" title="View Details">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="{{ url_for('supplier_views.print_supplier_payment', payment_id=item.get('payment_id', '')) }}" 
+                                        class="btn-secondary btn-sm" title="Print">
+                                            <i class="fas fa-print"></i>
+                                        </a>
+                                    {% elif assembled_data.entity_config.entity_type == 'suppliers' %}
+                                        <a href="{{ url_for('supplier_views.view_supplier', supplier_id=item.get('supplier_id', '')) }}" 
+                                        class="btn-outline btn-sm" title="View Details">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="{{ url_for('supplier_views.edit_supplier', supplier_id=item.get('supplier_id', '')) }}" 
+                                        class="btn-secondary btn-sm" title="Edit">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                    {% else %}
+                                        <!-- Generic actions for other entities -->
+                                        <a href="{{ url_for('universal_views.universal_detail_view', entity_type=assembled_data.entity_type, item_id=item.get(assembled_data.entity_config.primary_key, '')) }}" 
+                                        class="btn-outline btn-sm" title="View Details">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="{{ (table_columns|length) + 2 }}" class="text-center py-4 text-gray-500">
+                                No {{ assembled_data.entity_config.plural_name|lower }} found
+                            </td>
+                        </tr>
+                    {% endif %}
                 </tbody>
             </table>
         </div>
+
 
 
         <!-- ✅ Pagination -->

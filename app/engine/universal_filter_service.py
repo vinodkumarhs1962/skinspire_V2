@@ -30,7 +30,7 @@ from sqlalchemy.orm import Session
 
 from app.services.database_service import get_db_session
 from app.config.entity_configurations import get_entity_config, get_entity_filter_config
-from app.config.field_definitions import FieldType, EntitySearchConfiguration
+from app.config.core_definitions import FieldType, EntitySearchConfiguration
 from app.engine.categorized_filter_processor import get_categorized_filter_processor
 from app.engine.entity_config_manager import EntityConfigManager
 from app.utils.unicode_logging import get_unicode_safe_logger
@@ -331,6 +331,11 @@ class UniversalFilterService:
             with get_db_session() as session:
                 base_query = session.query(Supplier).filter_by(hospital_id=hospital_id)
                 
+                # ✅ FIX: Apply branch filter if provided (same as main query)
+                if branch_id:
+                    base_query = base_query.filter(Supplier.branch_id == branch_id)
+                    logger.info(f"✅ Applied branch filter to supplier summary: {branch_id}")
+
                 # Apply categorized filters
                 filtered_query, applied_filters, filter_count = self.categorized_processor.process_entity_filters(
                     entity_type='suppliers',

@@ -99,6 +99,7 @@ class FieldDefinition:
     field_type: FieldType
     show_in_list: bool = False
     show_in_detail: bool = True
+    show_in_form: bool = True
     searchable: bool = False
     sortable: bool = False
     filterable: bool = False
@@ -113,7 +114,8 @@ class FieldDefinition:
     # Form integration
     form_field_name: Optional[str] = None          # WTForms field name
     form_field_type: Optional[str] = None          # WTForms field type
-    
+    placeholder: str = ""
+
     # Filter configuration
     filter_config: Optional[FilterConfiguration] = None
     
@@ -141,6 +143,15 @@ class FieldDefinition:
     autocomplete_enabled: bool = False
     autocomplete_min_chars: int = 2
     autocomplete_source: Optional[str] = None  # 'backend', 'static', 'hybrid'
+
+    # Additional parameters from entity_configurations.py
+    related_field: Optional[str] = None  # For foreign key relationships
+    filter_aliases: List[str] = field(default_factory=list)  # Alternative input parameter names
+    filter_type: str = "exact"  # exact, range, search, etc.
+    
+    # For special cases
+    default: Optional[Any] = None     # Default value for the field
+    virtual: bool = False             # Indicates computed/derived field
 
 @dataclass
 class EntityConfiguration:

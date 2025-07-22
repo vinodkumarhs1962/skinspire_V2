@@ -4,120 +4,28 @@ File: app/config/entity_configurations.py
 
 Uses exact field names from your transaction.py and master.py models
 Ensures compatibility with all referenced fields in universal engine code
+
+Command to directly run import of bp to test the issues
+from app.views.universal_views import universal_bp 
+
 """
 
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 from enum import Enum
-from app.config.field_definitions import EntitySearchConfiguration
-from app.config.field_definitions import FieldDefinition, FieldType, EntityConfiguration
+from app.config.core_definitions import (
+    FieldType,
+    ButtonType,
+    FieldDefinition,
+    ActionDefinition,
+    EntitySearchConfiguration,
+    EntityConfiguration,
+    EntityFilterConfiguration,
+    ComplexDisplayType,
+    CustomRenderer,
+    FilterConfiguration
+)
 from app.config.filter_categories import FilterCategory
-
-
-class FieldType(Enum):
-    """Field types matching your model field types"""
-    TEXT = "text"
-    NUMBER = "number"
-    CURRENCY = "currency"
-    DATE = "date"
-    DATETIME = "datetime"
-    SELECT = "select"
-    MULTI_SELECT = "multi_select"
-    TEXTAREA = "textarea"
-    STATUS_BADGE = "status_badge"
-    BOOLEAN = "boolean"
-    UUID = "uuid"
-    REFERENCE = "reference"
-    JSONB = "jsonb"
-    EMAIL = "email"
-    ENTITY_SEARCH = "entity_search"
-    MULTI_METHOD_AMOUNT = "multi_method_amount" 
-
-class ButtonType(Enum):
-    """Button types matching your existing CSS classes"""
-    PRIMARY = "btn-primary"
-    OUTLINE = "btn-outline"
-    WARNING = "btn-warning"
-    DANGER = "btn-danger"
-    SUCCESS = "btn-success"
-
-@dataclass
-class FieldDefinition:
-    """Field definition based on your model fields"""
-    name: str
-    label: str
-    field_type: FieldType
-    show_in_list: bool = False
-    show_in_detail: bool = True
-    show_in_form: bool = True
-    searchable: bool = False
-    sortable: bool = False
-    filterable: bool = False
-    required: bool = False
-    options: List[Dict] = field(default_factory=list)
-    placeholder: str = ""
-    help_text: str = ""
-    readonly: bool = False
-    related_field: Optional[str] = None  # For foreign key relationships
-    autocomplete_enabled: bool = False
-    autocomplete_source: Optional[str] = None
-    entity_search_config: Optional[Any] = None
-    # ✅ NEW: Configuration-driven filter mappings
-    filter_aliases: List[str] = field(default_factory=list)  # Alternative input parameter names
-    filter_type: str = "exact"  # exact, range, search, etc.
-
-@dataclass
-class EntityFilterConfiguration:
-    """Configuration for entity filter dropdowns"""
-    entity_type: str
-    filter_mappings: Dict[str, Dict] = field(default_factory=dict)
-    # Example: {'status': {'options': [{'value': 'active', 'label': 'Active'}]}}
-
-@dataclass
-class ActionDefinition:
-    """Action definition for entity operations"""
-    id: str
-    label: str
-    icon: str
-    button_type: ButtonType
-    route_name: Optional[str] = None      # ✅ Flask route name instead of url_pattern
-    route_params: Optional[Dict] = None   # ✅ For routes that need parameters
-    permission: Optional[str] = None
-    confirmation_required: bool = False
-    confirmation_message: str = ""
-    show_in_list: bool = True
-    show_in_detail: bool = True
-    show_in_toolbar: bool = False  # ✅ Added missing parameter
-    conditions: Optional[Dict[str, Any]] = None  # ✅ Added for advanced configuration
-    custom_handler: Optional[str] = None  # ✅ Added for custom JavaScript handler
-    # ✅ BACKWARD COMPATIBILITY: Support old url_pattern temporarily
-    url_pattern: Optional[str] = None        # ✅ DEPRECATED: Will be removed
-
-@dataclass
-class EntityConfiguration:
-    """Complete entity configuration"""
-    entity_type: str
-    name: str
-    plural_name: str
-    service_name: str
-    table_name: str
-    primary_key: str
-    title_field: str
-    subtitle_field: str
-    icon: str
-    page_title: str
-    description: str
-    searchable_fields: List[str]
-    default_sort_field: str
-    default_sort_direction: str
-    fields: List[FieldDefinition]
-    actions: List[ActionDefinition]
-    summary_cards: List[Dict]
-    permissions: Dict[str, str]
-    filter_css_class: str = "universal-filter-card"
-    table_css_class: str = "universal-data-table"
-    enable_saved_filter_suggestions: bool = True
-    enable_auto_submit: bool = False
 
 # =============================================================================
 # SUPPLIER PAYMENT CONFIGURATION - Based on Your SupplierPayment Model
@@ -895,7 +803,7 @@ SUPPLIER_PAYMENT_CATEGORY_CONFIGS = {
 }
 
 # ✅ UNIVERSAL FIX: Ensure filter_category_mapping is properly set
-if not hasattr(SUPPLIER_PAYMENT_CONFIG, 'filter_category_mapping'):
+if not SUPPLIER_PAYMENT_CONFIG.filter_category_mapping:
     SUPPLIER_PAYMENT_CONFIG.filter_category_mapping = {}
 SUPPLIER_PAYMENT_CONFIG.filter_category_mapping.update(SUPPLIER_PAYMENT_FILTER_CATEGORY_MAPPING)
 SUPPLIER_PAYMENT_CONFIG.default_filters = SUPPLIER_PAYMENT_DEFAULT_FILTERS  
@@ -919,19 +827,22 @@ SUPPLIER_CONFIG = EntityConfiguration(
     plural_name="Suppliers",
     service_name="suppliers",
     table_name="suppliers",
-    primary_key="supplier_id",  # Exact field name
-    title_field="supplier_name",  # Exact field name
-    subtitle_field="supplier_category",  # Exact field name
+    primary_key="supplier_id",
+    title_field="supplier_name",
+    subtitle_field="supplier_category",
     icon="fas fa-truck",
+    enable_saved_filter_suggestions=True,
+    enable_auto_submit=False,  # ✅ Manual filter application
     page_title="Supplier Management",
     description="Manage suppliers and vendors",
-    searchable_fields=["supplier_name", "contact_person_name", "email"],  # Exact field names
-    default_sort_field="supplier_name",  # Exact field name
+    searchable_fields=["supplier_name", "contact_person_name", "email"],
+    default_sort_field="supplier_name",
     default_sort_direction="asc",
     
     fields=[
+        # System Fields
         FieldDefinition(
-            name="supplier_id",  # Exact field name
+            name="supplier_id",
             label="Supplier ID",
             field_type=FieldType.UUID,
             show_in_list=False,
@@ -940,7 +851,30 @@ SUPPLIER_CONFIG = EntityConfiguration(
             readonly=True
         ),
         FieldDefinition(
-            name="supplier_name",  # Exact field name
+            name="hospital_id",
+            label="Hospital",
+            field_type=FieldType.UUID,
+            show_in_list=False,
+            show_in_detail=False,
+            show_in_form=False,
+            required=True
+        ),
+        FieldDefinition(
+            name="branch_id",
+            label="Branch",
+            field_type=FieldType.SELECT,
+            show_in_list=False,
+            show_in_detail=True,
+            show_in_form=True,
+            filterable=True,
+            required=True,  # ✅ Not nullable in database
+            autocomplete_enabled=True,
+            autocomplete_source="backend"
+        ),
+        
+        # Basic Information - CORRECTED field names
+        FieldDefinition(
+            name="supplier_name",  # ✅ Correct field name
             label="Supplier Name",
             field_type=FieldType.TEXT,
             show_in_list=True,
@@ -949,25 +883,46 @@ SUPPLIER_CONFIG = EntityConfiguration(
             searchable=True,
             sortable=True,
             filterable=True,
+            width="250px",
             required=True
         ),
         FieldDefinition(
-            name="supplier_category",  # Exact field name
+            name="supplier_category",  # ✅ Correct field name
             label="Category",
             field_type=FieldType.SELECT,
             show_in_list=True,
             show_in_detail=True,
             show_in_form=True,
             filterable=True,
+            sortable=True,
             options=[
-                {"value": "retail_supplier", "label": "Retail Supplier"},
-                {"value": "distributor", "label": "Distributor"},
-                {"value": "manufacturer", "label": "Manufacturer"},
-                {"value": "wholesaler", "label": "Wholesaler"}
+                {"value": "medicine", "label": "Medicine"},
+                {"value": "equipment", "label": "Equipment"},
+                {"value": "consumable", "label": "Consumable"},
+                {"value": "service", "label": "Service"}
             ]
         ),
         FieldDefinition(
-            name="contact_person_name",  # Exact field name
+            name="status",  # ✅ Correct field name
+            label="Status",
+            field_type=FieldType.SELECT,
+            show_in_list=True,
+            show_in_detail=True,
+            show_in_form=True,
+            filterable=True,
+            sortable=True,
+            required=True,
+            default="active",
+            options=[
+                {"value": "active", "label": "Active"},
+                {"value": "inactive", "label": "Inactive"}
+            ],
+
+        ),
+        
+        # Contact Information - CORRECTED
+        FieldDefinition(
+            name="contact_person_name",  # ✅ Correct field name
             label="Contact Person",
             field_type=FieldType.TEXT,
             show_in_list=True,
@@ -977,116 +932,320 @@ SUPPLIER_CONFIG = EntityConfiguration(
             sortable=True
         ),
         FieldDefinition(
-            name="email",  # Exact field name
+            name="email",  # ✅ Correct field name
             label="Email",
-            field_type=FieldType.EMAIL,
+            field_type=FieldType.TEXT,
             show_in_list=True,
             show_in_detail=True,
             show_in_form=True,
-            searchable=True
+            searchable=True,
+            placeholder="email@example.com"
         ),
         FieldDefinition(
-            name="gst_registration_number",  # Exact field name
-            label="GST Number",
+            name="phone",  # ✅ Virtual field - extracted from contact_info JSONB
+            label="Phone",
+            field_type=FieldType.TEXT,
+            show_in_list=True,  # ✅ Show in list
+            show_in_detail=False,  # Use contact_info for detail view
+            show_in_form=False,  # Not directly editable
+            searchable=False,  # Can't search JSONB extracted field easily
+            sortable=False,  # Can't sort JSONB extracted field
+            readonly=True,
+            virtual=True,  # ✅ Indicates this is extracted, not a real column
+            help_text="Extracted from contact information"
+        ),
+        # Note: Phone is in contact_info JSONB - will handle in service
+        FieldDefinition(
+            name="contact_info",  # ✅ JSONB field
+            label="Contact Info",
+            field_type=FieldType.JSONB,
+            show_in_list=False,  # We'll extract phone for list display
+            show_in_detail=True,
+            show_in_form=True,
+            help_text="Phone, Mobile, Fax information"
+        ),
+        
+        # Tax Information
+        FieldDefinition(
+            name="gst_registration_number",  # ✅ Correct field name
+            label="GST No.",
             field_type=FieldType.TEXT,
             show_in_list=False,
             show_in_detail=True,
             show_in_form=True,
+            filterable=True,
+            placeholder="00AAAAA0000A0Z0"
+        ),
+        FieldDefinition(
+            name="pan_number",  # ✅ Correct field name
+            label="PAN",
+            field_type=FieldType.TEXT,
+            show_in_list=False,
+            show_in_detail=True,
+            show_in_form=True,
+            placeholder="AAAAA0000A"
+        ),
+        
+        # Business Information
+        FieldDefinition(
+            name="payment_terms",  # ✅ Correct field name
+            label="Payment Terms",
+            field_type=FieldType.TEXT,
+            show_in_list=False,
+            show_in_detail=True,
+            show_in_form=True,
+            help_text="e.g., Net 30 days"
+        ),
+        FieldDefinition(
+            name="performance_rating",  # ✅ Correct field name
+            label="Rating",
+            field_type=FieldType.NUMBER,
+            show_in_list=True,
+            show_in_detail=True,
+            show_in_form=True,
             filterable=True
         ),
         FieldDefinition(
-            name="status",  # Exact field name
-            label="Status",
-            field_type=FieldType.STATUS_BADGE,
-            show_in_list=True,
+            name="black_listed",  # ✅ Correct field name (not blacklisted)
+            label="Blacklisted",
+            field_type=FieldType.BOOLEAN,
+            show_in_list=False,
             show_in_detail=True,
             show_in_form=True,
             filterable=True,
-            options=[
-                {"value": "active", "label": "Active", "css_class": "universal-status-completed"},
-                {"value": "inactive", "label": "Inactive", "css_class": "universal-status-cancelled"}
-            ]
+            default=False
+        ),
+        
+        # Timestamps
+        FieldDefinition(
+            name="created_at",
+            label="Created Date",
+            field_type=FieldType.DATETIME,
+            show_in_list=False,
+            show_in_detail=True,
+            show_in_form=False,
+            sortable=True,
+            filterable=True,
+            readonly=True
         ),
         FieldDefinition(
-            name="black_listed",  # Exact field name
-            label="Blacklisted",
-            field_type=FieldType.BOOLEAN,
-            show_in_list=True,
+            name="updated_at",
+            label="Last Updated",
+            field_type=FieldType.DATETIME,
+            show_in_list=False,
             show_in_detail=True,
-            show_in_form=True,
-            filterable=True
+            show_in_form=False,
+            sortable=True,
+            readonly=True
         )
     ],
     
+    # Summary Cards
+    summary_cards=[
+        {
+            "id": "total_suppliers",
+            "field": "total_count",  # ✅ Standard field from service
+            "label": "Total Suppliers",
+            "icon": "fas fa-truck",
+            "icon_css": "stat-card-icon primary",
+            "type": "number",
+            "filterable": True,
+            "filter_field": "clear_filters",  # Clear all filters when clicked
+            "filter_value": "all"
+        },
+        {
+            "id": "active_suppliers",
+            "field": "active_count",  # ✅ Calculated in service
+            "label": "Active Suppliers",
+            "icon": "fas fa-check-circle",
+            "icon_css": "stat-card-icon success",
+            "type": "number",
+            "filterable": True,
+            "filter_field": "status",
+            "filter_value": "active"
+        },
+        {
+            "id": "medicine_suppliers",
+            "field": "medicine_suppliers",  # ✅ Calculated in service
+            "label": "Medicine Suppliers",
+            "icon": "fas fa-pills",
+            "icon_css": "stat-card-icon info",
+            "type": "number",
+            "filterable": True,
+            "filter_field": "supplier_category",
+            "filter_value": "medicine"
+        },
+        {
+            "id": "blacklisted_suppliers",
+            "field": "blacklisted_count",  # ✅ Calculated in service
+            "label": "Blacklisted",
+            "icon": "fas fa-ban",
+            "icon_css": "stat-card-icon danger",
+            "type": "number",
+            "filterable": True,
+            "filter_field": "black_listed",
+            "filter_value": "true"
+        }
+    ],
+    
+    # Actions
     actions=[
+        # Top toolbar buttons
+        ActionDefinition(
+            id="add_supplier",
+            label="Add Supplier",
+            icon="fas fa-plus",
+            button_type=ButtonType.PRIMARY,
+            # ✅ FIX: Use URL pattern instead of route_name for now
+            url_pattern="/suppliers/create",  # Direct URL instead of route name
+            permission="supplier_create",
+            show_in_list=False,
+            show_in_detail=False,
+            show_in_toolbar=True
+        ),
+        ActionDefinition(
+            id="purchase_orders",
+            label="Purchase Orders",
+            icon="fas fa-file-contract",
+            button_type=ButtonType.OUTLINE,
+            route_name="supplier_views.purchase_order_list",
+            permission="supplier_view",
+            show_in_list=False,
+            show_in_detail=False,
+            show_in_toolbar=True
+        ),
+        ActionDefinition(
+            id="supplier_payments",
+            label="Payments",
+            icon="fas fa-money-bill",
+            button_type=ButtonType.OUTLINE,
+            route_name="supplier_views.payment_list",
+            permission="supplier_view",
+            show_in_list=False,
+            show_in_detail=False,
+            show_in_toolbar=True
+        ),
+        ActionDefinition(
+            id="invoices",
+            label="Invoices",
+            icon="fas fa-file-invoice",
+            button_type=ButtonType.OUTLINE,
+            route_name="supplier_views.supplier_invoice_list",
+            permission="supplier_view",
+            show_in_list=False,
+            show_in_detail=False,
+            show_in_toolbar=True
+        ),
+        ActionDefinition(
+            id="export",
+            label="Export",
+            icon="fas fa-download",
+            button_type=ButtonType.OUTLINE,
+            url_pattern="/universal/suppliers/export/csv",
+            permission="supplier_view",
+            show_in_list=False,
+            show_in_detail=False,
+            show_in_toolbar=True
+        ),
+        # Row-level actions
         ActionDefinition(
             id="view",
             label="View",
             icon="fas fa-eye",
             button_type=ButtonType.OUTLINE,
-            permission="suppliers_view"
+            route_name="supplier_views.view_supplier",
+            route_params={"supplier_id": "{supplier_id}"},
+            permission="supplier_view",
+            show_in_list=True,
+            show_in_detail=False,
+            show_in_toolbar=False
         ),
         ActionDefinition(
             id="edit",
             label="Edit",
             icon="fas fa-edit",
             button_type=ButtonType.WARNING,
-            permission="suppliers_edit"
+            route_name="supplier_views.edit_supplier",
+            route_params={"supplier_id": "{supplier_id}"},
+            permission="supplier_edit",
+            show_in_list=True,
+            show_in_detail=True,
+            show_in_toolbar=False
         )
     ],
+
     
-    summary_cards=[
-    {
-        "id": "total_count",
-        "field": "total_count", 
-        "label": "Total Payments",
-        "icon": "fas fa-receipt",
-        "icon_css": "stat-card-icon primary",  # ✅ Universal CSS class
-        "type": "number",
-        "filterable": False
-    },
-    {
-        "id": "total_amount",
-        "field": "total_amount",
-        "label": "Total Amount", 
-        "icon": "fas fa-rupee-sign",
-        "icon_css": "stat-card-icon success",  # ✅ Universal CSS class
-        "type": "currency",
-        "filterable": False
-    },
-    {
-        "id": "pending_count",
-        "field": "pending_count",
-        "label": "Pending Approval",
-        "icon": "fas fa-clock", 
-        "icon_css": "stat-card-icon danger",  # ✅ Universal CSS class
-        "type": "number",
-        "filterable": True,
-        "filter_field": "workflow_status",
-        "filter_value": "pending"
-    },
-    {
-        "id": "this_month_count",
-        "field": "this_month_count",
-        "label": "This Month",
-        "icon": "fas fa-calendar-check",
-        "icon_css": "stat-card-icon primary",  # ✅ Universal CSS class
-        "type": "number", 
-        "filterable": True,
-        "filter_field": "date_preset",
-        "filter_value": "this_month"
-    }
-    ],
-    
+    # Permissions
     permissions={
-        "list": "suppliers_list",
-        "view": "suppliers_view",
-        "create": "suppliers_create",
-        "edit": "suppliers_edit",
-        "delete": "suppliers_delete",
-        "export": "suppliers_export"
-    }
+        "list": "supplier_list",
+        "view": "supplier_view",
+        "create": "supplier_create",
+        "edit": "supplier_edit",
+        "delete": "supplier_delete",
+        "export": "supplier_export"
+    },
+
+
+    
+    # Add these after the permissions dict:
+    filter_css_class="universal-filter-card",
+    table_css_class="universal-data-table",
+    
 )
+
+# Filter category mapping for suppliers
+SUPPLIER_FILTER_CATEGORY_MAPPING = {
+    # Date category fields
+    # 'start_date': FilterCategory.DATE,     
+    # 'end_date': FilterCategory.DATE,       
+    'created_at': FilterCategory.DATE,
+    'created_date': FilterCategory.DATE,
+    
+    # Selection category fields
+    'status': FilterCategory.SELECTION,
+    'supplier_category': FilterCategory.SELECTION,
+    'black_listed': FilterCategory.SELECTION,
+    
+    # Search category fields
+    'search': FilterCategory.SEARCH,
+    'q': FilterCategory.SEARCH,
+    'supplier_name': FilterCategory.SEARCH,
+    
+    # Amount category fields
+    'performance_rating': FilterCategory.AMOUNT
+}
+
+# Default filters for suppliers
+SUPPLIER_DEFAULT_FILTERS = {
+    'status': 'active'
+}
+
+# Category configurations for suppliers
+SUPPLIER_CATEGORY_CONFIGS = {
+    FilterCategory.SELECTION: {
+        'process_empty_as_all': True,
+        'case_sensitive': False
+    },
+    FilterCategory.SEARCH: {
+        'min_length': 2,
+        'search_fields': ['supplier_name', 'contact_person_name', 'email'],
+        'case_sensitive': False
+    },
+    FilterCategory.DATE: {
+        'default_preset': None,
+        'allow_range': True
+    }
+}
+
+# Apply configurations to SUPPLIER_CONFIG
+if not SUPPLIER_CONFIG.filter_category_mapping:
+    SUPPLIER_CONFIG.filter_category_mapping = {}
+SUPPLIER_CONFIG.filter_category_mapping.update(SUPPLIER_FILTER_CATEGORY_MAPPING)
+SUPPLIER_CONFIG.default_filters = SUPPLIER_DEFAULT_FILTERS
+SUPPLIER_CONFIG.category_configs = SUPPLIER_CATEGORY_CONFIGS
+SUPPLIER_CONFIG.model_class = 'app.models.master.Supplier'
+SUPPLIER_CONFIG.primary_date_field = "created_at"
+
 
 # =============================================================================
 # Entity Filter Configuration
@@ -1131,6 +1290,19 @@ ENTITY_FILTER_CONFIGS = {
                     {'value': 'active', 'label': 'Active'},
                     {'value': 'inactive', 'label': 'Inactive'},
                     {'value': 'pending', 'label': 'Pending Approval'}
+                ]
+            },
+            'black_listed': {
+                'options': [
+                    {'value': 'true', 'label': 'Yes'},
+                    {'value': 'false', 'label': 'No'}
+                ]
+            },
+            'tax_type': {
+                'options': [
+                    {'value': 'regular', 'label': 'Regular'},
+                    {'value': 'composition', 'label': 'Composition'},
+                    {'value': 'unregistered', 'label': 'Unregistered'}
                 ]
             }
         }

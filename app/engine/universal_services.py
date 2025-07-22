@@ -13,6 +13,7 @@ import uuid
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
+from sqlalchemy import desc, asc, func
 from decimal import Decimal
 from flask_login import current_user
 
@@ -37,10 +38,10 @@ class UniversalServiceRegistry:
     
     def __init__(self):
         self.service_registry = {
-            'supplier_payments': 'app.services.universal_supplier_service.EnhancedUniversalSupplierService',  # ✅ Use enhanced service
-            'suppliers': 'app.services.universal_supplier_service.EnhancedUniversalSupplierService',
-            'patients': 'app.services.universal_patient_service.UniversalPatientService',
-            'medicines': 'app.services.universal_medicine_service.UniversalMedicineService'
+            'supplier_payments': 'app.services.supplier_payment_service.SupplierPaymentService',  # NEW
+            'suppliers': 'app.services.supplier_master_service.SupplierMasterService',  # NEW
+            'patients': 'app.services.patient_service.PatientService',  # Future
+            'medicines': 'app.services.medicine_service.MedicineService'  # Future
         }
         
         self.filter_service = get_universal_filter_service()
@@ -83,10 +84,44 @@ class UniversalServiceRegistry:
         """
         ✅ CLEAN ROUTING: Route to existing complete filtering system
         Uses existing infrastructure - no duplicate logic
+        ✅ FIXED: Added breakdown enhancement to maintain feature parity
         """
         try:
             logger.info(f"🔄 [CLEAN_ROUTING] Routing {entity_type} to existing complete system")
             
+            # ✅ NEW: Extract complete filters from request if available
+            import flask
+            if flask.has_request_context() and flask.request:
+                complete_filters = filters.copy()
+                
+                # Extract ALL parameters from request.args that aren't already in filters
+                for key in flask.request.args.keys():
+                    if key not in complete_filters:
+                        # Get all values for this key
+                        values = flask.request.args.getlist(key)
+                        
+                        # Skip empty values
+                        values = [v for v in values if v and v.strip()]
+                        
+                        if values:
+                            # Single value - store as string
+                            if len(values) == 1:
+                                complete_filters[key] = values[0]
+                            # Multiple values - store as list
+                            else:
+                                complete_filters[key] = values
+                                
+                                # For backward compatibility, also set singular version
+                                # e.g., 'statuses' -> 'status'
+                                if key.endswith('s') and key != 'status':
+                                    singular_key = key[:-1]
+                                    if singular_key not in complete_filters:
+                                        complete_filters[singular_key] = values[0]
+                
+                logger.info(f"✅ Enhanced filter extraction: {len(filters)} → {len(complete_filters)} parameters")
+                filters = complete_filters
+
+
             # Extract basic parameters
             hospital_id = kwargs.get('hospital_id') or (current_user.hospital_id if current_user else None)
             branch_id = kwargs.get('branch_id')
@@ -109,7 +144,7 @@ class UniversalServiceRegistry:
             # Route query execution to categorized processor (where DB logic belongs)
             result = self.categorized_processor.execute_complete_search(
                 entity_type=entity_type,
-                filters=filters,
+                filters=filters, # Now has ALL parameters from request
                 filter_data=filter_data,
                 hospital_id=hospital_id,
                 branch_id=branch_id,
@@ -117,34 +152,35 @@ class UniversalServiceRegistry:
                 per_page=per_page
             )
             
-            if result:
-                logger.info(f"✅ [CLEAN_ROUTING] {entity_type} handled by existing system: {len(result.get('items', []))} items")
-                return result
-            else:
-                logger.info(f"⚠️ [FALLBACK] Existing system unsuccessful for {entity_type}, using entity service")
-                raise Exception("Existing system returned None")
-                
-        except Exception as e:
-            logger.warning(f"⚠️ [FALLBACK] Routing to entity service for {entity_type}: {str(e)}")
+            # ✅ CRITICAL FIX: Enhance result with breakdowns if successful
+            # This maintains 100% backward compatibility while fixing the breakdown issue
+            if result and result.get('success'):
+                logger.info(f"🔍 [BREAKDOWN_FIX] Enhancing {entity_type} result with breakdowns")
+                result = self._enhance_result_with_breakdowns(entity_type, result, filters)
+                logger.info(f"✅ [BREAKDOWN_FIX] Enhanced {entity_type} result with breakdowns")
             
-            # Simple fallback to entity service
-            try:
-                service = self.get_service(entity_type)
-                if service and hasattr(service, 'search_data'):
-                    result = service.search_data(filters=filters, **kwargs)
-                    # Add metadata to indicate fallback
-                    if result and isinstance(result, dict):
-                        result['metadata'] = result.get('metadata', {})
-                        result['metadata'].update({
-                            'routing_method': 'entity_service_fallback',
-                            'complete_system_attempted': True
-                        })
-                    return result
-                else:
-                    return self._get_error_result(f"No service available for {entity_type}", entity_type, **kwargs)
-            except Exception as fallback_error:
-                logger.error(f"❌ [FALLBACK_ERROR] Entity service failed for {entity_type}: {str(fallback_error)}")
-                return self._get_error_result(str(fallback_error), entity_type, **kwargs)
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in search_entity_data for {entity_type}: {str(e)}")
+            # ✅ Maintain backward compatibility with existing error response structure
+            return {
+                'items': [],
+                'total': 0,
+                'page': page if 'page' in locals() else 1,
+                'per_page': per_page if 'per_page' in locals() else 20,
+                'total_pages': 0,
+                'pagination': {
+                    'total_count': 0,
+                    'page': page if 'page' in locals() else 1,
+                    'per_page': per_page if 'per_page' in locals() else 20,
+                    'total_pages': 0
+                },
+                'summary': {'total_count': 0},
+                'success': False,
+                'error': str(e),
+                'entity_type': entity_type
+            }
         
 
     def _get_error_result(self, error_message: str, entity_type: str = None, **kwargs) -> Dict:
@@ -579,40 +615,128 @@ class GenericUniversalService:
         try:
             logger.info(f"Generic search for entity: {self.entity_type}")
             
-            # Get filters parameter properly
+            # Get standard parameters
             filters = kwargs.get('filters', {})
+            hospital_id = kwargs.get('hospital_id')
+            branch_id = kwargs.get('branch_id')
             page = kwargs.get('page', 1)
             per_page = kwargs.get('per_page', 20)
             
-            # TODO: Implement using entity configuration to determine:
-            # - Database table/model from entity_type
-            # - Searchable fields from configuration
-            # - Default ordering from configuration
+            # Get entity configuration
+            from app.config.entity_configurations import get_entity_config
+            config = get_entity_config(self.entity_type)
+            if not config:
+                logger.error(f"No configuration found for {self.entity_type}")
+                return self._get_empty_result()
             
-            return {
-                'items': [],
-                'total': 0,
-                'pagination': {
-                    'total_count': 0, 
-                    'page': page, 
-                    'per_page': per_page, 
-                    'total_pages': 1
-                },
-                'summary': {},
-                'success': True,
-                'message': f'Generic search for {self.entity_type} - implementation pending'
-            }
+            # Get model class from configuration
+            if hasattr(config, 'model_class') and config.model_class:
+                try:
+                    # Import model class dynamically
+                    module_path, class_name = config.model_class.rsplit('.', 1)
+                    module = importlib.import_module(module_path)
+                    model_class = getattr(module, class_name)
+                except Exception as e:
+                    logger.error(f"Failed to import model class {config.model_class}: {str(e)}")
+                    return self._get_empty_result()
+            else:
+                logger.error(f"No model_class configured for {self.entity_type}")
+                return self._get_empty_result()
             
+            with get_db_session() as session:
+                # Build base query
+                query = session.query(model_class)
+                
+                # Apply hospital filter
+                if hasattr(model_class, 'hospital_id') and hospital_id:
+                    query = query.filter(model_class.hospital_id == hospital_id)
+                
+                # Apply branch filter
+                if hasattr(model_class, 'branch_id') and branch_id:
+                    query = query.filter(model_class.branch_id == branch_id)
+                
+                # Apply categorized filters (including date filters)
+                from app.engine.categorized_filter_processor import get_categorized_filter_processor
+                filter_processor = get_categorized_filter_processor()
+                
+                query, applied_filters, filter_count = filter_processor.process_entity_filters(
+                    self.entity_type, filters, query, session, config
+                )
+                
+                logger.info(f"✅ Applied {filter_count} filters: {applied_filters}")
+                
+                # Get total count
+                total_count = query.count()
+                
+                # Apply sorting
+                sort_field = filters.get('sort', config.default_sort_field if config else None)
+                if sort_field and hasattr(model_class, sort_field):
+                    sort_dir = filters.get('direction', 'asc')
+                    if sort_dir == 'desc':
+                        query = query.order_by(desc(getattr(model_class, sort_field)))
+                    else:
+                        query = query.order_by(asc(getattr(model_class, sort_field)))
+                
+                # Apply pagination
+                offset = (page - 1) * per_page
+                items = query.offset(offset).limit(per_page).all()
+                
+                # Convert to dictionaries
+                from app.services.database_service import get_entity_dict
+                items_dict = []
+                for item in items:
+                    item_dict = get_entity_dict(item)
+                    items_dict.append(item_dict)
+                
+                # Build summary
+                summary = {'total_count': total_count}
+                if hasattr(model_class, 'status'):
+                    status_counts = session.query(
+                        model_class.status,
+                        func.count(model_class.status)
+                    ).filter(
+                        model_class.hospital_id == hospital_id
+                    ).group_by(model_class.status).all()
+                    
+                    for status, count in status_counts:
+                        if status:
+                            summary[f'{status.lower()}_count'] = count
+                
+                return {
+                    'items': items_dict,
+                    'total': total_count,
+                    'pagination': {
+                        'total_count': total_count, 
+                        'page': page, 
+                        'per_page': per_page, 
+                        'total_pages': (total_count + per_page - 1) // per_page,
+                        'has_prev': page > 1,
+                        'has_next': page < ((total_count + per_page - 1) // per_page)
+                    },
+                    'summary': summary,
+                    'success': True,
+                    'applied_filters': list(applied_filters),
+                    'filter_count': filter_count
+                }
+                
         except Exception as e:
             logger.error(f"Error in generic search for {self.entity_type}: {str(e)}")
-            return {
-                'items': [],
-                'total': 0,
-                'pagination': {'total_count': 0, 'page': 1, 'per_page': 20, 'total_pages': 1},
-                'summary': {},
-                'success': False,
-                'error': str(e)
-            }
+            return self._get_empty_result()
+
+    def _get_empty_result(self) -> Dict:
+        """Return empty result structure"""
+        return {
+            'items': [],
+            'total': 0,
+            'pagination': {
+                'total_count': 0, 
+                'page': 1, 
+                'per_page': 20, 
+                'total_pages': 1
+            },
+            'summary': {},
+            'success': False
+        }
 
     def get_by_id(self, item_id: str, **kwargs):
         """✅ ENTITY AGNOSTIC: Generic get by ID"""
@@ -789,83 +913,83 @@ def get_universal_filter_choices(entity_type: str, hospital_id: Optional[uuid.UU
 logger.info("✅ Universal Services loaded with enhanced registry and parameter fixes")
 
 
-def register_universal_service(entity_type: str, service_path: str):
-    """
-    ✅ ENTITY AGNOSTIC: Register a new universal service for ANY entity type
+# def register_universal_service(entity_type: str, service_path: str):
+#     """
+#     ✅ ENTITY AGNOSTIC: Register a new universal service for ANY entity type
     
-    Args:
-        entity_type: The entity type (e.g., 'medicines', 'invoices')
-        service_path: Full path to service class (e.g., 'app.services.medicine_service.UniversalMedicineService')
-    """
-    try:
-        _service_registry.service_registry[entity_type] = service_path
-        logger.info(f"✅ Universal service registered for {entity_type}: {service_path}")
-    except Exception as e:
-        logger.error(f"Error registering service for {entity_type}: {str(e)}")
+#     Args:
+#         entity_type: The entity type (e.g., 'medicines', 'invoices')
+#         service_path: Full path to service class (e.g., 'app.services.medicine_service.UniversalMedicineService')
+#     """
+#     try:
+#         _service_registry.service_registry[entity_type] = service_path
+#         logger.info(f"✅ Universal service registered for {entity_type}: {service_path}")
+#     except Exception as e:
+#         logger.error(f"Error registering service for {entity_type}: {str(e)}")
 
 
-def list_registered_services() -> List[str]:
-    """✅ ENTITY AGNOSTIC: Get list of all registered universal service entity types"""
-    return list(_service_registry.service_registry.keys())
+# def list_registered_services() -> List[str]:
+#     """✅ ENTITY AGNOSTIC: Get list of all registered universal service entity types"""
+#     return list(_service_registry.service_registry.keys())
 
 
 # Validation and testing functions
-def validate_service_interface(service_instance, entity_type: str) -> List[str]:
-    """
-    Validate that a service implements the required interface
-    Returns list of missing methods or errors
-    """
-    errors = []
-    required_methods = ['search_data', 'get_by_id', 'create', 'update', 'delete']
+# def validate_service_interface(service_instance, entity_type: str) -> List[str]:
+#     """
+#     Validate that a service implements the required interface
+#     Returns list of missing methods or errors
+#     """
+#     errors = []
+#     required_methods = ['search_data', 'get_by_id', 'create', 'update', 'delete']
     
-    for method_name in required_methods:
-        if not hasattr(service_instance, method_name):
-            errors.append(f"Missing required method: {method_name}")
-        elif not callable(getattr(service_instance, method_name)):
-            errors.append(f"Method {method_name} is not callable")
+#     for method_name in required_methods:
+#         if not hasattr(service_instance, method_name):
+#             errors.append(f"Missing required method: {method_name}")
+#         elif not callable(getattr(service_instance, method_name)):
+#             errors.append(f"Method {method_name} is not callable")
     
-    return errors
+#     return errors
 
 
-def test_universal_service(entity_type: str) -> bool:
-    """
-    Test universal service for basic functionality
-    Returns True if service passes basic tests
-    """
-    try:
-        service = get_universal_service(entity_type)
+# def test_universal_service(entity_type: str) -> bool:
+#     """
+#     Test universal service for basic functionality
+#     Returns True if service passes basic tests
+#     """
+#     try:
+#         service = get_universal_service(entity_type)
         
-        # Validate interface
-        errors = validate_service_interface(service, entity_type)
-        if errors:
-            logger.error(f"❌ Service validation failed for {entity_type}: {errors}")
-            return False
+#         # Validate interface
+#         errors = validate_service_interface(service, entity_type)
+#         if errors:
+#             logger.error(f"❌ Service validation failed for {entity_type}: {errors}")
+#             return False
         
-        logger.info(f"✅ Universal service validation passed for {entity_type}")
-        return True
+#         logger.info(f"✅ Universal service validation passed for {entity_type}")
+#         return True
         
-    except Exception as e:
-        logger.error(f"❌ Service test failed for {entity_type}: {str(e)}")
-        return False
+#     except Exception as e:
+#         logger.error(f"❌ Service test failed for {entity_type}: {str(e)}")
+#         return False
 
 
 # Test all registered services
-def test_all_services():
-    """Test all registered universal services"""
-    results = {}
-    for entity_type in _service_registry.service_registry.keys():
-        results[entity_type] = test_universal_service(entity_type)
+# def test_all_services():
+#     """Test all registered universal services"""
+#     results = {}
+#     for entity_type in _service_registry.service_registry.keys():
+#         results[entity_type] = test_universal_service(entity_type)
     
-    # Print results
-    print("\n🧪 Universal Service Test Results:")
-    print("=" * 50)
-    for entity_type, passed in results.items():
-        status = "✅ PASSED" if passed else "❌ FAILED"
-        print(f"{entity_type:20} {status}")
+#     # Print results
+#     print("\n🧪 Universal Service Test Results:")
+#     print("=" * 50)
+#     for entity_type, passed in results.items():
+#         status = "✅ PASSED" if passed else "❌ FAILED"
+#         print(f"{entity_type:20} {status}")
     
-    return results
+#     return results
 
 
 # Run tests when module is imported in development
-if __name__ == "__main__":
-    test_all_services()
+# if __name__ == "__main__":
+#     test_all_services()
