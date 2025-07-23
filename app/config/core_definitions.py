@@ -10,6 +10,7 @@ from enum import Enum
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Callable, Type, Union
 from flask_wtf import FlaskForm
+from flask import url_for
 
 # =============================================================================
 # CORE ENUMS - Complete type definitions from both files
@@ -176,6 +177,111 @@ class ActionDefinition:
     custom_handler: Optional[str] = None           # Custom handler function name
     javascript_handler: Optional[str] = None       # JS function name
     custom_template: Optional[str] = None          # Custom template override
+
+    def get_url(self, item: Dict, entity_config=None) -> str:
+        """
+        Generate URL for this action based on configuration
+        
+        Smart mapping: {id} automatically maps to the entity's primary key field
+        
+        Args:
+            item: Dictionary containing the data item (e.g., payment record)
+            entity_config: Optional EntityConfiguration for primary key lookup
+            
+        Returns:
+            Generated URL string
+        """
+        try:
+            if self.route_name:
+                # Build kwargs from route_params
+                kwargs = {}
+                if self.route_params:
+                    for param, template in self.route_params.items():
+                        if isinstance(template, str) and template.startswith('{') and template.endswith('}'):
+                            # Extract field name from template {field_name}
+                            field_name = template[1:-1]
+                            
+                            # ✅ SMART MAPPING: {id} → primary key field
+                            if field_name == 'id' and entity_config and hasattr(entity_config, 'primary_key'):
+                                actual_field_name = entity_config.primary_key
+                                value = item.get(actual_field_name, '')
+                                kwargs[param] = str(value) if value else ''
+                            # Handle nested fields with dot notation
+                            elif '.' in field_name:
+                                # e.g., {supplier.supplier_id}
+                                parts = field_name.split('.')
+                                value = item
+                                for part in parts:
+                                    if isinstance(value, dict):
+                                        value = value.get(part, '')
+                                    else:
+                                        value = ''
+                                        break
+                                kwargs[param] = str(value) if value else ''
+                            else:
+                                # Simple field lookup with safe get
+                                value = item.get(field_name, '')
+                                kwargs[param] = str(value) if value else ''
+                        else:
+                            # Static value
+                            kwargs[param] = template
+                
+                # Generate URL using Flask's url_for
+                try:
+                    from flask import url_for
+                    return url_for(self.route_name, **kwargs)
+                except Exception as url_error:
+                    # If url_for fails (e.g., outside request context), return safe fallback
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.debug(f"url_for failed for {self.route_name}: {url_error}")
+                    return '#'
+                
+            elif self.url_pattern:
+                # Simple string replacement for URL patterns
+                url = self.url_pattern
+                
+                # Replace all {field_name} patterns in the URL
+                import re
+                pattern = r'\{([^}]+)\}'
+                
+                def replace_field(match):
+                    field_name = match.group(1)
+                    
+                    # ✅ SMART MAPPING: {id} → primary key field
+                    if field_name == 'id' and entity_config and hasattr(entity_config, 'primary_key'):
+                        actual_field_name = entity_config.primary_key
+                        value = item.get(actual_field_name, '')
+                        return str(value) if value else ''
+                    # Handle nested fields with dot notation
+                    elif '.' in field_name:
+                        parts = field_name.split('.')
+                        value = item
+                        for part in parts:
+                            if isinstance(value, dict):
+                                value = value.get(part, '')
+                            else:
+                                value = ''
+                                break
+                        return str(value) if value else ''
+                    else:
+                        # Safe get with empty string default
+                        value = item.get(field_name, '')
+                        return str(value) if value else ''
+                
+                url = re.sub(pattern, replace_field, url)
+                return url
+                
+            else:
+                # No URL configuration
+                return '#'
+                
+        except Exception as e:
+            # Log error and return safe fallback
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.debug(f"Error generating URL for action {self.id}: {str(e)}")
+            return '#'
 
 # Note: ActionConfiguration from field_definitions.py is simpler
 # We use ActionDefinition as it's more complete

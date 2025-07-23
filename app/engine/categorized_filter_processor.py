@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session, Query
 from sqlalchemy import and_, or_, func, desc, asc
 from flask_login import current_user
 from flask import current_app
+import importlib
 
 from app.config.filter_categories import (
     FilterCategory, 
@@ -42,12 +43,14 @@ class CategorizedFilterProcessor:
     
     def __init__(self):
         self.session = None
-        self.entity_models = {
-            'supplier_payments': 'app.models.transaction.SupplierPayment',
-            'suppliers': 'app.models.master.Supplier',
-            'patients': 'app.models.patient.Patient',
-            'medicines': 'app.models.medicine.Medicine'
-        }
+        # self.entity_models = {
+        #     'supplier_payments': 'app.models.transaction.SupplierPayment',
+        #     'suppliers': 'app.models.master.Supplier',
+        #     'patients': 'app.models.patient.Patient',
+        #     'medicines': 'app.models.medicine.Medicine'
+        # }
+    
+
     
     def _apply_mixed_payment_logic(self, model_class, model_attr, filter_value, config):
         """
@@ -1315,20 +1318,32 @@ class CategorizedFilterProcessor:
     # ==========================================================================
     
     def _get_model_class(self, entity_type: str):
-        """✅ Use existing configuration structure"""
+        """Get model class for entity type - configuration driven with fallback"""
+        # First, try configuration (new way)
         config = get_entity_config(entity_type)
-        if config and hasattr(config, 'model_class'):
+        if config and hasattr(config, 'model_class') and config.model_class:
             try:
                 module_path, class_name = config.model_class.rsplit('.', 1)
                 module = __import__(module_path, fromlist=[class_name])
-                return getattr(module, class_name)
+                model = getattr(module, class_name)
+                logger.info(f"✅ Loaded model from config for {entity_type}: {config.model_class}")
+                return model
             except Exception as e:
                 logger.warning(f"Config model import failed: {str(e)}")
         
-        # ✅ Keep existing fallback for backward compatibility
-        if entity_type == 'supplier_payments':
-            from app.models.transaction import SupplierPayment
-            return SupplierPayment
+        # Second, try self.entity_models mapping (backward compatible)
+        if entity_type in self.entity_models:
+            try:
+                module_path = self.entity_models[entity_type]
+                module_path, class_name = module_path.rsplit('.', 1)
+                module = __import__(module_path, fromlist=[class_name])
+                model = getattr(module, class_name)
+                logger.info(f"✅ Loaded model from entity_models mapping for {entity_type}")
+                return model
+            except Exception as e:
+                logger.warning(f"Entity models import failed: {str(e)}")
+        
+        logger.warning(f"No model class found for {entity_type}")
         return None
             
     
@@ -1458,46 +1473,23 @@ class CategorizedFilterProcessor:
             return None
 
     def _add_basic_relationships(self, entity_dict: Dict, entity, entity_type: str, session) -> Dict:
-        """
-        ✅ BASIC RELATIONSHIPS: Add entity relationships
-        Future: Will use configuration-driven approach
-        """
+        """Add relationships based on configuration"""
         try:
-            # For supplier_payments - preserve existing relationship logic
-            if entity_type == 'supplier_payments':
-                from app.models.master import Supplier, Branch
-                from app.models.transaction import SupplierInvoice
-                
-                # Add supplier info
-                if hasattr(entity, 'supplier_id') and entity.supplier_id:
-                    supplier = session.query(Supplier).filter_by(supplier_id=entity.supplier_id).first()
-                    if supplier:
-                        entity_dict['supplier_name'] = supplier.supplier_name
-                        entity_dict['supplier_code'] = str(supplier.supplier_id)
-                    else:
-                        entity_dict['supplier_name'] = 'N/A'
-                        entity_dict['supplier_code'] = 'N/A'
-                
-                # Add branch info
-                if hasattr(entity, 'branch_id') and entity.branch_id:
-                    branch = session.query(Branch).filter_by(branch_id=entity.branch_id).first()
-                    if branch:
-                        entity_dict['branch_name'] = branch.name
-                
-                # Add invoice info
-                if hasattr(entity, 'invoice_id') and entity.invoice_id:
-                    invoice = session.query(SupplierInvoice).filter_by(invoice_id=entity.invoice_id).first()
-                    if invoice:
-                        entity_dict['invoice_number'] = invoice.supplier_invoice_number
-                        entity_dict['invoice_amount'] = float(invoice.total_amount)
+            config = get_entity_config(entity_type)
+            if not config:
+                return entity_dict
             
-            # For other entities - add relationships as needed
-            # Future: Use configuration-driven relationships
+            # Get service to handle entity-specific relationships
+            from app.engine.universal_services import get_universal_service
+            service = get_universal_service(entity_type)
             
+            if hasattr(service, 'add_relationships'):
+                return service.add_relationships(entity_dict, entity, session)
+                
             return entity_dict
             
         except Exception as e:
-            logger.warning(f"Error adding basic relationships for {entity_type}: {str(e)}")
+            logger.error(f"Error adding relationships: {str(e)}")
             return entity_dict
 
 

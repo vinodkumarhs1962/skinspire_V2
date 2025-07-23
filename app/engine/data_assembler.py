@@ -454,7 +454,8 @@ class EnhancedUniversalDataAssembler:
                         'css_class': getattr(field, 'css_class', ''),
                         'width': getattr(field, 'width', 'auto'),
                         'align': getattr(field, 'align', 'left'),
-                        'field_type': self._get_field_type_safe(field)
+                        'field_type': self._get_field_type_safe(field),
+                        'format_pattern': getattr(field, 'format_pattern', None)
                     }
                     columns.append(column)
             

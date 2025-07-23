@@ -365,25 +365,179 @@ class UniversalServiceRegistry:
             return []
     
     def _calculate_breakdown_from_database(self, entity_type: str, filters: Dict) -> Dict:
-        """Calculate breakdown if entity service supports it"""
+        """Calculate payment method breakdown amounts using direct database query with request filters"""
         try:
-            # Get the service for this entity
-            service = self.get_service(entity_type)
+            if entity_type != 'supplier_payments':
+                return {'cash_amount': 0.0, 'cheque_amount': 0.0, 'bank_amount': 0.0, 'upi_amount': 0.0}
             
-            # Check if service supports breakdown calculation
-            if hasattr(service, 'get_payment_breakdown'):
-                # Simply delegate to the service - it will use the same filters
-                breakdown = service.get_payment_breakdown(filters)
-                logger.info(f"✅ Got payment breakdown from {entity_type} service: {breakdown}")
-                return breakdown
+            from app.services.database_service import get_db_session
+            from app.models.transaction import SupplierPayment
+            from app.models.master import Supplier
+            from sqlalchemy import func
+            from flask_login import current_user
+            from flask import request
             
-            # No breakdown support for this entity - return empty dict
-            logger.debug(f"Entity {entity_type} does not support payment breakdown")
-            return {}
+            # Extract filters from request to avoid session conflicts
+            filter_data = {
+                'start_date': request.args.get('start_date'),
+                'end_date': request.args.get('end_date'),
+                'supplier_id': request.args.get('supplier_id'),
+                'supplier_name_search': request.args.get('supplier_name_search') or request.args.get('search'),
+                'workflow_status': request.args.get('workflow_status') or request.args.get('status'),
+                'payment_method': request.args.get('payment_method'),
+                'min_amount': request.args.get('min_amount') or request.args.get('amount_min'),
+                'max_amount': request.args.get('max_amount') or request.args.get('amount_max'),
+                'reference_no': request.args.get('reference_no') or request.args.get('ref_no'),
+                'invoice_id': request.args.get('invoice_id'),
+                'branch_id': request.args.get('branch_id')
+            }
             
+            with get_db_session() as session:
+                # Build query with same filter logic as main search
+                query = session.query(
+                    func.sum(SupplierPayment.cash_amount).label('total_cash'),
+                    func.sum(SupplierPayment.cheque_amount).label('total_cheque'),
+                    func.sum(SupplierPayment.bank_transfer_amount).label('total_bank'),
+                    func.sum(SupplierPayment.upi_amount).label('total_upi')
+                ).filter(
+                    SupplierPayment.hospital_id == current_user.hospital_id
+                )
+                
+                # Apply date filters
+                if filter_data['start_date']:
+                    from datetime import datetime
+                    start_date_obj = datetime.strptime(filter_data['start_date'], '%Y-%m-%d').date()
+                    query = query.filter(SupplierPayment.payment_date >= start_date_obj)
+                if filter_data['end_date']:
+                    from datetime import datetime
+                    end_date_obj = datetime.strptime(filter_data['end_date'], '%Y-%m-%d').date()
+                    query = query.filter(SupplierPayment.payment_date <= end_date_obj)
+                
+                # Apply supplier filters
+                if filter_data['supplier_id'] and filter_data['supplier_id'].strip():
+                    query = query.filter(SupplierPayment.supplier_id == filter_data['supplier_id'])
+                elif filter_data['supplier_name_search'] and filter_data['supplier_name_search'].strip():
+                    supplier_subquery = session.query(Supplier.supplier_id).filter(
+                        Supplier.hospital_id == current_user.hospital_id,
+                        Supplier.supplier_name.ilike(f'%{filter_data["supplier_name_search"]}%')
+                    ).subquery()
+                    query = query.filter(SupplierPayment.supplier_id.in_(supplier_subquery))
+                
+                # Apply status filters
+                if filter_data['workflow_status'] and filter_data['workflow_status'].strip():
+                    query = query.filter(SupplierPayment.workflow_status == filter_data['workflow_status'])
+                
+                # Apply reference number filters
+                if filter_data['reference_no'] and filter_data['reference_no'].strip():
+                    query = query.filter(SupplierPayment.reference_no.ilike(f'%{filter_data["reference_no"]}%'))
+
+                # Apply payment method filters
+                if filter_data['payment_method'] and filter_data['payment_method'].strip():
+                    if filter_data['payment_method'] == 'bank_transfer_inclusive':
+                        from sqlalchemy import or_, and_
+                        query = query.filter(
+                            or_(
+                                SupplierPayment.payment_method == 'bank_transfer',
+                                and_(
+                                    SupplierPayment.payment_method == 'mixed',
+                                    SupplierPayment.bank_transfer_amount > 0
+                                )
+                            )
+                        )
+                    elif filter_data['payment_method'] == 'cash':
+                        from sqlalchemy import or_, and_
+                        query = query.filter(
+                            or_(
+                                SupplierPayment.payment_method == 'cash',
+                                and_(
+                                    SupplierPayment.payment_method == 'mixed',
+                                    SupplierPayment.cash_amount > 0
+                                )
+                            )
+                        )
+                    elif filter_data['payment_method'] == 'cheque':
+                        from sqlalchemy import or_, and_
+                        query = query.filter(
+                            or_(
+                                SupplierPayment.payment_method == 'cheque',
+                                and_(
+                                    SupplierPayment.payment_method == 'mixed',
+                                    SupplierPayment.cheque_amount > 0
+                                )
+                            )
+                        )
+                    elif filter_data['payment_method'] == 'bank_transfer':
+                        from sqlalchemy import or_, and_
+                        query = query.filter(
+                            or_(
+                                SupplierPayment.payment_method == 'bank_transfer',
+                                and_(
+                                    SupplierPayment.payment_method == 'mixed',
+                                    SupplierPayment.bank_transfer_amount > 0
+                                )
+                            )
+                        )
+                    elif filter_data['payment_method'] == 'upi':
+                        from sqlalchemy import or_, and_
+                        query = query.filter(
+                            or_(
+                                SupplierPayment.payment_method == 'upi',
+                                and_(
+                                    SupplierPayment.payment_method == 'mixed',
+                                    SupplierPayment.upi_amount > 0
+                                )
+                            )
+                        )
+                    else:
+                        query = query.filter(SupplierPayment.payment_method == filter_data['payment_method'])
+                
+                # Apply amount filters
+                if filter_data['min_amount']:
+                    try:
+                        min_val = float(filter_data['min_amount'])
+                        query = query.filter(SupplierPayment.amount >= min_val)
+                    except ValueError:
+                        pass
+                if filter_data['max_amount']:
+                    try:
+                        max_val = float(filter_data['max_amount'])
+                        query = query.filter(SupplierPayment.amount <= max_val)
+                    except ValueError:
+                        pass
+                
+                # Apply reference number filter
+                if filter_data['reference_no'] and filter_data['reference_no'].strip():
+                    query = query.filter(SupplierPayment.reference_no.ilike(f'%{filter_data["reference_no"]}%'))
+                
+                # Apply invoice ID filter
+                if filter_data['invoice_id'] and filter_data['invoice_id'].strip():
+                    query = query.filter(SupplierPayment.invoice_id == filter_data['invoice_id'])
+                
+                # Apply branch filter
+                if filter_data['branch_id'] and filter_data['branch_id'].strip():
+                    try:
+                        import uuid
+                        branch_uuid = uuid.UUID(filter_data['branch_id'])
+                        query = query.filter(SupplierPayment.branch_id == branch_uuid)
+                    except ValueError:
+                        pass
+                
+                # Execute query
+                result = query.first()
+                
+                breakdown_amounts = {
+                    'cash_amount': float(result.total_cash or 0),
+                    'cheque_amount': float(result.total_cheque or 0),
+                    'bank_amount': float(result.total_bank or 0),
+                    'upi_amount': float(result.total_upi or 0)
+                }
+                
+                logger.info(f"Calculated breakdown using direct filter application: {breakdown_amounts}")
+                return breakdown_amounts
+                
         except Exception as e:
-            logger.error(f"Error calculating breakdown for {entity_type}: {str(e)}")
-            return {}
+            logger.error(f"Error calculating breakdown from database: {str(e)}")
+            return {'cash_amount': 0.0, 'cheque_amount': 0.0, 'bank_amount': 0.0, 'upi_amount': 0.0}
 
 
     def _fix_parameter_names(self, kwargs: Dict) -> Dict:

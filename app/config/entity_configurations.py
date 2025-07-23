@@ -49,7 +49,9 @@ SUPPLIER_PAYMENT_CONFIG = EntityConfiguration(
     searchable_fields=["reference_no", "supplier_name", "notes"],  # Exact field names
     default_sort_field="payment_date",  # Exact field name from your model
     default_sort_direction="desc",
+    model_class="app.models.transaction.SupplierPayment",
     
+
     fields=[
         # Primary Key - UUID field from your model
         FieldDefinition(
@@ -245,7 +247,8 @@ SUPPLIER_PAYMENT_CONFIG = EntityConfiguration(
             filter_aliases=["min_amount", "max_amount", "amount_min", "amount_max"],
             filter_type="range",  # Handles >= and <= operations
             required=True,
-            help_text="Total payment amount"
+            help_text="Total payment amount",
+            format_pattern="mixed_payment_breakdown"
         ),
         
         # Multi-method payment amounts - exact field names from your model
@@ -838,7 +841,9 @@ SUPPLIER_CONFIG = EntityConfiguration(
     searchable_fields=["supplier_name", "contact_person_name", "email"],
     default_sort_field="supplier_name",
     default_sort_direction="asc",
+    model_class="app.models.master.Supplier",
     
+
     fields=[
         # System Fields
         FieldDefinition(

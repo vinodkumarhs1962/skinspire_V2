@@ -751,47 +751,21 @@ def get_universal_list_data_safe(entity_type: str) -> Dict:
 
 def get_service_data_safe(entity_type: str, config, current_filters: Dict, 
                          branch_uuid: Optional[uuid.UUID]) -> Dict:
-    """✅ REPLACE: Fixed branch_ids -> branch_id parameter mismatch"""
+    """✅ SIMPLIFIED: All services now use standard search_data interface"""
     try:
         service = get_universal_service(entity_type)
         
-        # ✅ FIXED: Call service with correct parameter names
+        # ✅ SIMPLIFIED: Only check for search_data method
         if hasattr(service, 'search_data'):
             logger.debug(f"Using search_data method for {entity_type}")
             return service.search_data(
                 hospital_id=current_user.hospital_id,
                 filters=current_filters,
-                branch_id=branch_uuid,  # ✅ FIXED: Use branch_id (singular)
+                branch_id=branch_uuid,
                 current_user_id=current_user.user_id,
                 page=int(current_filters.get('page', 1)),
                 per_page=int(current_filters.get('per_page', config.items_per_page))
             )
-            
-        elif hasattr(service, 'search_payments_with_form_integration'):
-            logger.debug(f"Using search_payments_with_form_integration method for {entity_type}")
-            
-            # Get form class for the entity
-            form_class = None
-        if entity_type == 'supplier_payments':
-            # Use a simple fallback form instead of None
-            from flask_wtf import FlaskForm
-            from wtforms import StringField, SelectField, SubmitField
-            
-            class SimpleFilterForm(FlaskForm):
-                supplier_id = SelectField('Supplier', choices=[])
-                submit = SubmitField('Filter')
-            
-            form_class = SimpleFilterForm
-            logger.info("Using fallback form for supplier_payments")
-            
-            return service.search_payments_with_form_integration(
-                form_class=form_class,  # ✅ ADDED: Required form_class parameter
-                filters=current_filters,
-                hospital_id=current_user.hospital_id,
-                branch_id=branch_uuid,
-                current_user_id=current_user.user_id
-            )
-            
         else:
             # ✅ FIXED: Fallback with correct service calling
             logger.debug(f"Using fallback service call for {entity_type}")

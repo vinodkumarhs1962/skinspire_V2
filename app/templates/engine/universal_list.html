@@ -51,7 +51,9 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
             {% if assembled_data and assembled_data.entity_config and assembled_data.entity_config.actions %}
                 {% for action in assembled_data.entity_config.actions %}
                     {% if action.show_in_toolbar %}
-                    <a href="{% if action.route_name %}{{ url_for(action.route_name, **(action.route_params or {})) }}{% else %}#{% endif %}" 
+                    <!-- Toolbar actions don't have item context, pass empty dict -->
+                    <!-- Pass entity_config for smart {id} mapping support -->
+                    <a href="{{ action.get_url({}, assembled_data.entity_config) }}" 
                     class="{{ action.button_type.value }}">
                         <i class="{{ action.icon }} icon-left"></i>{{ action.label }}
                     </a>
@@ -473,42 +475,39 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                                     <!-- Format based on field type -->
                                     {% if column.field_type == 'currency' or column.field_type == 'amount' %}
                                         {% if value %}
-                                            ₹{{ "{:,.2f}".format(value|float) }}
-                                        {% else %}
-                                            —
-                                        {% endif %}
-                                        
-                                    {% elif column.field_type == 'date' %}
-                                        {% if value %}
-                                            <!-- Format date as "Jan 15, 2024" -->
-                                            {% if value is string %}
-                                                {{ value[:10] }}
+                                            <!-- Check for mixed payment breakdown based on active filter -->
+                                            {% if column.get('format_pattern') == 'mixed_payment_breakdown' 
+                                            and item.get('payment_method') == 'mixed' 
+                                            and request.args.get('payment_method') %}
+                                                
+                                                {% set method_mapping = {
+                                                    'cash': {'field': 'cash_amount', 'label': 'Cash'},
+                                                    'cheque': {'field': 'cheque_amount', 'label': 'Cheque'},
+                                                    'bank_transfer': {'field': 'bank_transfer_amount', 'label': 'Bank'},
+                                                    'upi': {'field': 'upi_amount', 'label': 'UPI'}
+                                                } %}
+                                                
+                                                {% set filtered_method = request.args.get('payment_method') %}
+                                                {% if filtered_method in method_mapping %}
+                                                    {% set field_name = method_mapping[filtered_method]['field'] %}
+                                                    {% set label = method_mapping[filtered_method]['label'] %}
+                                                    {% set breakdown_amount = item.get(field_name, 0)|float %}
+                                                    
+                                                    {% if breakdown_amount > 0 %}
+                                                        <div>
+                                                            <div>₹{{ "{:,.2f}".format(value|float) }}</div>
+                                                            <div class="text-xs text-gray-600">({{ label }}: ₹{{ "{:,.0f}".format(breakdown_amount) }})</div>
+                                                        </div>
+                                                    {% else %}
+                                                        ₹{{ "{:,.2f}".format(value|float) }}
+                                                    {% endif %}
+                                                {% else %}
+                                                    ₹{{ "{:,.2f}".format(value|float) }}
+                                                {% endif %}
                                             {% else %}
-                                                {{ value.strftime('%b %d, %Y') if value else '—' }}
+                                                <!-- Regular amount display -->
+                                                ₹{{ "{:,.2f}".format(value|float) }}
                                             {% endif %}
-                                        {% else %}
-                                            —
-                                        {% endif %}
-                                        
-                                    {% elif column.field_type == 'status_badge' %}
-                                        {% if value %}
-                                            <span class="status-badge status-{{ value|lower|replace(' ', '-') }}">
-                                                {{ value|title }}
-                                            </span>
-                                        {% else %}
-                                            <span class="status-badge status-default">—</span>
-                                        {% endif %}
-                                        
-                                    {% elif column.field_type == 'boolean' %}
-                                        {% if value %}
-                                            <i class="fas fa-check text-success"></i>
-                                        {% else %}
-                                            <i class="fas fa-times text-danger"></i>
-                                        {% endif %}
-                                        
-                                    {% elif column.field_type == 'email' %}
-                                        {% if value %}
-                                            <a href="mailto:{{ value }}">{{ value }}</a>
                                         {% else %}
                                             —
                                         {% endif %}
@@ -539,32 +538,29 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                             <!-- Actions column -->
                             <td class="actions-column" onclick="event.stopPropagation()">
                                 <div class="universal-table-actions">
-                                    <!-- Dynamic actions based on entity type -->
-                                    {% if assembled_data.entity_config.entity_type == 'supplier_payments' %}
-                                        <a href="{{ url_for('supplier_views.view_payment', payment_id=item.get('payment_id', '')) }}" 
-                                        class="btn-outline btn-sm" title="View Details">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
-                                        <a href="{{ url_for('supplier_views.print_supplier_payment', payment_id=item.get('payment_id', '')) }}" 
-                                        class="btn-secondary btn-sm" title="Print">
-                                            <i class="fas fa-print"></i>
-                                        </a>
-                                    {% elif assembled_data.entity_config.entity_type == 'suppliers' %}
-                                        <a href="{{ url_for('supplier_views.view_supplier', supplier_id=item.get('supplier_id', '')) }}" 
-                                        class="btn-outline btn-sm" title="View Details">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
-                                        <a href="{{ url_for('supplier_views.edit_supplier', supplier_id=item.get('supplier_id', '')) }}" 
-                                        class="btn-secondary btn-sm" title="Edit">
-                                            <i class="fas fa-edit"></i>
-                                        </a>
-                                    {% else %}
-                                        <!-- Generic actions for other entities -->
-                                        <a href="{{ url_for('universal_views.universal_detail_view', entity_type=assembled_data.entity_type, item_id=item.get(assembled_data.entity_config.primary_key, '')) }}" 
-                                        class="btn-outline btn-sm" title="View Details">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
-                                    {% endif %}
+                                    {% for action in assembled_data.entity_config.actions %}
+                                        {% if action.show_in_list %}
+                                            <!-- Pass both item and entity_config for smart {id} mapping -->
+                                            {% set action_url = action.get_url(item, assembled_data.entity_config) %}
+                                            
+                                            {% if action.confirmation_required %}
+                                                <!-- Action with confirmation -->
+                                                <a href="#" 
+                                                onclick="confirmAction('{{ action_url }}', '{{ action.confirmation_message }}'); return false;"
+                                                class="{{ action.button_type.value }} btn-sm" 
+                                                title="{{ action.label }}">
+                                                    <i class="{{ action.icon }}"></i>
+                                                </a>
+                                            {% else %}
+                                                <!-- Regular action -->
+                                                <a href="{{ action_url }}" 
+                                                class="{{ action.button_type.value }} btn-sm" 
+                                                title="{{ action.label }}">
+                                                    <i class="{{ action.icon }}"></i>
+                                                </a>
+                                            {% endif %}
+                                        {% endif %}
+                                    {% endfor %}
                                 </div>
                             </td>
                         </tr>
@@ -757,6 +753,16 @@ function confirmDelete(itemId, itemName = 'this record') {
 
 console.log('✅ Universal List utility functions loaded');
 </script>
+
+<script>
+function confirmAction(url, message) {
+    if (confirm(message)) {
+        window.location.href = url;
+    }
+    return false;
+}
+</script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const now = new Date();
@@ -776,6 +782,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('current-day').textContent = dayStr;
 });
 </script>
+
+
 </div> <!-- ✅ Close main container -->
 
 {% endblock %} <!-- ✅ CRITICAL: Template block closure -->
