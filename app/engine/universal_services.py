@@ -180,6 +180,41 @@ class UniversalServiceRegistry:
                 'entity_type': entity_type
             }
         
+    def get_item_data(self, entity_type: str, item_id: str, **kwargs) -> Dict:
+        """
+        Get single item data - SAME PATTERN as search_entity_data
+        """
+        try:
+            # Get service using existing registry logic
+            service = self.get_service(entity_type)
+            
+            if not service:
+                return {
+                    'has_error': True, 
+                    'error': f'Service not available for {entity_type}', 
+                    'item': None
+                }
+            
+            # Call get_by_id method (which already exists)
+            item = service.get_by_id(
+                item_id=item_id,
+                hospital_id=kwargs.get('hospital_id'),
+                branch_id=kwargs.get('branch_id'),
+                current_user_id=kwargs.get('current_user_id')
+            )
+            
+            return {
+                'has_error': False if item else True,
+                'error': None if item else 'Record not found',
+                'item': item,
+                'entity_type': entity_type,
+                'item_id': item_id
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Registry get_item_data error: {str(e)}")
+            return {'has_error': True, 'error': str(e), 'item': None}
+
 
     def _get_error_result(self, error_message: str, entity_type: str = None, **kwargs) -> Dict:
         """Universal error handler for all entities"""
@@ -720,6 +755,12 @@ def search_universal_entity_data(entity_type: str, filters: Dict, **kwargs) -> D
     ✅ ADD: Universal search function with parameter fixing
     """
     return _service_registry.search_entity_data(entity_type, filters, **kwargs)
+
+def get_universal_item_data(entity_type: str, item_id: str, **kwargs) -> Dict:
+    """
+    Universal single item function - SAME PATTERN as search_universal_entity_data
+    """
+    return _service_registry.get_item_data(entity_type, item_id, **kwargs)
 
 def get_universal_filter_choices(entity_type: str, hospital_id: Optional[uuid.UUID] = None) -> Dict:
     """

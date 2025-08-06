@@ -50,6 +50,8 @@
    Use sparingly - prefer component-based styles
    ========================================== */
 
+@import url('./components/universal_view.css');
+
 /* Patient module specific styles (when created) */
 /* @import url('./modules/patient.css'); */
 

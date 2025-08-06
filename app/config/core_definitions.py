@@ -4,6 +4,13 @@ File: app/config/core_definitions.py
 
 COMPREHENSIVE VERSION: Includes ALL parameters from both field_definitions.py 
 and entity_configurations.py to ensure complete backward compatibility
+
+Enhanced Core Definitions - Building blocks for Universal Engine v3.0
+File: app/config/core_definitions.py
+
+Includes ALL v2.0 enhancements + v2.1 view template enhancements
+Complete backward compatibility with existing configurations
+
 """
 
 from enum import Enum
@@ -11,6 +18,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Callable, Type, Union
 from flask_wtf import FlaskForm
 from flask import url_for
+import re
 
 # =============================================================================
 # CORE ENUMS - Complete type definitions from both files
@@ -37,6 +45,8 @@ class FieldType(Enum):
     MULTI_SELECT = "multi_select"
     BOOLEAN = "boolean"
     STATUS_BADGE = "status_badge"
+    STATUS = "status"
+    DECIMAL = "decimal"
     
     # Reference types
     UUID = "uuid"
@@ -64,10 +74,95 @@ class ButtonType(Enum):
 
 class ComplexDisplayType(Enum):
     """Complex display component types from field_definitions.py"""
-    MULTI_METHOD_PAYMENT = "multi_method_payment"
-    BREAKDOWN_AMOUNTS = "breakdown_amounts"
-    CONDITIONAL_DISPLAY = "conditional_display"
-    DYNAMIC_CONTENT = "dynamic_content"
+    # Payment related
+    MULTI_METHOD_PAYMENT = "multi_method_payment"   # Mixed payment display
+    BREAKDOWN_AMOUNTS = "breakdown_amounts"         # Amount breakdowns
+    # Display logic
+    CONDITIONAL_DISPLAY = "conditional_display"     # Show/hide based on conditions
+    DYNAMIC_CONTENT = "dynamic_content"             # Dynamic content generation
+    # Entity reference display (FIX: Add this missing value)
+    ENTITY_REFERENCE = "entity_reference"           # Display related entity info
+
+class LayoutType(Enum):
+    """View template layout types"""
+    SIMPLE = "simple"
+    TABBED = "tabbed"
+    ACCORDION = "accordion"
+    MASTER_DETAIL = "master_detail"
+
+class ActionDisplayType(Enum):
+    """How an action should be displayed in the UI"""
+    BUTTON = "button"          # Standalone button
+    DROPDOWN_ITEM = "dropdown" # Item in dropdown menu  
+    BOTH = "both"             # Show in both places
+    HIDDEN = "hidden"         # Not shown (API only)
+
+# =============================================================================
+# VIEW SECTION DEFINITIONS - Eliminates Hardcoded Values
+# =============================================================================
+
+@dataclass
+class SectionDefinition:
+    """
+    Configurable section definition - ELIMINATES hardcoded section names
+    Replaces hardcoded 'Key Information', 'Details', etc.
+    """
+    key: str                              # Unique section identifier
+    title: str                            # Display title
+    icon: str                             # FontAwesome icon class
+    columns: int = 2                      # Number of columns
+    order: int = 0                        # Display order
+    css_class: Optional[str] = None       # Custom CSS class
+    collapsible: bool = False             # Can collapse
+    default_collapsed: bool = False       # Start collapsed  # ADD THIS
+    show_divider: bool = True             # Show bottom divider
+    conditional_display: Optional[str] = None  # Display condition
+
+@dataclass 
+class TabDefinition:
+    """
+    Configurable tab definition - ELIMINATES hardcoded tab structures
+    """
+    key: str                           # Unique tab identifier
+    label: str                         # Tab display name
+    icon: str                          # Tab icon
+    sections: Dict[str, SectionDefinition] = field(default_factory=dict)
+    order: int = 0                     # Tab order
+    default_active: bool = False       # Default active tab
+    conditions: Optional[str] = None   # Show/hide conditions
+
+@dataclass
+class ViewLayoutConfiguration:
+    """Complete layout configuration for view templates"""
+    type: LayoutType = LayoutType.SIMPLE
+    responsive_breakpoint: str = 'md'  # Bootstrap breakpoint
+    
+    # Section-based configuration (for simple/accordion layouts)
+    sections: Dict[str, SectionDefinition] = field(default_factory=dict)
+    
+    # Tab-based configuration (for tabbed layout)
+    tabs: Dict[str, TabDefinition] = field(default_factory=dict)
+    default_tab: Optional[str] = None
+    sticky_tabs: bool = False
+    
+    # Master-detail configuration
+    master_panel_width: str = '30%'
+    master_fields: List[str] = field(default_factory=list)
+    
+    # Auto-generation settings
+    auto_generate_sections: bool = True  # Auto-create sections if not defined
+    default_section_columns: int = 2     # Default column count
+    fallback_section_title: str = "Information"  # Default section name
+    fallback_section_icon: str = "fas fa-info-circle"  # Default icon
+
+    # ========== NEW PARAMETERS TO ADD ==========
+    # Action buttons configuration
+    enable_print: bool = False          # Enable print button in view
+    enable_export: bool = False         # Enable export button in view
+    
+    # Header configuration
+    header_config: Optional[Dict[str, Any]] = None  # Header display configuration with primary_field, status_field, etc.
+
 
 # =============================================================================
 # CORE DATA CLASSES - Complete field definition with ALL parameters
@@ -89,6 +184,13 @@ class FieldDefinition:
     show_in_detail: bool = True       # Show in detail/view page
     show_in_form: bool = True         # Show in create/edit forms ✓ FROM entity_configurations
     
+    # ========== NEW: VIEW ORGANIZATION (v2.1) ==========
+    tab_group: Optional[str] = None    # Which tab (eliminates hardcoding)
+    section: Optional[str] = None      # Which section within tab
+    view_order: int = 0                # Display order within section
+    columns_span: Optional[int] = None # Grid span (1-12, default auto)
+    conditional_display: Optional[str] = None  # Show/hide condition
+
     # ========== BEHAVIOR CONTROL ==========
     searchable: bool = False          # Enable text search on this field
     sortable: bool = False            # Enable column sorting
@@ -108,6 +210,10 @@ class FieldDefinition:
     min_value: Optional[float] = None          # Minimum numeric value ✓ FROM docs
     max_value: Optional[float] = None          # Maximum numeric value ✓ FROM docs
     validation: Optional[Dict] = None          # Custom validation rules ✓ FROM field_definitions
+    default_value: Optional[Any] = None        # Default value for the field
+    unique: bool = False
+    validators: List[str] = field(default_factory=list)
+    step: Optional[float] = None             # Step increment for number inputs
     
     # ========== RELATIONSHIPS ==========
     related_field: Optional[str] = None        # Foreign key field
@@ -119,6 +225,7 @@ class FieldDefinition:
     css_classes: Optional[str] = None         # Custom CSS classes
     table_column_style: Optional[str] = None  # Inline styles for tables
     format_pattern: Optional[str] = None      # Display format pattern
+    rows: Optional[int] = None
     
     # ========== ADVANCED DISPLAY ==========
     custom_renderer: Optional['CustomRenderer'] = None     # Custom rendering object
@@ -172,11 +279,19 @@ class ActionDefinition:
     show_in_detail: bool = True          # Show in detail view
     show_in_toolbar: bool = False        # Show in page toolbar
     
+    # ========== NEW PARAMETERS TO ADD ==========
+    display_type: ActionDisplayType = ActionDisplayType.DROPDOWN_ITEM  # NEW: How to display
+    button_group: Optional[str] = None   # NEW: Group buttons together
+
     # ========== ADVANCED FEATURES ==========
     conditions: Optional[Dict[str, Any]] = None    # Conditional display rules
     custom_handler: Optional[str] = None           # Custom handler function name
     javascript_handler: Optional[str] = None       # JS function name
     custom_template: Optional[str] = None          # Custom template override
+    order: int = 999                               # NEW: Display order for sorting
+
+    # ========== NEW: EXPRESSION-BASED CONDITIONAL DISPLAY ==========
+    conditional_display: Optional[str] = None    # Expression-based display condition
 
     def get_url(self, item: Dict, entity_config=None) -> str:
         """
@@ -191,6 +306,24 @@ class ActionDefinition:
         Returns:
             Generated URL string
         """
+        # ✅ DEBUG: Add unicode-safe logging
+        from app.utils.unicode_logging import get_unicode_safe_logger
+        logger = get_unicode_safe_logger(__name__)
+        
+        logger.info(f"🔍 [ACTION_URL_DEBUG] Action: {self.id}")
+        logger.info(f"🔍 [ACTION_URL_DEBUG] URL Pattern: {self.url_pattern}")
+        logger.info(f"🔍 [ACTION_URL_DEBUG] Route Name: {self.route_name}")
+        logger.info(f"🔍 [ACTION_URL_DEBUG] Item type: {type(item)}")
+        logger.info(f"🔍 [ACTION_URL_DEBUG] Item keys: {list(item.keys()) if item else 'None'}")
+        logger.info(f"🔍 [ACTION_URL_DEBUG] Entity config type: {type(entity_config)}")
+        logger.info(f"🔍 [ACTION_URL_DEBUG] Entity config entity_type: {entity_config.entity_type if entity_config and hasattr(entity_config, 'entity_type') else 'None'}")
+        logger.info(f"🔍 [ACTION_URL_DEBUG] Entity primary key field: {entity_config.primary_key if entity_config and hasattr(entity_config, 'primary_key') else 'None'}")
+        
+        if entity_config and hasattr(entity_config, 'primary_key') and item:
+            pk_value = item.get(entity_config.primary_key)
+            logger.info(f"🔍 [ACTION_URL_DEBUG] Primary key value: {pk_value}")
+            logger.info(f"🔍 [ACTION_URL_DEBUG] Primary key type: {type(pk_value)}")
+        
         try:
             if self.route_name:
                 # Build kwargs from route_params
@@ -232,8 +365,6 @@ class ActionDefinition:
                     return url_for(self.route_name, **kwargs)
                 except Exception as url_error:
                     # If url_for fails (e.g., outside request context), return safe fallback
-                    import logging
-                    logger = logging.getLogger(__name__)
                     logger.debug(f"url_for failed for {self.route_name}: {url_error}")
                     return '#'
                 
@@ -248,8 +379,16 @@ class ActionDefinition:
                 def replace_field(match):
                     field_name = match.group(1)
                     
+                    logger.debug(f"🔍 [URL_REPLACE_DEBUG] Processing placeholder: {field_name}")
+
+                    # ✅ NEW: Handle {entity_type} placeholder
+                    if field_name == 'entity_type' and entity_config and hasattr(entity_config, 'entity_type'):
+                        result = str(entity_config.entity_type)
+                        logger.debug(f"🔍 [URL_REPLACE_DEBUG] Replaced {field_name} with: {result}")
+                        return result
+
                     # ✅ SMART MAPPING: {id} → primary key field
-                    if field_name == 'id' and entity_config and hasattr(entity_config, 'primary_key'):
+                    elif field_name == 'id' and entity_config and hasattr(entity_config, 'primary_key'):
                         actual_field_name = entity_config.primary_key
                         value = item.get(actual_field_name, '')
                         return str(value) if value else ''
@@ -278,9 +417,9 @@ class ActionDefinition:
                 
         except Exception as e:
             # Log error and return safe fallback
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.debug(f"Error generating URL for action {self.id}: {str(e)}")
+            logger.error(f"❌ [ACTION_URL_ERROR] Error generating URL for action {self.id}: {str(e)}")
+            logger.error(f"❌ [ACTION_URL_ERROR] Item data: {item}")
+            logger.error(f"❌ [ACTION_URL_ERROR] Entity config: {entity_config}")
             return '#'
 
 # Note: ActionConfiguration from field_definitions.py is simpler
@@ -365,6 +504,14 @@ class EntityConfiguration:
     permissions: Dict[str, str]         # Permission mapping
     
     # ========== ALL OPTIONAL PARAMETERS AFTER ==========
+
+    # ========== VIEW LAYOUT CONFIGURATION (v2.1) ==========
+    view_layout: Optional[ViewLayoutConfiguration] = None
+    section_definitions: Dict[str, SectionDefinition] = field(default_factory=dict)
+    
+    # ========== ENHANCED FEATURES (v2.0) ==========
+    model_class: Optional[str] = None
+
     # Database
     model_class: Optional[str] = None
     
@@ -481,5 +628,22 @@ def validate_action_definition(action_def: ActionDefinition) -> List[str]:
     
     if action_def.confirmation_required and not action_def.confirmation_message:
         errors.append("Confirmation message is required when confirmation_required is True")
+    
+    return errors
+
+def validate_entity_configuration(config: EntityConfiguration) -> List[str]:
+    """Validate entity configuration"""
+    errors = []
+    
+    if not config.entity_type:
+        errors.append("Entity type is required")
+    
+    if not config.fields:
+        errors.append("At least one field must be defined")
+    
+    # Validate view layout configuration
+    if config.view_layout:
+        if config.view_layout.type == LayoutType.TABBED and not config.view_layout.tabs:
+            errors.append("Tabbed layout requires tab definitions")
     
     return errors

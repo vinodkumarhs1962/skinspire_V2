@@ -1,0 +1,68 @@
+<!-- File: app/templates/engine/layouts/tabbed_view.html -->
+<div class="universal-tabbed-view bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+    
+    <!-- Tab Navigation -->
+    <div class="universal-tab-navigation">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-6">
+            <nav class="-mb-px flex space-x-8 overflow-x-auto">
+                {% for tab in field_sections|sort(attribute='order') %}
+                    <button class="universal-tab-button flex items-center space-x-2 py-4 px-2 text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 border-b-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600 transition-colors whitespace-nowrap {% if loop.first %}active text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400{% endif %}"
+                            data-tab="{{ tab.key }}">
+                        <i class="{{ tab.icon }}"></i>
+                        <span>{{ tab.label }}</span>
+                    </button>
+                {% endfor %}
+            </nav>
+        </div>
+    </div>
+    
+    <!-- Tab Content -->
+    <div class="universal-tab-content">
+        {% for tab in field_sections|sort(attribute='order') %}
+            <div class="universal-tab-panel p-6 {% if not loop.first %}hidden{% endif %}" 
+                 id="tab-{{ tab.key }}">
+                
+                {% for section in tab.sections|sort(attribute='order') %}
+                    <div class="universal-field-section {% if section.collapsible %}universal-collapsible-section{% endif %} bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 mb-6">
+                        
+                        <!-- Section Header -->
+                        <div class="universal-section-header px-4 py-3 {% if section.collapsible %}cursor-pointer{% endif %}" 
+                             {% if section.collapsible %}onclick="toggleSection('{{ section.key }}')"{% endif %}>
+                            <h4 class="universal-section-title text-md font-medium text-gray-800 dark:text-gray-200 flex items-center">
+                                <i class="{{ section.icon }} text-gray-500 mr-2"></i>
+                                {{ section.title }}
+                                {% if section.collapsible %}
+                                    <i class="fas fa-chevron-down ml-auto transform transition-transform" id="chevron-{{ section.key }}"></i>
+                                {% endif %}
+                            </h4>
+                        </div>
+                        
+                        <!-- Section Fields -->
+                        <div class="universal-section-fields px-4 pb-4 {% if section.collapsible and section.collapsed_by_default %}hidden{% endif %}" 
+                             id="content-{{ section.key }}">
+                            <div class="grid grid-cols-1 md:grid-cols-{{ section.columns }} gap-4">
+                                {% for field in section.fields|sort(attribute='view_order') %}
+                                    <div class="universal-field-group {{ field.css_class }}">
+                                        <label class="universal-field-label block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            {{ field.label }}
+                                        </label>
+                                        <div class="universal-field-value text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 px-3 py-2 rounded border border-gray-300 dark:border-gray-600">
+                                            {% if field.is_empty %}
+                                                <span class="text-gray-400 italic">Not specified</span>
+                                            {% else %}
+                                                {{ field.value|safe }}
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                    </div>
+                {% endfor %}
+                
+            </div>
+        {% endfor %}
+    </div>
+    
+</div>

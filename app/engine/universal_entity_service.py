@@ -280,6 +280,9 @@ class UniversalEntityService(ABC):
                 
                 # Find ID field dynamically
                 id_field = self._get_id_field()
+                # ===== ADD THIS DEBUG =====
+                logger.info(f"[{self.entity_type}] get_by_id: Looking for {id_field}={item_id}")
+                # ===== END DEBUG =====
                 if not id_field:
                     return None
                 
@@ -298,15 +301,24 @@ class UniversalEntityService(ABC):
     
     def _get_id_field(self) -> Optional[str]:
         """Get the primary key field name for the model"""
-        # Common patterns
+        # ALWAYS check configuration first - this is the source of truth
+        if self.config and hasattr(self.config, 'primary_key') and self.config.primary_key:
+            logger.debug(f"Using primary_key '{self.config.primary_key}' from config for {self.entity_type}")
+            return self.config.primary_key
+        
+        # Log warning if no config
+        logger.warning(f"No primary_key in config for {self.entity_type}, trying common patterns")
+        
+        # Common patterns fallback
         common_id_fields = [
             f'{self.entity_type[:-1]}_id',  # e.g., supplier_id for suppliers
-            f'{self.entity_type}_id',        # e.g., suppliers_id
             'id'                             # generic id
         ]
         
         for field_name in common_id_fields:
             if hasattr(self.model_class, field_name):
+                logger.debug(f"Found ID field by pattern: {field_name}")
                 return field_name
         
+        logger.error(f"No ID field found for {self.entity_type}")
         return None

@@ -1,24 +1,28 @@
 /* ==========================================
-   ICON COMPONENTS
+   FONTAWESOME ICON FIXES AND ENHANCEMENTS
    File: static/css/components/icons.css
    ========================================== */
 
 /* ==========================================
-   FONTAWESOME ICON FIXES - CENTRALIZED
+   CORE FONTAWESOME FIXES
    ========================================== */
 
-/* Ensure FontAwesome icons are always visible */
-.fas, .far, .fab, .fal, .fad {
-    display: inline-block !important;
+/* Ensure FontAwesome icons use correct font */
+.fa,
+.fas,
+.far,
+.fal,
+.fad,
+.fab {
     font-family: "Font Awesome 5 Free" !important;
     font-style: normal !important;
     font-variant: normal !important;
     text-rendering: auto !important;
-    line-height: 1 !important;
-    vertical-align: baseline !important;
+    -webkit-font-smoothing: antialiased !important;
+    display: inline-block !important;
 }
 
-/* Specific weights for FontAwesome */
+/* Font weight fixes for different icon styles */
 .fas {
     font-weight: 900 !important;
 }
@@ -27,83 +31,334 @@
     font-weight: 400 !important;
 }
 
-/* Override Tailwind's text size constraints for action column icons */
-.action-column .fas,
-.action-column .far,
-table .fas,
-table .far {
-    font-size: inherit !important;
-    width: auto !important;
-    height: auto !important;
-    min-width: 1em !important;
-    min-height: 1em !important;
-}
+/* ==========================================
+   ICON SPACING IN BUTTONS AND LABELS
+   ========================================== */
 
-/* Ensure action buttons have proper spacing and icon visibility */
-.action-buttons .fas,
-.action-buttons .far,
-.inline-flex .fas,
-.inline-flex .far {
-    padding: 0 !important;
+/* Icon spacing in buttons */
+.btn-primary i,
+.btn-secondary i,
+.btn-outline i,
+.btn-warning i,
+.btn-danger i,
+.btn-success i {
+    margin-right: 0.5rem !important;
+    display: inline-block !important;
     vertical-align: middle !important;
 }
 
-/* ==========================================
-   ICON SPACING UTILITIES
-   ========================================== */
-
-/* Ensure Tailwind margin utilities work with higher specificity */
-.mr-1 { margin-right: 0.25rem !important; }
-.mr-2 { margin-right: 0.5rem !important; }
-.mr-3 { margin-right: 0.75rem !important; }
-.ml-1 { margin-left: 0.25rem !important; }
-.ml-2 { margin-left: 0.5rem !important; }
-.ml-3 { margin-left: 0.75rem !important; }
-
-/* Semantic icon spacing classes for better maintainability */
-.icon-left { margin-right: 0.5rem !important; }
-.icon-right { margin-left: 0.5rem !important; }
-
-/* Optional: Add fallback spacing for icons without explicit classes */
-.fas:not([class*="mr-"]):not([class*="ml-"]) + * {
-    margin-left: 0.5rem !important;
-}
-
-.far:not([class*="mr-"]):not([class*="ml-"]) + * {
-    margin-left: 0.5rem !important;
+/* Icon-only buttons should not have margin */
+.btn-icon-only i {
+    margin: 0 !important;
 }
 
 /* ==========================================
-   ENHANCED ICON SPACING WITHIN BUTTONS
+   ICON COLORS IN SPECIFIC CONTEXTS
    ========================================== */
 
-/* Ensure icons within buttons have proper spacing from text */
-.btn-primary .icon-left,
-.btn-secondary .icon-left,
-.btn-outline .icon-left,
-.btn-danger .icon-left,
-.btn-success .icon-left,
-.btn-warning .icon-left,
-.btn-primary .fas.mr-2,
-.btn-secondary .fas.mr-2,
-.btn-outline .fas.mr-2,
-.btn-danger .fas.mr-2,
-.btn-success .fas.mr-2,
-.btn-warning .fas.mr-2 {
+/* Header field icons */
+.universal-view-header-field-label i.fa-building {
+    color: rgb(59 130 246) !important; /* blue-500 */
+}
+
+.universal-view-header-field-label i.fa-calendar {
+    color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.universal-view-header-field-label i.fa-file-invoice {
+    color: rgb(245 158 11) !important; /* amber-500 */
+}
+
+.universal-view-header-field-label i.fa-fingerprint {
+    color: rgb(139 92 246) !important; /* violet-500 */
+}
+
+.universal-view-header-field-label i.fa-rupee-sign,
+.universal-view-header-field-label i.fa-inr {
+    color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.universal-view-header-field-label i.fa-tag {
+    color: rgb(239 68 68) !important; /* red-500 */
+}
+
+/* Dark mode variants */
+.dark .universal-view-header-field-label i.fa-building {
+    color: rgb(96 165 250) !important; /* blue-400 */
+}
+
+.dark .universal-view-header-field-label i.fa-calendar {
+    color: rgb(74 222 128) !important; /* green-400 */
+}
+
+.dark .universal-view-header-field-label i.fa-file-invoice {
+    color: rgb(251 191 36) !important; /* amber-400 */
+}
+
+.dark .universal-view-header-field-label i.fa-fingerprint {
+    color: rgb(167 139 250) !important; /* violet-400 */
+}
+
+.dark .universal-view-header-field-label i.fa-rupee-sign,
+.dark .universal-view-header-field-label i.fa-inr {
+    color: rgb(74 222 128) !important; /* green-400 */
+}
+
+.dark .universal-view-header-field-label i.fa-tag {
+    color: rgb(248 113 113) !important; /* red-400 */
+}
+
+/* ==========================================
+   DROPDOWN ICON COLORS
+   ========================================== */
+
+.dropdown-item i {
+    width: 1.25rem !important;
+    display: inline-block !important;
+    text-align: center !important;
     margin-right: 0.5rem !important;
 }
 
-.btn-primary .icon-right,
-.btn-secondary .icon-right,
-.btn-outline .icon-right,
-.btn-danger .icon-right,
-.btn-success .icon-right,
-.btn-warning .icon-right,
-.btn-primary .fas.ml-2,
-.btn-secondary .fas.ml-2,
-.btn-outline .fas.ml-2,
-.btn-danger .fas.ml-2,
-.btn-success .fas.ml-2,
-.btn-warning .fas.ml-2 {
-    margin-left: 0.5rem !important;
+.dropdown-item i.fa-edit {
+    color: rgb(245 158 11) !important; /* amber-500 */
+}
+
+.dropdown-item i.fa-check {
+    color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.dropdown-item i.fa-times {
+    color: rgb(239 68 68) !important; /* red-500 */
+}
+
+.dropdown-item i.fa-copy {
+    color: rgb(59 130 246) !important; /* blue-500 */
+}
+
+.dropdown-item i.fa-trash {
+    color: rgb(220 38 38) !important; /* red-600 */
+}
+
+.dropdown-item i.fa-file-pdf {
+    color: rgb(239 68 68) !important; /* red-500 */
+}
+
+.dropdown-item i.fa-file-invoice-dollar {
+    color: rgb(245 158 11) !important; /* amber-500 */
+}
+
+.dropdown-item i.fa-print {
+    color: rgb(107 114 128) !important; /* gray-500 */
+}
+
+.dropdown-item i.fa-download {
+    color: rgb(34 197 94) !important; /* green-500 */
+}
+
+/* Dark mode dropdown icons */
+.dark .dropdown-item i.fa-edit {
+    color: rgb(251 191 36) !important; /* amber-400 */
+}
+
+.dark .dropdown-item i.fa-check {
+    color: rgb(74 222 128) !important; /* green-400 */
+}
+
+.dark .dropdown-item i.fa-times {
+    color: rgb(248 113 113) !important; /* red-400 */
+}
+
+.dark .dropdown-item i.fa-copy {
+    color: rgb(96 165 250) !important; /* blue-400 */
+}
+
+.dark .dropdown-item i.fa-trash {
+    color: rgb(248 113 113) !important; /* red-400 */
+}
+
+/* ==========================================
+   STATUS ICON COLORS
+   ========================================== */
+
+.status-badge i {
+    margin-right: 0.375rem !important;
+    display: inline-block !important;
+}
+
+/* Status specific icons */
+.status-active i,
+.status-completed i,
+.status-paid i {
+    color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.status-pending i,
+.status-processing i {
+    color: rgb(245 158 11) !important; /* amber-500 */
+}
+
+.status-inactive i,
+.status-cancelled i,
+.status-failed i {
+    color: rgb(239 68 68) !important; /* red-500 */
+}
+
+/* ==========================================
+   TABLE ACTION ICON COLORS
+   ========================================== */
+
+.action-buttons i {
+    display: inline-block !important;
+    vertical-align: middle !important;
+}
+
+.universal-action-btn.view i {
+    color: rgb(59 130 246) !important; /* blue-500 */
+}
+
+.universal-action-btn.edit i {
+    color: rgb(245 158 11) !important; /* amber-500 */
+}
+
+.universal-action-btn.delete i {
+    color: rgb(239 68 68) !important; /* red-500 */
+}
+
+/* ==========================================
+   FORM ICON COLORS
+   ========================================== */
+
+.form-label i {
+    color: rgb(107 114 128) !important; /* gray-500 */
+    margin-right: 0.25rem !important;
+}
+
+.form-label.required i {
+    color: rgb(239 68 68) !important; /* red-500 */
+}
+
+/* ==========================================
+   CARD HEADER ICON COLORS
+   ========================================== */
+
+.info-card-header i,
+.filter-card-header i,
+.stat-card i {
+    margin-right: 0.5rem !important;
+    display: inline-block !important;
+}
+
+/* Specific card type icons */
+.invoice-card i.fa-file-invoice {
+    color: rgb(59 130 246) !important; /* blue-500 */
+}
+
+.payment-card i.fa-money-bill-wave {
+    color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.supplier-card i.fa-truck {
+    color: rgb(245 158 11) !important; /* amber-500 */
+}
+
+/* ==========================================
+   ICON SIZE UTILITIES
+   ========================================== */
+
+.icon-xs { font-size: 0.75rem !important; }
+.icon-sm { font-size: 0.875rem !important; }
+.icon-base { font-size: 1rem !important; }
+.icon-lg { font-size: 1.25rem !important; }
+.icon-xl { font-size: 1.5rem !important; }
+.icon-2xl { font-size: 2rem !important; }
+
+/* ==========================================
+   ICON ANIMATION UTILITIES
+   ========================================== */
+
+.icon-spin {
+    animation: spin 2s linear infinite !important;
+}
+
+.icon-pulse {
+    animation: pulse 2s ease-in-out infinite !important;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* ==========================================
+   ICON ALIGNMENT FIXES
+   ========================================== */
+
+/* Ensure icons align properly with text */
+.align-icon-text {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.25rem !important;
+}
+
+/* Fix icon vertical alignment in various contexts */
+button i,
+a i,
+span i,
+label i,
+.badge i,
+.status-badge i {
+    vertical-align: middle !important;
+    line-height: 1 !important;
+}
+
+/* ==========================================
+   RESPONSIVE ICON ADJUSTMENTS
+   ========================================== */
+
+@media (max-width: 640px) {
+    /* Smaller icons on mobile for space efficiency */
+    .responsive-icon {
+        font-size: 0.875rem !important;
+    }
+    
+    /* Hide decorative icons on mobile if needed */
+    .hide-icon-mobile {
+        display: none !important;
+    }
+}
+
+/* ==========================================
+   ICON LOADING STATES
+   ========================================== */
+
+.icon-loading {
+    color: rgb(107 114 128) !important; /* gray-500 */
+    animation: spin 1s linear infinite !important;
+}
+
+.icon-success {
+    color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.icon-error {
+    color: rgb(239 68 68) !important; /* red-500 */
+}
+
+.icon-warning {
+    color: rgb(245 158 11) !important; /* amber-500 */
+}
+
+/* ==========================================
+   BREADCRUMB ICON FIXES
+   ========================================== */
+
+.universal-breadcrumb-separator {
+    color: rgb(156 163 175) !important; /* gray-400 */
+    margin: 0 0.5rem !important;
 }

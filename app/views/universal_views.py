@@ -28,7 +28,7 @@ from app.security.authorization.decorators import (
 from app.services.database_service import get_db_session
 from app.config.entity_configurations import get_entity_config, is_valid_entity_type, list_entity_types
 from app.engine.data_assembler import EnhancedUniversalDataAssembler
-from app.engine.universal_services import search_universal_entity_data, get_universal_service
+from app.engine.universal_services import search_universal_entity_data, get_universal_service, get_universal_item_data
 from app.utils.context_helpers import ensure_request_context, get_user_branch_context, get_branch_uuid_from_context_or_request
 from app.utils.unicode_logging import get_unicode_safe_logger
 
@@ -148,7 +148,7 @@ def get_template_for_entity(entity_type: str, action: str = 'list') -> str:
         # Check if entity has specific template configured
         if config and hasattr(config, 'template_overrides'):
             template_overrides = getattr(config, 'template_overrides', {})
-            if action in template_overrides:
+            if template_overrides is not None and action in template_overrides:
                 template_path = template_overrides[action]
                 # ✅ Template existence checking for overrides
                 try:
@@ -601,6 +601,9 @@ def universal_list_view(entity_type: str):
         # Handle GET requests (normal list view)
         assembled_data = get_universal_list_data(entity_type)
         
+        # Get service for potential future use (custom actions, etc.)
+        service = get_universal_service(entity_type)
+
         # Check for errors
         if assembled_data.get('has_errors'):
             for error in assembled_data.get('error_messages', []):
@@ -611,7 +614,10 @@ def universal_list_view(entity_type: str):
         
         try:
             logger.info(f"[SUCCESS] Successfully rendered {entity_type} list with {len(assembled_data.get('items', []))} items")
-            return render_template(template, assembled_data=assembled_data, **assembled_data)
+            return render_template(template, 
+                             service=service,  # Available if needed
+                             assembled_data=assembled_data, 
+                             **assembled_data)
         except Exception as template_error:
             logger.error(f"[ERROR] Template rendering error for {entity_type}: {str(template_error)}")
             
@@ -692,6 +698,13 @@ def get_universal_list_data_safe(entity_type: str) -> Dict:
 
         # ✅ FIXED: Get service and call with correct parameters  
         raw_data = get_service_data_safe(entity_type, config, current_filters, branch_uuid)
+
+        logger.info("🔍 [DEBUG SUPPLIER NAME - VIEW LEVEL]")
+        if raw_data.get('items'):
+            first_item = raw_data['items'][0]
+            logger.info(f"✅ Raw data first item keys: {list(first_item.keys()) if isinstance(first_item, dict) else 'Not a dict'}")
+            logger.info(f"✅ supplier_name in raw item: {'supplier_name' in first_item if isinstance(first_item, dict) else 'N/A'}")
+            logger.info(f"✅ supplier_name value: {first_item.get('supplier_name', 'NOT FOUND') if isinstance(first_item, dict) else 'N/A'}")
 
         # ✅ CRITICAL FIX: Use the service's processed filters (with aliases resolved)
         # This ensures summary cards use the SAME filters as the main query
@@ -894,70 +907,204 @@ def get_error_fallback_data(entity_type: str, error: str) -> Dict:
 # UNIVERSAL DETAIL VIEW
 # =============================================================================
 
+@universal_bp.route('/<entity_type>/view/<item_id>')
 @universal_bp.route('/<entity_type>/detail/<item_id>')
-@login_required 
-@require_web_branch_permission('universal', 'view')
+@login_required
 def universal_detail_view(entity_type: str, item_id: str):
-    """Universal detail view for any entity type"""
+    """
+    NEW: Enhanced Universal view router with advanced layout support
+    Same validation, permission checking, orchestrator pattern as universal list
+    """
     try:
-        # Validate entity type
+        # ===== SINGLE DEBUG POINT =====
+        logger.info("="*50)
+        logger.info(f"UNIVERSAL DETAIL VIEW CALLED")
+        logger.info(f"Entity Type: {entity_type}")
+        logger.info(f"Item ID from URL: {item_id}")
+        logger.info(f"Item ID Type: {type(item_id)}")
+        logger.info(f"Item ID Length: {len(item_id)}")
+        logger.info(f"Current User: {current_user.user_id if current_user else 'None'}")
+        logger.info(f"Hospital ID: {current_user.hospital_id if current_user else 'None'}")
+        logger.info("="*50)
+        # ===== END DEBUG =====
+
+        # ADD THIS DEBUG BLOCK:
+        logger.info("="*50)
+        logger.info("DEBUG: About to call get_branch_uuid_from_context_or_request")
+        
+        # Store the result first before unpacking
+        branch_result = get_branch_uuid_from_context_or_request()
+        logger.info(f"DEBUG: branch_result type: {type(branch_result)}")
+        logger.info(f"DEBUG: branch_result value: {branch_result}")
+        
+        if callable(branch_result):
+            logger.error("ERROR: branch_result is a function, not a value!")
+            logger.error(f"Function: {branch_result}")
+            # Try to fix by calling it
+            branch_result = branch_result()
+            logger.info(f"DEBUG: After calling, result: {branch_result}")
+        
+        # Now try to unpack
+        branch_uuid, branch_name = branch_result
+        logger.info(f"DEBUG: Successfully unpacked - UUID: {branch_uuid}, Name: {branch_name}")
+        logger.info("="*50)
+
+        # ADD THIS FIX:
+        if isinstance(branch_name, dict):
+            # Quick fix - extract a reasonable name from the dict
+            if branch_name.get('is_multi_branch_user'):
+                branch_name = "Multi-Branch Access"
+            else:
+                branch_name = "Main Branch"
+
+        # Same validation as universal list
         if not is_valid_entity_type(entity_type):
             flash(f"Entity type '{entity_type}' not found", 'error')
             return redirect(url_for('auth_views.dashboard'))
         
-        # Get entity configuration
         config = get_entity_config(entity_type)
-        
-        # Check permissions
         if not has_entity_permission(current_user, entity_type, 'view'):
-            flash(f"You don't have permission to view {config.name}", 'warning')
-            return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+            flash("You don't have permission to view this record", 'warning')
+            return redirect(url_for('auth_views.dashboard'))
         
-        # Get universal service and fetch item
-        service = get_universal_service(entity_type)
-        item = service.get_by_id(
-            item_id=item_id,
-            hospital_id=current_user.hospital_id,
-            current_user_id=current_user.user_id,
-            include_related=True
-        )
-        
-        if not item:
-            flash(f"{config.name} not found", 'error')
-            return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
-        
-        # Get branch context
+        # Same orchestrator pattern as universal list
         branch_uuid, branch_name = get_branch_uuid_from_context_or_request()
         
-        # Assemble detail data
-        detail_data = {
-            'entity_config': _make_template_safe_config(config),
-            'entity_type': entity_type,
-            'item': item,
-            'item_id': item_id,
-            'page_title': f"{config.name} - {getattr(item, config.title_field, item_id)}",
+        raw_item_data = get_universal_item_data(
+            entity_type=entity_type,
+            item_id=item_id,
+            hospital_id=current_user.hospital_id,
+            branch_id=branch_uuid,
+            current_user_id=current_user.user_id
+        )
+        
+        if raw_item_data.get('has_error'):
+            flash(raw_item_data.get('error', 'Record not found'), 'error')
+            return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+        
+        # Same data assembly pattern as universal list
+        assembler = EnhancedUniversalDataAssembler()
+        assembled_data = assembler.assemble_universal_view_data(
+            config=config,
+            raw_item_data=raw_item_data,
+            user_id=current_user.user_id,
+            branch_context={'branch_id': branch_uuid, 'branch_name': branch_name}
+        )
+        
+        # Get the service instance for custom renderer calls
+        service = get_universal_service(entity_type)
+
+        # ===== DEBUG: Check what service actually is =====
+        logger.error(f"🔍 [SERVICE_DEBUG] Service type: {type(service)}")
+        logger.error(f"🔍 [SERVICE_DEBUG] Service value: {service}")
+        logger.error(f"🔍 [SERVICE_DEBUG] Is callable: {callable(service)}")
+        if hasattr(service, '__name__'):
+            logger.error(f"🔍 [SERVICE_DEBUG] Service name: {service.__name__}")
+        if hasattr(service, '__class__'):
+            logger.error(f"🔍 [SERVICE_DEBUG] Service class: {service.__class__.__name__}")
+
+        # Check if service has the expected methods
+        expected_methods = ['get_po_items_for_payment', 'get_invoice_items_for_payment', 'get_payment_workflow_timeline']
+        for method_name in expected_methods:
+            if hasattr(service, method_name):
+                method = getattr(service, method_name)
+                logger.error(f"🔍 [SERVICE_DEBUG] Has {method_name}: YES (type: {type(method)})")
+            else:
+                logger.error(f"🔍 [SERVICE_DEBUG] Has {method_name}: NO")
+        # ===== END DEBUG =====
+
+        # Don't add the service object directly - pass it separately
+        assembled_data.update({
             'current_user': current_user,
-            'branch_context': {
-                'branch_id': branch_uuid,
-                'branch_name': branch_name
-            },
-            'breadcrumbs': [
-                {'label': 'Dashboard', 'url': url_for('main.dashboard')},
-                {'label': config.plural_name, 'url': url_for('universal_views.universal_list_view', entity_type=entity_type)},
-                {'label': f"View {config.name}", 'url': '#'}
-            ]
-        }
-        
+            # REMOVED 'service' from here
+            'current_hospital_id': current_user.hospital_id,  # Add hospital ID
+            'current_branch_id': branch_uuid,  # Add branch ID
+            'item_id': item_id  # Ensure item_id is available
+        })
+
         # Smart template routing
-        template_name = get_template_for_entity(entity_type, 'detail')
-        
-        logger.info(f"✅ Universal detail view rendered for {entity_type}/{item_id}")
-        
-        return render_template(template_name, **detail_data)
+        template_name = get_template_for_entity(entity_type, 'view')
+        if request.path.startswith('/universal/'):
+            template_name = 'engine/universal_view.html'
+
+        # DON'T UNPACK - pass everything explicitly to avoid iteration error
+        return render_template(
+            template_name,
+            # Service passed separately
+            service=service,
+            
+            # Main data container
+            assembled_data=assembled_data,
+            
+            # Core view components (extracted from assembled_data)
+            entity_config=assembled_data.get('entity_config'),
+            entity_type=assembled_data.get('entity_type'),
+            item=assembled_data.get('item'),
+            item_id=assembled_data.get('item_id'),
+            
+            # View structure
+            field_sections=assembled_data.get('field_sections'),
+            layout_type=assembled_data.get('layout_type'),
+            has_tabs=assembled_data.get('has_tabs'),
+            has_accordion=assembled_data.get('has_accordion'),
+            
+            # Header components
+            header_config=assembled_data.get('header_config'),
+            header_data=assembled_data.get('header_data'),
+            header_actions=assembled_data.get('header_actions'),
+            
+            # Action components
+            action_buttons=assembled_data.get('action_buttons'),
+            
+            # Page metadata
+            page_title=assembled_data.get('page_title'),
+            breadcrumbs=assembled_data.get('breadcrumbs'),
+            
+            # Context data
+            branch_context=assembled_data.get('branch_context'),
+            user_permissions=assembled_data.get('user_permissions'),
+            
+            # User and hospital data
+            current_user=assembled_data.get('current_user'),
+            current_hospital_id=assembled_data.get('current_hospital_id'),
+            current_branch_id=assembled_data.get('current_branch_id')
+        )
         
     except Exception as e:
-        logger.error(f"❌ Error in universal detail view for {entity_type}/{item_id}: {str(e)}")
-        flash(f"Error loading {entity_type} details: {str(e)}", 'error')
+        logger.error(f"❌ Router error: {str(e)}")
+        
+        # Get detailed traceback to find template error
+        import traceback
+        tb_lines = traceback.format_exc().split('\n')
+        
+        # Find the template error location
+        template_error_found = False
+        for i, line in enumerate(tb_lines):
+            if '.html' in line and 'File' in line:
+                template_error_found = True
+                logger.error("❌ TEMPLATE ERROR LOCATION:")
+                # Print the file line and next few lines for context
+                for j in range(max(0, i-2), min(len(tb_lines), i+5)):
+                    logger.error(f"   {tb_lines[j]}")
+                    
+            # Look for the actual template line content
+            if 'builtin_function_or_method' in line:
+                logger.error(f"❌ ERROR LINE: {line}")
+                # Get surrounding lines for context
+                for j in range(max(0, i-3), min(len(tb_lines), i+3)):
+                    logger.error(f"   Context: {tb_lines[j]}")
+        
+        # If it's a template error, try to get the specific variable
+        error_str = str(e)
+        if 'is not iterable' in error_str:
+            logger.error("❌ ITERATION ERROR - Something in the template is trying to iterate over a function/method")
+            logger.error(f"❌ Full error: {error_str}")
+        
+        # Log the full traceback if no template error found
+        if not template_error_found:
+            logger.error(f"❌ FULL TRACEBACK:\n{traceback.format_exc()}")
+        
+        flash(f"Error loading details: {str(e)}", 'error')
         return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
 
 # =============================================================================

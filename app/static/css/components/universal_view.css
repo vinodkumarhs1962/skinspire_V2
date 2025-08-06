@@ -1,0 +1,1247 @@
+/* File: static/css/components/universal_view.css
+   Enhanced view template styles leveraging existing component library */
+
+/* ==========================================
+   UNIVERSAL VIEW - BUILDS ON EXISTING COMPONENTS
+   Leverages: buttons.css, forms.css, cards.css, status.css
+   ========================================== */
+
+/* ==========================================
+   PAGE HEADER - EXTENDS EXISTING HEADER STYLES
+   ========================================== */
+
+.universal-page-header {
+    margin-bottom: 1.5rem !important;
+}
+
+.universal-page-header .header-inline {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1rem !important;
+}
+
+@media (min-width: 768px) {
+    .universal-page-header .header-inline {
+        flex-direction: row !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+    }
+}
+
+.universal-page-title {
+    font-size: 1.5rem !important;
+    line-height: 2rem !important;
+    font-weight: 700 !important;
+    color: rgb(17 24 39) !important;
+}
+
+.dark .universal-page-title {
+    color: rgb(243 244 246) !important;
+}
+
+.universal-breadcrumbs {
+    margin-top: 0.5rem !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.25rem !important;
+    font-size: 0.875rem !important;
+    color: rgb(107 114 128) !important;
+}
+
+.universal-breadcrumb-link {
+    color: rgb(107 114 128) !important;
+    transition: color 0.15s ease-in-out !important;
+}
+
+.universal-breadcrumb-link:hover {
+    color: rgb(55 65 81) !important;
+}
+
+.dark .universal-breadcrumb-link {
+    color: rgb(156 163 175) !important;
+}
+
+.dark .universal-breadcrumb-link:hover {
+    color: rgb(209 213 219) !important;
+}
+
+.universal-breadcrumb-separator {
+    color: rgb(156 163 175) !important;
+    margin: 0 0.5rem !important;
+}
+
+/* ==========================================
+   ACTION BUTTONS - USES EXISTING BUTTON COMPONENTS
+   ========================================== */
+
+.universal-action-buttons {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.75rem !important;
+}
+
+.universal-action-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    padding: 0.5rem 1rem !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    border-radius: 0.375rem !important;
+    transition: all 0.15s ease-in-out !important;
+}
+
+.universal-action-btn i {
+    margin-right: 0.625rem !important;
+}
+
+.header-inline-actions {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.75rem !important;
+}
+
+/* ==========================================
+   FIELD SECTIONS - BUILDS ON EXISTING CARD STYLES
+   ========================================== */
+
+.universal-field-section {
+    background: rgb(249 250 251) !important;  /* gray-50 - light gray instead of white */
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    border: 1px solid rgb(229 231 235) !important;
+    margin-bottom: 3rem !important;
+    margin-top: 3rem !important;
+}
+
+.dark .universal-field-section {
+    background: rgb(31 41 55) !important;
+    border-color: rgb(55 65 81) !important;
+}
+
+.universal-section-header {
+    border-bottom: 1px solid rgb(229 231 235) !important;
+    padding: 1rem 1.5rem !important;
+}
+
+.dark .universal-section-header {
+    border-bottom-color: rgb(55 65 81) !important;
+}
+
+.universal-section-title {
+    font-size: 1.125rem !important;
+    line-height: 1.75rem !important;
+    font-weight: 600 !important;
+    color: rgb(17 24 39) !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+.dark .universal-section-title {
+    color: rgb(243 244 246) !important;
+}
+
+.universal-section-title i {
+    margin-right: 0.75rem !important;
+    font-size: 1.125rem !important;
+    opacity: 0.8 !important;
+}
+
+/* Contextual icon colors for section titles */
+.universal-section-title i.fa-info-circle,
+.universal-section-title i.fa-file-text { color: rgb(59 130 246) !important; }
+
+.universal-section-title i.fa-credit-card,
+.universal-section-title i.fa-money-bill,
+.universal-section-title i.fa-money-bill-wave,
+.universal-section-title i.fa-rupee-sign { color: rgb(34 197 94) !important; }
+
+.universal-section-title i.fa-file-invoice,
+.universal-section-title i.fa-receipt,
+.universal-section-title i.fa-file-invoice-dollar { color: rgb(245 158 11) !important; }
+
+.universal-section-title i.fa-history,
+.universal-section-title i.fa-clock { color: rgb(139 92 246) !important; }
+
+.universal-section-title i.fa-paperclip,
+.universal-section-title i.fa-file,
+.universal-section-title i.fa-folder { color: rgb(107 114 128) !important; }
+
+.universal-section-title i.fa-tasks,
+.universal-section-title i.fa-project-diagram { color: rgb(236 72 153) !important; }
+
+/* Dark mode section title icons */
+.dark .universal-section-title i.fa-info-circle,
+.dark .universal-section-title i.fa-file-text { color: rgb(96 165 250) !important; }
+
+.dark .universal-section-title i.fa-credit-card,
+.dark .universal-section-title i.fa-money-bill,
+.dark .universal-section-title i.fa-money-bill-wave,
+.dark .universal-section-title i.fa-rupee-sign { color: rgb(74 222 128) !important; }
+
+.dark .universal-section-title i.fa-file-invoice,
+.dark .universal-section-title i.fa-receipt,
+.dark .universal-section-title i.fa-file-invoice-dollar { color: rgb(251 191 36) !important; }
+
+.dark .universal-section-title i.fa-history,
+.dark .universal-section-title i.fa-clock { color: rgb(167 139 250) !important; }
+
+.dark .universal-section-title i.fa-paperclip,
+.dark .universal-section-title i.fa-file,
+.dark .universal-section-title i.fa-folder { color: rgb(156 163 175) !important; }
+
+.dark .universal-section-title i.fa-tasks,
+.dark .universal-section-title i.fa-project-diagram { color: rgb(244 114 182) !important; }
+
+.universal-section-fields {
+    padding: 1.5rem !important;
+}
+
+/* Section content background for contrast */
+.universal-field-section .universal-section-fields {
+    background: white !important;
+    border-radius: 0.375rem !important;
+    padding: 1.5rem !important;
+}
+
+.dark .universal-field-section .universal-section-fields {
+    background: rgb(17 24 39) !important;
+}
+
+/* Apply to tab panels too */
+.universal-tab-panel .universal-field-section {
+    background: rgb(249 250 251) !important;
+    margin-bottom: 2rem !important;
+}
+
+/* Add consistent spacing between sections in all layouts */
+.universal-view-content .universal-field-section + .universal-field-section {
+    margin-top: 1.5rem !important;
+}
+
+/* Ensure sections in simple layout have proper spacing */
+.universal-simple-view .universal-field-section {
+    margin-bottom: 1.5rem !important;
+}
+
+/* Remove margin from last section in any container */
+.universal-view-content > *:last-child,
+.universal-tab-panel > *:last-child,
+.universal-accordion-content > *:last-child {
+    margin-bottom: 0 !important;
+}
+
+.dark .universal-tab-panel .universal-field-section {
+    background: rgb(31 41 55) !important;
+}
+
+/* Last section doesn't need bottom margin */
+.universal-tab-panel .universal-field-section:last-child {
+    margin-bottom: 0 !important;
+}
+
+
+/* ==========================================
+   FIELD GROUPS - ENHANCES EXISTING FORM COMPONENTS
+   ========================================== */
+
+.universal-field-group {
+    margin-bottom: 1rem !important;
+}
+
+.universal-field-label {
+    display: block !important;
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    color: rgb(55 65 81) !important;
+    margin-bottom: 0.375rem !important;
+}
+
+.dark .universal-field-label {
+    color: rgb(209 213 219) !important;
+}
+
+.universal-field-value {
+    font-size: 0.875rem !important;
+    font-weight: 400 !important;
+    color: rgb(17 24 39) !important;
+    background-color: rgb(249 250 251) !important;
+    padding: 0.5rem 0.75rem !important;
+    border-radius: 0.25rem !important;
+}
+
+.dark .universal-field-value {
+    color: rgb(243 244 246) !important;
+    background-color: rgb(17 24 39) !important;
+}
+
+.universal-field-value.empty {
+    color: rgb(156 163 175) !important;
+    font-style: italic !important;
+}
+
+/* Field type specific enhancements */
+.universal-field-currency .universal-field-value {
+    font-weight: 500 !important;
+    color: rgb(34 197 94) !important;
+}
+
+.dark .universal-field-currency .universal-field-value {
+    color: rgb(74 222 128) !important;
+}
+
+.universal-field-date .universal-field-value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 0.875rem !important;
+}
+
+.universal-field-uuid .universal-field-value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 0.75rem !important;
+    color: rgb(107 114 128) !important;
+}
+
+/* ==========================================
+   TABBED LAYOUT - NEW COMPONENT
+   ========================================== */
+
+.universal-tabbed-view {
+    background: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    border: 1px solid rgb(229 231 235) !important;
+}
+
+.dark .universal-tabbed-view {
+    background: rgb(31 41 55) !important;
+    border-color: rgb(55 65 81) !important;
+}
+
+.universal-tab-navigation {
+    border-bottom: 1px solid rgb(229 231 235) !important;
+    padding: 0 0.5rem !important; /* Add horizontal padding */
+}
+
+.dark .universal-tab-navigation {
+    border-bottom-color: rgb(55 65 81) !important;
+}
+
+.universal-tab-button {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    padding: 0.5rem !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    color: rgb(107 114 128) !important;
+    border-bottom: 2px solid transparent !important;
+    background: transparent !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease-in-out !important;
+    white-space: nowrap !important;
+}
+
+.universal-tab-button:hover {
+    color: rgb(55 65 81) !important;
+    border-bottom-color: rgb(209 213 219) !important;
+}
+
+.dark .universal-tab-button {
+    color: rgb(156 163 175) !important;
+}
+
+.dark .universal-tab-button:hover {
+    color: rgb(209 213 219) !important;
+    border-bottom-color: rgb(107 114 128) !important;
+}
+
+.universal-tab-button.active {
+    color: rgb(59 130 246) !important;
+    border-bottom-color: rgb(59 130 246) !important;
+}
+
+.dark .universal-tab-button.active {
+    color: rgb(96 165 250) !important;
+    border-bottom-color: rgb(96 165 250) !important;
+}
+
+/* Additional specificity for active state */
+.universal-tab-navigation .universal-tab-button.active {
+    color: rgb(59 130 246) !important;
+    border-bottom-color: rgb(59 130 246) !important;
+}
+
+.dark .universal-tab-navigation .universal-tab-button.active {
+    color: rgb(96 165 250) !important;
+    border-bottom-color: rgb(96 165 250) !important;
+}
+
+.universal-tab-content {
+    position: relative !important;
+}
+
+.universal-tab-panel {
+    padding: 1.5rem !important;
+}
+
+/* CRITICAL TAB VISIBILITY RULES */
+.universal-tab-panel {
+    display: none !important;
+}
+
+/* Show first tab by default */
+.universal-tab-panel:first-of-type {
+    display: block !important;
+}
+
+/* JavaScript-controlled visibility */
+.universal-tab-panel.hidden {
+    display: none !important;
+}
+
+/* Tab panel must be visible when NOT hidden */
+.universal-tab-panel:not(.hidden) {
+    display: block !important;
+}
+
+/* Ensure proper cascade for hidden state */
+.universal-tab-content > .universal-tab-panel.hidden {
+    display: none !important;
+}
+
+/* Active panel always visible */
+.universal-tab-panel.active {
+    display: block !important;
+}
+
+/* Debug: number each tab panel */
+.universal-tab-panel {
+    counter-increment: tab-counter;
+}
+
+/* IMPORTANT: Override any inline styles */
+.universal-tab-panel[style*="display: none"] {
+    display: none !important;
+}
+
+.universal-tab-panel[style*="display: block"] {
+    display: block !important;
+}
+
+/* Tab Navigation Container - Fix overflow */
+.universal-tab-navigation {
+    border-bottom: 1px solid rgb(229 231 235) !important;
+    padding: 0 0.5rem !important; /* Add horizontal padding */
+}
+
+.universal-tab-navigation nav {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: thin !important;
+}
+
+/* Reduce tab button padding to save space */
+.universal-tab-button {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    padding: 0.75rem 1rem !important; /* Reduced from 1rem */
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    /* ... rest unchanged ... */
+}
+
+/* Tab scroll indicators for mobile */
+@media (max-width: 768px) {
+    .universal-tab-navigation::before,
+    .universal-tab-navigation::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 20px;
+        pointer-events: none;
+        z-index: 10;
+    }
+    
+    .universal-tab-navigation::before {
+        left: 0;
+        background: linear-gradient(to right, rgba(255,255,255,1), rgba(255,255,255,0));
+    }
+    
+    .universal-tab-navigation::after {
+        right: 0;
+        background: linear-gradient(to left, rgba(255,255,255,1), rgba(255,255,255,0));
+    }
+}
+
+/* Utility class for rotated chevrons */
+.rotated {
+    transform: rotate(180deg) !important;
+    transition: transform 0.2s ease-in-out !important;
+}
+
+/* ==========================================
+   ACCORDION LAYOUT - NEW COMPONENT
+   ========================================== */
+
+.universal-accordion-view {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1rem !important;
+}
+
+.universal-accordion-section {
+    background: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    border: 1px solid rgb(229 231 235) !important;
+}
+
+.dark .universal-accordion-section {
+    background: rgb(31 41 55) !important;
+    border-color: rgb(55 65 81) !important;
+}
+
+.universal-accordion-header {
+    padding: 1rem 1.5rem !important;
+    cursor: pointer !important;
+    border-bottom: 1px solid rgb(229 231 235) !important;
+    transition: background-color 0.15s ease-in-out !important;
+}
+
+.dark .universal-accordion-header {
+    border-bottom-color: rgb(55 65 81) !important;
+}
+
+.universal-accordion-header:hover {
+    background-color: rgb(249 250 251) !important;
+}
+
+.dark .universal-accordion-header:hover {
+    background-color: rgb(55 65 81) !important;
+}
+
+.universal-accordion-content {
+    padding: 1.5rem !important;
+}
+
+.universal-accordion-content.hidden {
+    display: none !important;
+}
+
+/* ==========================================
+   COLLAPSIBLE SECTIONS (within tabs)
+   ========================================== */
+
+.universal-collapsible-section .universal-section-header {
+    cursor: pointer !important;
+    transition: background-color 0.15s ease-in-out !important;
+}
+
+.universal-collapsible-section .universal-section-header:hover {
+    background-color: rgb(249 250 251) !important;
+}
+
+.dark .universal-collapsible-section .universal-section-header:hover {
+    background-color: rgb(31 41 55) !important;
+}
+
+/* ==========================================
+   ERROR HANDLING - USES EXISTING STATUS COMPONENTS
+   ========================================== */
+
+.universal-error-card {
+    background-color: rgb(254 242 242) !important;
+    border: 1px solid rgb(254 226 226) !important;
+    border-radius: 0.5rem !important;
+    padding: 1rem !important;
+    margin-bottom: 1.5rem !important;
+}
+
+.dark .universal-error-card {
+    background-color: rgb(127 29 29 / 0.2) !important;
+    border-color: rgb(239 68 68) !important;
+}
+
+.universal-error-value {
+    color: rgb(185 28 28) !important;
+    font-style: italic !important;
+}
+
+/* ==========================================
+   RESPONSIVE ENHANCEMENTS
+   ========================================== */
+
+@media (max-width: 768px) {
+    .universal-page-header .header-inline {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 1rem !important;
+    }
+    
+    .universal-action-buttons {
+        width: 100% !important;
+    }
+    
+    .universal-action-btn {
+        flex: 1 !important;
+        justify-content: center !important;
+    }
+    
+    .universal-tab-navigation nav {
+        overflow-x: auto !important;
+        padding-bottom: 0.5rem !important;
+    }
+    
+    .universal-tab-button {
+        min-width: max-content !important;
+    }
+}
+
+/* ==========================================
+   UNIVERSAL VIEW HEADER - CONSOLIDATED
+   ========================================== */
+
+/* Container Structure */
+.universal-view-header {
+    background: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+    border: 1px solid rgb(229 231 235) !important;
+    padding: 1.5rem !important;
+    margin-bottom: 1.5rem !important;
+}
+
+.dark .universal-view-header {
+    background: rgb(31 41 55) !important;
+    border-color: rgb(55 65 81) !important;
+}
+
+/* Header Fields Grid */
+.universal-view-header-fields {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 1.5rem !important;
+    padding-top: 1.5rem !important;
+    border-top: 1px solid rgb(229 231 235) !important;
+    margin-top: 1.5rem !important;
+}
+
+.dark .universal-view-header-fields {
+    border-top-color: rgb(55 65 81) !important;
+}
+
+@media (min-width: 768px) {
+    .universal-view-header-fields {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+@media (min-width: 1024px) {
+    .universal-view-header-fields {
+        grid-template-columns: repeat(4, 1fr) !important;
+    }
+}
+
+/* Field Container - Now displays inline */
+.universal-view-header-field {
+    display: flex !important;
+    flex-direction: column !important;  /* Changed from row to column */
+    align-items: flex-start !important; /* Changed from baseline to flex-start */
+    gap: 0.25rem !important;            /* Reduced gap between label and value */
+}
+
+/* Primary Field Container */
+.universal-view-header-primary {
+    margin-top: 0.75rem !important;
+}
+
+/* ==========================================
+   LABELS AND VALUES - UNIFIED STYLING
+   ========================================== */
+
+/* All Labels - Primary Fields (Supplier, Reference) */
+.universal-view-header-field-label,
+.universal-view-header-label {
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+    color: rgb(75 85 99) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
+}
+
+/* All Values - Primary Fields */
+.universal-view-header-field-value,
+.universal-view-header-value {
+    font-size: 1rem !important;
+    font-weight: 400 !important;
+    color: rgb(17 24 39) !important;
+}
+
+/* Secondary Fields (inside grid) - Smaller */
+.universal-view-header-fields .universal-view-header-field-label {
+    font-size: 0.875rem !important;
+}
+
+.universal-view-header-fields .universal-view-header-field-value {
+    font-size: 0.875rem !important;
+}
+
+/* Special Styling */
+.universal-view-header-value.primary-reference {
+    font-size: 1.125rem !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+}
+
+.universal-view-header-field-value.currency {
+    color: rgb(34 197 94) !important;
+    font-weight: 500 !important;
+}
+
+.universal-view-header-field-value.date {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+}
+
+/* Dark Mode */
+.dark .universal-view-header-field-label,
+.dark .universal-view-header-label {
+    color: rgb(156 163 175) !important;
+}
+
+.dark .universal-view-header-field-value,
+.dark .universal-view-header-value {
+    color: rgb(243 244 246) !important;
+}
+
+.dark .universal-view-header-field-value.currency {
+    color: rgb(74 222 128) !important;
+}
+
+/* ==========================================
+   HEADER ICONS - CONSOLIDATED
+   ========================================== */
+
+/* Base icon styling */
+.universal-view-header-field-label i {
+    font-size: 0.75rem !important;
+    margin-right: 0.375rem !important;
+}
+
+/* Icon colors by type */
+.universal-view-header-field-label i.fa-building { color: rgb(59 130 246) !important; }
+.universal-view-header-field-label i.fa-calendar { color: rgb(34 197 94) !important; }
+.universal-view-header-field-label i.fa-file-invoice { color: rgb(245 158 11) !important; }
+.universal-view-header-field-label i.fa-fingerprint { color: rgb(139 92 246) !important; }
+.universal-view-header-field-label i.fa-rupee-sign,
+.universal-view-header-field-label i.fa-inr { color: rgb(34 197 94) !important; }
+.universal-view-header-field-label i.fa-tag { color: rgb(239 68 68) !important; }
+
+/* Additional contextual icon colors for section titles */
+.universal-section-title i.fa-network-wired,
+.universal-section-title i.fa-code-branch,
+.universal-section-title i.fa-flow-chart { color: rgb(59 130 246) !important; }
+
+.universal-section-title i.fa-user,
+.universal-section-title i.fa-users,
+.universal-section-title i.fa-user-tie { color: rgb(34 197 94) !important; }
+
+.universal-section-title i.fa-comment,
+.universal-section-title i.fa-comments,
+.universal-section-title i.fa-sticky-note { color: rgb(245 158 11) !important; }
+
+/* Default color for any unspecified icons */
+.universal-section-title i:not([class*="fa-info-circle"]):not([class*="fa-file"]):not([class*="fa-credit-card"]):not([class*="fa-money"]):not([class*="fa-invoice"]):not([class*="fa-receipt"]):not([class*="fa-history"]):not([class*="fa-clock"]):not([class*="fa-paperclip"]):not([class*="fa-folder"]):not([class*="fa-tasks"]):not([class*="fa-project"]) {
+    color: rgb(107 114 128) !important;
+}
+
+
+/* Dark mode icon colors */
+.dark .universal-view-header-field-label i.fa-building { color: rgb(96 165 250) !important; }
+.dark .universal-view-header-field-label i.fa-calendar { color: rgb(74 222 128) !important; }
+.dark .universal-view-header-field-label i.fa-file-invoice { color: rgb(251 191 36) !important; }
+.dark .universal-view-header-field-label i.fa-fingerprint { color: rgb(167 139 250) !important; }
+.dark .universal-view-header-field-label i.fa-rupee-sign,
+.dark .universal-view-header-field-label i.fa-inr { color: rgb(74 222 128) !important; }
+.dark .universal-view-header-field-label i.fa-tag { color: rgb(248 113 113) !important; }
+
+/* Dark mode additional icons */
+.dark .universal-section-title i.fa-network-wired,
+.dark .universal-section-title i.fa-code-branch,
+.dark .universal-section-title i.fa-flow-chart { color: rgb(96 165 250) !important; }
+
+.dark .universal-section-title i.fa-user,
+.dark .universal-section-title i.fa-users,
+.dark .universal-section-title i.fa-user-tie { color: rgb(74 222 128) !important; }
+
+/* ==========================================
+   TITLE AND STATUS
+   ========================================== */
+
+.universal-view-header-title {
+    font-size: 1.5rem !important;
+    line-height: 2rem !important;
+    font-weight: 700 !important;
+    color: rgb(17 24 39) !important;
+    margin-bottom: 0.5rem !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+}
+
+.dark .universal-view-header-title {
+    color: rgb(243 244 246) !important;
+}
+
+.universal-view-header-status {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    margin-left: auto !important;
+}
+
+.universal-view-header-status .status-badge {
+    font-size: 0.875rem !important;
+    padding: 0.25rem 0.75rem !important;
+}
+
+/* ==========================================
+   DROPDOWN MENU STYLING
+   ========================================== */
+
+.dropdown-toggle {
+    display: inline-flex !important;
+    align-items: center !important;
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    color: rgb(55 65 81) !important;
+    background: white !important;
+    border: 1px solid rgb(209 213 219) !important;
+    border-radius: 0.375rem !important;
+    transition: all 0.15s ease-in-out !important;
+}
+
+.dropdown-toggle:hover {
+    background-color: rgb(249 250 251) !important;
+}
+
+.dark .dropdown-toggle {
+    color: rgb(209 213 219) !important;
+    background: rgb(55 65 81) !important;
+    border-color: rgb(75 85 99) !important;
+}
+
+.dark .dropdown-toggle:hover {
+    background-color: rgb(75 85 99) !important;
+}
+
+/* Icon colors in dropdowns */
+.dropdown-item {
+    display: flex !important;
+    align-items: center !important;
+    padding: 0.5rem 1rem !important;
+    font-size: 0.875rem !important;
+    color: rgb(55 65 81) !important;
+    transition: background-color 0.15s ease-in-out !important;
+}
+
+.dropdown-item:hover {
+    background-color: rgb(249 250 251) !important;
+    color: rgb(17 24 39) !important;
+}
+
+.dark .dropdown-item {
+    color: rgb(209 213 219) !important;
+}
+
+.dark .dropdown-item:hover {
+    background-color: rgb(55 65 81) !important;
+    color: rgb(243 244 246) !important;
+}
+
+.dropdown-item i {
+    width: 1.25rem !important;
+    margin-right: 0.75rem !important;
+    color: rgb(156 163 175) !important;
+}
+
+.dark .dropdown-item i {
+    color: rgb(107 114 128) !important;
+}
+
+/* Dropdown toggle - extends existing btn styles */
+.dropdown-toggle::after {
+    content: none !important; /* Remove default caret */
+}
+
+/* ==========================================
+   RESPONSIVE ADJUSTMENTS
+   ========================================== */
+
+@media (max-width: 768px) {
+    .universal-view-header-content {
+        padding: 1rem !important;
+    }
+    
+    .universal-view-header-title {
+        font-size: 1.25rem !important;
+    }
+    
+    .universal-view-header-value {
+        font-size: 1.125rem !important;
+    }
+    
+    .universal-view-header-fields {
+        grid-template-columns: 1fr !important;
+        gap: 1rem !important;
+    }
+}
+
+/* ==========================================
+   DARK MODE ENHANCEMENTS
+   ========================================== */
+
+.dark .universal-view-header {
+    background: rgb(31 41 55) !important;
+    border-color: rgb(55 65 81) !important;
+}
+
+.dark .universal-view-header-fields {
+    border-top-color: rgb(55 65 81) !important;
+}
+
+/* ==========================================
+   ANIMATION FOR HEADER
+   ========================================== */
+
+.universal-view-header {
+    animation: headerSlideDown 0.3s ease-out;
+}
+
+@keyframes headerSlideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ==========================================
+   PRINT-SPECIFIC STYLES
+   ========================================== */
+
+@media print {
+    .header-inline-actions,
+    .dropdown {
+        display: none !important;
+    }
+    
+    .universal-view-header {
+        box-shadow: none !important;
+        border: 1px solid #ddd !important;
+    }
+}
+
+/* Dropdown item icon colors - FIX FOR ISSUE 1 */
+.dropdown-item i {
+    width: 1.25rem !important; /* Fixed width for alignment */
+}
+
+.dropdown-item i.fa-edit {
+    color: rgb(245 158 11) !important; /* amber-500 */
+}
+
+.dropdown-item i.fa-check {
+    color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.dropdown-item i.fa-times {
+    color: rgb(239 68 68) !important; /* red-500 */
+}
+
+.dropdown-item i.fa-copy {
+    color: rgb(59 130 246) !important; /* blue-500 */
+}
+
+.dropdown-item i.fa-trash {
+    color: rgb(220 38 38) !important; /* red-600 */
+}
+
+.dropdown-item i.fa-file-pdf {
+    color: rgb(239 68 68) !important; /* red-500 */
+}
+
+.dropdown-item i.fa-file-invoice-dollar {
+    color: rgb(245 158 11) !important; /* amber-500 */
+}
+
+/* ==========================================
+   ROTATED CHEVRON FOR ACCORDION/COLLAPSIBLE
+   ========================================== */
+
+.rotated {
+    transform: rotate(180deg);
+    transition: transform 0.2s ease-in-out;
+}
+
+/* ==========================================
+   EMPTY STATES
+   ========================================== */
+
+.universal-empty-state {
+    text-align: center !important;
+    padding: 2rem !important;
+    color: rgb(107 114 128) !important;
+}
+
+.dark .universal-empty-state {
+    color: rgb(156 163 175) !important;
+}
+
+.universal-empty-state i {
+    font-size: 2.5rem !important;
+    margin-bottom: 0.75rem !important;
+    color: rgb(209 213 219) !important;
+}
+
+.dark .universal-empty-state i {
+    color: rgb(75 85 99) !important;
+}
+
+/* ==========================================
+   LOADING STATES
+   ========================================== */
+
+.universal-loading {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    padding: 3rem !important;
+}
+
+.universal-loading-spinner {
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    border: 3px solid rgb(229 231 235) !important;
+    border-top-color: rgb(59 130 246) !important;
+    border-radius: 50% !important;
+    animation: spin 1s linear infinite !important;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* ==========================================
+   STATUS BADGES IN FIELDS
+   ========================================== */
+
+.universal-field-value .status-badge {
+    display: inline-flex !important;
+    align-items: center !important;
+    padding: 0.25rem 0.5rem !important;
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    border-radius: 9999px !important;
+}
+
+/* ==========================================
+   SECTION COLLAPSE CHEVRON
+   ========================================== */
+
+.universal-section-chevron {
+    transition: transform 0.2s ease-in-out !important;
+}
+
+.universal-section-chevron.rotated {
+    transform: rotate(180deg) !important;
+}
+
+/* ==========================================
+   FIELD VISIBILITY CONTROLS
+   ========================================== */
+
+.universal-field-hidden {
+    display: none !important;
+}
+
+.universal-field-readonly {
+    opacity: 0.75 !important;
+    cursor: not-allowed !important;
+}
+
+/* ==========================================
+   TOOLTIP SUPPORT
+   ========================================== */
+
+.universal-field-tooltip {
+    position: relative !important;
+    display: inline-block !important;
+}
+
+.universal-field-tooltip-content {
+    visibility: hidden !important;
+    position: absolute !important;
+    z-index: 10 !important;
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    color: white !important;
+    background-color: rgb(17 24 39) !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1) !important;
+    opacity: 0 !important;
+    transition: opacity 0.3s !important;
+}
+
+.dark .universal-field-tooltip-content {
+    background-color: rgb(55 65 81) !important;
+}
+
+.universal-field-tooltip:hover .universal-field-tooltip-content {
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* ==========================================
+   DEBUG STYLES - REMOVE AFTER TESTING
+   ========================================== */
+
+/* Temporary: Force show all tabs to verify content exists */
+body.debug-tabs .universal-tab-panel {
+    display: block !important;
+    border: 2px solid red !important;
+    margin-bottom: 20px !important;
+    position: relative !important;
+}
+
+body.debug-tabs .universal-tab-panel::before {
+    content: "Tab Panel - " attr(id) !important;
+    position: absolute !important;
+    top: -20px !important;
+    left: 0 !important;
+    background: red !important;
+    color: white !important;
+    padding: 2px 8px !important;
+    font-size: 12px !important;
+}
+
+/* Highlight which tab should be visible */
+body.debug-tabs .universal-tab-panel:not(.hidden)::after {
+    content: "SHOULD BE VISIBLE" !important;
+    position: absolute !important;
+    top: -20px !important;
+    right: 0 !important;
+    background: green !important;
+    color: white !important;
+    padding: 2px 8px !important;
+    font-size: 12px !important;
+}
+
+/* Correct selectors based on actual HTML */
+.universal-field-label i.fa-fingerprint { color: rgb(139 92 246) !important; }
+.universal-field-label i.fa-calendar { color: rgb(34 197 94) !important; }
+.universal-field-label i.fa-rupee-sign { color: rgb(34 197 94) !important; }
+.universal-field-label i.fa-tag { color: rgb(239 68 68) !important; }
+
+/* Button icons */
+i.fa-file-contract { color: rgb(59 130 246) !important; }
+i.fa-file-invoice { color: rgb(245 158 11) !important; }
+
+/* ==========================================
+   CUSTOM RENDERER CONTAINERS
+   ========================================== */
+
+/* Full width containers for tables */
+.custom-renderer-field {
+    width: 100% !important;
+}
+
+.custom-renderer-field.table-responsive {
+    grid-column: 1 / -1 !important; /* Span full width across all columns */
+    width: 100% !important;
+    overflow-x: auto !important;
+}
+
+/* Specific table types */
+.payment-history-table,
+.po-items-table,
+.invoice-items-table {
+    width: 100% !important;
+    overflow-x: auto !important;
+}
+
+/* Ensure tables inside custom renderers take full width */
+.custom-renderer-field table {
+    width: 100% !important;
+    min-width: 600px !important; /* Prevent table from collapsing too small */
+}
+
+/* Responsive behavior for custom tables */
+@media (max-width: 768px) {
+    .custom-renderer-field.table-responsive {
+        margin-left: -1rem !important;
+        margin-right: -1rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+}
+/* Make table-responsive custom renderers use full grid width */
+.custom-renderer-field.table-responsive {
+    grid-column: 1 / -1 !important;
+}
+
+/* Force grid display for summary cards inside custom renderers */
+.custom-renderer-field .grid {
+    display: grid !important;
+}
+
+/* Invoice summary card - force 3 columns */
+.custom-renderer-field .invoice-items-container .grid-cols-3 {
+    grid-template-columns: repeat(3, 1fr) !important;
+}
+
+/* Payment history summary card - responsive columns */
+.custom-renderer-field .payment-history-container .grid-cols-2 {
+    grid-template-columns: repeat(2, 1fr) !important;
+}
+
+@media (min-width: 768px) {
+    .custom-renderer-field .payment-history-container .md\:grid-cols-4 {
+        grid-template-columns: repeat(4, 1fr) !important;
+    }
+}
+
+/* Summary card styling */
+.custom-renderer-field .bg-green-50,
+.custom-renderer-field .bg-indigo-50 {
+    width: 100% !important;
+    margin-bottom: 1rem !important;
+}
+
+/* Ensure grid gap is maintained */
+.custom-renderer-field .bg-green-50 > div,
+.custom-renderer-field .bg-indigo-50 > div {
+    display: grid !important;
+    gap: 1rem !important;
+}
+
+/* Text alignment in summary cards */
+.custom-renderer-field .text-center {
+    text-align: center !important;
+}
+
+/* Dark mode for summary cards */
+.dark .custom-renderer-field .dark\:bg-green-900\/20 {
+    background-color: rgb(34 197 94 / 0.2) !important;
+}
+
+.dark .custom-renderer-field .dark\:bg-indigo-900\/20 {
+    background-color: rgb(79 70 229 / 0.2) !important;
+}

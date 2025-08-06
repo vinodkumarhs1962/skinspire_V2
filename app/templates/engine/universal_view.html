@@ -1,0 +1,673 @@
+{% extends "layouts/dashboard.html" %}
+<!-- DEBUG SECTION - REMOVE AFTER FIXING -->
+<!-- <div style="background: #ff0000; color: white; padding: 20px; margin: 20px; border: 3px solid black;">
+    <h2>TEMPLATE DEBUG INFO</h2>
+    
+    <h3>Direct Variables:</h3>
+    <p>layout_type exists: {{ layout_type is defined }}</p>
+    <p>layout_type value: {{ layout_type if layout_type is defined else 'NOT DEFINED' }}</p>
+    <p>field_sections exists: {{ field_sections is defined }}</p>
+    <p>field_sections count: {{ field_sections|length if field_sections is defined else 'NOT DEFINED' }}</p>
+    
+    <h3>Assembled Data Variables:</h3>
+    <p>assembled_data exists: {{ assembled_data is defined }}</p>
+    {% if assembled_data is defined %}
+        <p>assembled_data.layout_type: {{ assembled_data.layout_type if assembled_data.layout_type is defined else 'NOT IN ASSEMBLED_DATA' }}</p>
+        <p>assembled_data.field_sections exists: {{ assembled_data.field_sections is defined }}</p>
+        <p>assembled_data.field_sections count: {{ assembled_data.field_sections|length if assembled_data.field_sections is defined else 'NOT DEFINED' }}</p>
+        
+        <h4>All keys in assembled_data:</h4>
+        <ul>
+            {% for key in assembled_data.keys() %}
+                <li>{{ key }}: {{ assembled_data[key]|string|truncate(50) }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+    
+    <h3>Template Context Test:</h3>
+    <p>Checking which layout will be used:</p>
+    <ul>
+        <li>layout_type == 'simple': {{ layout_type == 'simple' if layout_type is defined else 'layout_type not defined' }}</li>
+        <li>layout_type == 'tabbed': {{ layout_type == 'tabbed' if layout_type is defined else 'layout_type not defined' }}</li>
+        <li>layout_type == 'accordion': {{ layout_type == 'accordion' if layout_type is defined else 'layout_type not defined' }}</li>
+    </ul>
+</div> -->
+<!-- END DEBUG SECTION -->
+{% block styles %}
+    {{ super() }}
+    <!-- Universal View specific styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/components/universal_view.css') }}">
+{% endblock %}
+
+{% block title %}{{ page_title }} - {{ entity_config.name }}{% endblock %}
+
+{% block content %}
+<!-- =============================================================================
+UNIVERSAL VIEW TEMPLATE - FIXED TO EXTEND DASHBOARD LAYOUT
+Now properly inherits all CSS including Tailwind base styles
+============================================================================= -->
+<!-- DEBUG SECTION - REMOVE AFTER FIXING -->
+<!-- <div style="background: #ff0000; color: white; padding: 20px; margin: 20px; border: 3px solid black;">
+    <h2>TEMPLATE DEBUG INFO</h2>
+    
+    <h3>Direct Variables:</h3>
+    <p>layout_type exists: {{ layout_type is defined }}</p>
+    <p>layout_type value: {{ layout_type if layout_type is defined else 'NOT DEFINED' }}</p>
+    <p>field_sections exists: {{ field_sections is defined }}</p>
+    <p>field_sections count: {{ field_sections|length if field_sections is defined else 'NOT DEFINED' }}</p>
+    
+    <h3>Assembled Data Variables:</h3>
+    <p>assembled_data exists: {{ assembled_data is defined }}</p>
+    {% if assembled_data is defined %}
+        <p>assembled_data.layout_type: {{ assembled_data.layout_type if assembled_data.layout_type is defined else 'NOT IN ASSEMBLED_DATA' }}</p>
+        <p>assembled_data.field_sections exists: {{ assembled_data.field_sections is defined }}</p>
+        <p>assembled_data.field_sections count: {{ assembled_data.field_sections|length if assembled_data.field_sections is defined else 'NOT DEFINED' }}</p>
+        
+        <h4>All keys in assembled_data:</h4>
+        <ul>
+            {% for key in assembled_data.keys() %}
+                <li>{{ key }}: {{ assembled_data[key]|string|truncate(50) }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+    
+    <h3>Template Context Test:</h3>
+    <p>Checking which layout will be used:</p>
+    <ul>
+        <li>layout_type == 'simple': {{ layout_type == 'simple' if layout_type is defined else 'layout_type not defined' }}</li>
+        <li>layout_type == 'tabbed': {{ layout_type == 'tabbed' if layout_type is defined else 'layout_type not defined' }}</li>
+        <li>layout_type == 'accordion': {{ layout_type == 'accordion' if layout_type is defined else 'layout_type not defined' }}</li>
+    </ul>
+</div> -->
+<!-- END DEBUG SECTION -->
+<div class="container mx-auto px-4 py-6" data-entity-type="{{ entity_config.entity_type }}">
+    
+    <!-- Page Header - Uses existing header-inline component -->
+    <div class="universal-page-header mb-6">
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">{{ page_title }}</h1>
+                {% if breadcrumbs %}
+                    <nav class="mt-2 flex items-center space-x-1 text-sm text-gray-500">
+                        {% for crumb in breadcrumbs %}
+                            <a href="{{ crumb.url }}" class="hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors">
+                                {{ crumb.label }}
+                            </a>
+                            {% if not loop.last %}
+                                <span class="text-gray-400 mx-2">/</span>
+                            {% endif %}
+                        {% endfor %}
+                    </nav>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Error Messages -->
+    {% if has_errors %}
+        <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 dark:bg-red-900/20 dark:border-red-800">
+            <h3 class="text-lg font-semibold text-red-800 dark:text-red-300 mb-2">
+                <i class="fas fa-exclamation-triangle mr-2"></i>
+                Unable to Load Data
+            </h3>
+            {% for error in error_messages %}
+                <p class="text-red-700 dark:text-red-300">{{ error }}</p>
+            {% endfor %}
+        </div>
+    {% endif %}
+    
+    <!-- Universal View Header Section -->
+    {% if item and header_config %}
+    <div class="info-card mb-6">
+        <div class="card-body">
+            <!-- Primary Information -->
+            <div class="mb-4">
+                <!-- First Line: Dynamic Title Field (left) and Status (right) -->
+                <div class="flex justify-between items-center w-full mb-3">
+
+                    <!-- Dynamic Title Field from Configuration -->
+                    {% if header_config.title_field %}
+                    <div>
+                        {% if header_config.title_label %}
+                        <span class="universal-view-header-field-label">{{ header_config.title_label }}:</span>
+                        {% endif %}
+                        <span class="universal-view-header-field-value">
+                            {% set title_value = item.get(header_config.title_field) %}
+                            {% if title_value is mapping and header_config.title_field == 'supplier' %}
+                                <!-- Handle entity reference object -->
+                                {{ title_value.get('supplier_name', '—') }}
+                            {% else %}
+                                <!-- Handle direct field value -->
+                                {{ title_value or '—' }}
+                            {% endif %}
+                        </span>
+                    </div>
+                    {% else %}
+                    <!-- Fallback: Use entity's default title field -->
+                    <div>
+                        <span class="font-bold text-lg text-gray-900 dark:text-gray-100 ml-2">
+                            {{ item[entity_config.title_field] if entity_config.title_field and item[entity_config.title_field] else entity_config.name }}
+                        </span>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Status Badge (unchanged) -->
+                    {% if header_config.status_field and item[header_config.status_field] %}
+                    <div>
+                        <span class="status-badge status-{{ item[header_config.status_field]|lower|replace(' ', '-') }}">
+                            {{ item[header_config.status_field]|title|replace('_', ' ') }}
+                        </span>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Second Line: Payment Reference -->
+                {% if header_config.primary_field and item[header_config.primary_field] %}
+                <div class="universal-view-header-field universal-view-header-primary">
+                    <div class="universal-view-header-label">
+                        {{ header_config.primary_label or 'Reference' }}:
+                    </div>
+                    <div class="universal-view-header-value primary-reference">
+                        {{ item[header_config.primary_field] }}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Action Buttons Section -->
+            <div class="flex justify-between items-center mb-4 w-full">
+                <!-- Left side - Navigation and quick access buttons -->
+                <div class="flex items-center gap-4">
+                    <!-- Navigation button -->
+                    <a href="{{ url_for('universal_views.universal_list_view', entity_type=entity_type) }}" 
+                    class="btn-secondary">
+                        <i class="fas fa-arrow-left mr-2"></i>
+                        Back to List
+                    </a>
+                    
+                    <!-- Direct Access Buttons -->
+                    {% if assembled_data.header_actions and assembled_data.header_actions.button_actions %}
+                        {% for action in assembled_data.header_actions.button_actions %}
+                            {% if action.javascript_handler %}
+                                <button type="button"
+                                        class="btn-{{ action.button_type }}"
+                                        onclick="{{ action.javascript_handler }}(); return false;">
+                                    <i class="{{ action.icon }} mr-2"></i>
+                                    {{ action.label }}
+                                </button>
+                            {% else %}
+                                <a href="{{ action.url }}" 
+                                class="btn-{{ action.button_type }}"
+                                {% if action.confirmation_required %}
+                                onclick="return confirm('{{ action.confirmation_message }}')"
+                                {% endif %}>
+                                    <i class="{{ action.icon }} mr-2"></i>
+                                    {{ action.label }}
+                                </a>
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                </div>
+                
+                <!-- Right side - Actions Dropdown -->
+                {% if assembled_data.header_actions and assembled_data.header_actions.dropdown_actions and assembled_data.header_actions.dropdown_actions|length > 0 %}
+                <div class="dropdown">
+                    <button type="button" 
+                            class="btn-primary dropdown-toggle"
+                            onclick="toggleDropdown('header-actions-dropdown')">
+                        <i class="fas fa-ellipsis-v mr-2"></i>
+                        Actions
+                    </button>
+                    <div id="header-actions-dropdown" 
+                        class="dropdown-menu origin-top-right hidden">
+                        {% for action in assembled_data.header_actions.dropdown_actions %}
+                            <a href="{{ action.url }}" 
+                            class="dropdown-item"
+                            {% if action.confirmation_required %}
+                            onclick="return confirm('{{ action.confirmation_message }}')"
+                            {% endif %}>
+                                <i class="{{ action.icon }} mr-2"></i>
+                                {{ action.label }}
+                            </a>
+                        {% endfor %}
+                        
+                        <div class="dropdown-divider"></div>
+                        
+                        <a href="{{ url_for('universal_views.universal_export_view', entity_type=entity_type, export_format='pdf', item_id=item[entity_config.primary_key]) }}" 
+                        class="dropdown-item">
+                            <i class="fas fa-file-pdf"></i>
+                            Export as PDF
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Secondary Fields -->
+            {% if header_config.secondary_fields %}
+                <div class="universal-view-header-fields">
+                    {% for field in header_config.secondary_fields %}
+                        {% if item[field.field] is defined %}
+                        <div class="universal-view-header-field">
+                            <div class="universal-view-header-field-label">
+                                {% if field.icon %}
+                                <i class="{{ field.icon }}"></i>
+                                {% endif %}
+                                {{ field.label }}
+                            </div>
+                            <div class="universal-view-header-field-value{% if field.type == 'currency' %} currency{% endif %}">
+                                {% if field.type == 'currency' %}
+                                    ₹ {{ item[field.field]|default(0)|round(2)|format_number }}
+                                {% elif field.type == 'date' %}
+                                    {{ item[field.field]|format_date if item[field.field] else '—' }}
+                                {% else %}
+                                    {{ item[field.field] or '—' }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <script>
+    function toggleDropdown(dropdownId) {
+        const dropdown = document.getElementById(dropdownId);
+        if (dropdown) {
+            dropdown.classList.toggle('hidden');
+            
+            // Auto-hide after 5 seconds
+            let hideTimeout;
+            if (!dropdown.classList.contains('hidden')) {
+                hideTimeout = setTimeout(() => {
+                    dropdown.classList.add('hidden');
+                }, 5000); // 5 seconds
+            }
+            
+            // Close on outside click
+            document.addEventListener('click', function closeDropdown(e) {
+                if (!e.target.closest('.dropdown')) {
+                    dropdown.classList.add('hidden');
+                    if (hideTimeout) clearTimeout(hideTimeout);
+                    document.removeEventListener('click', closeDropdown);
+                }
+            }, { once: true });
+            
+            // Cancel timeout if user interacts with dropdown
+            dropdown.addEventListener('mouseenter', function() {
+                if (hideTimeout) clearTimeout(hideTimeout);
+            });
+            
+            dropdown.addEventListener('mouseleave', function() {
+                hideTimeout = setTimeout(() => {
+                    dropdown.classList.add('hidden');
+                }, 3000); // 3 seconds after mouse leaves
+            });
+        }
+    }
+    </script>
+
+    <!-- Alternative Simplified Header (if header_config is not available) -->
+    {% if not header_config and item %}
+    <div class="universal-view-header">
+        <div class="universal-view-header-content">
+            <div class="universal-view-header-top">
+                <div class="universal-view-header-primary">
+                    <!-- Use title_field from entity config -->
+                    <div class="universal-view-header-title">
+                        <span class="universal-view-header-value">
+                            {{ item[entity_config.title_field] if entity_config.title_field and item[entity_config.title_field] else 'View Details' }}
+                        </span>
+                        {% if item.workflow_status %}
+                        <span class="status-badge status-{{ item.workflow_status|lower|replace(' ', '-') }}">
+                            {{ item.workflow_status|title|replace('_', ' ') }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    {% if entity_config.subtitle_field and item[entity_config.subtitle_field] %}
+                    <div class="text-gray-600 dark:text-gray-400">
+                        {{ item[entity_config.subtitle_field] }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Auto-generate key fields from entity configuration -->
+            <div class="universal-view-header-fields">
+                {% if entity_config.fields %}
+                    {% for field in entity_config.fields %}
+                        {% if field.show_in_detail and item[field.name] is defined %}
+                        <div class="universal-view-header-field">
+                            <div class="universal-view-header-field-label">
+                                {% if field.icon %}
+                                <i class="{{ field.icon }}"></i>
+                                {% endif %}
+                                {{ field.label }}
+                            </div>
+                            <div class="universal-view-header-field-value">
+                                {% if field.field_type.value == 'currency' %}
+                                    ₹ {{ "{:,.2f}".format(item[field.name]|float) if item[field.name] else '0.00' }}
+                                {% elif field.field_type.value == 'date' %}
+                                    {{ item[field.name]|dateformat if item[field.name] else '—' }}
+                                {% else %}
+                                    {{ item[field.name] or '—' }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+
+    <!-- Main Content Area - Supports all 3 layout types -->
+    <div class="universal-view-content">
+        
+        <!-- SIMPLE LAYOUT -->
+        {% if assembled_data.layout_type == 'simple' %}
+            {% for tab in assembled_data.field_sections %}
+                {% for section in tab.sections %}
+                    <!-- ... section header code remains the same ... -->
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-{{ section.columns or 2 }} gap-6 {% if not loop.last %}mb-8 pb-8 border-b border-gray-200 dark:border-gray-700{% endif %}">
+                                    {% for field in section.fields|sort(attribute='view_order') %}
+                                        <div class="{{ field['css_class'] }} {% if field['columns_span'] == 'full' or (field['custom_renderer'] and 'table-responsive' in field['custom_renderer'].get('css_classes', '')) %}md:col-span-{{ section.columns or 2 }}{% endif %}">
+                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                {{ field['label'] }}
+                                            </label>
+                                            <!-- Check if this field has a custom renderer -->
+                                            {% if field['custom_renderer'] %}
+                                                <div class="custom-renderer-field {{ field['custom_renderer']['css_classes'] }}">
+                                            {% if field['custom_renderer']['context_function'] and service %}
+                                                {% set func_name = field['custom_renderer']['context_function'] %}
+                                                
+                                                <!-- ✅ FIXED: Direct method calls based on function name -->
+                                                {% if func_name == 'get_po_items_for_payment' and hasattr(service, 'get_po_items_for_payment') %}
+                                                    {% set data = service.get_po_items_for_payment(item_id, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
+                                                    
+                                                {% elif func_name == 'get_invoice_items_for_payment' and hasattr(service, 'get_invoice_items_for_payment') %}
+                                                    {% set data = service.get_invoice_items_for_payment(item_id, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
+                                                    
+                                                {% elif func_name == 'get_supplier_payment_history_6months' and hasattr(service, 'get_supplier_payment_history_6months') %}
+                                                    <!-- Note: This function needs supplier_id, not payment_id -->
+                                                    {% if item and item.get('supplier_id') %}
+                                                        {% set data = service.get_supplier_payment_history_6months(item['supplier_id'], hospital_id=current_hospital_id, branch_id=current_branch_id) %}
+                                                    {% else %}
+                                                        {% set data = {'error': 'Supplier ID not found', 'has_error': true} %}
+                                                    {% endif %}
+                                                    
+                                                {% elif func_name == 'get_payment_workflow_timeline' and hasattr(service, 'get_payment_workflow_timeline') %}
+                                                    {% set data = service.get_payment_workflow_timeline(item_id, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
+                                                    
+                                                {% else %}
+                                                    <!-- Unknown function - show error -->
+                                                    {% set data = {'error': 'Unknown context function: ' ~ func_name, 'has_error': true} %}
+                                                {% endif %}
+                                                
+                                                <!-- Include the custom template with the data -->
+                                                {% if data and not data.get('has_error') %}
+                                                    {% include field['custom_renderer']['template'] %}
+                                                {% else %}
+                                                    <div class="text-center py-4">
+                                                        <i class="fas fa-info-circle text-3xl text-gray-300 dark:text-gray-600 mb-2"></i>
+                                                        <p class="text-gray-500 dark:text-gray-400 text-sm">
+                                                            {{ data.get('error', 'No data available') }}
+                                                        </p>
+                                                    </div>
+                                                {% endif %}
+                                            {% else %}
+                                                <!-- Custom renderer without context function - just include template -->
+                                                {% include field['custom_renderer']['template'] %}
+                                            {% endif %}
+                                        </div>
+                                    {% else %}
+                                        <!-- Regular field rendering remains the same -->
+                                        <div class="text-sm text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded border border-gray-300 dark:border-gray-600 min-h-[2.5rem] flex items-center {% if field['is_empty'] %}text-gray-400 italic{% endif %} {% if field['field_type'] == 'currency' %}font-medium text-green-700 dark:text-green-400{% elif field['field_type'] == 'date' %}font-mono{% elif field['field_type'] == 'uuid' %}font-mono text-xs text-gray-500 dark:text-gray-400{% endif %}">
+                                            {% if field['is_empty'] %}
+                                                —
+                                            {% else %}
+                                                {{ field['value']|safe }}
+                                            {% endif %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endfor %}
+        
+        <!-- TABBED LAYOUT -->
+        {% elif assembled_data.layout_type == 'tabbed' %}
+            <div class="universal-tabbed-view bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                <!-- Tab Navigation -->
+                <div class="universal-tab-navigation">
+                    <nav class="-mb-px flex space-x-4 overflow-x-auto" aria-label="Tabs">
+                        {% for tab in assembled_data.field_sections %}
+                            <button type="button" 
+                                    data-tab="{{ tab.key }}" 
+                                    class="universal-tab-button {% if loop.first %}active text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400{% else %}text-gray-500 dark:text-gray-400 border-transparent{% endif %}"
+                                    onclick="switchUniversalTab('{{ tab.key }}')">
+                                {% if tab.icon %}
+                                    <i class="{{ tab.icon }}"></i>
+                                {% endif %}
+                                {{ tab.label }}
+                            </button>
+                        {% endfor %}
+                    </nav>
+                </div>
+                
+                <!-- Tab Content -->
+                <div class="universal-tab-content relative">
+                    {% for tab in assembled_data.field_sections %}
+                        <div id="tab-{{ tab.key }}" class="universal-tab-panel p-6 {% if not loop.first and not tab.default_active %}hidden{% endif %}">
+                            {% for section in tab.sections %}
+                                <!-- Section Header -->
+                                {% if section.title %}
+                                <div class="mb-4">
+                                    <h3 class="universal-section-title">
+                                        {% if section.icon %}
+                                            <i class="{{ section.icon }}"></i>
+                                        {% endif %}
+                                        {{ section.title }}
+                                    </h3>
+                                </div>
+                                {% endif %}
+                                
+                                <!-- Universal grid layout for ALL sections -->
+                                <div class="grid grid-cols-1 md:grid-cols-{{ section.columns or 2 }} gap-6 {% if not loop.last %}mb-8 pb-8 border-b border-gray-200 dark:border-gray-700{% endif %}">
+                                    {% for field in section.fields|sort(attribute='view_order') %}
+                                        <div class="{{ field['css_class'] }} {% if field['columns_span'] == 'full' %}md:col-span-{{ section.columns or 2 }}{% endif %}">
+                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                {{ field['label'] }}
+                                            </label>
+                                            <!-- Check if this field has a custom renderer -->
+                                            {% if field['custom_renderer'] %}
+                                                <div class="custom-renderer-field {{ field['custom_renderer']['css_classes'] }}">
+                                                {% if field['custom_renderer']['context_function'] and service %}
+                                                    {% set func_name = field['custom_renderer']['context_function'] %}
+                                                    
+                                                    <!-- ✅ FIXED: Direct method calls based on function name -->
+                                                    {% if func_name == 'get_po_items_for_payment' and hasattr(service, 'get_po_items_for_payment') %}
+                                                        {% set data = service.get_po_items_for_payment(item_id, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
+                                                        
+                                                    {% elif func_name == 'get_invoice_items_for_payment' and hasattr(service, 'get_invoice_items_for_payment') %}
+                                                        {% set data = service.get_invoice_items_for_payment(item_id, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
+                                                        
+                                                    {% elif func_name == 'get_supplier_payment_history_6months' and hasattr(service, 'get_supplier_payment_history_6months') %}
+                                                        <!-- Note: This function needs supplier_id, not payment_id -->
+                                                        {% if item and item.get('supplier_id') %}
+                                                            {% set data = service.get_supplier_payment_history_6months(item['supplier_id'], hospital_id=current_hospital_id, branch_id=current_branch_id) %}
+                                                        {% else %}
+                                                            {% set data = {'error': 'Supplier ID not found', 'has_error': true} %}
+                                                        {% endif %}
+                                                        
+                                                    {% elif func_name == 'get_payment_workflow_timeline' and hasattr(service, 'get_payment_workflow_timeline') %}
+                                                        {% set data = service.get_payment_workflow_timeline(item_id, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
+                                                        
+                                                    {% else %}
+                                                        <!-- Unknown function - show error -->
+                                                        {% set data = {'error': 'Unknown context function: ' ~ func_name, 'has_error': true} %}
+                                                    {% endif %}
+                                                    
+                                                    <!-- Include the custom template with the data -->
+                                                    {% if data and not data.get('has_error') %}
+                                                        {% include field['custom_renderer']['template'] %}
+                                                    {% else %}
+                                                        <div class="text-center py-4">
+                                                            <i class="fas fa-info-circle text-3xl text-gray-300 dark:text-gray-600 mb-2"></i>
+                                                            <p class="text-gray-500 dark:text-gray-400 text-sm">
+                                                                {{ data.get('error', 'No data available') }}
+                                                            </p>
+                                                        </div>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <!-- Custom renderer without context function - just include template -->
+                                                    {% include field['custom_renderer']['template'] %}
+                                                {% endif %}
+                                            </div>
+                                        {% else %}
+                                            <!-- Regular field rendering remains the same -->
+                                            <div class="text-sm text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded border border-gray-300 dark:border-gray-600 min-h-[2.5rem] flex items-center {% if field['is_empty'] %}text-gray-400 italic{% endif %} {% if field['field_type'] == 'currency' %}font-medium text-green-700 dark:text-green-400{% elif field['field_type'] == 'date' %}font-mono{% elif field['field_type'] == 'uuid' %}font-mono text-xs text-gray-500 dark:text-gray-400{% endif %}">
+                                                {% if field['is_empty'] %}
+                                                    —
+                                                {% else %}
+                                                    {{ field['value']|safe }}
+                                                {% endif %}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        
+        <!-- ACCORDION LAYOUT -->
+        {% elif assembled_data.layout_type == 'accordion' %}
+            <div class="universal-accordion-view">
+                {% for tab in assembled_data.field_sections %}
+                    {% for section in tab.sections %}
+                        <div class="universal-accordion-section bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-4">
+                            <!-- Accordion Header remains the same ... -->
+                            
+                            <!-- Accordion Content -->
+                            <div id="content-{{ section.key }}" class="accordion-content {% if section.collapsed_by_default %}hidden{% endif %}">
+                                <div class="p-6 pt-0">
+                                    <div class="grid grid-cols-1 md:grid-cols-{{ section.columns or 2 }} gap-6">
+                                        {% for field in section.fields|sort(attribute='view_order') %}
+                                            <div class="{{ field['css_class'] }} {% if field['columns_span'] == 'full' %}md:col-span-{{ section.columns or 2 }}{% endif %}">
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    {{ field['label'] }}
+                                                </label>
+                                                <!-- Check if this field has a custom renderer -->
+                                                {% if field['custom_renderer'] %}
+                                                    <div class="custom-renderer-field {{ field['custom_renderer']['css_classes'] }}">
+                                                        {% if field['custom_renderer']['context_function'] and service %}
+                                                            {% set func_name = field['custom_renderer']['context_function'] %}
+                                                            
+                                                            <!-- ✅ FIXED: Direct method calls based on function name -->
+                                                            {% if func_name == 'get_po_items_for_payment' and hasattr(service, 'get_po_items_for_payment') %}
+                                                                {% set data = service.get_po_items_for_payment(item_id, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
+                                                                
+                                                            {% elif func_name == 'get_invoice_items_for_payment' and hasattr(service, 'get_invoice_items_for_payment') %}
+                                                                {% set data = service.get_invoice_items_for_payment(item_id, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
+                                                                
+                                                            {% elif func_name == 'get_supplier_payment_history_6months' and hasattr(service, 'get_supplier_payment_history_6months') %}
+                                                                <!-- Note: This function needs supplier_id, not payment_id -->
+                                                                {% if item and item.get('supplier_id') %}
+                                                                    {% set data = service.get_supplier_payment_history_6months(item['supplier_id'], hospital_id=current_hospital_id, branch_id=current_branch_id) %}
+                                                                {% else %}
+                                                                    {% set data = {'error': 'Supplier ID not found', 'has_error': true} %}
+                                                                {% endif %}
+                                                                
+                                                            {% elif func_name == 'get_payment_workflow_timeline' and hasattr(service, 'get_payment_workflow_timeline') %}
+                                                                {% set data = service.get_payment_workflow_timeline(item_id, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
+                                                                
+                                                            {% else %}
+                                                                <!-- Unknown function - show error -->
+                                                                {% set data = {'error': 'Unknown context function: ' ~ func_name, 'has_error': true} %}
+                                                            {% endif %}
+                                                            
+                                                            <!-- Include the custom template with the data -->
+                                                            {% if data and not data.get('has_error') %}
+                                                                {% include field['custom_renderer']['template'] %}
+                                                            {% else %}
+                                                                <div class="text-center py-4">
+                                                                    <i class="fas fa-info-circle text-3xl text-gray-300 dark:text-gray-600 mb-2"></i>
+                                                                    <p class="text-gray-500 dark:text-gray-400 text-sm">
+                                                                        {{ data.get('error', 'No data available') }}
+                                                                    </p>
+                                                                </div>
+                                                            {% endif %}
+                                                        {% else %}
+                                                            <!-- Custom renderer without context function - just include template -->
+                                                            {% include field['custom_renderer']['template'] %}
+                                                        {% endif %}
+                                                    </div>
+                                                {% else %}
+                                                    <!-- Regular field rendering remains the same -->
+                                                    <div class="text-sm text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded border border-gray-300 dark:border-gray-600 min-h-[2.5rem] flex items-center {% if field['is_empty'] %}text-gray-400 italic{% endif %} {% if field['field_type'] == 'currency' %}font-medium text-green-700 dark:text-green-400{% elif field['field_type'] == 'date' %}font-mono{% elif field['field_type'] == 'uuid' %}font-mono text-xs text-gray-500 dark:text-gray-400{% endif %}">
+                                                        {% if field['is_empty'] %}
+                                                            —
+                                                        {% else %}
+                                                            {{ field['value']|safe }}
+                                                        {% endif %}
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% endfor %}
+            </div>
+        {% endif %}
+        
+    </div>
+</div>
+
+<!-- JavaScript Components -->
+<script src="{{ url_for('static', filename='js/components/universal_navigation.js') }}"></script>
+<script src="{{ url_for('static', filename='js/components/universal_utils.js') }}"></script>
+<script src="{{ url_for('static', filename='js/components/universal_forms.js') }}"></script>
+<script src="{{ url_for('static', filename='js/components/universal_view.js') }}"></script>
+
+<script>
+// Initialize based on layout type
+const layoutType = '{{ layout_type }}';
+
+
+function toggleAccordion(sectionKey) {
+    // Call the globally exported function from universal_view.js
+    if (window.toggleUniversalAccordion) {
+        window.toggleUniversalAccordion(sectionKey);
+    } else {
+        console.warn('toggleUniversalAccordion not loaded yet');
+    }
+}
+
+// Auto-initialize on load
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Universal View DOM loaded');
+    
+    // The universal_view.js already has its own DOMContentLoaded listener
+    // that will call initializeUniversalView() automatically
+    // But we can also call it explicitly if needed
+    if (window.initializeUniversalView) {
+        window.initializeUniversalView();
+    }
+});
+</script>
+
+{% endblock %}

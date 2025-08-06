@@ -21,7 +21,7 @@ from flask import request, url_for, current_app
 from flask_login import current_user
 from flask_wtf import FlaskForm
 
-from app.config.core_definitions import EntityConfiguration
+from app.config.core_definitions import EntityConfiguration, FieldDefinition, ActionDisplayType, ButtonType, ActionDefinition
 from app.utils.unicode_logging import get_unicode_safe_logger
 
 logger = get_unicode_safe_logger(__name__)
@@ -56,6 +56,19 @@ class EnhancedUniversalDataAssembler:
         🎯 MAIN ASSEMBLY METHOD - Now uses UniversalFilterService
         BACKWARD COMPATIBLE: Same signature, enhanced functionality
         """
+        # ✅ DEBUG: Log assembly start
+        logger.info(f"🔍 [ASSEMBLER_DEBUG] Starting assembly for entity: {config.entity_type}")
+        logger.info(f"🔍 [ASSEMBLER_DEBUG] Config type: {type(config)}")
+        logger.info(f"🔍 [ASSEMBLER_DEBUG] Config primary_key: {config.primary_key}")
+        logger.info(f"🔍 [ASSEMBLER_DEBUG] Number of actions: {len(config.actions) if config.actions else 0}")
+        logger.info(f"🔍 [ASSEMBLER_DEBUG] Raw data keys: {list(raw_data.keys())}")
+        logger.info(f"🔍 [ASSEMBLER_DEBUG] Number of items: {len(raw_data.get('items', []))}")
+        
+        if raw_data.get('items') and len(raw_data['items']) > 0:
+            first_item = raw_data['items'][0]
+            logger.info(f"🔍 [ASSEMBLER_DEBUG] First item type: {type(first_item)}")
+            logger.info(f"🔍 [ASSEMBLER_DEBUG] First item keys: {list(first_item.keys()) if isinstance(first_item, dict) else 'Not a dict'}")
+        
         try:
             logger.info(f"🔧 Assembling data for {config.entity_type}")
             
@@ -447,6 +460,11 @@ class EnhancedUniversalDataAssembler:
             
             for field in config.fields:
                 if getattr(field, 'show_in_list', False):
+                    
+                    # Get complex_display_type and convert enum to string value
+                    complex_display_type_enum = getattr(field, 'complex_display_type', None)
+                    complex_display_type_value = complex_display_type_enum.value if complex_display_type_enum else None
+
                     column = {
                         'name': field.name,
                         'label': field.label,
@@ -455,10 +473,26 @@ class EnhancedUniversalDataAssembler:
                         'width': getattr(field, 'width', 'auto'),
                         'align': getattr(field, 'align', 'left'),
                         'field_type': self._get_field_type_safe(field),
-                        'format_pattern': getattr(field, 'format_pattern', None)
+                        'format_pattern': getattr(field, 'format_pattern', None),
+                        'complex_display_type': complex_display_type_value,
+                        'css_classes': getattr(field, 'css_classes', ''),
+                        'related_field': getattr(field, 'related_field', None),
+                        'related_display_field': getattr(field, 'related_display_field', None)
                     }
+                    # Debug log for supplier_name
+                    if field.name == 'supplier_name':
+                        logger.info(f"🔍 SUPPLIER COLUMN ASSEMBLY: {column}")
                     columns.append(column)
             
+            logger.info("🔍 [DEBUG TABLE COLUMNS]")
+            for field in config.fields:
+                if field.name == 'supplier_name':
+                    logger.info(f"✅ Found supplier_name field config:")
+                    logger.info(f"  - show_in_list: {getattr(field, 'show_in_list', False)}")
+                    logger.info(f"  - field_type: {getattr(field, 'field_type', 'unknown')}")
+                    logger.info(f"  - complex_display_type: {getattr(field, 'complex_display_type', 'NOT SET')}")
+                    logger.info(f"  - css_classes: {getattr(field, 'css_classes', 'NOT SET')}")
+
             return columns
             
         except Exception as e:
@@ -831,6 +865,9 @@ class EnhancedUniversalDataAssembler:
     def _make_template_safe_config(self, config: EntityConfiguration) -> Dict:
         """Convert EntityConfiguration dataclass to template-safe dictionary"""
         try:
+            # ✅ DEBUG: Log config conversion
+            logger.info(f"🔍 [TEMPLATE_SAFE_DEBUG] Converting config for: {getattr(config, 'entity_type', 'unknown')}")
+            logger.info(f"🔍 [TEMPLATE_SAFE_DEBUG] Actions before conversion: {len(getattr(config, 'actions', []))}")
             return {
                 'entity_type': getattr(config, 'entity_type', 'unknown'),
                 'name': getattr(config, 'name', 'Unknown'),
@@ -841,8 +878,8 @@ class EnhancedUniversalDataAssembler:
                 'primary_key': getattr(config, 'primary_key', 'id'),
                 'title_field': getattr(config, 'title_field', 'name'),
                 'subtitle_field': getattr(config, 'subtitle_field', 'description'),
-                'actions': list(getattr(config, 'actions', [])),  # ✅ Convert to list
-                'fields': list(getattr(config, 'fields', [])),    # ✅ Convert to list
+                'actions': getattr(config, 'actions', []),  # Keep as ActionDefinition objects
+                'fields': getattr(config, 'fields', []),    # Keep as FieldDefinition objects
                 'summary_cards': list(getattr(config, 'summary_cards', [])),  # ✅ Convert to list
                 'permissions': dict(getattr(config, 'permissions', {})),  # ✅ Convert to dict
                 'enable_saved_filter_suggestions': getattr(config, 'enable_saved_filter_suggestions', True),
@@ -928,6 +965,898 @@ class EnhancedUniversalDataAssembler:
             'has_errors': True,
             'error_messages': [error]
         }
+
+    # =============================================================================
+    # VIEW FIELD ASSEMBLY FUNCTIONS
+    # =============================================================================
+
+    def assemble_universal_view_data(self, config: EntityConfiguration, raw_item_data: Dict, **kwargs) -> Dict:
+        """
+        Main view data assembly - with fixed layout type handling
+        """
+        try:
+            item = raw_item_data.get('item')
+            if not item:
+                raise ValueError("No item found in raw data")
+            
+            item_id = getattr(item, config.primary_key, None)
+            
+            # Get layout type FIRST
+            layout_type = self._get_layout_type(config)
+            has_tabs = self._has_tabbed_layout(config)
+            
+            logger.info(f"[VIEW] Assembling view data for {config.entity_type}")
+            logger.info(f"[VIEW] Layout type: '{layout_type}', Has tabs: {has_tabs}")
+            
+            # Assemble field sections
+            field_sections = self._assemble_view_sections_from_fields(config, item)
+            
+            assembled_data = {
+                'entity_config': self._make_template_safe_config(config),
+                'entity_type': config.entity_type,
+                'item': item,
+                'item_id': item_id,
+                
+                # Core view data
+                'field_sections': field_sections,
+                'action_buttons': self._assemble_view_action_buttons(config, item, item_id),
+                'page_title': f"{config.name} Details",
+                'breadcrumbs': self._build_view_breadcrumbs(config, item),
+                
+                # CRITICAL: Ensure layout_type is a string, not an enum
+                'layout_type': layout_type,  # This MUST be 'tabbed' as a string
+                'has_tabs': has_tabs,
+                'has_accordion': layout_type == 'accordion',
+                
+                # Header configuration
+                'header_config': self._enhance_header_config(config) if hasattr(config.view_layout, 'header_config') else None,
+                'header_data': item,
+                'header_actions': self._assemble_header_action_buttons(config, item, item_id),
+
+                # Context information
+                'branch_context': kwargs.get('branch_context', {}),
+                'user_permissions': kwargs.get('user_permissions', {}),
+            }
+            
+            # Final verification log
+            logger.info(f"[VIEW] Final assembled data - layout_type: '{assembled_data['layout_type']}'")
+            logger.info(f"[VIEW] Field sections count: {len(assembled_data['field_sections'])}")
+            
+            return self._clean_view_data(assembled_data)
+            
+        except Exception as e:
+            logger.error(f"❌ [DATA_ASSEMBLER] View assembly error: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return self._get_error_fallback_data(config, str(e))
+
+
+    def _assemble_header_action_buttons(self, config: EntityConfiguration, item: Any, item_id: str) -> Dict[str, List[Dict]]:
+        """
+        Assemble action buttons for header - respects display_type configuration
+        """
+        try:
+            button_actions = []
+            dropdown_actions = []
+            processed_ids = set()
+            
+            logger.info(f"[DEBUG] Processing {len(config.actions)} actions for header")
+
+            for action in config.actions:
+                if action.id in processed_ids:
+                    logger.debug(f"[DEBUG] Skipping duplicate action: {action.id}")
+                    continue
+                    
+                if not getattr(action, 'show_in_detail', False):
+                    logger.debug(f"[DEBUG] Action {action.id} not shown in detail view")
+                    continue
+                
+                if not self._evaluate_action_conditions(action, item):
+                    continue
+                
+                # Get display type
+                display_type = getattr(action, 'display_type', ActionDisplayType.DROPDOWN_ITEM)
+                if isinstance(display_type, ActionDisplayType):
+                    display_type_value = display_type.value
+                else:
+                    display_type_value = str(display_type)
+                logger.info(f"[DEBUG] Action {action.id} has display_type: {display_type_value}")
+
+                # Get button type value
+                button_type = getattr(action, 'button_type', ButtonType.OUTLINE)
+                if hasattr(button_type, 'value'):
+                    button_type_value = button_type.value
+                else:
+                    button_type_value = str(button_type)
+
+                # Build action data
+                action_data = {
+                    'id': action.id,
+                    'label': action.label,
+                    'icon': action.icon,
+                    'url': action.get_url(item, config),  # Use the action's built-in get_url method
+                    'javascript_handler': getattr(action, 'javascript_handler', None),
+                    'button_type': button_type_value,  # Now always a string
+                    'display_type': display_type_value,
+                    'confirmation_required': getattr(action, 'confirmation_required', False),
+                    'confirmation_message': getattr(action, 'confirmation_message', ''),
+                    'order': getattr(action, 'order', 999)
+                }
+                
+                # Add to appropriate list based on display type
+                if display_type_value == 'button':
+                    button_actions.append(action_data)
+                    logger.info(f"[DEBUG] Added {action.id} to button_actions")
+                else:
+                    dropdown_actions.append(action_data)
+                    logger.info(f"[DEBUG] Added {action.id} to dropdown_actions")
+
+                processed_ids.add(action.id)
+            
+            # Sort both lists by order
+            button_actions.sort(key=lambda x: x['order'])
+            dropdown_actions.sort(key=lambda x: x['order'])
+            logger.info(f"[DEBUG] Final counts - buttons: {len(button_actions)}, dropdown: {len(dropdown_actions)}")
+
+            return {
+                'button_actions': button_actions,
+                'dropdown_actions': dropdown_actions
+            }
+            
+        except Exception as e:
+            logger.error(f"Error assembling header actions: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {'button_actions': [], 'dropdown_actions': []}
+
+    def _evaluate_action_conditions(self, action: ActionDefinition, item: Any) -> bool:
+        """
+        Evaluate action conditions based on configuration
+        """
+        try:
+            if not hasattr(action, 'conditions') or not action.conditions:
+                return True
+            
+            for field, allowed_values in action.conditions.items():
+                # Get value from item (works with dict or object)
+                if isinstance(item, dict):
+                    actual_value = item.get(field)
+                else:
+                    actual_value = getattr(item, field, None)
+                
+                # Ensure allowed_values is a list
+                if not isinstance(allowed_values, list):
+                    allowed_values = [allowed_values]
+                
+                # Check if value matches any allowed value
+                if actual_value not in allowed_values:
+                    return False
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error evaluating conditions: {str(e)}")
+            return True  # Default to showing action on error
+
+    def _enhance_header_config(self, config: EntityConfiguration) -> Dict:
+        """Enhance header config with field metadata for better template handling"""
+        header_config = config.view_layout.header_config.copy() if config.view_layout.header_config else {}
+        
+        # Find the title field configuration
+        if header_config.get('title_field') == 'supplier_name':
+            for field in config.fields:
+                if field.name == 'supplier_name' and hasattr(field, 'related_field'):
+                    # Use the related field for entity references
+                    header_config['title_field'] = field.related_field  # 'supplier'
+                    header_config['title_field_name'] = 'supplier_name'
+                    break
+        
+        return header_config
+
+
+    def _clean_view_data(self, data: Any) -> Any:
+        """
+        Clean view data to remove Undefined objects and ensure JSON serializable
+        Minimal implementation to fix JSON serialization errors
+        """
+        from jinja2 import Undefined
+        from datetime import date, datetime
+        
+        if isinstance(data, Undefined):
+            return None
+        elif isinstance(data, dict):
+            return {k: self._clean_view_data(v) for k, v in data.items()}
+        elif isinstance(data, list):
+            return [self._clean_view_data(item) for item in data]
+        elif isinstance(data, (date, datetime)):
+            return data.isoformat()
+        elif hasattr(data, '__dict__') and not isinstance(data, (str, int, float, bool, type(None))):
+            # Convert objects to dictionaries
+            try:
+                from app.services.database_service import get_entity_dict
+                entity_dict = get_entity_dict(data)
+                # Debug supplier_name
+                if hasattr(data, 'supplier_name'):
+                    logger.info(f"[DEBUG] Object has supplier_name: {data.supplier_name}")
+                if 'supplier_name' in entity_dict:
+                    logger.info(f"[DEBUG] Dict has supplier_name: {entity_dict['supplier_name']}")
+                return entity_dict
+            except Exception as e:
+                logger.error(f"Failed to convert entity to dict: {str(e)}")
+                return str(data)
+        else:
+            return data
+
+
+    def _assemble_view_sections_from_fields(self, config: EntityConfiguration, item: Any) -> List[Dict]:
+        """
+        Assemble view sections by reading enhanced field definitions directly
+        MUCH SIMPLER - no embedded configuration, just reads field properties
+        """
+        try:
+            # Get fields that should show in detail view
+            detail_fields = [f for f in config.fields if getattr(f, 'show_in_detail', True)]
+            
+            logger.info(f"[VIEW] Assembling sections for {config.entity_type}")
+            logger.info(f"[VIEW] Total fields: {len(config.fields)}, Detail fields: {len(detail_fields)}")
+
+            if not detail_fields:
+                return []
+            
+            # Get layout type from configuration
+            layout_type = self._get_layout_type(config)
+            
+            if layout_type == 'tabbed':
+                result = self._organize_by_tabs_from_fields(detail_fields, item, config)
+                logger.info(f"[VIEW] Tabbed layout assembled: {len(result)} tabs")
+                
+                # Log details about each tab
+                for tab in result:
+                    total_fields = sum(len(section.get('fields', [])) for section in tab.get('sections', []))
+                    logger.info(f"[VIEW] Tab '{tab['key']}': {len(tab.get('sections', []))} sections, {total_fields} fields")
+                
+                return result
+            elif layout_type == 'accordion':
+                return self._organize_by_accordion_from_fields(detail_fields, item, config)
+            else:
+                # Simple layout
+                return self._organize_simple_from_fields(detail_fields, item, config)
+                
+        except Exception as e:
+            logger.error(f"Error assembling view sections: {str(e)}")
+            return self._create_fallback_sections(detail_fields, item, config)
+
+    def _organize_by_tabs_from_fields(self, fields: List[FieldDefinition], item: Any, config: EntityConfiguration) -> List[Dict]:
+        """
+        Organize fields into tabs by reading tab_group from field definitions
+        PROPERLY reads tab configuration including order
+        """
+        tabs = {}
+        
+        # First, pre-create all tabs from configuration to ensure proper order
+        if (hasattr(config, 'view_layout') and 
+            config.view_layout and 
+            hasattr(config.view_layout, 'tabs') and 
+            config.view_layout.tabs):
+            
+            for tab_key, tab_config in config.view_layout.tabs.items():
+                tabs[tab_key] = {
+                    'key': tab_key,
+                    'label': tab_config.label if hasattr(tab_config, 'label') else tab_key.replace('_', ' ').title(),
+                    'icon': tab_config.icon if hasattr(tab_config, 'icon') else 'fas fa-info-circle',
+                    'order': tab_config.order if hasattr(tab_config, 'order') else 999,
+                    'sections': {}
+                }
+                
+                # Pre-create sections from tab configuration
+                if hasattr(tab_config, 'sections') and tab_config.sections:
+                    for section_key, section_config in tab_config.sections.items():
+                        tabs[tab_key]['sections'][section_key] = {
+                            'key': section_key,
+                            'title': section_config.title if hasattr(section_config, 'title') else section_key.replace('_', ' ').title(),
+                            'icon': section_config.icon if hasattr(section_config, 'icon') else None,
+                            'columns': section_config.columns if hasattr(section_config, 'columns') else 2,
+                            'order': section_config.order if hasattr(section_config, 'order') else 0,
+                            'collapsible': getattr(section_config, 'collapsible', False),
+                            'fields': []
+                        }
+        
+        # Process fields into their assigned tabs/sections
+        for field in fields:
+            if not self._should_display_field(field, item):
+                continue
+            
+            # Get tab and section from field definition
+            tab_key = getattr(field, 'tab_group', 'details')
+            section_key = getattr(field, 'section', 'general')
+            
+            # Create tab if not exists
+            if tab_key not in tabs:
+                tabs[tab_key] = {
+                    'key': tab_key,
+                    'label': tab_key.replace('_', ' ').title(),
+                    'icon': 'fas fa-info-circle',
+                    'order': 999,
+                    'sections': {}
+                }
+            
+            # Create section if not exists
+            if section_key not in tabs[tab_key]['sections']:
+                tabs[tab_key]['sections'][section_key] = {
+                    'key': section_key,
+                    'title': section_key.replace('_', ' ').title(),
+                    'icon': None,
+                    'columns': 2,
+                    'order': 0,
+                    'collapsible': False,
+                    'fields': []
+                }
+            
+            # Add formatted field to section
+            formatted_field = self._format_field_for_view(field, item)
+            tabs[tab_key]['sections'][section_key]['fields'].append(formatted_field)
+        
+        # Convert to list and sort
+        result = []
+        for tab_key, tab_data in tabs.items():
+            # Convert sections dict to list and sort
+            sections_list = sorted(tab_data['sections'].values(), key=lambda x: x['order'])
+            tab_data['sections'] = sections_list
+            result.append(tab_data)
+        
+        # Sort tabs by order
+        result.sort(key=lambda x: x['order'])
+        
+        # Log summary only (not details)
+        logger.info(f"[VIEW] Assembled {len(result)} tabs for {config.entity_type}")
+        
+        return result
+
+
+    # def _organize_by_tabs_from_fields(self, fields: List[FieldDefinition], item: Any, config: EntityConfiguration) -> List[Dict]:
+    #     """
+    #     Organize fields into tabs by reading tab_group from field definitions
+    #     PROPERLY reads tab configuration including order
+    #     """
+    #     tabs = {}
+        
+    #     # First, pre-create all tabs from configuration to ensure proper order
+    #     if (hasattr(config, 'view_layout') and 
+    #         config.view_layout and 
+    #         hasattr(config.view_layout, 'tabs') and 
+    #         config.view_layout.tabs):
+            
+    #         for tab_key, tab_config in config.view_layout.tabs.items():
+    #             tabs[tab_key] = {
+    #                 'key': tab_key,
+    #                 'label': tab_config.label if hasattr(tab_config, 'label') else tab_key.title(),
+    #                 'icon': tab_config.icon if hasattr(tab_config, 'icon') else 'fas fa-folder',
+    #                 'order': tab_config.order if hasattr(tab_config, 'order') else 999,
+    #                 'default_active': tab_config.default_active if hasattr(tab_config, 'default_active') else False,
+    #                 'sections': {}
+    #             }
+                
+    #             # Pre-create sections from tab configuration
+    #             if hasattr(tab_config, 'sections') and tab_config.sections:
+    #                 for section_key, section_config in tab_config.sections.items():
+    #                     tabs[tab_key]['sections'][section_key] = {
+    #                         'key': section_key,
+    #                         'title': section_config.title if hasattr(section_config, 'title') else section_key.title(),
+    #                         'icon': section_config.icon if hasattr(section_config, 'icon') else 'fas fa-info-circle',
+    #                         'columns': section_config.columns if hasattr(section_config, 'columns') else 2,
+    #                         'collapsible': section_config.collapsible if hasattr(section_config, 'collapsible') else False,
+    #                         'order': section_config.order if hasattr(section_config, 'order') else 999,
+    #                         'fields': []
+    #                     }
+        
+    #     # Now populate fields into the pre-created structure
+    #     for field in fields:
+    #         if not self._should_display_field(field, item):
+    #             continue
+                
+    #         # Read tab and section from field definition
+    #         tab_key = getattr(field, 'tab_group', 'main')
+    #         section_key = getattr(field, 'section', 'details')
+            
+    #         # Create tab if not exists (for fields without pre-configured tabs)
+    #         if tab_key not in tabs:
+    #             tabs[tab_key] = {
+    #                 'key': tab_key,
+    #                 'label': self._get_tab_label(tab_key, config),
+    #                 'icon': self._get_tab_icon(tab_key, config),
+    #                 'order': 999,  # Put unconfigured tabs at the end
+    #                 'default_active': False,
+    #                 'sections': {}
+    #             }
+            
+    #         # Create section if not exists
+    #         if section_key not in tabs[tab_key]['sections']:
+    #             tabs[tab_key]['sections'][section_key] = {
+    #                 'key': section_key,
+    #                 'title': self._get_section_title(section_key, config),
+    #                 'icon': self._get_section_icon(section_key, config),
+    #                 'columns': 2,
+    #                 'collapsible': False,
+    #                 'order': 999,
+    #                 'fields': []
+    #             }
+            
+    #         # Add formatted field
+    #         tabs[tab_key]['sections'][section_key]['fields'].append(
+    #             self._format_field_for_view(field, item)
+    #         )
+        
+    #     # Convert to sorted list
+    #     tab_list = []
+    #     for tab_data in tabs.values():
+    #         # Sort sections within tab by their configured order
+    #         tab_data['sections'] = sorted(tab_data['sections'].values(), key=lambda x: x.get('order', 999))
+    #         tab_list.append(tab_data)
+        
+    #     # Sort tabs by their configured order
+    #     return sorted(tab_list, key=lambda x: x.get('order', 999))
+
+    def _organize_by_accordion_from_fields(self, fields: List[FieldDefinition], item: Any, config: EntityConfiguration) -> List[Dict]:
+        """
+        Organize fields into accordion by reading section from field definitions
+        """
+        sections = {}
+        
+        for field in fields:
+            if not self._should_display_field(field, item):
+                continue
+                
+            # Read section from field definition (enhanced property)
+            section_key = getattr(field, 'section', 'details')
+            
+            # Create section if not exists
+            if section_key not in sections:
+                sections[section_key] = {
+                    'key': section_key,
+                    'title': self._get_section_title(section_key, config),
+                    'icon': self._get_section_icon(section_key, config),
+                    'columns': 2,  # Default
+                    'collapsed_by_default': False,  # Can be enhanced later
+                    'order': 0,  # Can be enhanced later
+                    'fields': []
+                }
+            
+            # Add formatted field
+            sections[section_key]['fields'].append(
+                self._format_field_for_view(field, item)
+            )
+        
+        # Return as single "tab" for template compatibility
+        return [{
+            'key': 'accordion',
+            'label': f'{config.name} Details',
+            'icon': config.icon,
+            'sections': sorted(sections.values(), key=lambda x: x['order'])
+        }]
+
+    def _organize_simple_from_fields(self, fields: List[FieldDefinition], item: Any, config: EntityConfiguration) -> List[Dict]:
+        """
+        Organize fields into simple layout by reading section from field definitions
+        """
+        sections = {}
+        
+        for field in fields:
+            if not self._should_display_field(field, item):
+                continue
+                
+            # Read section from field definition (enhanced property)
+            section_key = getattr(field, 'section', 'details')
+            
+            # Create section if not exists
+            if section_key not in sections:
+                sections[section_key] = {
+                    'key': section_key,
+                    'title': self._get_section_title(section_key, config),
+                    'icon': self._get_section_icon(section_key, config),
+                    'columns': 2,  # Default
+                    'order': 0,  # Can be enhanced later
+                    'fields': []
+                }
+            
+            # Add formatted field
+            sections[section_key]['fields'].append(
+                self._format_field_for_view(field, item)
+            )
+        
+        # Return as single "tab" for template compatibility
+        return [{
+            'key': 'simple',
+            'label': f'{config.name} Details',
+            'icon': config.icon,
+            'sections': sorted(sections.values(), key=lambda x: x['order'])
+        }]
+
+    def _format_field_for_view(self, field: FieldDefinition, item: Any) -> Dict:
+        """Format individual field for view display"""
+        try:
+            field_name = getattr(field, 'name', 'unknown')
+            
+            # DEBUG: Check custom renderer
+            if field_name in ['po_items_display', 'invoice_items_display', 'workflow_timeline', 'supplier_payment_summary']:
+                logger.info(f"DEBUG: Field {field_name}")
+                logger.info(f"  - Has custom_renderer attr: {hasattr(field, 'custom_renderer')}")
+                logger.info(f"  - custom_renderer value: {getattr(field, 'custom_renderer', None)}")
+                if hasattr(field, 'custom_renderer') and field.custom_renderer:
+                    logger.info(f"  - template: {field.custom_renderer.template}")
+                    logger.info(f"  - context_function: {field.custom_renderer.context_function}")
+        
+
+            # For custom renderer fields, we need to ensure the context function is called
+            if (hasattr(field, 'custom_renderer') and 
+                field.custom_renderer and 
+                hasattr(field.custom_renderer, 'context_function')):
+                
+                # The value will be populated by the custom renderer
+                raw_value = None
+                is_custom_renderer = True
+            else:
+                # Get the raw value from item
+                if isinstance(item, dict):
+                    raw_value = item.get(field_name)
+                else:
+                    raw_value = getattr(item, field_name, None)
+                is_custom_renderer = False
+            
+            # Format the value
+            formatted_value = self._format_field_value(field, raw_value)
+            
+            custom_renderer_dict = None
+            custom_renderer_obj = getattr(field, 'custom_renderer', None)
+            if custom_renderer_obj:
+                # Handle context_function properly - convert to string if it's a callable
+                context_func = getattr(custom_renderer_obj, 'context_function', None)
+                # Convert to string if it's anything else
+                if context_func is not None:
+                    if callable(context_func):
+                        # If it's a function/method, get its name
+                        context_func = context_func.__name__ if hasattr(context_func, '__name__') else str(context_func)
+                        logger.warning(f"Converted callable {field_name}.context_function to string: {context_func}")
+                    elif not isinstance(context_func, str):
+                        # Convert any other type to string
+                        old_type = type(context_func).__name__
+                        context_func = str(context_func)
+                        logger.warning(f"Converted {old_type} to string for {field_name}.context_function: {context_func}")
+                
+                custom_renderer_dict = {
+                    'template': getattr(custom_renderer_obj, 'template', None),
+                    'context_function': context_func,  # Now safely a string or None
+                    'css_classes': getattr(custom_renderer_obj, 'css_classes', ''),
+                    'javascript': getattr(custom_renderer_obj, 'javascript', None)
+                }
+
+            return {
+                'name': field_name,
+                'label': getattr(field, 'label', field_name),
+                'value': formatted_value,
+                'field_type': self._get_field_type_safe(field),
+                'is_empty': raw_value is None and not is_custom_renderer,
+                'css_class': getattr(field, 'css_class', ''),
+                'columns_span': getattr(field, 'columns_span', None),
+                'view_order': getattr(field, 'view_order', 0),
+                'help_text': getattr(field, 'help_text', None),
+                'custom_renderer': custom_renderer_dict,  # ✅ Now passes a dictionary
+                'is_custom_renderer': is_custom_renderer
+            }
+            
+        except Exception as e:
+            logger.error(f"Error formatting field {field_name}: {str(e)}")
+            return self._get_error_field_format(field)
+
+    def _should_display_field(self, field: FieldDefinition, item: Any) -> bool:
+        """
+        Check if field should be displayed - reads conditional_display from field definition
+        FIXED: Safe handling of conditional when it might be None
+        """
+        # Check basic display flag
+        if not getattr(field, 'show_in_detail', True):
+            return False
+        
+        # Check conditional display from field definition
+        conditional = getattr(field, 'conditional_display', None)
+        if not conditional:
+            return True
+        
+        try:
+            # Convert conditional to string to ensure it's not None
+            conditional_str = str(conditional)
+            
+            # Simple condition evaluation
+            if 'item.' in conditional_str:
+                import re
+                for attr in re.findall(r'item\.(\w+)', conditional_str):
+                    # FIXED: Handle both dictionary and object access
+                    if isinstance(item, dict):
+                        value = item.get(attr, None)
+                    else:
+                        value = getattr(item, attr, None)
+                        
+                    if value is None:
+                        conditional_str = conditional_str.replace(f'item.{attr}', 'None')
+                    elif isinstance(value, str):
+                        conditional_str = conditional_str.replace(f'item.{attr}', f"'{value}'")
+                    else:
+                        conditional_str = conditional_str.replace(f'item.{attr}', str(value))
+            
+            return eval(conditional_str)
+        except Exception as e:
+            logger.debug(f"Conditional display evaluation failed for field {getattr(field, 'name', 'unknown')}: {e}")
+            # If condition fails, default to showing the field
+            return True
+
+    def _get_layout_type(self, config: EntityConfiguration) -> str:
+        """Get layout type from configuration - FIXED VERSION"""
+        try:
+            if hasattr(config, 'view_layout') and config.view_layout:
+                layout_type = config.view_layout.type
+                
+                # Handle the LayoutType enum properly
+                if hasattr(layout_type, 'value'):
+                    # This is an enum, get its value
+                    result = layout_type.value
+                elif hasattr(layout_type, 'name'):
+                    # Fallback to name if value doesn't exist
+                    result = layout_type.name.lower()
+                else:
+                    # Last resort - convert to string
+                    result = str(layout_type).lower().replace('layouttype.', '')
+                
+                logger.info(f"[VIEW] Layout type for {config.entity_type}: '{result}'")
+                return result
+            else:
+                logger.info(f"[VIEW] No view_layout found for {config.entity_type}, defaulting to simple")
+                return 'simple'
+                
+        except Exception as e:
+            logger.error(f"Error getting layout type: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return 'simple'
+
+    def _get_button_css_class(self, button_type) -> str:
+        """
+        Get CSS class for button based on ButtonType
+        Maps ButtonType enum values to CSS classes
+        """
+        try:
+            if hasattr(button_type, 'value'):
+                # ButtonType enum has the CSS class as its value
+                return button_type.value
+            else:
+                # Fallback for string button types
+                return f"btn-{str(button_type).lower()}"
+        except Exception as e:
+            logger.error(f"Error getting button CSS class: {str(e)}")
+            return "btn-secondary"  # Safe default
+
+    def _has_tabbed_layout(self, config: EntityConfiguration) -> bool:
+        """Check if configuration uses tabbed layout"""
+        try:
+            if hasattr(config, 'view_layout') and config.view_layout:
+                layout_type = config.view_layout.type
+                
+                # Check for tabbed layout properly
+                if hasattr(layout_type, 'value'):
+                    return layout_type.value == 'tabbed'
+                elif hasattr(layout_type, 'name'):
+                    return layout_type.name.lower() == 'tabbed'
+                else:
+                    return str(layout_type).lower() == 'tabbed'
+            return False
+        except:
+            return False
+
+    def _has_accordion_layout(self, config: EntityConfiguration) -> bool:
+        """Check if using accordion layout"""
+        return self._get_layout_type(config) == 'accordion'
+
+    def _get_tab_label(self, tab_key: str, config: EntityConfiguration) -> str:
+        """Get display label for tab - ONLY from configuration, no hardcoding"""
+        if not tab_key:
+            return 'Details'
+        
+        # Read ONLY from configuration
+        if (hasattr(config, 'view_layout') and 
+            config.view_layout and 
+            hasattr(config.view_layout, 'tabs') and 
+            config.view_layout.tabs):
+            
+            # tabs is a dict of TabDefinition objects
+            tab_config = config.view_layout.tabs.get(tab_key)
+            if tab_config and hasattr(tab_config, 'label'):
+                return tab_config.label
+        
+        # Generic fallback - no hardcoded mappings!
+        return str(tab_key).replace('_', ' ').title()
+
+    def _get_tab_icon(self, tab_key: str, config: EntityConfiguration) -> str:
+        """Get icon for tab - ONLY from configuration, no hardcoding"""
+        if not tab_key:
+            return 'fas fa-folder'
+        
+        # Read ONLY from configuration
+        if (hasattr(config, 'view_layout') and 
+            config.view_layout and 
+            hasattr(config.view_layout, 'tabs') and 
+            config.view_layout.tabs):
+            
+            # tabs is a dict of TabDefinition objects
+            tab_config = config.view_layout.tabs.get(tab_key)
+            if tab_config and hasattr(tab_config, 'icon'):
+                return tab_config.icon
+        
+        # Generic fallback icon - no hardcoded mappings!
+        return 'fas fa-folder'
+
+    def _get_section_title(self, section_key: str, config: EntityConfiguration) -> str:
+        """Get display title for section - ONLY from configuration"""
+        if not section_key:
+            return 'Information'
+        
+        # First check if there's a tab-specific section definition
+        if (hasattr(config, 'view_layout') and 
+            config.view_layout and 
+            hasattr(config.view_layout, 'tabs') and 
+            config.view_layout.tabs):
+            
+            # Look through all tabs for this section
+            for tab_config in config.view_layout.tabs.values():
+                if hasattr(tab_config, 'sections') and tab_config.sections:
+                    section_config = tab_config.sections.get(section_key)
+                    if section_config and hasattr(section_config, 'title'):
+                        return section_config.title
+        
+        # Check global section definitions
+        if hasattr(config, 'section_definitions') and config.section_definitions:
+            section_config = config.section_definitions.get(section_key)
+            if section_config and hasattr(section_config, 'title'):
+                return section_config.title
+        
+        # Generic fallback - no hardcoded mappings!
+        return str(section_key).replace('_', ' ').title()
+
+    def _get_section_icon(self, section_key: str, config: EntityConfiguration) -> str:
+        """Get icon for section - ONLY from configuration"""
+        if not section_key:
+            return 'fas fa-info-circle'
+        
+        # First check if there's a tab-specific section definition
+        if (hasattr(config, 'view_layout') and 
+            config.view_layout and 
+            hasattr(config.view_layout, 'tabs') and 
+            config.view_layout.tabs):
+            
+            # Look through all tabs for this section
+            for tab_config in config.view_layout.tabs.values():
+                if hasattr(tab_config, 'sections') and tab_config.sections:
+                    section_config = tab_config.sections.get(section_key)
+                    if section_config and hasattr(section_config, 'icon'):
+                        return section_config.icon
+        
+        # Check global section definitions
+        if hasattr(config, 'section_definitions') and config.section_definitions:
+            section_config = config.section_definitions.get(section_key)
+            if section_config and hasattr(section_config, 'icon'):
+                return section_config.icon
+        
+        # Generic fallback icon
+        return 'fas fa-info-circle'
+
+
+    def _assemble_view_action_buttons(self, config: EntityConfiguration, item: Any, item_id: str) -> List[Dict]:
+        """Assemble action buttons for view"""
+        try:
+            actions = []
+            
+            for action in config.actions:
+                if action.show_in_detail:
+                    # Check conditions
+                    if action.conditions and not self._check_action_conditions(action, item):
+                        continue
+                    
+                    # Convert item to dict if it's an object
+                    item_dict = {}
+                    if hasattr(item, '__dict__'):
+                        item_dict = {key: getattr(item, key, None) for key in dir(item) 
+                                    if not key.startswith('_') and not callable(getattr(item, key))}
+                    else:
+                        item_dict = item if isinstance(item, dict) else {}
+                    
+                    # Generate URL properly
+                    url = action.get_url(item_dict, config)
+                    
+                    actions.append({
+                        'id': action.id,
+                        'label': action.label,
+                        'icon': action.icon,
+                        'url': url,
+                        'button_type': action.button_type,
+                        'css_class': f'btn-{action.button_type.value}',
+                        'confirmation_required': action.confirmation_required,
+                        'confirmation_message': action.confirmation_message,
+                    })
+            
+            # Default actions if none configured
+            if not actions:
+                actions.extend([
+                    {
+                        'id': 'back',
+                        'label': f'Back to {config.plural_name}',
+                        'icon': 'fas fa-arrow-left',
+                        'url': f'/universal/{config.entity_type}/list',
+                        'css_class': 'universal-action-btn btn-secondary'
+                    },
+                    {
+                        'id': 'edit',
+                        'label': f'Edit {config.name}',
+                        'icon': 'fas fa-edit',
+                        'url': f'/universal/{config.entity_type}/edit/{item_id}',
+                        'css_class': 'universal-action-btn btn-warning'
+                    }
+                ])
+            
+            return actions
+            
+        except Exception as e:
+            logger.error(f"Error assembling action buttons: {str(e)}")
+            return []
+
+    def _build_view_breadcrumbs(self, config: EntityConfiguration, item: Any) -> List[Dict]:
+        """
+        Build breadcrumb navigation
+        """
+        try:
+            return [
+                {'label': 'Dashboard', 'url': '/dashboard'},
+                {'label': config.plural_name, 'url': f'/universal/{config.entity_type}/list'},
+                {'label': str(getattr(item, config.title_field, 'Details')), 'url': '#'}
+            ]
+        except:
+            return []
+        
+    def _create_fallback_sections(self, detail_fields: List[FieldDefinition], item: Any, config: EntityConfiguration) -> List[Dict]:
+        """
+        Create fallback sections when normal assembly fails
+        Minimal implementation to fix the missing method error
+        """
+        try:
+            # Create a single section with all available fields
+            section = {
+                'key': 'details',
+                'title': 'Details',
+                'icon': 'fas fa-info-circle',
+                'columns': 2,
+                'fields': []
+            }
+            
+            # Use existing fields if available
+            if detail_fields:
+                for field in detail_fields:
+                    if getattr(field, 'show_in_detail', True):
+                        section['fields'].append(self._format_field_for_view(field, item))
+            
+            # Return in the expected format (list of tabs with sections)
+            return [{
+                'key': 'simple',
+                'label': f'{config.name} Details',
+                'icon': config.icon,
+                'sections': [section]
+            }]
+            
+        except Exception as e:
+            logger.error(f"Error in fallback section creation: {str(e)}")
+            # Ultimate fallback - empty structure
+            return [{
+                'key': 'error',
+                'label': 'Error',
+                'icon': 'fas fa-exclamation-triangle',
+                'sections': []
+            }]
+
 
 # =============================================================================
 # LEGACY COMPATIBILITY FUNCTIONS (STANDALONE)

@@ -57,7 +57,7 @@ from .security.bridge import initialize_security
 from app.views.test import test_bp
 from pathlib import Path
 try:
-    from app.utils.filters import format_currency, dateformat, datetimeformat, timeago, register_filters
+    from app.utils.filters import format_currency, format_number, format_date, dateformat, datetimeformat, timeago, register_filters
 except ImportError:
     # Fallback functions if import fails
     def format_currency(value):
@@ -74,6 +74,7 @@ except ImportError:
         app.jinja_env.filters['dateformat'] = dateformat
         app.jinja_env.filters['datetimeformat'] = datetimeformat
         app.jinja_env.filters['timeago'] = timeago
+        app.jinja_env.filters['format_number'] = format_number
 
     def register_jinja_filters(app):
         """Wrapper function that calls register_filters"""
@@ -217,9 +218,11 @@ def create_app() -> Flask:
             app.logger.error(f"register_filters not available: {e}")
             # Basic fallback registration
             app.jinja_env.filters['format_currency'] = lambda value: f"Rs.{float(value or 0):,.2f}"
+            app.jinja_env.filters['timeago'] = lambda value: str(value) if value else ""
+            app.jinja_env.filters['date_format'] = lambda value, fmt='%b %d, %Y': value.strftime(fmt) if value else ""
+            app.jinja_env.filters['datetime_format'] = lambda value, fmt='%b %d, %Y %I:%M %p': value.strftime(fmt) if value else ""
             app.jinja_env.filters['dateformat'] = lambda value, fmt='%Y-%m-%d': value.strftime(fmt) if value else ""
             app.jinja_env.filters['datetimeformat'] = lambda value, fmt='%Y-%m-%d %H:%M:%S': value.strftime(fmt) if value else ""
-            app.jinja_env.filters['timeago'] = lambda value: str(value) if value else ""
             app.logger.warning("Using basic filter fallback")
         except Exception as e:
             app.logger.error(f"Unexpected filter registration error: {e}")
@@ -324,7 +327,7 @@ def register_view_blueprints(app: Flask) -> None:
             app.logger.info("[PROCESS] Attempting to import universal views...")
             from app.views.universal_views import universal_bp
             view_blueprints.append(universal_bp)
-            app.logger.info("[SUCCESS] Successfully imported universal views blueprint")
+            app.logger.info("[SUCCESS] ✅✅🚀 Successfully imported universal views blueprint")
         except ImportError as e:
             app.logger.warning(f"[WARNING] Universal views blueprint could not be loaded: {str(e)}")
         except Exception as e:

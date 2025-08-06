@@ -28,7 +28,6 @@ def configure_early_logging():
     
     # Set specific loggers to higher levels to reduce noise
     noisy_loggers = [
-        'app.services.universal_supplier_service',
         'app.engine.universal_services',
         'app.engine.categorized_filter_processor', 
         'app.engine.universal_filter_service',

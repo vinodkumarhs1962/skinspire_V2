@@ -164,6 +164,65 @@ def format_currency(value):
     return currencyformat(value)
 
 
+def format_number(value, decimals=2, use_indian_format=True):
+    """
+    Format a number with thousand separators
+    
+    Args:
+        value: Numeric value to format
+        decimals: Number of decimal places (default: 2)
+        use_indian_format: Whether to use Indian numbering system (default: True)
+        
+    Returns:
+        Formatted number string with thousand separators
+    """
+    try:
+        # Convert to float
+        value = float(value)
+        
+        # Format with specified decimals
+        formatted = f"{{:,.{decimals}f}}".format(value)
+        
+        if use_indian_format and decimals == 0:
+            # For whole numbers in Indian format, adjust comma placement
+            parts = formatted.split('.')
+            whole_part = parts[0].replace(',', '')
+            
+            if len(whole_part) > 3:
+                # Last 3 digits
+                last_three = whole_part[-3:]
+                # Remaining digits
+                remaining = whole_part[:-3]
+                
+                # Add commas every 2 digits in the remaining part (Indian system)
+                formatted_remaining = ""
+                for i, digit in enumerate(reversed(remaining)):
+                    if i > 0 and i % 2 == 0:
+                        formatted_remaining = "," + formatted_remaining
+                    formatted_remaining = digit + formatted_remaining
+                    
+                return formatted_remaining + "," + last_three
+        
+        return formatted
+        
+    except (ValueError, TypeError):
+        return "0"
+
+
+def format_date(value, format_string='%d/%m/%Y'):
+    """
+    Format a date value - alias for dateformat with different default
+    
+    Args:
+        value: Date/datetime object to format
+        format_string: strftime format string (default: '%d/%m/%Y')
+        
+    Returns:
+        Formatted date string
+    """
+    return dateformat(value, format_string)
+
+
 def numberformat(value, decimals=2):
     """
     Format a number with specified decimal places
@@ -304,6 +363,28 @@ def amount_in_words(value):
     except (ValueError, TypeError):
         return "Amount conversion error"
 
+def safe_get(obj, attribute, default=''):
+    """
+    Safely get an attribute from an object or dictionary
+    
+    Args:
+        obj: Object or dictionary to get attribute from
+        attribute: Attribute name or dictionary key
+        default: Default value if attribute not found
+        
+    Returns:
+        Attribute value or default
+    """
+    if obj is None:
+        return default
+    
+    # Handle dictionary
+    if isinstance(obj, dict):
+        return obj.get(attribute, default)
+    
+    # Handle object attribute
+    return getattr(obj, attribute, default)
+
 
 def register_filters(app):
     """
@@ -318,10 +399,13 @@ def register_filters(app):
     app.jinja_env.filters['datetimeformat'] = datetimeformat
     app.jinja_env.filters['timeago'] = timeago
     app.jinja_env.filters['numberformat'] = numberformat
+    app.jinja_env.filters['format_number'] = format_number  # NEW
+    app.jinja_env.filters['format_date'] = format_date  # NEW
     app.jinja_env.filters['percentformat'] = percentformat
     app.jinja_env.filters['statusformat'] = statusformat
     app.jinja_env.filters['boolformat'] = boolformat
-    app.jinja_env.filters['amount_in_words'] = amount_in_words 
+    app.jinja_env.filters['amount_in_words'] = amount_in_words
+    app.jinja_env.filters['safe_get'] = safe_get  # NEW - useful for templates 
     
     # Add global functions that might be useful
     app.jinja_env.globals['now'] = datetime.now

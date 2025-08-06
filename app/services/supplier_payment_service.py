@@ -8,7 +8,7 @@ Contains only payment-specific business logic
 
 from typing import Dict, Any, List, Optional, Tuple
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from flask_login import current_user
 from sqlalchemy import or_, and_, desc, asc, func
 from sqlalchemy.orm import Session, joinedload
@@ -66,8 +66,16 @@ class SupplierPaymentService(UniversalEntityService):
                 payments = query.all()
                 
                 # Convert to dictionaries with payment-specific fields
-                payments_dict = self._convert_payments_to_dict(payments, session)
+                payments_dict = self._convert_items_to_dict(payments, session)
                 
+                logger.info("🔍 [DEBUG SUPPLIER NAME - SERVICE LEVEL]")
+                if payments_dict:
+                    first_payment = payments_dict[0]
+                    logger.info(f"✅ First payment dict keys: {list(first_payment.keys())}")
+                    logger.info(f"✅ supplier_name in dict: {'supplier_name' in first_payment}")
+                    logger.info(f"✅ supplier_name value: {first_payment.get('supplier_name', 'NOT FOUND')}")
+                    logger.info(f"✅ Full payment dict sample: {first_payment}")
+
                 # Calculate payment-specific summary
                 summary = self._calculate_payment_summary(
                     session, hospital_id, branch_id, filters, total_count
@@ -243,12 +251,12 @@ class SupplierPaymentService(UniversalEntityService):
                 # Amount range filter - using exact field names from _apply_payment_filters
                 if filters.get('amount_min'):
                     try:
-                        query = query.filter(SupplierPayment.payment_amount >= Decimal(str(filters['amount_min'])))
+                        query = query.filter(SupplierPayment.amount >= Decimal(str(filters['amount_min'])))
                     except (ValueError, TypeError):
                         pass
                 if filters.get('amount_max'):
                     try:
-                        query = query.filter(SupplierPayment.payment_amount <= Decimal(str(filters['amount_max'])))
+                        query = query.filter(SupplierPayment.amount <= Decimal(str(filters['amount_max'])))
                     except (ValueError, TypeError):
                         pass
                 
@@ -284,7 +292,6 @@ class SupplierPaymentService(UniversalEntityService):
             SupplierPayment.supplier_id == Supplier.supplier_id
         ).options(
             joinedload(SupplierPayment.supplier),
-            joinedload(SupplierPayment.payment_invoice_links)
         )
         
         # Apply hospital filter
@@ -368,10 +375,10 @@ class SupplierPaymentService(UniversalEntityService):
         amount_min = filters.get('amount_min')
         amount_max = filters.get('amount_max')
         if amount_min:
-            query = query.filter(SupplierPayment.payment_amount >= Decimal(str(amount_min)))
+            query = query.filter(SupplierPayment.amount >= Decimal(str(amount_min)))
             applied_filters.add('amount_min')
         if amount_max:
-            query = query.filter(SupplierPayment.payment_amount <= Decimal(str(amount_max)))
+            query = query.filter(SupplierPayment.amount <= Decimal(str(amount_max)))
             applied_filters.add('amount_max')
         
         return query, applied_filters
@@ -388,7 +395,7 @@ class SupplierPaymentService(UniversalEntityService):
             'payment_date': SupplierPayment.payment_date,
             'reference_no': SupplierPayment.reference_no,
             'supplier_name': Supplier.supplier_name,
-            'payment_amount': SupplierPayment.payment_amount,
+            'amount': SupplierPayment.amount,
             'workflow_status': SupplierPayment.workflow_status
         }
         
@@ -401,15 +408,17 @@ class SupplierPaymentService(UniversalEntityService):
         
         return query
     
-    def _convert_payments_to_dict(self, payments: List[SupplierPayment], 
-                                session: Session) -> List[Dict]:
+    def _convert_items_to_dict(self, items: List, session: Session) -> List[Dict]:
         """
-        Convert payment entities to dictionaries with all required fields
+        Convert payment entities to dictionaries
+        FIXED: Removed incorrect iteration over single invoice
         """
-        payments_dict = []
+        from decimal import Decimal
+        from app.services.database_service import get_entity_dict
         
-        for payment in payments:
-            # Get base dictionary
+        items_dict = []
+        
+        for payment in items:
             payment_dict = get_entity_dict(payment)
             
             # Add supplier information
@@ -419,39 +428,37 @@ class SupplierPaymentService(UniversalEntityService):
                     'supplier_name': payment.supplier.supplier_name,
                     'contact_person_name': payment.supplier.contact_person_name,
                     'email': payment.supplier.email,
-                    'phone': payment.supplier.phone or ''
+                    'phone': getattr(payment.supplier, 'phone', '')
                 }
                 payment_dict['supplier_name'] = payment.supplier.supplier_name
             
-            # Add invoice information
+            # ✅ FIXED: Handle single invoice (no loop needed)
             payment_dict['linked_invoices'] = []
             payment_dict['total_invoice_amount'] = Decimal('0')
             
-            if payment.payment_invoice_links:
-                for link in payment.payment_invoice_links:
-                    if link.invoice and not link.invoice.is_deleted:
-                        invoice_info = {
-                            'invoice_id': str(link.invoice.invoice_id),
-                            'invoice_no': link.invoice.invoice_no,
-                            'invoice_date': link.invoice.invoice_date.isoformat() if link.invoice.invoice_date else None,
-                            'total_amount': float(link.invoice.total_amount) if link.invoice.total_amount else 0,
-                            'amount_paid': float(link.amount_paid) if link.amount_paid else 0
-                        }
-                        payment_dict['linked_invoices'].append(invoice_info)
-                        payment_dict['total_invoice_amount'] += link.invoice.total_amount or 0
+            if payment.invoice:
+                invoice_info = {
+                    'invoice_id': str(payment.invoice.invoice_id),
+                    'invoice_no': payment.invoice.supplier_invoice_number,
+                    'invoice_date': payment.invoice.invoice_date.isoformat() if payment.invoice.invoice_date else None,
+                    'total_amount': float(payment.invoice.total_amount) if payment.invoice.total_amount else 0
+                }
+                payment_dict['linked_invoices'] = [invoice_info]
+                payment_dict['total_invoice_amount'] = float(payment.invoice.total_amount or 0)
+                payment_dict['supplier_invoice_no'] = payment.invoice.supplier_invoice_number
+            else:
+                payment_dict['total_invoice_amount'] = 0
             
-            # Format amounts
-            payment_dict['payment_amount'] = float(payment_dict.get('payment_amount', 0))
-            payment_dict['cash_amount'] = float(payment_dict.get('cash_amount', 0))
-            payment_dict['bank_transfer_amount'] = float(payment_dict.get('bank_transfer_amount', 0))
-            payment_dict['total_invoice_amount'] = float(payment_dict['total_invoice_amount'])
+            # Add branch name if available
+            if payment.branch:
+                payment_dict['branch_name'] = payment.branch.name
             
-            # Calculate balance
-            payment_dict['balance_amount'] = payment_dict['payment_amount'] - payment_dict['total_invoice_amount']
+            # Add any additional virtual fields
+            payment_dict = self._add_virtual_fields_to_payment(payment_dict, payment)
             
-            payments_dict.append(payment_dict)
+            items_dict.append(payment_dict)
         
-        return payments_dict
+        return items_dict
     
     def _calculate_payment_summary(self, session: Session, hospital_id: uuid.UUID,
                                  branch_id: Optional[uuid.UUID], filters: Dict,
@@ -461,8 +468,7 @@ class SupplierPaymentService(UniversalEntityService):
         """
         # Start with base query for summary
         base_query = session.query(SupplierPayment).filter(
-            SupplierPayment.hospital_id == hospital_id,
-            SupplierPayment.is_deleted == False
+            SupplierPayment.hospital_id == hospital_id
         )
         
         if branch_id:
@@ -470,7 +476,7 @@ class SupplierPaymentService(UniversalEntityService):
         
         # Total amount
         total_amount = base_query.with_entities(
-            func.sum(SupplierPayment.payment_amount)
+            func.sum(SupplierPayment.amount)
         ).scalar() or 0
         
         # Status counts
@@ -495,7 +501,7 @@ class SupplierPaymentService(UniversalEntityService):
         # Payment method breakdown
         method_amounts = base_query.with_entities(
             SupplierPayment.payment_method,
-            func.sum(SupplierPayment.payment_amount),
+            func.sum(SupplierPayment.amount),
             func.count(SupplierPayment.payment_id)
         ).group_by(SupplierPayment.payment_method).all()
         
@@ -517,7 +523,7 @@ class SupplierPaymentService(UniversalEntityService):
             func.sum(
                 func.case(
                     [(SupplierPayment.payment_method == 'bank_transfer', 
-                      SupplierPayment.payment_amount)],
+                      SupplierPayment.amount)],
                     else_=SupplierPayment.bank_transfer_amount
                 )
             )
@@ -534,8 +540,7 @@ class SupplierPaymentService(UniversalEntityService):
         """
         query = session.query(Supplier).filter(
             Supplier.hospital_id == hospital_id,
-            Supplier.status == 'active',
-            Supplier.is_deleted == False
+            Supplier.status == 'active'
         )
         
         if branch_id:
@@ -556,11 +561,401 @@ class SupplierPaymentService(UniversalEntityService):
         return suppliers
     
     def add_relationships(self, entity_dict: Dict, entity, session) -> Dict:
+        """Public wrapper for relationship addition - called by categorized processor"""
+        return self._add_relationships(entity_dict, entity, session)
+
+    def _add_relationships(self, entity_dict: Dict, entity, session) -> Dict:
         """Add payment-specific relationships"""
-        # Move the supplier/branch/invoice relationship logic here
-        if hasattr(entity, 'supplier_id') and entity.supplier_id:
-            from app.models.master import Supplier
-            supplier = session.query(Supplier).filter_by(supplier_id=entity.supplier_id).first()
-            if supplier:
-                entity_dict['supplier_name'] = supplier.supplier_name
-        return entity_dict
+        try:
+            # Add supplier relationship data - preserve object structure for template
+            if hasattr(entity, 'supplier') and entity.supplier:
+                # Create supplier object for template compatibility with ENTITY_REFERENCE display
+                entity_dict['supplier'] = {
+                    'supplier_id': str(entity.supplier.supplier_id),
+                    'supplier_name': entity.supplier.supplier_name,
+                    'contact_person_name': getattr(entity.supplier, 'contact_person_name', ''),
+                    'email': getattr(entity.supplier, 'email', '')
+                }
+                # Also add flat field for backward compatibility
+                entity_dict['supplier_name'] = entity.supplier.supplier_name
+                logger.info(f"[DEBUG] Added supplier object and flat fields from relationship: {entity.supplier.supplier_name}")
+            elif hasattr(entity, 'supplier_id') and entity.supplier_id:
+                # Fallback: Load supplier if not already loaded
+                from app.models.master import Supplier
+                supplier = session.query(Supplier).filter_by(supplier_id=entity.supplier_id).first()
+                if supplier:
+                    # Create supplier object for template compatibility
+                    entity_dict['supplier'] = {
+                        'supplier_id': str(supplier.supplier_id),
+                        'supplier_name': supplier.supplier_name,
+                        'contact_person_name': getattr(supplier, 'contact_person_name', ''),
+                        'email': getattr(supplier, 'email', '')
+                    }
+                    # Also add flat field for backward compatibility
+                    entity_dict['supplier_name'] = supplier.supplier_name
+                    logger.info(f"[DEBUG] Added supplier object and flat fields from query: {supplier.supplier_name}")
+                else:
+                    logger.warning(f"[DEBUG] Supplier not found for supplier_id: {entity.supplier_id}")
+            
+            # ✅ CORRECTED: Handle SINGLE invoice relationship (NOT payment_invoice_links)
+            if hasattr(entity, 'invoice') and entity.invoice:
+                # Single invoice relationship
+                entity_dict['invoice_no'] = entity.invoice.supplier_invoice_number
+                entity_dict['supplier_invoice_no'] = entity.invoice.supplier_invoice_number
+                entity_dict['invoice_date'] = entity.invoice.invoice_date.isoformat() if entity.invoice.invoice_date else None
+                
+                # Add other useful invoice fields that actually exist in your model
+                if hasattr(entity.invoice, 'total_amount'):
+                    entity_dict['invoice_total'] = float(entity.invoice.total_amount)
+                
+                if hasattr(entity.invoice, 'payment_status'):
+                    entity_dict['invoice_status'] = entity.invoice.payment_status
+                
+                if hasattr(entity.invoice, 'notes'):
+                    entity_dict['invoice_notes'] = entity.invoice.notes
+                
+                # Create linked_invoices array with single invoice for template compatibility
+                entity_dict['linked_invoices'] = [{
+                    'invoice_id': str(entity.invoice.invoice_id),
+                    'invoice_no': entity.invoice.supplier_invoice_number,
+                    'supplier_invoice_no': entity.invoice.supplier_invoice_number,
+                    'invoice_date': entity.invoice.invoice_date.isoformat() if entity.invoice.invoice_date else None,
+                    'total_amount': float(entity.invoice.total_amount) if entity.invoice.total_amount else 0
+                }]
+            elif hasattr(entity, 'invoice_id') and entity.invoice_id:
+                # ✅ NEW: If invoice not loaded but we have invoice_id, try to load it
+                invoice = session.query(SupplierInvoice).filter_by(invoice_id=entity.invoice_id).first()
+                if invoice:
+                    entity_dict['invoice_no'] = invoice.supplier_invoice_number
+                    entity_dict['supplier_invoice_no'] = invoice.supplier_invoice_number
+                    entity_dict['invoice_date'] = invoice.invoice_date.isoformat() if invoice.invoice_date else None
+                    
+                    if hasattr(invoice, 'total_amount'):
+                        entity_dict['invoice_total'] = float(invoice.total_amount)
+                    
+                    entity_dict['linked_invoices'] = [{
+                        'invoice_id': str(invoice.invoice_id),
+                        'invoice_no': invoice.supplier_invoice_number,
+                        'supplier_invoice_no': invoice.supplier_invoice_number,
+                        'invoice_date': invoice.invoice_date.isoformat() if invoice.invoice_date else None,
+                        'total_amount': float(invoice.total_amount) if invoice.total_amount else 0
+                    }]
+                else:
+                    entity_dict['linked_invoices'] = []
+            else:
+                # No invoice linked
+                entity_dict['linked_invoices'] = []
+
+            # ✅ FIXED: Using correct field name 'name' instead of 'branch_name'
+            if hasattr(entity, 'branch') and entity.branch:
+                entity_dict['branch_name'] = entity.branch.name
+            
+            logger.info(f"[DEBUG] Final entity_dict has supplier_name: {'supplier_name' in entity_dict}")
+            logger.info(f"[DEBUG] Final entity_dict has supplier object: {'supplier' in entity_dict}")
+            
+            return entity_dict
+            
+        except Exception as e:
+            logger.error(f"Error adding relationships: {str(e)}")
+            return entity_dict
+        
+    def _get_base_query(self, session: Session, hospital_id: uuid.UUID, 
+                   branch_id: Optional[uuid.UUID] = None):
+        """
+        Override base query to include supplier relationship only
+        """
+        query = session.query(SupplierPayment).options(
+            joinedload(SupplierPayment.supplier)
+        ).filter(
+            SupplierPayment.hospital_id == hospital_id,
+        )
+        
+        if branch_id:
+            query = query.filter(SupplierPayment.branch_id == branch_id)
+        
+        return query
+    
+    def get_po_items_for_payment(self, payment_id: str, **kwargs) -> Dict:
+        """
+        Get purchase order items related to this payment
+        FIXED: Removed incorrect iteration over single invoice
+        """
+        try:
+            with get_db_session() as session:
+                payment = session.query(SupplierPayment).filter(
+                    SupplierPayment.payment_id == payment_id,
+                    SupplierPayment.hospital_id == kwargs.get('hospital_id')
+                ).first()
+                
+                if not payment:
+                    return {'items': [], 'has_po': False}
+                
+                po_items = []
+                po_info = None
+                
+                # ✅ FIXED: Access PO through single invoice (no loop needed)
+                if payment.invoice_id:
+                    invoice = session.query(SupplierInvoice).filter(
+                        SupplierInvoice.invoice_id == payment.invoice_id
+                    ).first()
+                    
+                    if invoice and invoice.po_id:
+                        from app.models.transaction import PurchaseOrderHeader, PurchaseOrderLine
+                        po = session.query(PurchaseOrderHeader).filter(
+                            PurchaseOrderHeader.po_id == invoice.po_id
+                        ).first()
+                        
+                        if po:
+                            po_info = {
+                                'po_no': po.po_number,  # Corrected field name
+                                'po_date': po.po_date.isoformat() if po.po_date else None,
+                                'total_amount': float(po.total_amount or 0)
+                            }
+                            
+                            po_lines = session.query(PurchaseOrderLine).filter(
+                                PurchaseOrderLine.po_id == po.po_id
+                            ).all()
+                            
+                            for item in po_lines:
+                                po_items.append({
+                                    'item_name': item.medicine_name,
+                                    'quantity': float(item.units or 0),
+                                    'unit_price': float(item.pack_purchase_price or 0),
+                                    'discount': 0,  # PO lines don't have discount_amount
+                                    'gst_amount': float(item.total_gst or 0),
+                                    'total': float(item.line_total or 0),
+                                    'batch_no': None,  # PO lines don't have batch_number
+                                    'expiry_date': None  # PO lines don't have expiry_date
+                                })
+                
+                return {
+                    'items': po_items,
+                    'po_info': po_info,
+                    'has_po': bool(po_items),
+                    'currency_symbol': '₹'
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting PO items for payment: {str(e)}")
+            return {'items': [], 'has_po': False, 'error': str(e)}
+
+    def get_invoice_items_for_payment(self, payment_id: str, **kwargs) -> Dict:
+        """
+        Get invoice line items for this payment
+        FIXED: Removed incorrect iteration over single invoice
+        """
+        try:
+            with get_db_session() as session:
+                payment = session.query(SupplierPayment).filter(
+                    SupplierPayment.payment_id == payment_id,
+                    SupplierPayment.hospital_id == kwargs.get('hospital_id')
+                ).first()
+                
+                if not payment:
+                    return {'items': [], 'has_invoices': False}
+                
+                invoice_items = []
+                invoice_summary = {
+                    'total_amount': 0,
+                    'total_discount': 0,
+                    'total_gst': 0
+                }
+                
+                # ✅ FIXED: Access invoice directly (no loop needed)
+                if payment.invoice_id:
+                    invoice = session.query(SupplierInvoice).filter(
+                        SupplierInvoice.invoice_id == payment.invoice_id
+                    ).first()
+                    
+                    if invoice:
+                        from app.models.transaction import SupplierInvoiceLine
+                        invoice_lines = session.query(SupplierInvoiceLine).filter(
+                            SupplierInvoiceLine.invoice_id == invoice.invoice_id
+                        ).all()
+                        
+                        for item in invoice_lines:
+                            invoice_items.append({
+                                'invoice_no': invoice.supplier_invoice_number,
+                                'item_name': item.medicine_name,
+                                'batch_no': item.batch_number,
+                                'quantity': float(item.units or 0),
+                                'unit_price': float(item.pack_purchase_price or 0),
+                                'discount': float(item.discount_amount or 0),
+                                'gst_rate': float(item.gst_rate or 0),
+                                'gst_amount': float(item.total_gst or 0),
+                                'total': float(item.line_total or 0)
+                            })
+                            
+                            invoice_summary['total_amount'] += float(item.line_total or 0)
+                            invoice_summary['total_discount'] += float(item.discount_amount or 0)
+                            invoice_summary['total_gst'] += float(item.total_gst or 0)
+                
+                return {
+                    'items': invoice_items,
+                    'summary': invoice_summary,
+                    'has_invoices': bool(invoice_items),
+                    'currency_symbol': '₹'
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting invoice items: {str(e)}")
+            return {'items': [], 'has_invoices': False, 'error': str(e)}
+
+    def get_payment_workflow_timeline(self, payment_id: str, **kwargs) -> Dict:
+        """
+        Get workflow timeline for payment approval process
+        Returns data for the workflow timeline custom renderer
+        """
+        try:
+            with get_db_session() as session:  # ✅ Fixed session method
+                payment = session.query(SupplierPayment).filter(
+                    SupplierPayment.payment_id == payment_id,
+                    SupplierPayment.hospital_id == kwargs.get('hospital_id')
+                ).first()
+                
+                if not payment:
+                    return {'steps': [], 'current_status': 'unknown'}
+                
+                # Build workflow timeline with fields that actually exist
+                steps = []
+                
+                # Step 1: Created
+                steps.append({
+                    'title': 'Payment Created',
+                    'status': 'completed',
+                    'timestamp': payment.created_at,  # ✅ This field exists
+                    'user': payment.created_by,  # ✅ This field exists
+                    'icon': 'fas fa-plus-circle',
+                    'color': 'success'
+                })
+                
+                # Step 2: Based on workflow_status field which exists
+                if payment.workflow_status == 'pending_approval':
+                    steps.append({
+                        'title': 'Awaiting Approval',
+                        'status': 'pending',
+                        'icon': 'fas fa-clock',
+                        'color': 'warning'
+                    })
+                elif payment.workflow_status == 'approved':
+                    steps.append({
+                        'title': 'Payment Approved',
+                        'status': 'completed',
+                        'timestamp': payment.modified_at,  # Use modified_at since approved_at doesn't exist
+                        'user': payment.modified_by,  # Use modified_by since approved_by doesn't exist
+                        'icon': 'fas fa-check-circle',
+                        'color': 'success'
+                    })
+                elif payment.workflow_status == 'rejected':
+                    steps.append({
+                        'title': 'Payment Rejected',
+                        'status': 'rejected',
+                        'timestamp': payment.modified_at,
+                        'user': payment.modified_by,
+                        'icon': 'fas fa-times-circle',
+                        'color': 'danger'
+                    })
+                
+                # Step 3: Completed
+                if payment.workflow_status == 'completed':
+                    steps.append({
+                        'title': 'Payment Completed',
+                        'status': 'completed',
+                        'timestamp': payment.modified_at,
+                        'icon': 'fas fa-flag-checkered',
+                        'color': 'success'
+                    })
+                
+                return {
+                    'steps': steps,
+                    'current_status': payment.workflow_status,
+                    'has_timeline': True
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting workflow timeline: {str(e)}")
+            return {'steps': [], 'has_timeline': False, 'error': str(e)}
+
+    def get_supplier_payment_history_6months(self, supplier_id: str, **kwargs) -> Dict:
+        """
+        Get last 6 months payment history for a supplier
+        Enhanced version of get_supplier_payment_history
+        """
+        try:
+            with get_db_session() as session:
+                from datetime import datetime, timedelta
+                
+                # Calculate date 6 months ago
+                six_months_ago = datetime.now() - timedelta(days=180)
+                
+                # Get payments for this supplier
+                payments = session.query(SupplierPayment).filter(
+                    SupplierPayment.supplier_id == supplier_id,
+                    SupplierPayment.hospital_id == kwargs.get('hospital_id'),
+                    SupplierPayment.payment_date >= six_months_ago,
+                    SupplierPayment.workflow_status.in_(['approved', 'completed'])
+                ).order_by(desc(SupplierPayment.payment_date)).all()
+                
+                payment_history = []
+                total_paid = 0
+                
+                for payment in payments:
+                    # ✅ FIXED: Safely get invoice number
+                    invoice_no = None
+                    if payment.invoice_id:
+                        # Load the invoice if we have an invoice_id
+                        invoice = session.query(SupplierInvoice).filter(
+                            SupplierInvoice.invoice_id == payment.invoice_id
+                        ).first()
+                        if invoice:
+                            invoice_no = invoice.supplier_invoice_number
+                    
+                    payment_history.append({
+                        'payment_id': str(payment.payment_id),
+                        'reference_no': payment.reference_no,
+                        'payment_date': payment.payment_date.isoformat() if payment.payment_date else None,  # ✅ Format as ISO string
+                        'payment_method': payment.payment_method,
+                        'amount': float(payment.amount or 0),
+                        'workflow_status': payment.workflow_status,
+                        'invoice_no': invoice_no  # ✅ Use safely retrieved invoice number
+                    })
+                    total_paid += float(payment.amount or 0)
+                
+                # Get supplier details for summary
+                supplier = session.query(Supplier).filter(
+                    Supplier.supplier_id == supplier_id
+                ).first()
+                
+                return {
+                    'payments': payment_history,
+                    'summary': {
+                        'total_payments': len(payment_history),
+                        'total_amount': total_paid,
+                        'supplier_name': supplier.supplier_name if supplier else 'Unknown',
+                        'period': '6 Months'
+                    },
+                    'has_history': bool(payment_history),
+                    'currency_symbol': '₹'
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting payment history: {str(e)}")
+            return {'payments': [], 'has_history': False, 'error': str(e)}
+        
+    def _add_virtual_fields_to_payment(self, payment_dict: Dict, payment: SupplierPayment) -> Dict:
+        """
+        Add virtual/calculated fields to payment dictionary
+        FIXED: Removed incorrect iteration over single invoice
+        """
+        from decimal import Decimal
+        
+        # ✅ FIXED: Calculate total from single invoice (no loop needed)
+        total_invoice_amount = Decimal('0')
+        if payment.invoice:
+            total_invoice_amount = payment.invoice.total_amount or Decimal('0')
+        
+        payment_dict['total_invoice_amount'] = float(total_invoice_amount)
+        payment_dict['submitted_by'] = getattr(payment, 'submitted_by', payment.created_by)
+        payment_dict['workflow_updated_at'] = payment.modified_at
+        
+        return payment_dict

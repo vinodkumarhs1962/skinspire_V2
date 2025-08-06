@@ -553,12 +553,26 @@ class CategorizedFilterProcessor:
         """Process text search filters - Using existing ENTITY_SEARCH_CONFIGS where available"""
         applied_filters = set()
         filter_count = 0
-        
+        # Add at the beginning of the method
+        logger.info(f"🔍 Processing search filters for {entity_type} with filters: {filters}")
         try:
             model_class = self._get_model_class(entity_type)
             if not model_class:
                 return query, applied_filters, filter_count
             
+            # ✅ Ensure ENTITY_SEARCH_CONFIGS is loaded
+            try:
+                from app.config.entity_configurations import ENTITY_SEARCH_CONFIGS, get_entity_search_config
+                
+                # Force load the search config if not in dict
+                if entity_type not in ENTITY_SEARCH_CONFIGS:
+                    search_config = get_entity_search_config(entity_type)
+                    if search_config:
+                        ENTITY_SEARCH_CONFIGS[entity_type] = search_config
+            except Exception as e:
+                logger.warning(f"Could not load ENTITY_SEARCH_CONFIGS: {str(e)}")
+                ENTITY_SEARCH_CONFIGS = {}
+
             # ✅ PHASE 1C CORRECTED: Use existing ENTITY_SEARCH_CONFIGS first
             from app.config.entity_configurations import ENTITY_SEARCH_CONFIGS
             
@@ -572,8 +586,16 @@ class CategorizedFilterProcessor:
                 search_term = None
                 search_param_used = None
                 
-                # Check various search parameter names - skip if already processed as supplier search
-                for param_name in ['search', 'reference_no', 'ref_no']:
+                # Check various search parameter names based on entity type
+                search_params = []
+                if entity_type == 'suppliers':
+                    # For suppliers, check these parameters
+                    search_params = ['search', 'q', 'supplier_name']
+                else:
+                    # For other entities
+                    search_params = ['search', 'reference_no', 'ref_no']
+
+                for param_name in search_params:
                     if (param_name in filters and filters[param_name] and str(filters[param_name]).strip() 
                         and param_name not in applied_filters):
                         search_term = str(filters[param_name]).strip()
@@ -582,6 +604,7 @@ class CategorizedFilterProcessor:
                 
                 # Apply search using existing configuration
                 if search_term and len(search_term) >= search_config.min_chars:
+                    logger.info(f"✅ Applying search for {entity_type} with term '{search_term}' using param '{search_param_used}'")
                     query = self._apply_search_using_existing_config(query, search_term, search_config, model_class)
                     applied_filters.add(search_param_used)
                     filter_count += 1

@@ -467,13 +467,31 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                             
                             <!-- DYNAMIC CELLS BASED ON COLUMNS -->
                             {% for column in table_columns %}
-                                <td class="{{ column.css_class }}" 
+                                <td class="{{ column.css_class }} {{ column.css_classes }}" 
                                     style="{% if column.width and column.width != 'auto' %}width: {{ column.width }};{% endif %} text-align: {{ column.align|default('left') }};">
                                     
                                     {% set value = item.get(column.name, '') %}
                                     
+                                    <!-- Handle complex display types first -->
+                                    {% if column.complex_display_type == 'entity_reference' %}
+                                        <!-- First check if the value is already populated (supplier_name is at top level) -->
+                                        {% if value %}
+                                            {{ value }}
+                                        {% elif column.related_field and item.get(column.related_field) %}
+                                            <!-- Fall back to related entity object if direct value is empty -->
+                                            {% set related_entity = item.get(column.related_field) %}
+                                            {% if related_entity is mapping %}
+                                                <!-- Use the field name from the column as the key in related entity -->
+                                                {{ related_entity.get(column.name, related_entity.get(column.related_display_field or 'name', '—')) }}
+                                            {% else %}
+                                                {{ '—' }}
+                                            {% endif %}
+                                        {% else %}
+                                            {{ '—' }}
+                                        {% endif %}
+
                                     <!-- Format based on field type -->
-                                    {% if column.field_type == 'currency' or column.field_type == 'amount' %}
+                                    {% elif column.field_type == 'currency' or column.field_type == 'amount' %}
                                         {% if value %}
                                             <!-- Check for mixed payment breakdown based on active filter -->
                                             {% if column.get('format_pattern') == 'mixed_payment_breakdown' 
@@ -549,14 +567,15 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                                                 onclick="confirmAction('{{ action_url }}', '{{ action.confirmation_message }}'); return false;"
                                                 class="{{ action.button_type.value }} btn-sm" 
                                                 title="{{ action.label }}">
-                                                    <i class="{{ action.icon }}"></i>
+                                                    <i class="{{ action.icon }} mr-2"></i>
+                                                    
                                                 </a>
                                             {% else %}
                                                 <!-- Regular action -->
                                                 <a href="{{ action_url }}" 
                                                 class="{{ action.button_type.value }} btn-sm" 
                                                 title="{{ action.label }}">
-                                                    <i class="{{ action.icon }}"></i>
+                                                    <i class="{{ action.icon }} mr-2"></i>
                                                 </a>
                                             {% endif %}
                                         {% endif %}
@@ -658,17 +677,32 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
 
 <!-- Entity Configuration -->
 <script>
-// ✅ SAFEST: Manual object construction to avoid template issues<script>
+// ✅ FIXED: Use actual server data instead of hardcoded values
+{% if assembled_data and assembled_data.entity_config %}
 window.assembledData = {
     entity_config: {
-        entity_type: "supplier_payments",
+        entity_type: "{{ assembled_data.entity_config.entity_type }}",
+        enable_saved_filter_suggestions: {{ assembled_data.entity_config.enable_saved_filter_suggestions|tojson }},
+        enable_auto_submit: {{ assembled_data.entity_config.enable_auto_submit|tojson }},
+        primary_key: "{{ assembled_data.entity_config.primary_key }}",
+        name: "{{ assembled_data.entity_config.name }}",
+        plural_name: "{{ assembled_data.entity_config.plural_name }}"
+    }
+};
+{% else %}
+// Fallback if no assembled data
+window.assembledData = {
+    entity_config: {
+        entity_type: "unknown",
         enable_saved_filter_suggestions: true,
         enable_auto_submit: true
     }
 };
+{% endif %}
 
 console.log('📋 Universal List template loaded');
 console.log('🔧 Entity config:', window.assembledData.entity_config);
+console.log('🔧 Entity type:', window.assembledData.entity_config.entity_type);
 </script>
 
 <!-- Utility Functions -->
@@ -715,10 +749,13 @@ function handleRowClick(event, paymentId) {
         return;
     }
     
-    const targetUrl = `/supplier/payment/view/${paymentId}`;
+    // Get entity type from page data
+    const entityType = document.querySelector('[data-entity-type]')?.dataset.entityType || 'supplier_payments';
+    
+    // Use universal view route
+    const targetUrl = `/universal/${entityType}/view/${paymentId}`;
     console.log('🔍 Navigating to URL:', targetUrl);
     
-    // Navigate to payment view using correct supplier_views.py route
     window.location.href = targetUrl;
 }
 

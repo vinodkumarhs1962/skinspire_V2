@@ -1,0 +1,82 @@
+<!-- templates/components/business/workflow_timeline.html -->
+{% if data.has_timeline %}
+<div class="workflow-timeline-container">
+    <!-- Current Status Badge -->
+    <div class="mb-6">
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
+            {% if data.current_status == 'approved' or data.current_status == 'completed' %}
+                bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300
+            {% elif data.current_status == 'pending' or data.current_status == 'pending_approval' %}
+                bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300
+            {% elif data.current_status == 'rejected' %}
+                bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300
+            {% else %}
+                bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300
+            {% endif %}">
+            <i class="fas fa-circle text-xs mr-2"></i>
+            Current Status: {{ data.current_status|title|replace('_', ' ') }}
+        </span>
+    </div>
+
+    <!-- Timeline -->
+    <div class="relative">
+        {% for step in data['steps'] %}
+        <div class="flex items-start mb-8 {% if not loop.last %}pb-8 border-l-2 border-gray-200 dark:border-gray-700 ml-4{% endif %}">
+            <!-- Timeline Icon -->
+            <div class="absolute -left-2 w-8 h-8 rounded-full flex items-center justify-center
+                {% if step.color == 'success' %}
+                    bg-green-500 text-white
+                {% elif step.color == 'info' %}
+                    bg-blue-500 text-white
+                {% elif step.color == 'warning' %}
+                    bg-yellow-500 text-white
+                {% elif step.color == 'danger' %}
+                    bg-red-500 text-white
+                {% else %}
+                    bg-gray-500 text-white
+                {% endif %}">
+                <i class="{{ step.icon }} text-sm"></i>
+            </div>
+            
+            <!-- Timeline Content -->
+            <div class="ml-12 flex-1">
+                <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {{ step.title }}
+                </h4>
+                
+                {% if step.timestamp %}
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    <i class="far fa-clock mr-1"></i>
+                    {{ step.timestamp.strftime('%b %d, %Y %I:%M %p') if step.timestamp else '' }}
+                </p>
+                {% endif %}
+                
+                {% if step.user %}
+                <p class="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                    <i class="far fa-user mr-1"></i>
+                    {% if step.status == 'pending' %}
+                        Awaiting: {{ step.user }}
+                    {% else %}
+                        By: {{ step.user }}
+                    {% endif %}
+                </p>
+                {% endif %}
+                
+                {% if step.reason %}
+                <div class="mt-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                    <p class="text-xs text-red-700 dark:text-red-300">
+                        <strong>Reason:</strong> {{ step.reason }}
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% else %}
+<div class="text-center py-8">
+    <i class="fas fa-tasks text-4xl text-gray-300 dark:text-gray-600 mb-3"></i>
+    <p class="text-gray-500 dark:text-gray-400">No workflow timeline available</p>
+</div>
+{% endif %}
