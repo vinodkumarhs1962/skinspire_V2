@@ -1,0 +1,811 @@
+/* File: static/css/components/universal_document.css */
+/* Universal Document Engine - Print & Document Specific Styles */
+/* ENHANCED: Full A4 width support and better print layout */
+
+/* =============================================================================
+   DOCUMENT CONTAINER STYLES - A4 OPTIMIZED
+   ============================================================================= */
+
+/* Screen view - simulates A4 paper */
+@media screen {
+    .document-container {
+        width: 21cm;  /* Fixed A4 width */
+        min-height: 29.7cm; /* A4 height */
+        margin: 2rem auto;
+        background: white;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        padding: 2cm 1.5cm; /* Proper margins for A4 */
+        box-sizing: border-box;
+    }
+    
+    /* Dark mode support */
+    @media (prefers-color-scheme: dark) {
+        .document-container {
+            background: white; /* Keep white for documents */
+            color: #000; /* Black text for documents */
+        }
+    }
+}
+
+/* =============================================================================
+   PRINT STYLES - FULL A4 WIDTH
+   ============================================================================= */
+
+@media print {
+    /* Page setup for A4 */
+    @page {
+        size: A4;
+        margin: 1.5cm; /* Reduced margins for more content space */
+    }
+    
+    @page :first {
+        margin-top: 1cm; /* Less margin on first page for header */
+    }
+    
+    /* Reset body and html for full width */
+    html, body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        font-size: 11pt;
+        line-height: 1.5;
+    }
+    
+    /* Document container uses full page width */
+    .document-container {
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        min-height: auto !important;
+    }
+    
+    /* Content area uses full width */
+    .universal-view-content {
+        width: 100% !important;
+        max-width: none !important;
+    }
+    
+    /* Field sections use full width */
+    .universal-field-section,
+    .universal-tabbed-view,
+    .universal-accordion-view {
+        width: 100% !important;
+        max-width: none !important;
+    }
+    
+    /* Grid adjustments for print */
+    .grid {
+        width: 100% !important;
+    }
+    
+    /* Hide elements not needed in print */
+    .no-print,
+    .btn,
+    button,
+    .universal-action-buttons,
+    .universal-tab-navigation,
+    .universal-accordion-header i.fas.fa-chevron-down,
+    .breadcrumb,
+    .page-header-actions {
+        display: none !important;
+    }
+    
+    /* Expand collapsed sections */
+    .universal-accordion-content {
+        display: block !important;
+        border: none !important;
+    }
+    
+    /* Show all tab panels */
+    .universal-tab-panel {
+        display: block !important;
+        border: none !important;
+        padding: 1rem 0 !important;
+        page-break-inside: avoid;
+    }
+    
+    /* Add tab label as section header in print */
+    .universal-tab-panel[data-tab-label]::before {
+        content: attr(data-tab-label);
+        display: block;
+        font-size: 14pt;
+        font-weight: bold;
+        margin-bottom: 1em;
+        padding-bottom: 0.5em;
+        border-bottom: 2px solid #000;
+        page-break-after: avoid;
+    }
+    
+    /* Prevent breaks inside important elements */
+    .avoid-break,
+    .universal-field-section,
+    .field-item,
+    table,
+    .company-header,
+    .document-header,
+    .signature-section {
+        page-break-inside: avoid;
+    }
+    
+    /* Force page break */
+    .page-break {
+        page-break-after: always;
+    }
+    
+    /* Table adjustments for print */
+    table {
+        width: 100% !important;
+        font-size: 10pt;
+    }
+    
+    th {
+        background-color: #f0f0f0 !important;
+        font-weight: bold;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    /* Status badges - ensure colors print */
+    .status-badge {
+        border: 1px solid currentColor !important;
+        padding: 2px 8px !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    /* Links - remove underline and use black */
+    a {
+        color: black !important;
+        text-decoration: none !important;
+    }
+}
+
+/* =============================================================================
+   ENHANCED DOCUMENT HEADER STYLES
+   ============================================================================= */
+
+.company-header {
+    border-bottom: 3px double #000;
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+    page-break-inside: avoid;
+}
+
+.company-info {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+}
+
+.company-details {
+    flex: 1;
+}
+
+.company-logo-container {
+    margin-left: 20px;
+}
+
+.company-logo {
+    height: 120px;  /* Changed from max-height: 80px */
+    width: auto;    /* Maintain aspect ratio */
+    max-width: 300px;  /* Increased from 200px */
+    object-fit: contain;
+    display: block;
+}
+
+.company-name {
+    font-size: 24pt;
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #000;
+}
+
+.company-address {
+    font-size: 10pt;
+    color: #333;
+    line-height: 1.4;
+}
+
+/* Document header with reference info */
+.document-header {
+    background: #f8f8f8;
+    border: 1px solid #ddd;
+    padding: 15px;
+    margin-bottom: 20px;
+    page-break-inside: avoid;
+}
+
+@media print {
+    .document-header {
+        background: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+
+.document-header-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+}
+
+.document-header-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.document-header-label {
+    font-size: 9pt;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}
+
+.document-header-value {
+    font-size: 11pt;
+    font-weight: bold;
+    color: #000;
+}
+
+/* Document title styling */
+.document-title {
+    font-size: 22pt;
+    font-weight: bold;
+    text-align: center;
+    margin: 15px 0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #000;
+}
+
+.document-subtitle {
+    font-size: 11pt;
+    text-align: center;
+    color: #666;
+    margin-top: -10px;
+    margin-bottom: 15px;
+}
+
+/* =============================================================================
+   STATUS-BASED STYLING
+   ============================================================================= */
+
+/* Approved status - green theme */
+.status-approved .document-header {
+    background: #f0fdf4;
+    border-color: #10b981;
+}
+
+.status-approved .status-indicator {
+    color: #10b981;
+    font-weight: bold;
+}
+
+/* Pending status - yellow theme */
+.status-pending .document-header,
+.status-draft .document-header {
+    background: #fefce8;
+    border-color: #eab308;
+}
+
+.status-pending .status-indicator,
+.status-draft .status-indicator {
+    color: #eab308;
+    font-weight: bold;
+}
+
+/* Rejected status - red theme */
+.status-rejected .document-header {
+    background: #fef2f2;
+    border-color: #ef4444;
+}
+
+.status-rejected .status-indicator {
+    color: #ef4444;
+    font-weight: bold;
+}
+
+/* =============================================================================
+   WATERMARK STYLES - ENHANCED
+   ============================================================================= */
+
+.watermark {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-45deg);
+    font-size: 100px;
+    color: rgba(200, 200, 200, 0.3);
+    z-index: -1;
+    pointer-events: none;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 20px;
+}
+
+/* Different watermarks for different statuses */
+.watermark-draft {
+    color: rgba(234, 179, 8, 0.2); /* Yellow */
+}
+
+.watermark-rejected {
+    color: rgba(239, 68, 68, 0.2); /* Red */
+}
+
+.watermark-cancelled {
+    color: rgba(107, 114, 128, 0.2); /* Gray */
+}
+
+@media print {
+    .watermark {
+        position: fixed;
+        opacity: 0.15;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+
+/* =============================================================================
+   TERMS AND CONDITIONS SECTION
+   ============================================================================= */
+
+.terms-section {
+    margin-top: 30px;
+    padding: 15px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    page-break-inside: avoid;
+}
+
+.terms-title {
+    font-size: 10pt;
+    font-weight: bold;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+}
+
+.terms-content {
+    font-size: 9pt;
+    line-height: 1.5;
+    color: #4b5563;
+}
+
+.terms-content ul {
+    margin-left: 20px;
+    list-style-type: disc;
+}
+
+.terms-content li {
+    margin-bottom: 5px;
+}
+
+@media print {
+    .terms-section {
+        background: #f9fafb !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+
+/* =============================================================================
+   SIGNATURE SECTION STYLES - ENHANCED
+   ============================================================================= */
+
+.signature-section {
+    margin-top: 50px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 30px;
+    page-break-inside: avoid;
+}
+
+.signature-field {
+    text-align: center;
+}
+
+.signature-line {
+    border-bottom: 1px solid #333;
+    margin-bottom: 5px;
+    height: 40px;
+    width: 100%;
+}
+
+.signature-label {
+    font-size: 10pt;
+    color: #333;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.signature-date {
+    font-size: 9pt;
+    color: #666;
+    margin-top: 5px;
+}
+
+/* =============================================================================
+   DOCUMENT FOOTER STYLES - ENHANCED
+   ============================================================================= */
+
+.document-footer {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 2px solid #e5e7eb;
+    text-align: center;
+    font-size: 9pt;
+    color: #6b7280;
+    page-break-inside: avoid;
+}
+
+.document-footer p {
+    margin: 5px 0;
+}
+
+.footer-confidential {
+    font-weight: bold;
+    text-transform: uppercase;
+    color: #dc2626;
+    margin-top: 10px;
+}
+
+/* =============================================================================
+   RESPONSIVE FIELD LAYOUT FOR A4
+   ============================================================================= */
+
+/* Ensure fields use full width efficiently */
+.field-grid {
+    display: grid;
+    gap: 1rem;
+    width: 100%;
+}
+
+.grid-cols-2 { 
+    grid-template-columns: repeat(2, 1fr); 
+}
+
+.grid-cols-3 { 
+    grid-template-columns: repeat(3, 1fr); 
+}
+
+.grid-cols-4 { 
+    grid-template-columns: repeat(4, 1fr); 
+}
+
+/* Print-specific grid adjustments */
+@media print {
+    .field-grid {
+        gap: 0.75rem;
+    }
+    
+    .field-item {
+        padding: 0.5rem 0;
+        border-bottom: 1px dotted #e5e7eb;
+    }
+    
+    .field-label {
+        font-size: 9pt;
+        font-weight: 600;
+        color: #4b5563;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        margin-bottom: 2px;
+    }
+    
+    .field-value {
+        font-size: 10pt;
+        color: #000;
+        font-weight: 400;
+    }
+}
+
+/* =============================================================================
+   LOGO PLACEHOLDER - When no logo is available
+   ============================================================================= */
+
+.company-logo-placeholder {
+    width: 120px;   /* Increased from 80px */
+    height: 120px;  /* Increased from 80px */
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 42px;  /* Increased from 28px */
+    font-weight: bold;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+@media print {
+    .company-logo-placeholder {
+        background: #6b7280 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+
+/* =============================================================================
+   ENHANCED STATUS INDICATORS
+   ============================================================================= */
+
+.status-indicator {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10pt;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.status-indicator.approved {
+    background: #10b981;
+    color: white;
+}
+
+.status-indicator.draft,
+.status-indicator.pending {
+    background: #eab308;
+    color: white;
+}
+
+.status-indicator.rejected {
+    background: #ef4444;
+    color: white;
+}
+
+/* =============================================================================
+   INVOICE specific formatting
+   ============================================================================= */
+
+/* Landscape orientation for invoice items section */
+@media print {
+    @page invoice-items {
+        size: A4 landscape;
+        margin: 15mm;
+    }
+    
+    /* Apply landscape to invoice items section */
+    .invoice-items-section {
+        page: invoice-items;
+        page-break-before: always;
+        page-break-after: always;
+    }
+    
+    /* Ensure tables in landscape sections use full width */
+    .invoice-items-section table {
+        width: 100% !important;
+        font-size: 9pt !important;
+    }
+    
+    /* Also apply to PO items if needed */
+    .po-items-section {
+        page: invoice-items;
+        page-break-before: always;
+        page-break-after: always;
+    }
+}
+
+/* =============================================================================
+   INVOICE AND PO ITEMS TABLE - FIXED COLUMN WIDTHS
+   Replace the previous Issue 1 fix in universal_document.css with this
+   ============================================================================= */
+
+/* Container fixes - Keep scroll for screen view */
+.invoice-items-container,
+.po-items-container {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;  /* Smooth scrolling on touch devices */
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    padding: 0;
+    margin: 0 0 1rem 0;
+}
+
+/* Screen view - Allow table to exceed container width with scroll */
+@media screen {
+    .document-container .invoice-items-table,
+    .document-container .po-items-table {
+        width: max-content;  /* Table takes its natural width */
+        min-width: 100%;  /* But at least full container width */
+        table-layout: auto;  /* Let columns size based on content */
+    }
+        
+    /* Container styling */
+    .invoice-items-section,
+    .po-items-section {
+        margin: 20px 0;
+        padding: 15px;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    /* Nice scrollbar */
+    .invoice-items-container::-webkit-scrollbar,
+    .po-items-container::-webkit-scrollbar {
+        height: 8px;
+    }
+    
+    .invoice-items-container::-webkit-scrollbar-track,
+    .po-items-container::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    
+    .invoice-items-container::-webkit-scrollbar-thumb,
+    .po-items-container::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+    }
+    
+    .invoice-items-container::-webkit-scrollbar-thumb:hover,
+    .po-items-container::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+}
+
+@media screen {
+    .invoice-items-container,
+    .po-items-container {
+        max-width: 100%;
+        overflow-x: auto;
+        position: relative;  /* For scrollbar positioning */
+    }
+    /* Visible scrollbar styling */
+    .invoice-items-container::-webkit-scrollbar,
+    .po-items-container::-webkit-scrollbar {
+        height: 10px;
+    }
+    
+    .invoice-items-container::-webkit-scrollbar-track,
+    .po-items-container::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    
+    .invoice-items-container::-webkit-scrollbar-thumb,
+    .po-items-container::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+    }
+    
+    .invoice-items-container::-webkit-scrollbar-thumb:hover,
+    .po-items-container::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+}
+
+
+/* =============================================================================
+   UTILITY CLASSES
+   ============================================================================= */
+
+/* Text alignment */
+.doc-text-left { text-align: left; }
+.doc-text-center { text-align: center; }
+.doc-text-right { text-align: right; }
+
+/* Font weights */
+.doc-bold { font-weight: bold; }
+.doc-normal { font-weight: normal; }
+
+/* Spacing */
+.doc-mt-1 { margin-top: 0.25rem; }
+.doc-mt-2 { margin-top: 0.5rem; }
+.doc-mt-3 { margin-top: 1rem; }
+.doc-mt-4 { margin-top: 1.5rem; }
+.doc-mb-1 { margin-bottom: 0.25rem; }
+.doc-mb-2 { margin-bottom: 0.5rem; }
+.doc-mb-3 { margin-bottom: 1rem; }
+.doc-mb-4 { margin-bottom: 1.5rem; }
+
+/* Visibility */
+.print-only { display: none; }
+.screen-only { display: block; }
+
+@media print {
+    .print-only { display: block !important; }
+    .screen-only { display: none !important; }
+}
+
+/* =============================================================================
+   PAGINATION SUPPORT
+   ============================================================================= */
+
+/* Page break controls */
+@media print {
+    .page-break-before {
+        page-break-before: always;
+    }
+    
+    .page-break-after {
+        page-break-after: always;
+    }
+    
+    /* Auto page numbers */
+    @page {
+        @bottom-right {
+            content: "Page " counter(page) " of " counter(pages);
+        }
+    }
+}
+
+/* Section that should start on new page */
+.new-page {
+    page-break-before: always;
+}
+
+/* Keep sections together */
+.keep-together {
+    page-break-inside: avoid;
+}
+
+/* Document sections styling */
+.document-section {
+    margin-bottom: 20px;
+    page-break-inside: avoid;
+}
+
+.section-title {
+    font-size: 14pt;
+    font-weight: bold;
+    border-bottom: 2px solid #333;
+    padding-bottom: 5px;
+    margin-bottom: 15px;
+    page-break-after: avoid;
+}
+
+/* Button container styling */
+.screen-only {
+    background: white;
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.screen-only button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+}
+
+.btn-primary {
+    background: #007bff;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #0056b3;
+}
+
+.btn-success {
+    background: #28a745;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #218838;
+}

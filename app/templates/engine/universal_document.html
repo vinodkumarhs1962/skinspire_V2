@@ -1,0 +1,393 @@
+<!-- File: templates/engine/universal_document.html -->
+<!-- ENHANCED VERSION with hospital info, document headers, and terms -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ doc_config.title if doc_config.title else 'Document' }} - {{ data.get('reference_no', '') }}</title>
+    
+    <!-- Single CSS import - app.css loads everything including universal_document.css -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+
+</head>
+<body class="document-{{ doc_config.document_type if doc_config.document_type else 'default' }} status-{{ data.get('workflow_status', 'draft')|lower }}">
+    
+    <!-- Watermark based on approval status -->
+    {% if doc_config.watermark_draft %}
+        {% if data.get('workflow_status', '').lower() in ['draft', 'pending'] %}
+        <div class="watermark watermark-draft">DRAFT</div>
+        {% elif data.get('workflow_status', '').lower() == 'rejected' %}
+        <div class="watermark watermark-rejected">REJECTED</div>
+        {% elif data.get('workflow_status', '').lower() == 'cancelled' %}
+        <div class="watermark watermark-cancelled">CANCELLED</div>
+        {% endif %}
+    {% endif %}
+    
+    <div class="document-container">
+        
+        <!-- Enhanced Company Header with Logo -->
+        {% if doc_config.show_company_info %}
+        <div class="company-header">
+            <div class="company-info">
+                <div class="company-details">
+                    <div class="company-name">
+                        {{ hospital.name if hospital and hospital.name else 'Healthcare Facility' }}
+                    </div>
+                    <div class="company-address">
+                        {% if hospital %}
+                            {% if hospital.address %}{{ hospital.address }}{% endif %}
+                            {% if hospital.city or hospital.state or hospital.pincode %}
+                                {% if hospital.address %}<br>{% endif %}
+                                {% if hospital.city %}{{ hospital.city }}{% endif %}
+                                {% if hospital.state %}{% if hospital.city %}, {% endif %}{{ hospital.state }}{% endif %}
+                                {% if hospital.pincode %} - {{ hospital.pincode }}{% endif %}
+                            {% endif %}
+                            {% if hospital.phone or hospital.email %}
+                                <br>
+                                {% if hospital.phone %}Tel: {{ hospital.phone }}{% endif %}
+                                {% if hospital.email %}{% if hospital.phone %} | {% endif %}Email: {{ hospital.email }}{% endif %}
+                            {% endif %}
+                            {% if hospital.gst_number or hospital.registration_number %}
+                                <br>
+                                {% if hospital.gst_number %}GSTIN: {{ hospital.gst_number }}{% endif %}
+                                {% if hospital.registration_number %}
+                                    {% if hospital.gst_number %} | {% endif %}Reg No: {{ hospital.registration_number }}
+                                {% endif %}
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+                {% if doc_config.show_logo %}
+                <div class="company-logo-container">
+                    {% if hospital and hospital.logo_path %}
+                    <img src="{{ url_for('static', filename='uploads/hospital_logos/' + hospital.hospital_id + '/' + hospital.logo_path) }}" 
+                        alt="{{ hospital.name }} Logo" 
+                        class="company-logo">
+                    {% elif hospital and hospital.logo_url %}
+                    <img src="{{ hospital.logo_url }}" 
+                        alt="{{ hospital.name }} Logo" 
+                        class="company-logo">
+                    {% else %}
+                    <!-- Logo placeholder -->
+                    <div class="company-logo-placeholder">
+                        {{ hospital.name[:2]|upper if hospital and hospital.name else 'HC' }}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Back Button - Top Left using existing btn-secondary class -->
+        <button class="btn-secondary screen-only" 
+                onclick="goBack()" 
+                style="position: fixed; top: 20px; left: 20px; z-index: 1000;">
+            <i class="fas fa-arrow-left"></i> Back
+        </button>
+
+        <!-- Action Buttons - Top Right using existing classes -->
+        <div class="screen-only" style="position: fixed; top: 20px; right: 20px; z-index: 1000;">
+            <button onclick="window.print()" class="btn-primary">
+                <i class="fas fa-print"></i> Print
+            </button>
+            <button onclick="savePDF()" class="btn-success">
+                <i class="fas fa-download"></i> Save PDF
+            </button>
+        </div>
+
+        <!-- Update the existing script section -->
+        <script type="text/javascript">
+        // Back button function
+        window.goBack = function() {
+            console.log('Back button clicked');
+            
+            // Parse current URL to get entity type and item ID
+            const path = window.location.pathname;
+            console.log('Current path:', path);
+            
+            // Match pattern: /universal/{entity_type}/document/{item_id}/{doc_type}
+            const match = path.match(/\/universal\/([^\/]+)\/document\/([^\/]+)\/([^\/]+)/);
+            
+            if (match) {
+                const entityType = match[1];
+                const itemId = match[2];
+                console.log('Extracted:', entityType, itemId);
+                
+                // Go to detail view
+                const detailUrl = `/universal/${entityType}/view/${itemId}`;
+                console.log('Navigating to:', detailUrl);
+                window.location.href = detailUrl;
+            } else {
+                // Fallback to history
+                if (window.history.length > 1) {
+                    window.history.back();
+                } else {
+                    // Go to list as last resort
+                    window.location.href = '/universal/supplier_payments/list';
+                }
+            }
+        };
+
+        // Save PDF function
+        window.savePDF = function() {
+            console.log('Save PDF clicked');
+            
+            // Add download=true parameter to current URL
+            const currentUrl = window.location.href;
+            const separator = currentUrl.includes('?') ? '&' : '?';
+            const pdfUrl = currentUrl + separator + 'format=pdf&download=true';
+            
+            console.log('Opening PDF URL:', pdfUrl);
+            
+            // Use window.location to trigger download
+            window.location.href = pdfUrl;
+        };
+        </script>
+
+        <!-- Document Title -->
+        <div class="document-title">{{ doc_config.header_text if doc_config.header_text else doc_config.title }}</div>
+        {% if doc_config.subtitle %}
+        <div class="document-subtitle">{{ doc_config.subtitle }}</div>
+        {% endif %}
+        
+        <!-- Document Header with Reference Info -->
+        <div class="document-header">
+            <div class="document-header-grid">
+                <div class="document-header-item">
+                    <span class="document-header-label">Document No</span>
+                    <span class="document-header-value">
+                        {{ data.get('reference_no', data.get('invoice_no', data.get('receipt_no', 'N/A'))) }}
+                    </span>
+                </div>
+                <div class="document-header-item">
+                    <span class="document-header-label">Date</span>
+                    <span class="document-header-value">
+                        {{ data.get('payment_date', data.get('invoice_date', data.get('created_at', current_datetime)))|dateformat }}
+                    </span>
+                </div>
+                <div class="document-header-item">
+                    <span class="document-header-label">Status</span>
+                    <span class="document-header-value status-indicator">
+                        {{ data.get('workflow_status', 'Draft')|upper|replace('_', ' ') }}
+                    </span>
+                </div>
+            </div>
+            
+            <!-- Additional reference info for specific document types -->
+            {% if doc_config.document_type == 'receipt' and data.get('supplier_name') %}
+            <div class="document-header-grid doc-mt-3">
+                <div class="document-header-item">
+                    <span class="document-header-label">Supplier</span>
+                    <span class="document-header-value">{{ data.get('supplier_name', '') }}</span>
+                </div>
+                <div class="document-header-item">
+                    <span class="document-header-label">Amount</span>
+                    <span class="document-header-value">₹ {{ "{:,.2f}".format(data.get('amount', 0)|float) }}</span>
+                </div>
+                <div class="document-header-item">
+                    <span class="document-header-label">Payment Method</span>
+                    <span class="document-header-value">{{ data.get('payment_method', 'N/A')|title|replace('_', ' ') }}</span>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Main Content using EXISTING Layout Components -->
+        <div class="universal-view-content">
+            
+            {% if assembled_data and assembled_data.field_sections %}
+                
+                <!-- Apply document filters to sections -->
+                {% set filtered_sections = [] %}
+                {% for section in assembled_data.field_sections %}
+                    {% set should_include = true %}
+                    
+                    <!-- Check visible_tabs -->
+                    {% if doc_config.visible_tabs and section.key not in doc_config.visible_tabs %}
+                        {% set should_include = false %}
+                    {% endif %}
+                    
+                    <!-- Check hidden_sections -->
+                    {% if doc_config.hidden_sections and section.key in doc_config.hidden_sections %}
+                        {% set should_include = false %}
+                    {% endif %}
+                    
+                    <!-- Add to filtered list if should include -->
+                    {% if should_include %}
+                        {% set _ = filtered_sections.append(section) %}
+                    {% endif %}
+                {% endfor %}
+                
+                <!-- Create modified assembled_data with filtered sections -->
+                {% set doc_assembled_data = dict(assembled_data, field_sections=filtered_sections) %}
+                
+                <!-- Determine layout type from doc_config -->
+                {% set layout_type = doc_config.print_layout_type|lower if doc_config.print_layout_type else 'simple' %}
+                
+                <!-- Override assembled_data layout_type for document -->
+                {% set doc_assembled_data = dict(doc_assembled_data, layout_type=layout_type) %}
+                
+                <!-- Add data-tab-label for print styling -->
+                {% for section in doc_assembled_data.field_sections %}
+                    {% set _ = section.update({'data-tab-label': section.label}) %}
+                {% endfor %}
+                
+                <!-- REUSE EXISTING LAYOUT COMPONENTS -->
+                {% if layout_type == 'tabbed' %}
+                    {% with assembled_data=doc_assembled_data, service=service, item_id=item_id, 
+                            current_hospital_id=current_hospital_id, current_branch_id=current_branch_id, 
+                            item=item %}
+                        {% include 'engine/components/layout_tabbed.html' %}
+                    {% endwith %}
+                    
+                {% elif layout_type == 'accordion' %}
+                    {% with assembled_data=doc_assembled_data, service=service, item_id=item_id,
+                            current_hospital_id=current_hospital_id, current_branch_id=current_branch_id,
+                            item=item %}
+                        {% include 'engine/components/layout_accordion.html' %}
+                    {% endwith %}
+                    
+                {% else %}
+                    <!-- Default: Simple layout -->
+                    {% with assembled_data=doc_assembled_data, service=service, item_id=item_id,
+                            current_hospital_id=current_hospital_id, current_branch_id=current_branch_id,
+                            item=item %}
+                        {% include 'engine/components/layout_simple.html' %}
+                    {% endwith %}
+                {% endif %}
+                
+            {% else %}
+                <!-- Fallback: Simple table display -->
+                <div class="simple-data-display">
+                    <table class="table table-striped">
+                        <tbody>
+                            {% if data %}
+                                {% for key, value in data.items() %}
+                                    {% if not key.startswith('_') and value is not none %}
+                                    <tr>
+                                        <td class="font-semibold">{{ key|title|replace('_', ' ') }}</td>
+                                        <td>
+                                            {% if value is string or value is number %}
+                                                {{ value }}
+                                            {% elif value is mapping %}
+                                                {% if value.name is defined %}
+                                                    {{ value.name }}
+                                                {% else %}
+                                                    {{ value|tojson }}
+                                                {% endif %}
+                                            {% elif value is iterable %}
+                                                {{ value|join(', ') }}
+                                            {% else %}
+                                                {{ value }}
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="2" class="text-center">No data available</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </div>
+        
+        <!-- Terms and Conditions Section -->
+        {% if doc_config.show_terms and doc_config.terms_content %}
+        <div class="terms-section">
+            <div class="terms-title">{{ doc_config.terms_title if doc_config.terms_title else 'Terms and Conditions' }}</div>
+            <div class="terms-content">
+                {% if doc_config.terms_content is string %}
+                    {{ doc_config.terms_content|safe }}
+                {% elif doc_config.terms_content is iterable %}
+                    <ul>
+                    {% for term in doc_config.terms_content %}
+                        <li>{{ term }}</li>
+                    {% endfor %}
+                    </ul>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Signature Section -->
+        {% if doc_config.signature_fields %}
+        <div class="signature-section">
+            {% for sig in doc_config.signature_fields %}
+            <div class="signature-field">
+                <div class="signature-line"></div>
+                <div class="signature-label">{{ sig.label }}</div>
+                {% if doc_config.show_signature_date %}
+                <div class="signature-date">Date: _______________</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        <!-- Document Footer -->
+        {% if doc_config.show_footer %}
+        <div class="document-footer">
+            {% if doc_config.footer_text %}
+            <p>{{ doc_config.footer_text }}</p>
+            {% endif %}
+            
+            <!-- Status-specific footer text -->
+            {% if doc_config.status_footer_text %}
+                {% set status = data.get('workflow_status', 'draft').lower() %}
+                {% if status in doc_config.status_footer_text %}
+                    <p>{{ doc_config.status_footer_text[status] }}</p>
+                {% endif %}
+            {% endif %}
+            
+            {% if doc_config.show_print_info %}
+            <p class="print-info">
+                Printed on {{ current_datetime.strftime('%d-%m-%Y %H:%M') if current_datetime else '' }}
+                {% if current_user %}by {{ current_user.username }}{% endif %}
+                {% if branch and branch.name %}at {{ branch.name }}{% endif %}
+            </p>
+            {% endif %}
+            
+            {% if doc_config.confidential_notice %}
+            <p class="footer-confidential">CONFIDENTIAL</p>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        <!-- Page Number (for multi-page documents) -->
+        <div class="print-only doc-text-center doc-mt-4">
+            <span class="page-number"></span>
+        </div>
+    </div>
+    
+    <!-- Include necessary JavaScript for interactive elements (screen only) -->
+    <script src="{{ url_for('static', filename='js/components/universal_view.js') }}"></script>
+    
+    <!-- Auto-print functionality -->
+    {% if auto_print %}
+    <script>
+        window.onload = function() {
+            // Small delay to ensure everything is rendered
+            setTimeout(function() {
+                window.print();
+                
+                // Optional: Return to previous page after print dialog
+                window.onafterprint = function() {
+                    if (window.history.length > 1) {
+                        window.history.back();
+                    } else {
+                        // Redirect to list view if no history
+                        window.location.href = '/universal/{{ entity_config.entity_type if entity_config.entity_type else "" }}/list';
+                    }
+                };
+            }, 500);
+        };
+    </script>
+    {% endif %}
+</body>
+</html>

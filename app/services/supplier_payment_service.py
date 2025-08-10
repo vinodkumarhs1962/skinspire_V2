@@ -729,8 +729,8 @@ class SupplierPaymentService(UniversalEntityService):
                                 })
                 
                 return {
-                    'items': po_items,
-                    'po_info': po_info,
+                    'items': po_items if po_items is not None else [],  # <-- FIX: Ensure list
+                    'po_info': po_info if po_info is not None else {},  # <-- FIX: Ensure dict
                     'has_po': bool(po_items),
                     'currency_symbol': '₹'
                 }
@@ -775,31 +775,45 @@ class SupplierPaymentService(UniversalEntityService):
                         
                         for item in invoice_lines:
                             invoice_items.append({
-                                'invoice_no': invoice.supplier_invoice_number,
-                                'item_name': item.medicine_name,
+                                # 'invoice_no' REMOVED - not needed for line items
+                                'item_name': item.medicine_name,  # This is correct field
                                 'batch_no': item.batch_number,
                                 'quantity': float(item.units or 0),
                                 'unit_price': float(item.pack_purchase_price or 0),
-                                'discount': float(item.discount_amount or 0),
+                                'discount_percent': float(item.discount_percent or 0),  # Add percentage
+                                'discount_amount': float(item.discount_amount or 0),
                                 'gst_rate': float(item.gst_rate or 0),
                                 'gst_amount': float(item.total_gst or 0),
-                                'total': float(item.line_total or 0)
+                                'total_amount': float(item.line_total or 0)  # Renamed for consistency
                             })
                             
                             invoice_summary['total_amount'] += float(item.line_total or 0)
                             invoice_summary['total_discount'] += float(item.discount_amount or 0)
                             invoice_summary['total_gst'] += float(item.total_gst or 0)
                 
-                return {
-                    'items': invoice_items,
-                    'summary': invoice_summary,
+                # CRITICAL FIX: Ensure 'items' is always a list, never None
+                result = {
+                    'items': invoice_items if invoice_items is not None else [],  # <-- FIX: Ensure list
+                    'summary': invoice_summary if invoice_summary is not None else {},  # <-- FIX: Ensure dict
                     'has_invoices': bool(invoice_items),
                     'currency_symbol': '₹'
                 }
                 
+                # Debug log to verify structure
+                logger.debug(f"Invoice items data: type={type(result)}, has items key={('items' in result)}, items type={type(result.get('items'))}")
+                
+                return result
+                
         except Exception as e:
-            logger.error(f"Error getting invoice items: {str(e)}")
-            return {'items': [], 'has_invoices': False, 'error': str(e)}
+            logger.error(f"Error getting invoice items for payment: {str(e)}")
+            # CRITICAL: Always return proper structure with 'items' as a list
+            return {
+                'items': [],  # <-- Must be a list, not None
+                'summary': {},  # <-- Must be a dict, not None
+                'has_invoices': False,
+                'currency_symbol': '₹',
+                'error': str(e)
+            }
 
     def get_payment_workflow_timeline(self, payment_id: str, **kwargs) -> Dict:
         """
@@ -959,3 +973,66 @@ class SupplierPaymentService(UniversalEntityService):
         payment_dict['workflow_updated_at'] = payment.modified_at
         
         return payment_dict
+    
+    def _add_detail_virtual_fields(self, payment_dict: Dict, payment: SupplierPayment) -> Dict:
+        """
+        Add expensive virtual fields only for detail views
+        Called separately from the main conversion to avoid slowing down list views
+        """
+        # ✅ Add invoice summary virtual fields using existing computation
+        if payment.invoice_id:
+            try:
+                # Get invoice summary using existing method
+                invoice_data = self.get_invoice_items_for_payment(
+                    str(payment.payment_id), 
+                    hospital_id=payment.hospital_id,
+                    branch_id=payment.branch_id
+                )
+                
+                if invoice_data and invoice_data.get('summary'):
+                    summary = invoice_data['summary']
+                    items = invoice_data.get('items', [])
+                    
+                    # ✅ Populate virtual fields using existing calculations
+                    payment_dict['invoice_total_items'] = len(items)
+                    payment_dict['invoice_total_gst'] = summary.get('total_gst', 0)
+                    payment_dict['invoice_grand_total'] = summary.get('total_amount', 0)
+                else:
+                    payment_dict['invoice_total_items'] = 0
+                    payment_dict['invoice_total_gst'] = 0
+                    payment_dict['invoice_grand_total'] = 0
+                    
+            except Exception as e:
+                logger.error(f"Error calculating invoice summary: {str(e)}")
+                payment_dict['invoice_total_items'] = 0
+                payment_dict['invoice_total_gst'] = 0
+                payment_dict['invoice_grand_total'] = 0
+        else:
+            # No invoice linked
+            payment_dict['invoice_total_items'] = 0
+            payment_dict['invoice_total_gst'] = 0
+            payment_dict['invoice_grand_total'] = 0
+        
+        return payment_dict
+
+    def get_by_id(self, item_id: str, **kwargs) -> Optional[Dict]:
+        """Override to add detail virtual fields"""
+        # Call parent method first
+        result = super().get_by_id(item_id, **kwargs)
+        
+        if result:
+            try:
+                # Get the payment entity to add detail virtual fields
+                with get_db_session() as session:
+                    payment = session.query(SupplierPayment).filter(
+                        SupplierPayment.payment_id == item_id,
+                        SupplierPayment.hospital_id == kwargs.get('hospital_id')
+                    ).first()
+                    
+                    if payment:
+                        # Add expensive detail virtual fields
+                        result = self._add_detail_virtual_fields(result, payment)
+            except Exception as e:
+                logger.error(f"Error adding detail virtual fields: {str(e)}")
+        
+        return result

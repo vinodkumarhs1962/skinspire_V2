@@ -46,11 +46,20 @@
 @import url('./components/supplier.css');
 
 /* ==========================================
+   UNIVERSAL ENGINE COMPONENTS
+   ========================================== */
+
+/* Universal View components - View layouts and field rendering */
+@import url('./components/universal_view.css');
+
+/* Universal Document components - Print and document generation */
+@import url('./components/universal_document.css');
+
+
+/* ==========================================
    MODULE-SPECIFIC STYLES (OPTIONAL)
    Use sparingly - prefer component-based styles
    ========================================== */
-
-@import url('./components/universal_view.css');
 
 /* Patient module specific styles (when created) */
 /* @import url('./modules/patient.css'); */

@@ -97,6 +97,56 @@ class ActionDisplayType(Enum):
     BOTH = "both"             # Show in both places
     HIDDEN = "hidden"         # Not shown (API only)
 
+class DocumentType(Enum):
+    """Types of documents that can be generated"""
+    RECEIPT = "receipt"
+    INVOICE = "invoice"
+    REPORT = "report"
+    STATEMENT = "statement"
+    CERTIFICATE = "certificate"
+    LETTER = "letter"
+    LABEL = "label"
+
+class PrintLayoutType(Enum):
+    """Print layout types that reuse view components"""
+    SIMPLE = "simple"           # Uses layout_simple.html
+    TABBED = "tabbed"           # Uses layout_tabbed.html (tabs become sections)
+    ACCORDION = "accordion"     # Uses layout_accordion.html (all sections expanded)
+    SIMPLE_WITH_HEADER = "simple_with_header"  # Simple layout with enhanced header
+    COMPACT = "compact"         # Condensed version for receipts
+
+class PageSize(Enum):
+    """Standard page sizes for documents"""
+    A4 = "A4"
+    A5 = "A5"
+    LETTER = "letter"
+    LEGAL = "legal"
+    THERMAL_80MM = "thermal_80"
+    THERMAL_58MM = "thermal_58"
+
+class Orientation(Enum):
+    """Page orientation"""
+    PORTRAIT = "portrait"
+    LANDSCAPE = "landscape"
+
+class DocumentSectionType(Enum):
+    """Document section types"""
+    HEADER = "header"
+    BODY = "body"
+    TABLE = "table"
+    SUMMARY = "summary"
+    FOOTER = "footer"
+    SIGNATURE = "signature"
+
+class ExportFormat(Enum):
+    """Supported export formats"""
+    PDF = "pdf"
+    HTML = "html"
+    PRINT = "print"
+    EXCEL = "excel"
+    WORD = "word"
+    CSV = "csv"
+
 # =============================================================================
 # VIEW SECTION DEFINITIONS - Eliminates Hardcoded Values
 # =============================================================================
@@ -290,6 +340,7 @@ class ActionDefinition:
     custom_template: Optional[str] = None          # Custom template override
     order: int = 999                               # NEW: Display order for sorting
 
+
     # ========== NEW: EXPRESSION-BASED CONDITIONAL DISPLAY ==========
     conditional_display: Optional[str] = None    # Expression-based display condition
 
@@ -424,6 +475,126 @@ class ActionDefinition:
 
 # Note: ActionConfiguration from field_definitions.py is simpler
 # We use ActionDefinition as it's more complete
+
+@dataclass
+class DocumentFieldMapping:
+    """Maps entity field to document display"""
+    entity_field: str                          # Field name from entity
+    document_label: Optional[str] = None       # Override label for document
+    format_type: Optional[str] = None          # Special formatting (currency, date, etc.)
+    show_if_empty: bool = True                 # Show field even if value is empty
+    default_value: Optional[str] = None        # Default if field is empty
+    prefix: Optional[str] = None               # Text before value
+    suffix: Optional[str] = None               # Text after value
+
+@dataclass
+class TableColumnConfig:
+    """Configuration for table columns in documents"""
+    field_name: str                           # Field name from entity
+    label: str                                # Column header
+    width: Optional[str] = None               # Column width (e.g., "20%", "100px")
+    align: str = "left"                       # Text alignment
+    format_type: Optional[str] = None         # Formatting type
+    total: bool = False                       # Include in totals row
+
+@dataclass
+class DocumentSection:
+    """Configuration for a document section"""
+    section_type: DocumentSectionType
+    title: Optional[str] = None               # Section title
+    fields: List[DocumentFieldMapping] = field(default_factory=list)
+    
+    # For table sections
+    source_field: Optional[str] = None        # Entity field containing table data
+    columns: List[TableColumnConfig] = field(default_factory=list)
+    show_totals: bool = False
+    
+    # Layout options
+    columns_count: int = 1                    # Number of columns for fields
+    css_class: Optional[str] = None           # Custom CSS class
+    show_border: bool = False
+    
+    # Conditional display
+    show_condition: Optional[str] = None      # e.g., "item.status == 'approved'"
+
+@dataclass
+class DocumentConfiguration:
+    """Complete configuration for a document type"""
+    # Basic Information
+    enabled: bool = True
+    document_type: DocumentType = DocumentType.RECEIPT
+    title: str = "Document"
+    subtitle: Optional[str] = None
+    
+    # Print layout configuration
+    print_layout_type: PrintLayoutType = PrintLayoutType.SIMPLE_WITH_HEADER
+    include_header_section: bool = True  # Include entity header info
+    include_action_buttons: bool = False  # Hide action buttons in print
+
+    # Page Setup
+    page_size: PageSize = PageSize.A4
+    orientation: Orientation = Orientation.PORTRAIT
+    margins: Dict[str, str] = field(default_factory=lambda: {
+        "top": "20mm", "right": "15mm", "bottom": "20mm", "left": "15mm"
+    })
+    
+    # Document Sections
+    sections: List[DocumentSection] = field(default_factory=list)
+    
+    # Header Configuration
+    show_logo: bool = True
+    logo_position: str = "left"  # left, center, right
+    show_company_info: bool = True
+    header_fields: List[DocumentFieldMapping] = field(default_factory=list)
+    header_text: Optional[str] = None
+    
+    # Footer Configuration
+    show_footer: bool = True
+    footer_text: Optional[str] = None
+    show_page_numbers: bool = False
+    show_print_info: bool = True
+    
+    # Status-specific footer text (NEW)
+    status_footer_text: Optional[Dict[str, str]] = None
+    # Example: {"approved": "This is an approved document", "draft": "This is a draft document"}
+
+    # Terms and Conditions Configuration (NEW)
+    show_terms: bool = False
+    terms_title: Optional[str] = None
+    terms_content: Optional[Union[str, List[str]]] = None
+
+    # Confidentiality (MISSING - ADD THIS)
+    confidential_notice: bool = False
+
+    # Watermark
+    watermark_draft: bool = True  # Show DRAFT watermark for non-approved items
+    watermark_text: str = "DRAFT"
+    
+    # Field visibility control
+    # If specified, only these fields/sections are shown
+    visible_sections: Optional[List[str]] = None  # None means show all
+    hidden_sections: Optional[List[str]] = None   # Sections to hide
+    visible_tabs: Optional[List[str]] = None       # For tabbed layout
+    
+
+    # Export Options
+    allowed_formats: List[ExportFormat] = field(
+        default_factory=lambda: [ExportFormat.PDF, ExportFormat.PRINT]
+    )
+    default_format: ExportFormat = ExportFormat.HTML
+    
+    # Security
+    require_approval: bool = False            # Document only for approved items
+    watermark_draft: bool = True              # Show watermark for draft items
+    
+    # Template Override (optional)
+    custom_template: Optional[str] = None     # Path to custom template
+
+    # Signature fields
+    signature_fields: List[Dict[str, str]] = field(default_factory=list)
+    show_signature_date: bool = False
+    # Example: [{"label": "Authorized By", "width": "200px"}, {"label": "Received By", "width": "200px"}]
+
 
 # =============================================================================
 # UTILITY CLASSES - From field_definitions.py
@@ -570,6 +741,13 @@ class EntityConfiguration:
     # Advanced Configuration
     css_classes: Optional[Dict[str, str]] = None
     validation_rules: Optional[Dict[str, Any]] = None
+
+    # Document Generation Support 
+    document_enabled: bool = False
+    document_configs: Dict[str, DocumentConfiguration] = field(default_factory=dict)
+    default_document: str = "receipt"
+    include_calculated_fields: List[str] = field(default_factory=list)
+    document_permissions: Dict[str, str] = field(default_factory=dict)
 
 # =============================================================================
 # ENTITY-SPECIFIC HELPER CLASSES

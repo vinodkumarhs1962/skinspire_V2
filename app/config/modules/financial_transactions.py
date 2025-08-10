@@ -14,7 +14,9 @@ from app.config.core_definitions import (
     TabDefinition, ViewLayoutConfiguration, LayoutType,
     EntityConfiguration, ActionDefinition, CustomRenderer,
     EntitySearchConfiguration, FilterConfiguration,
-    EntityFilterConfiguration, ButtonType, ActionDisplayType, ComplexDisplayType
+    EntityFilterConfiguration, ButtonType, ActionDisplayType, ComplexDisplayType, DocumentType,
+    PageSize, Orientation, DocumentSectionType, ExportFormat, DocumentFieldMapping, TableColumnConfig,
+    DocumentSection, DocumentConfiguration, PrintLayoutType
 )
 from app.config.filter_categories import FilterCategory
 
@@ -153,14 +155,14 @@ SUPPLIER_PAYMENT_FIELDS = [
         searchable=True,
         tab_group="invoice_details",
         section="invoice_summary",
-        view_order=2
+        view_order=1
     ),
     FieldDefinition(
         name="supplier_invoice_date",
         label="Supplier Invoice Date",
         field_type=FieldType.DATE,
         show_in_list=False,
-        show_in_detail=True,
+        show_in_detail=False,
         show_in_form=True,
         tab_group="invoice_details",
         section="invoice_summary",
@@ -168,7 +170,7 @@ SUPPLIER_PAYMENT_FIELDS = [
     ),
     
     FieldDefinition(
-        name="invoice_date_display",
+        name="invoice_date",
         label="Invoice Date",
         field_type=FieldType.DATE,
         show_in_list=False,
@@ -179,7 +181,7 @@ SUPPLIER_PAYMENT_FIELDS = [
         related_field="invoice",  # VALID parameter
         tab_group="invoice_details",
         section="invoice_summary",
-        view_order=4
+        view_order=2
     ),
     FieldDefinition(
         name="po_number_display",
@@ -361,7 +363,7 @@ SUPPLIER_PAYMENT_FIELDS = [
         label="Total Invoice Amount",
         field_type=FieldType.CURRENCY,
         show_in_list=False,
-        show_in_detail=True,
+        show_in_detail=False,
         show_in_form=False,
         readonly=True,
         virtual=True,  # This is a calculated field
@@ -855,6 +857,54 @@ SUPPLIER_PAYMENT_FIELDS = [
         )
     ),
     
+    # ✅ Virtual field 1: Total Items Count
+    FieldDefinition(
+        name="invoice_total_items",
+        label="Total Items",
+        field_type=FieldType.NUMBER,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=False,
+        readonly=True,
+        virtual=True,
+        tab_group="invoice_details",
+        section="invoice_summary",
+        view_order=3,
+        help_text="Number of line items in invoice"
+    ),
+
+    # ✅ Virtual field 2: Total GST Amount  
+    FieldDefinition(
+        name="invoice_total_gst",
+        label="Total GST",
+        field_type=FieldType.CURRENCY,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=False,
+        readonly=True,
+        virtual=True,
+        tab_group="invoice_details",
+        section="invoice_summary",
+        view_order=4,
+        help_text="Total GST amount from all line items"
+    ),
+
+    # ✅ Virtual field 3: Grand Total Amount
+    FieldDefinition(
+        name="invoice_grand_total",
+        label="Invoice Total",
+        field_type=FieldType.CURRENCY,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=False,
+        readonly=True,
+        virtual=True,
+        tab_group="invoice_details",
+        section="invoice_summary",
+        view_order=5,
+        help_text="Grand total amount including taxes"
+    ),
+
     # Workflow Timeline
     FieldDefinition(
         name="workflow_timeline",
@@ -1319,8 +1369,8 @@ SUPPLIER_PAYMENT_ACTIONS = [
         show_in_detail=True,
         display_type=ActionDisplayType.BUTTON,
         button_group="related_docs",
-        order=20,
-        conditional_display="item.invoice_id"
+        order=20
+        # conditional_display="item.invoice_id"
     ),
     
     # Payment list navigation (verified route exists)
@@ -1396,8 +1446,8 @@ SUPPLIER_PAYMENT_ACTIONS = [
         show_in_detail=True,
         display_type=ActionDisplayType.BUTTON,
         button_group="related_docs",
-        order=10,
-        conditional_display="item.po_id or (item.invoice and item.invoice.po_id)"  # ✅ Check both direct and through invoice
+        order=10
+        # conditional_display="item.po_id or (item.invoice and item.invoice.po_id)"  # ✅ Check both direct and through invoice
     ),
     
     # Delete - complex condition
@@ -1417,8 +1467,8 @@ SUPPLIER_PAYMENT_ACTIONS = [
         confirmation_message="Are you sure you want to delete this payment?",
         conditions={
             "workflow_status": ["draft", "pending", "rejected"]  # Keep for exact matching
-        },
-        conditional_display="item.workflow_status != 'approved' and not item.has_credit_notes"  # ✅ Additional complex logic
+        }
+        # conditional_display="item.workflow_status != 'approved' and not item.has_credit_notes"  # ✅ Additional complex logic
     ),
     
     # Create credit note - complex business rules
@@ -1436,8 +1486,8 @@ SUPPLIER_PAYMENT_ACTIONS = [
         order=140,
         conditions={
             "workflow_status": ["approved", "completed"]
-        },
-        conditional_display="not item.is_credit_note and not item.has_credit_notes"  # ✅ Complex business logic
+        }
+        #conditional_display="not item.is_credit_note and not item.has_credit_notes"  # ✅ Complex business logic
     ),
     
     # Print - only for approved/completed payments
@@ -1445,16 +1495,24 @@ SUPPLIER_PAYMENT_ACTIONS = [
         id="print",
         label="Print Receipt",
         icon="fas fa-print",
-        route_name="supplier_views.print_supplier_payment",
-        route_params={"payment_id": "{payment_id}"},
+        route_name="universal_views.universal_document_view",  # ✅ Use route name
+        route_params={  # ✅ Correct parameter order: entity_type, item_id, doc_type
+            "entity_type": "supplier_payments",
+            "item_id": "{payment_id}",  # ✅ item_id comes BEFORE doc_type
+            "doc_type": "receipt"
+        },
+        # url_pattern="/universal/supplier_payments/document/receipt/{payment_id}?auto_print=true",
         button_type=ButtonType.SECONDARY,
         permission="supplier_payments_view",
         show_in_list=False,
         show_in_detail=True,
         display_type=ActionDisplayType.BUTTON,
         button_group="document_ops",
-        order=30,
-        conditional_display="item.workflow_status in ['approved', 'completed']"  # ✅ Status check
+        order=30
+        # conditions={
+        #     "workflow_status": ["approved", "completed"]
+        # }
+        # conditional_display="item.workflow_status in ['approved', 'completed']"  # ✅ Status check
     ),
     
     # View action for list (keep existing)
@@ -1756,6 +1814,442 @@ SUPPLIER_PAYMENT_PERMISSIONS = {
 }
 
 # =============================================================================
+# DOCUMENT CONFIGURATION
+# =============================================================================
+# Define receipt configuration for supplier payments
+# SUPPLIER_PAYMENT_RECEIPT_CONFIG = DocumentConfiguration(
+#     enabled=True,
+#     document_type=DocumentType.RECEIPT,
+#     title="Payment Receipt",
+#     subtitle="Original Receipt",
+    
+#     # Page settings
+#     page_size=PageSize.A4,  # Changed from A5 to A4 for better readability
+#     orientation=Orientation.PORTRAIT,
+#     margins={
+#         "top": "20mm",
+#         "right": "15mm",
+#         "bottom": "20mm",
+#         "left": "15mm"
+#     },
+    
+#     # No header_fields - we'll put header in sections for this structure
+#     header_fields=[],
+    
+#     sections=[
+#         # Header Section - CORRECTED FIELD NAMES
+#         DocumentSection(
+#             section_type=DocumentSectionType.HEADER,
+#             fields=[
+#                 DocumentFieldMapping(
+#                     entity_field="reference_no",  # FIXED: was "payment_number"
+#                     document_label="Receipt No",
+#                     prefix="#"
+#                 ),
+#                 DocumentFieldMapping(
+#                     entity_field="payment_date",
+#                     document_label="Date",
+#                     format_type="date"
+#                 ),
+#                 DocumentFieldMapping(
+#                     entity_field="workflow_status",
+#                     document_label="Status",
+#                     show_if_empty=False
+#                 ),
+#             ]
+#         ),
+        
+#         # Supplier Details Section
+#         DocumentSection(
+#             section_type=DocumentSectionType.BODY,
+#             title="Received From",
+#             fields=[
+#                 DocumentFieldMapping(
+#                     entity_field="supplier_name",
+#                     document_label="Supplier Name"
+#                 ),
+#                 DocumentFieldMapping(
+#                     entity_field="supplier_id",  # Use supplier_id if supplier_code doesn't exist
+#                     document_label="Supplier ID",
+#                     show_if_empty=False
+#                 ),
+#                 # Removed supplier_address as it's not in your data
+#             ],
+#             columns_count=1,
+#             show_border=True
+#         ),
+        
+#         # Payment Details Section
+#         DocumentSection(
+#             section_type=DocumentSectionType.BODY,
+#             title="Payment Details",
+#             fields=[
+#                 DocumentFieldMapping(
+#                     entity_field="payment_method",
+#                     document_label="Payment Mode"
+#                 ),
+#                 DocumentFieldMapping(
+#                     entity_field="amount",
+#                     document_label="Amount Paid",
+#                     format_type="currency"
+#                     # Removed prefix="₹" to avoid duplication with format_currency
+#                 ),
+#                 DocumentFieldMapping(
+#                     entity_field="amount_in_words",
+#                     document_label="Amount in Words",
+#                     show_if_empty=False
+#                 ),
+#             ],
+#             columns_count=2,
+#             show_border=False
+#         ),
+        
+#         # Invoice Adjustments Section (if applicable)
+#         DocumentSection(
+#             section_type=DocumentSectionType.BODY,
+#             title="Invoice Adjustments",
+#             fields=[
+#                 DocumentFieldMapping(
+#                     entity_field="supplier_invoice_no",  # FIXED field name
+#                     document_label="Invoice Number",
+#                     show_if_empty=False
+#                 ),
+#                 DocumentFieldMapping(
+#                     entity_field="invoice_date",
+#                     document_label="Invoice Date",
+#                     format_type="date",
+#                     show_if_empty=False
+#                 ),
+#                 DocumentFieldMapping(
+#                     entity_field="invoice_total",
+#                     document_label="Invoice Amount",
+#                     format_type="currency",
+#                     show_if_empty=False
+#                 ),
+#             ],
+#             columns_count=3,
+#             show_border=False,
+#             show_condition="item.supplier_invoice_no"  # Only show if invoice exists
+#         ),
+        
+#         # Remarks Section
+#         DocumentSection(
+#             section_type=DocumentSectionType.BODY,
+#             title="Additional Information",
+#             fields=[
+#                 DocumentFieldMapping(
+#                     entity_field="notes",  # Using notes instead of remarks
+#                     document_label="Notes",
+#                     show_if_empty=False
+#                 ),
+#             ],
+#             columns_count=1
+#         ),
+        
+#         # Signature Section
+#         DocumentSection(
+#             section_type=DocumentSectionType.SIGNATURE,
+#             fields=[
+#                 DocumentFieldMapping(
+#                     entity_field="created_by",  # Use created_by ID for now
+#                     document_label="Prepared By"
+#                 ),
+#                 DocumentFieldMapping(
+#                     entity_field="approved_by",
+#                     document_label="Authorized By",
+#                     show_if_empty=False
+#                 ),
+#                 DocumentFieldMapping(
+#                     entity_field="branch_name",
+#                     document_label="Branch"
+#                 ),
+#             ]
+#         )
+#     ],
+    
+#     # Footer Configuration
+#     footer_text="This is a computer generated receipt",
+#     show_footer=True,
+#     show_print_info=True,
+#     show_page_numbers=False,
+    
+#     # Export Options
+#     allowed_formats=[ExportFormat.PDF, ExportFormat.PRINT, ExportFormat.HTML],
+#     default_format=ExportFormat.HTML,
+    
+#     # Security
+#     require_approval=False,  # Can print draft receipts
+#     watermark_draft=True,    # Show DRAFT watermark for non-approved
+    
+#     # Optional custom template
+#     custom_template=None
+# )
+
+# =============================================================================
+# DOCUMENT CONFIGURATIONS - INDIVIDUAL DEFINITIONS
+# =============================================================================
+
+# Receipt Configuration
+SUPPLIER_PAYMENT_RECEIPT_CONFIG = DocumentConfiguration(
+    enabled=True,
+    document_type="receipt",
+    title="Payment Receipt",
+    
+    # Use simple layout with header for clean receipt
+    print_layout_type=PrintLayoutType.SIMPLE_WITH_HEADER,
+    include_header_section=True,
+    include_action_buttons=False,
+    
+    # Page setup
+    page_size="A4",
+    orientation="portrait",
+    margins={
+        "top": "15mm",
+        "right": "15mm",
+        "bottom": "15mm",
+        "left": "15mm"
+    },
+    
+    # Company header
+    show_logo=True,
+    show_company_info=True,
+    header_text="PAYMENT RECEIPT",
+    
+    # Only show essential tabs for receipt
+    visible_tabs=["payment_details", "invoice_details", "po_details"],
+    
+    # Hide these specific sections
+    hidden_sections=[
+        "documents",
+        "technical_info",
+        "audit_trail",
+        "workflow_status",
+        "workflow_history",
+        "workflow_steps"
+    ],
+    
+    # Signature lines
+    signature_fields=[
+        {"label": "Authorized By", "width": "250px"},
+        {"label": "Received By", "width": "250px"}
+    ],
+    
+    # Footer
+    show_footer=True,
+    footer_text="This is a computer generated receipt",
+    show_print_info=True,
+
+    # Terms and Conditions for Receipt (NEW)
+    show_terms=True,
+    terms_title="Terms and Conditions",
+    terms_content=[
+        "This receipt is valid subject to realization of payment.",
+        "Please retain this receipt for future reference.",
+        "Any discrepancy should be reported within 7 days."
+    ],
+    
+    # Status-specific footer messages (NEW)
+    status_footer_text={
+        "approved": "This is an approved payment receipt.",
+        "draft": "This is a draft receipt pending approval.",
+        "pending": "This receipt is pending approval.",
+        "rejected": "This payment has been rejected."
+    },
+    
+    # Show date with signatures (NEW)
+    show_signature_date=True,
+    
+    # Watermark
+    watermark_draft=True,
+    watermark_text="DRAFT",
+    
+    allowed_formats=["pdf", "print", "preview"]
+)
+
+# Voucher Configuration
+SUPPLIER_PAYMENT_VOUCHER_CONFIG = DocumentConfiguration(
+    enabled=True,
+    document_type="voucher",
+    title="Payment Voucher",
+    
+    # Use tabbed layout for detailed voucher
+    print_layout_type=PrintLayoutType.TABBED,
+    include_header_section=True,
+    
+    page_size="A4",
+    orientation="portrait",
+    
+    show_logo=True,
+    show_company_info=True,
+    header_text="PAYMENT VOUCHER",
+    
+    # Show more details for voucher
+    visible_tabs=[
+        "payment_details",
+        "invoice_details",
+        "po_details",
+        "workflow"
+    ],
+    
+    # Hide technical sections
+    hidden_sections=[
+        "documents",
+        "technical_info",
+        "audit_trail"
+    ],
+    
+    # Multiple signatures for approval chain
+    signature_fields=[
+        {"label": "Prepared By", "width": "200px"},
+        {"label": "Checked By", "width": "200px"},
+        {"label": "Approved By", "width": "200px"},
+        {"label": "Received By", "width": "200px"}
+    ],
+    
+    show_footer=True,
+    footer_text="All payments are subject to realization of instruments",
+    show_print_info=True,
+    
+    # Terms and Conditions for Voucher (NEW)
+    show_terms=True,
+    terms_title="Payment Terms",
+    terms_content=[
+        "All payments are subject to audit verification.",
+        "Payments by cheque/DD are subject to realization.",
+        "This voucher is valid only with authorized signatures.",
+        "Please verify all details before processing payment.",
+        "Any disputes must be raised within 30 days of payment."
+    ],
+    
+    # Status-specific footer messages (NEW)
+    status_footer_text={
+        "approved": "This payment voucher has been approved and processed.",
+        "draft": "This is a draft voucher awaiting approval.",
+        "pending": "This payment voucher is pending approval.",
+        "rejected": "This voucher has been rejected. Please contact accounts department."
+    },
+    
+    # Show date with signatures (NEW)
+    show_signature_date=True,
+
+    watermark_draft=True,
+    watermark_text="DRAFT - NOT APPROVED",
+    
+    allowed_formats=["pdf", "print", "preview"]
+)
+
+# Statement Configuration
+SUPPLIER_PAYMENT_STATEMENT_CONFIG = DocumentConfiguration(
+    enabled=True,
+    document_type="statement",
+    title="Payment Statement",
+    
+    # Simple layout for clean statement
+    print_layout_type=PrintLayoutType.SIMPLE,
+    include_header_section=False,
+    
+    page_size="A4",
+    orientation="portrait",
+    
+    show_logo=True,
+    show_company_info=True,
+    header_text="SUPPLIER PAYMENT STATEMENT",
+    
+    # Focus on payment history
+    visible_tabs=[
+        "payment_history",
+        "payment_details"
+    ],
+    
+    # Hide payment method details
+    hidden_sections=[
+        "cash_payment",
+        "bank_payment",
+        "cheque_payment",
+        "upi_payment",
+        "documents",
+        "workflow_status",
+        "workflow_history",
+        "workflow_steps",
+        "technical_info",
+        "audit_trail"
+    ],
+    
+    # No signatures for statement
+    signature_fields=[],
+    
+    show_footer=True,
+    footer_text="This statement is for information purposes only",
+    show_print_info=True,
+    
+    # No terms for statement (NEW)
+    show_terms=False,
+    
+    # Status-specific footer messages (NEW)
+    status_footer_text={
+        "approved": "This is an official payment statement.",
+        "pending": "This receipt is pending approval.",
+        "draft": "This is a preliminary statement subject to verification."
+    },
+
+    watermark_draft=False,
+    
+    allowed_formats=["pdf", "print", "excel", "preview"]
+)
+
+# Summary/Acknowledgment Configuration  
+SUPPLIER_PAYMENT_SUMMARY_CONFIG = DocumentConfiguration(
+    enabled=True,
+    document_type="summary",
+    title="Payment Summary",
+    
+    # Compact layout for summary
+    print_layout_type=PrintLayoutType.COMPACT,
+    include_header_section=True,
+    
+    page_size="A5",
+    orientation="portrait",
+    
+    show_logo=True,
+    show_company_info=False,
+    header_text="PAYMENT SUMMARY",
+    
+    # Only essential payment info
+    visible_tabs=["payment_details"],
+    
+    # Show only payment summary section
+    hidden_sections=[
+        "balance_calculations",
+        "cash_payment",
+        "bank_payment",
+        "cheque_payment",
+        "upi_payment",
+        "documents"
+    ],
+    
+    # Single signature
+    signature_fields=[
+        {"label": "Acknowledged By", "width": "300px"}
+    ],
+    
+    show_footer=False,
+    show_print_info=True,
+    
+    watermark_draft=False,
+    
+    allowed_formats=["pdf", "print"]
+)
+
+# Dictionary to hold all document configurations for supplier payments
+SUPPLIER_PAYMENT_DOCUMENT_CONFIGS = {
+    "receipt": SUPPLIER_PAYMENT_RECEIPT_CONFIG,
+    "voucher": SUPPLIER_PAYMENT_VOUCHER_CONFIG,
+    "statement": SUPPLIER_PAYMENT_STATEMENT_CONFIG,
+    "summary": SUPPLIER_PAYMENT_SUMMARY_CONFIG,
+}
+
+
+# =============================================================================
 # COMPLETE SUPPLIER PAYMENT CONFIGURATION
 # =============================================================================
 
@@ -1796,7 +2290,29 @@ SUPPLIER_PAYMENT_CONFIG = EntityConfiguration(
     
     # Date and Amount Configuration
     primary_date_field="payment_date",
-    primary_amount_field="amount"
+    primary_amount_field="amount",
+
+    # Document Generation Support
+    document_enabled=True,
+    document_configs=SUPPLIER_PAYMENT_DOCUMENT_CONFIGS,  # Reference the dictionary
+    default_document="receipt",
+    
+    # Fields that need to be calculated/included for documents
+    include_calculated_fields=[
+        "supplier_name",         # From supplier relationship
+        "supplier_code",         # From supplier relationship
+        "supplier_address",      # From supplier relationship
+        "amount_in_words",       # Convert amount to words
+        "created_by_name",       # From created_by user
+        "approved_by_name",      # From approved_by user
+        "branch_name",           # From current branch context
+        "adjusted_invoices",     # List of adjusted invoice details
+    ],
+    
+    # Optional: Document-specific permissions (uses view permission by default)
+    document_permissions={
+        "receipt": "supplier_payments_view",
+    }
 )
 
 # Apply additional configurations (if needed for backward compatibility)

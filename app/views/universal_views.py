@@ -19,6 +19,7 @@ from flask_login import login_required, current_user
 from datetime import datetime
 import uuid
 from typing import Dict, Any, Optional, List
+import traceback  # Add this for error handling
 
 # Import your existing security decorators and utilities
 from app.security.authorization.decorators import (
@@ -29,8 +30,10 @@ from app.services.database_service import get_db_session
 from app.config.entity_configurations import get_entity_config, is_valid_entity_type, list_entity_types
 from app.engine.data_assembler import EnhancedUniversalDataAssembler
 from app.engine.universal_services import search_universal_entity_data, get_universal_service, get_universal_item_data
-from app.utils.context_helpers import ensure_request_context, get_user_branch_context, get_branch_uuid_from_context_or_request
+from app.engine.document_service import get_document_service, prepare_document_data, get_document_buttons
+from app.utils.context_helpers import ensure_request_context, get_user_branch_context, get_branch_uuid_from_context_or_request, get_current_hospital, get_current_branch, get_hospital_and_branch_for_display
 from app.utils.unicode_logging import get_unicode_safe_logger
+
 
 logger = get_unicode_safe_logger(__name__)
 
@@ -1027,6 +1030,17 @@ def universal_detail_view(entity_type: str, item_id: str):
         if request.path.startswith('/universal/'):
             template_name = 'engine/universal_view.html'
 
+        if config.document_enabled:
+                       
+            # Store data for documents
+            if 'entity_data' in assembled_data:
+                prepare_document_data(entity_type, item_id, assembled_data['entity_data'])
+            
+            # Add document buttons
+            doc_buttons = get_document_buttons(config, item_id)
+            if doc_buttons:
+                assembled_data['document_buttons'] = doc_buttons
+
         # DON'T UNPACK - pass everything explicitly to avoid iteration error
         return render_template(
             template_name,
@@ -1335,6 +1349,244 @@ def universal_delete_view(entity_type: str, item_id: str):
         logger.error(f"❌ Error deleting {entity_type}/{item_id}: {str(e)}")
         flash(f"Error deleting {config.name}: {str(e)}", 'error')
         return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+
+@universal_bp.route('/<entity_type>/document/<item_id>/<doc_type>')
+@login_required
+@require_web_branch_permission('universal', 'view')
+def universal_document_view(entity_type: str, item_id: str, doc_type: str):
+    """
+    Generate document using pre-calculated data from Universal View
+    SIMPLIFIED: Document service now handles hospital/branch data internally
+    """
+    try:
+        # ===== VALIDATION SECTION (Unchanged) =====
+        # Validate entity type
+        if not is_valid_entity_type(entity_type):
+            flash(f"Entity type '{entity_type}' not found", 'error')
+            return redirect(url_for('auth_views.dashboard'))
+        
+        # Get entity configuration - THIS RETURNS AN OBJECT
+        config = get_entity_config(entity_type)
+        if not config:
+            flash(f"Configuration not found for {entity_type}", 'error')
+            return redirect(url_for('auth_views.dashboard'))
+        
+        # Check if documents are enabled
+        if not config.document_enabled:
+            flash("Documents not enabled for this entity", 'error')
+            return redirect(url_for('universal_views.universal_detail_view', 
+                                  entity_type=entity_type, item_id=item_id))
+        
+        # Get document configuration
+        doc_config = config.document_configs.get(doc_type)
+        if not doc_config or not doc_config.enabled:
+            flash(f"Document type '{doc_type}' not configured", 'error')
+            return redirect(url_for('universal_views.universal_detail_view',
+                                  entity_type=entity_type, item_id=item_id))
+        
+        # ===== CONFIGURATION CONVERSION (Unchanged) =====
+        # Convert doc_config to dict if it's an object (for safe passing)
+        doc_config_dict = {}
+        if hasattr(doc_config, '__dict__'):
+            # It's an object, convert to dict
+            for key, value in doc_config.__dict__.items():
+                if not key.startswith('_'):
+                    # Handle enum values
+                    if hasattr(value, 'value'):
+                        doc_config_dict[key] = value.value
+                    else:
+                        doc_config_dict[key] = value
+        else:
+            # It's already a dict
+            doc_config_dict = doc_config
+        
+        # ===== DOCUMENT SERVICE INITIALIZATION =====
+        # Get document service
+        from app.engine.document_service import UniversalDocumentService
+        doc_service = UniversalDocumentService()
+        
+        # ===== SIMPLIFIED: NO ORGANIZATION DATA FETCHING =====
+        # The document service now handles hospital/branch data internally
+        # No need to fetch it here
+        
+        # ===== SESSION DATA CHECK (Unchanged) =====
+        # Try to get data from session first
+        doc_data = doc_service.get_document_data_from_session(entity_type, item_id)
+        
+        if not doc_data:
+            logger.info(f"No session data found, fetching fresh data for {entity_type}/{item_id}")
+            
+            # ===== FETCH FRESH DATA IF NEEDED =====
+            # Get service and branch context for data fetching
+            service = get_universal_service(entity_type)
+            branch_uuid, branch_name = get_branch_uuid_from_context_or_request()
+            
+            # Fetch entity data with calculations
+            raw_data = service.get_by_id(
+                item_id=item_id,
+                hospital_id=current_user.hospital_id,
+                branch_id=branch_uuid,
+                include_calculations=True  # Important for documents
+            )
+            
+            if not raw_data:
+                flash(f"{config.name} not found", 'error')
+                return redirect(url_for('universal_views.universal_list_view', 
+                                      entity_type=entity_type))
+            
+            # ===== DATA ASSEMBLY - Use Standard Assembler =====
+            from app.engine.data_assembler import EnhancedUniversalDataAssembler
+            assembler = EnhancedUniversalDataAssembler()
+
+            logger.info(f"Using data assembler for {entity_type}/{item_id}")
+
+            # Prepare raw_item_data in the format the assembler expects
+            raw_item_data = {
+                'item': raw_data,  # The assembler expects 'item' key
+                'has_error': False
+            }
+
+            # Assemble data using the CORRECT method name
+            assembled_data = assembler.assemble_universal_view_data(
+                config=config,
+                raw_item_data=raw_item_data,  # Note: different parameter name
+                user_id=current_user.user_id,
+                branch_context={
+                    'branch_id': branch_uuid, 
+                    'branch_name': branch_name
+                }
+            )
+
+            # The assembled data already has the processed entity data
+            # Extract it for document use
+            if 'entity_data' in assembled_data and isinstance(assembled_data['entity_data'], dict):
+                doc_data = assembled_data['entity_data']
+                logger.info(f"Extracted entity_data from assembled data")
+            elif 'item' in assembled_data and isinstance(assembled_data['item'], dict):
+                doc_data = assembled_data['item']
+                logger.info(f"Extracted item from assembled data")
+            else:
+                # Use the original raw_data as fallback
+                doc_data = raw_data if isinstance(raw_data, dict) else {}
+                logger.warning(f"Could not extract from assembled data, using raw_data")
+
+            # IMPORTANT: Add the invoice items data from assembled_data
+            if 'field_sections' in assembled_data:
+                # The assembler has already called custom renderers
+                # Extract invoice items from the assembled field sections
+                for section_group in assembled_data.get('field_sections', []):
+                    for section in section_group.get('sections', []):
+                        for field in section.get('fields', []):
+                            if field.get('name') == 'invoice_items_display':
+                                # Custom renderer data might be here
+                                logger.info(f"Found invoice_items_display field in assembled data")
+
+            logger.info(f"Document data ready with keys: {doc_data.keys() if isinstance(doc_data, dict) else 'not a dict'}")
+        
+        logger.info(f"Document data ready with keys: {doc_data.keys() if isinstance(doc_data, dict) else 'not a dict'}")
+        
+        # ===== DATA ENHANCEMENT (Unchanged) =====
+        # Enhance data with relationships if needed
+        doc_data = doc_service.enhance_data_with_relationships(config, doc_data)
+        
+        # ===== CONTEXT PREPARATION =====
+        # Prepare document context using the service method
+        # The service now fetches hospital/branch data internally
+        context = doc_service.prepare_document_context(config, doc_config_dict, doc_data)
+        
+        # ===== ADD SERVICE FOR CUSTOM RENDERERS =====
+        # Pass service object to template (same as universal_detail_view does)
+        context['service'] = service
+        context['current_hospital_id'] = current_user.hospital_id
+        context['current_branch_id'] = branch_uuid
+        context['item_id'] = item_id
+        context['entity_type'] = entity_type
+        context['item'] = doc_data  # Add item for consistency with universal_view
+        # ===== END SERVICE ADDITION =====
+        
+        # ===== OUTPUT FORMAT HANDLING (Unchanged) =====
+        # Check output format
+        output_format = request.args.get('format', 'html').lower()
+        
+        if output_format == 'pdf':
+            # Generate PDF using the service method
+            return doc_service.render_document_pdf(context, doc_config_dict)
+        else:
+            # Add auto-print flag if requested
+            if request.args.get('auto_print') == 'true':
+                context['auto_print'] = True
+            
+            # Render HTML using the service method
+            return doc_service.render_document_html(context)
+            
+    except Exception as e:
+        logger.error(f"❌ Error generating document {doc_type} for {entity_type}/{item_id}: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        flash(f"Error generating document: {str(e)}", 'error')
+        return redirect(url_for('universal_views.universal_detail_view',
+                              entity_type=entity_type, item_id=item_id))
+
+@universal_bp.route('/<entity_type>/documents/batch', methods=['POST'])
+@login_required
+@require_web_branch_permission('universal', 'view')
+def universal_batch_documents(entity_type: str):
+    """
+    Generate multiple documents at once
+    Useful for bulk printing receipts, statements, etc.
+    """
+    try:
+        # Get entity IDs from request
+        entity_ids = request.json.get('entity_ids', [])
+        doc_type = request.json.get('doc_type', 'receipt')
+        
+        if not entity_ids:
+            return jsonify({'error': 'No entities selected'}), 400
+        
+        # Get configurations
+        config = get_entity_config(entity_type)
+        if not config or not config.document_enabled:
+            return jsonify({'error': 'Documents not enabled for this entity'}), 404
+        
+        doc_config = config.document_configs.get(doc_type)
+        if not doc_config:
+            return jsonify({'error': f'Document type {doc_type} not configured'}), 404
+        
+        # Get document service
+        doc_service = get_document_service()
+        
+        # Collect all documents
+        documents = []
+        service = get_universal_service(entity_type)
+        branch_uuid, branch_name = get_branch_uuid_from_context_or_request()
+        
+        for entity_id in entity_ids[:10]:  # Limit to 10 for performance
+            # Get data for each entity
+            raw_data = service.get_by_id(
+                item_id=entity_id,
+                hospital_id=current_user.hospital_id,
+                branch_id=branch_uuid,
+                include_calculations=True
+            )
+            
+            if raw_data:
+                # Enhance and prepare context
+                doc_data = doc_service.enhance_data_with_relationships(config, raw_data)
+                context = doc_service.prepare_document_context(config, doc_config, doc_data)
+                documents.append(context)
+        
+        # Render batch template
+        return render_template(
+            'engine/universal_document_batch.html',
+            documents=documents,
+            doc_config=doc_config,
+            entity_config=config
+        )
+        
+    except Exception as e:
+        logger.error(f"Error generating batch documents: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 
 # =============================================================================
 # UNIVERSAL EXPORT HANDLING

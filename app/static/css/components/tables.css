@@ -839,52 +839,6 @@
    PREDEFINED FINANCIAL TABLE LAYOUTS
    ========================================== */
 
-/* Invoice Items Table - 7 columns */
-.invoice-items-table {
-    min-width: 900px !important;
-}
-
-.invoice-items-table th:nth-child(1),
-.invoice-items-table td:nth-child(1) { width: 25% !important; } /* Item */
-
-.invoice-items-table th:nth-child(2),
-.invoice-items-table td:nth-child(2) { width: 15% !important; } /* Batch */
-
-.invoice-items-table th:nth-child(3),
-.invoice-items-table td:nth-child(3) { width: 10% !important; } /* Qty */
-
-.invoice-items-table th:nth-child(4),
-.invoice-items-table td:nth-child(4) { width: 15% !important; } /* Price */
-
-.invoice-items-table th:nth-child(5),
-.invoice-items-table td:nth-child(5) { width: 10% !important; } /* Discount */
-
-.invoice-items-table th:nth-child(6),
-.invoice-items-table td:nth-child(6) { width: 15% !important; } /* GST */
-
-.invoice-items-table th:nth-child(7),
-.invoice-items-table td:nth-child(7) { width: 10% !important; } /* Total */
-
-/* GST Summary Table - 5 columns */
-.gst-summary-table {
-    min-width: 700px !important;
-}
-
-.gst-summary-table th:nth-child(1),
-.gst-summary-table td:nth-child(1) { width: 20% !important; } /* HSN */
-
-.gst-summary-table th:nth-child(2),
-.gst-summary-table td:nth-child(2) { width: 20% !important; } /* Taxable */
-
-.gst-summary-table th:nth-child(3),
-.gst-summary-table td:nth-child(3) { width: 20% !important; } /* CGST */
-
-.gst-summary-table th:nth-child(4),
-.gst-summary-table td:nth-child(4) { width: 20% !important; } /* SGST */
-
-.gst-summary-table th:nth-child(5),
-.gst-summary-table td:nth-child(5) { width: 20% !important; } /* IGST */
-
 /* Payment History Table - 6 columns */
 .payment-history-table {
     min-width: 800px !important;
@@ -956,16 +910,7 @@
     .financial-table th {
         font-size: 0.6875rem !important;
     }
-    
-    /* Adjust table minimums for mobile */
-    .invoice-items-table {
-        min-width: 600px !important;
-    }
-    
-    .gst-summary-table {
-        min-width: 500px !important;
-    }
-    
+       
     .payment-history-table {
         min-width: 500px !important;
     }
@@ -985,14 +930,7 @@
 
 @media (max-width: 640px) {
     /* Very small screens - further optimization */
-    .invoice-items-table {
-        min-width: 450px !important;
-    }
-    
-    .gst-summary-table {
-        min-width: 400px !important;
-    }
-    
+        
     .payment-history-table {
         min-width: 400px !important;
     }
@@ -1129,114 +1067,6 @@
     padding: 0 !important;
 }
 
-/* INVOICE ITEMS TABLE - Enforce exact column widths */
-.invoice-items-table {
-    min-width: 900px !important;
-    width: 100% !important;
-}
-
-.invoice-items-table th:nth-child(1),
-.invoice-items-table td:nth-child(1),
-.invoice-items-table tfoot td:nth-child(1) {
-    width: 25% !important;
-    min-width: 225px !important;
-    max-width: 225px !important;
-}
-
-.invoice-items-table th:nth-child(2),
-.invoice-items-table td:nth-child(2),
-.invoice-items-table tfoot td:nth-child(2) {
-    width: 15% !important;
-    min-width: 135px !important;
-    max-width: 135px !important;
-}
-
-.invoice-items-table th:nth-child(3),
-.invoice-items-table td:nth-child(3),
-.invoice-items-table tfoot td:nth-child(3) {
-    width: 10% !important;
-    min-width: 90px !important;
-    max-width: 90px !important;
-}
-
-.invoice-items-table th:nth-child(4),
-.invoice-items-table td:nth-child(4),
-.invoice-items-table tfoot td:nth-child(4) {
-    width: 15% !important;
-    min-width: 135px !important;
-    max-width: 135px !important;
-}
-
-.invoice-items-table th:nth-child(5),
-.invoice-items-table td:nth-child(5),
-.invoice-items-table tfoot td:nth-child(5) {
-    width: 10% !important;
-    min-width: 90px !important;
-    max-width: 90px !important;
-}
-
-.invoice-items-table th:nth-child(6),
-.invoice-items-table td:nth-child(6),
-.invoice-items-table tfoot td:nth-child(6) {
-    width: 15% !important;
-    min-width: 135px !important;
-    max-width: 135px !important;
-}
-
-.invoice-items-table th:nth-child(7),
-.invoice-items-table td:nth-child(7),
-.invoice-items-table tfoot td:nth-child(7) {
-    width: 10% !important;
-    min-width: 90px !important;
-    max-width: 90px !important;
-}
-
-/* GST SUMMARY TABLE - Enforce exact column widths */
-.gst-summary-table {
-    min-width: 700px !important;
-    width: 100% !important;
-}
-
-.gst-summary-table th:nth-child(1),
-.gst-summary-table td:nth-child(1),
-.gst-summary-table tfoot td:nth-child(1) {
-    width: 20% !important;
-    min-width: 140px !important;
-    max-width: 140px !important;
-}
-
-.gst-summary-table th:nth-child(2),
-.gst-summary-table td:nth-child(2),
-.gst-summary-table tfoot td:nth-child(2) {
-    width: 20% !important;
-    min-width: 140px !important;
-    max-width: 140px !important;
-}
-
-.gst-summary-table th:nth-child(3),
-.gst-summary-table td:nth-child(3),
-.gst-summary-table tfoot td:nth-child(3) {
-    width: 20% !important;
-    min-width: 140px !important;
-    max-width: 140px !important;
-}
-
-.gst-summary-table th:nth-child(4),
-.gst-summary-table td:nth-child(4),
-.gst-summary-table tfoot td:nth-child(4) {
-    width: 20% !important;
-    min-width: 140px !important;
-    max-width: 140px !important;
-}
-
-.gst-summary-table th:nth-child(5),
-.gst-summary-table td:nth-child(5),
-.gst-summary-table tfoot td:nth-child(5) {
-    width: 20% !important;
-    min-width: 140px !important;
-    max-width: 140px !important;
-}
-
 /* FOOTER STYLING - Full width coverage */
 .financial-table tfoot tr {
     width: 100% !important;
@@ -1348,26 +1178,6 @@
 
 /* Responsive adjustments that maintain alignment */
 @media (max-width: 768px) {
-    .invoice-items-table {
-        min-width: 600px !important;
-    }
-    
-    .gst-summary-table {
-        min-width: 500px !important;
-    }
-    
-    /* Maintain proportional widths on mobile */
-    .invoice-items-table th:nth-child(1),
-    .invoice-items-table td:nth-child(1),
-    .invoice-items-table tfoot td:nth-child(1) {
-        min-width: 150px !important;
-    }
-    
-    .gst-summary-table th,
-    .gst-summary-table td,
-    .gst-summary-table tfoot td {
-        min-width: 100px !important;
-    }
     
     /* Ensure footer still spans full width on mobile */
     .financial-table tfoot td {
@@ -1380,16 +1190,6 @@
     }
 }
 
-/* Additional mobile responsive for very small screens */
-@media (max-width: 640px) {
-    .invoice-items-table {
-        min-width: 450px !important;
-    }
-    
-    .gst-summary-table {
-        min-width: 400px !important;
-    }
-}
 
 /* ==========================================
    ENHANCED PAYMENT ACTION BUTTONS CSS
@@ -2176,3 +1976,30 @@ table .supplier-column {
         transform: none !important;
     }
 }
+
+/* =============================================================================
+   UNIVERSAL FINANCIAL TABLE - COLUMN WIDTH FIX
+   Add to tables.css - Works for ALL financial tables, not specific ones
+   ============================================================================= */
+
+/* Universal fix for responsive tables with many columns */
+.table-responsive table {
+    min-width: max-content !important;  /* Let table size naturally */
+}
+
+/* Ensure last column (typically Total) has minimum width in ALL financial tables */
+.financial-table td:last-child,
+.financial-table th:last-child {
+    min-width: 100px !important;  /* Prevent crushing of last column */
+}
+
+/* Universal rule for first column (typically name/description) */
+.financial-table td:first-child,
+.financial-table th:first-child {
+    min-width: 150px !important;  /* Ensure adequate space for names */
+}
+
+/* Let browser handle remaining columns naturally */
+.financial-table {
+    table-layout: auto !important;  /* Let columns size based on content */
+} 

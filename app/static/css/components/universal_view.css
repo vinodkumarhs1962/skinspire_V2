@@ -1169,13 +1169,6 @@ i.fa-file-invoice { color: rgb(245 158 11) !important; }
     overflow-x: auto !important;
 }
 
-/* Specific table types */
-.payment-history-table,
-.po-items-table,
-.invoice-items-table {
-    width: 100% !important;
-    overflow-x: auto !important;
-}
 
 /* Ensure tables inside custom renderers take full width */
 .custom-renderer-field table {

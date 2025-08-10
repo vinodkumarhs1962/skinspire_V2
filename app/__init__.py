@@ -80,6 +80,7 @@ except ImportError:
         """Wrapper function that calls register_filters"""
         return register_filters(app)
 
+from app.utils.template_filters import register_document_filters
 
 # Try to load settings, with improved error handling
 try:
@@ -172,6 +173,9 @@ def create_app() -> Flask:
 
         # Register util filters
         register_filters(app)
+        register_document_filters(app)
+
+        initialize_document_engine(app)
 
         # Initialize Redis session management if available
         if hasattr(settings, 'REDIS_URL') and settings.REDIS_URL:
@@ -602,3 +606,73 @@ def register_jinja_filters(app):
                 return [item for item in items if hasattr(item, attribute) and getattr(item, attribute) == value]
         except Exception:
             return []
+        
+def initialize_document_engine(app):
+    """
+    Initialize document engine for Universal Engine
+    Call this in create_app() after blueprint registration
+    """
+    try:
+        from app.engine.document_service import get_document_service
+        
+        # Register document service
+        app.document_service = get_document_service()
+        
+        # Ensure required filters are registered
+        ensure_document_filters(app)
+        
+        app.logger.info("✅ Document Engine initialized successfully")
+        return True
+        
+    except Exception as e:
+        app.logger.error(f"Failed to initialize Document Engine: {str(e)}")
+        return False
+
+def ensure_document_filters(app):
+    """Ensure all required Jinja filters for documents are registered"""
+    
+    # Check and add format_currency
+    if 'format_currency' not in app.jinja_env.filters:
+        try:
+            from app.utils.filters import format_currency
+            app.jinja_env.filters['format_currency'] = format_currency
+        except ImportError:
+            # Fallback implementation
+            app.jinja_env.filters['format_currency'] = lambda x: f"Rs.{float(x or 0):,.2f}"
+    
+    # Check and add date filters
+    if 'dateformat' not in app.jinja_env.filters:
+        try:
+            from app.utils.filters import dateformat
+            app.jinja_env.filters['dateformat'] = dateformat
+        except ImportError:
+            # Fallback implementation
+            from datetime import datetime
+            app.jinja_env.filters['dateformat'] = lambda x: x.strftime('%d/%m/%Y') if x else ''
+    
+    if 'datetimeformat' not in app.jinja_env.filters:
+        try:
+            from app.utils.filters import datetimeformat
+            app.jinja_env.filters['datetimeformat'] = datetimeformat
+        except ImportError:
+            # Fallback implementation
+            from datetime import datetime
+            app.jinja_env.filters['datetimeformat'] = lambda x: x.strftime('%d/%m/%Y %H:%M') if x else ''
+    
+    # Add sum filter for tables
+    if 'sum' not in app.jinja_env.filters:
+        def sum_filter(items, attribute):
+            """Sum values from a list of dictionaries"""
+            if not items:
+                return 0
+            total = 0
+            for item in items:
+                if isinstance(item, dict):
+                    value = item.get(attribute, 0)
+                    try:
+                        total += float(value) if value else 0
+                    except (ValueError, TypeError):
+                        continue
+            return total
+        
+        app.jinja_env.filters['sum'] = sum_filter
