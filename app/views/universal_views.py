@@ -1511,6 +1511,35 @@ def universal_document_view(entity_type: str, item_id: str, doc_type: str):
         if output_format == 'pdf':
             # Generate PDF using the service method
             return doc_service.render_document_pdf(context, doc_config_dict)
+        # NEW FORMAT: Excel (with safe fallback)
+        elif output_format in ['excel', 'xlsx']:
+            # Check if new method exists
+            if hasattr(doc_service, 'render_document_excel'):
+                try:
+                    logger.info(f"📊 Generating Excel for {entity_type}/{item_id}/{doc_type}")
+                    return doc_service.render_document_excel(context, doc_config_dict)
+                except Exception as excel_error:
+                    logger.warning(f"Excel generation failed: {excel_error}, falling back to HTML")
+                    return doc_service.render_document_html(context)
+            else:
+                # Method doesn't exist, use HTML
+                logger.warning("render_document_excel not found, using HTML")
+                return doc_service.render_document_html(context)
+        
+        # NEW FORMAT: Word (with safe fallback)
+        elif output_format in ['word', 'docx']:
+            # Check if new method exists
+            if hasattr(doc_service, 'render_document_word'):
+                try:
+                    logger.info(f"📝 Generating Word for {entity_type}/{item_id}/{doc_type}")
+                    return doc_service.render_document_word(context, doc_config_dict)
+                except Exception as word_error:
+                    logger.warning(f"Word generation failed: {word_error}, falling back to HTML")
+                    return doc_service.render_document_html(context)
+            else:
+                # Method doesn't exist, use HTML
+                logger.warning("render_document_word not found, using HTML")
+                return doc_service.render_document_html(context)
         else:
             # Add auto-print flag if requested
             if request.args.get('auto_print') == 'true':

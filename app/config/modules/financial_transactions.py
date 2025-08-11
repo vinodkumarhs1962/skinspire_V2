@@ -2063,7 +2063,7 @@ SUPPLIER_PAYMENT_RECEIPT_CONFIG = DocumentConfiguration(
     watermark_draft=True,
     watermark_text="DRAFT",
     
-    allowed_formats=["pdf", "print", "preview"]
+    allowed_formats=["pdf", "print", "preview", "word", "excel"]
 )
 
 # Voucher Configuration
@@ -2135,7 +2135,7 @@ SUPPLIER_PAYMENT_VOUCHER_CONFIG = DocumentConfiguration(
     watermark_draft=True,
     watermark_text="DRAFT - NOT APPROVED",
     
-    allowed_formats=["pdf", "print", "preview"]
+    allowed_formats=["pdf", "print", "preview", "word", "excel"]
 )
 
 # Statement Configuration
@@ -2194,7 +2194,7 @@ SUPPLIER_PAYMENT_STATEMENT_CONFIG = DocumentConfiguration(
 
     watermark_draft=False,
     
-    allowed_formats=["pdf", "print", "excel", "preview"]
+    allowed_formats=["pdf", "print", "excel", "preview", "word"]
 )
 
 # Summary/Acknowledgment Configuration  
@@ -2237,7 +2237,7 @@ SUPPLIER_PAYMENT_SUMMARY_CONFIG = DocumentConfiguration(
     
     watermark_draft=False,
     
-    allowed_formats=["pdf", "print"]
+    allowed_formats=["pdf", "print", "excel", "word"]
 )
 
 # Dictionary to hold all document configurations for supplier payments

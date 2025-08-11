@@ -1780,6 +1780,40 @@ class EnhancedUniversalDataAssembler:
                         'confirmation_message': action.confirmation_message,
                     })
             
+            # ===== NEW CODE: ADD DOCUMENT BUTTONS =====
+            # Check if documents are enabled for this entity
+            if getattr(config, 'document_enabled', False):
+                from app.engine.document_service import get_document_service
+                doc_service = get_document_service()
+                
+                # Get document buttons
+                document_buttons = doc_service.get_document_buttons(config, item_id)
+                
+                # Add document buttons to actions
+                for doc_button in document_buttons:
+                    # Check if it's a dropdown
+                    if doc_button.get('type') == 'dropdown':
+                        # Add as dropdown button
+                        actions.append({
+                            'id': doc_button.get('id'),
+                            'label': doc_button.get('label'),
+                            'icon': doc_button.get('icon'),
+                            'type': 'dropdown',
+                            'dropdown_items': doc_button.get('dropdown_items', []),
+                            'css_class': doc_button.get('class', 'btn-outline dropdown-toggle')
+                        })
+                    else:
+                        # Add as regular button
+                        actions.append({
+                            'id': doc_button.get('id'),
+                            'label': doc_button.get('label'),
+                            'icon': doc_button.get('icon'),
+                            'url': doc_button.get('url'),
+                            'target': doc_button.get('target', '_blank'),
+                            'css_class': doc_button.get('class', 'btn-outline')
+                        })
+            # ===== END NEW CODE =====
+
             # Default actions if none configured
             if not actions:
                 actions.extend([

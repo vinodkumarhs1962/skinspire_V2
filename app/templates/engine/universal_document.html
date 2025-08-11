@@ -87,14 +87,66 @@
             <i class="fas fa-arrow-left"></i> Back
         </button>
 
-        <!-- Action Buttons - Top Right using existing classes -->
+        <!-- Document Actions Dropdown - Top Right (Fixed Position) -->
         <div class="screen-only" style="position: fixed; top: 20px; right: 20px; z-index: 1000;">
-            <button onclick="window.print()" class="btn-primary">
-                <i class="fas fa-print"></i> Print
-            </button>
-            <button onclick="savePDF()" class="btn-success">
-                <i class="fas fa-download"></i> Save PDF
-            </button>
+            <div class="btn-group" role="group" style="display: inline-block; position: relative;">
+                <button type="button" 
+                        class="btn-primary dropdown-toggle" 
+                        onclick="toggleDocumentDropdown()"
+                        style="padding: 8px 16px; border-radius: 4px;">
+                    <i class="fas fa-file-alt"></i> Document Actions
+                    <i class="fas fa-caret-down" style="margin-left: 5px;"></i>
+                </button>
+                
+                <div id="document-dropdown-menu" 
+                    class="dropdown-menu"
+                    style="display: none; position: absolute; right: 0; top: 100%; margin-top: 2px; 
+                            min-width: 200px; background: white; border: 1px solid #ddd; 
+                            border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 1001;">
+                    
+                    <!-- Print option -->
+                    <a class="dropdown-item" 
+                    href="javascript:void(0)"
+                    onclick="printDocument()"
+                    style="display: block; padding: 10px 15px; color: #333; text-decoration: none; hover: background-color: #f8f9fa;">
+                        <i class="fas fa-print" style="width: 20px; color: #6c757d;"></i>
+                        Print Document
+                    </a>
+                    
+                    <!-- PDF option -->
+                    {% if 'pdf' in doc_config.get('allowed_formats', ['pdf']) %}
+                    <a class="dropdown-item" 
+                    href="javascript:void(0)"
+                    onclick="savePDF()"
+                    style="display: block; padding: 10px 15px; color: #333; text-decoration: none;">
+                        <i class="fas fa-file-pdf" style="width: 20px; color: #dc3545;"></i>
+                        Download PDF
+                    </a>
+                    {% endif %}
+                    
+                    <!-- Excel option -->
+                    {% if 'excel' in doc_config.get('allowed_formats', []) %}
+                    <a class="dropdown-item" 
+                    href="javascript:void(0)"
+                    onclick="exportExcel()"
+                    style="display: block; padding: 10px 15px; color: #333; text-decoration: none;">
+                        <i class="fas fa-file-excel" style="width: 20px; color: #28a745;"></i>
+                        Export to Excel
+                    </a>
+                    {% endif %}
+                    
+                    <!-- Word option -->
+                    {% if 'word' in doc_config.get('allowed_formats', []) %}
+                    <a class="dropdown-item" 
+                    href="javascript:void(0)"
+                    onclick="exportWord()"
+                    style="display: block; padding: 10px 15px; color: #333; text-decoration: none;">
+                        <i class="fas fa-file-word" style="width: 20px; color: #007bff;"></i>
+                        Export to Word
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
         </div>
 
         <!-- Update the existing script section -->
@@ -130,10 +182,73 @@
             }
         };
 
+        // NEW: Toggle dropdown menu
+        function toggleDocumentDropdown() {
+            const dropdown = document.getElementById('document-dropdown-menu');
+            if (dropdown) {
+                dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+
+        // NEW: Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('document-dropdown-menu');
+            const button = event.target.closest('.dropdown-toggle');
+            
+            if (!button && dropdown && dropdown.style.display === 'block') {
+                dropdown.style.display = 'none';
+            }
+        });
+
+        // NEW: Print document function
+        function printDocument() {
+            console.log('Print document clicked');
+            // Close dropdown
+            document.getElementById('document-dropdown-menu').style.display = 'none';
+            
+            // Trigger print
+            window.print();
+        }
+
+        // NEW: Export to Excel
+        function exportExcel() {
+            console.log('Export Excel clicked');
+            // Close dropdown
+            document.getElementById('document-dropdown-menu').style.display = 'none';
+            
+            // Get current URL and add format parameter
+            const currentUrl = window.location.href;
+            const baseUrl = currentUrl.split('?')[0];
+            const newUrl = baseUrl + '?format=excel';
+            
+            // Open in new tab to download
+            window.open(newUrl, '_blank');
+        }
+
+        // NEW: Export to Word
+        function exportWord() {
+            console.log('Export Word clicked');
+            // Close dropdown
+            document.getElementById('document-dropdown-menu').style.display = 'none';
+            
+            // Get current URL and add format parameter
+            const currentUrl = window.location.href;
+            const baseUrl = currentUrl.split('?')[0];
+            const newUrl = baseUrl + '?format=word';
+            
+            // Open in new tab to download
+            window.open(newUrl, '_blank');
+        }
+
         // Save PDF function
         window.savePDF = function() {
             console.log('Save PDF clicked');
             
+            // Close dropdown if open
+            const dropdown = document.getElementById('document-dropdown-menu');
+            if (dropdown) {
+                dropdown.style.display = 'none';
+            }
             // Add download=true parameter to current URL
             const currentUrl = window.location.href;
             const separator = currentUrl.includes('?') ? '&' : '?';
@@ -144,7 +259,52 @@
             // Use window.location to trigger download
             window.location.href = pdfUrl;
         };
+
+
+
         </script>
+
+        <!-- ============================================================================
+            CSS additions for dropdown styling
+            ============================================================================ -->
+
+        <style>
+        /* Dropdown item hover effect */
+        .dropdown-item:hover {
+            background-color: #f8f9fa !important;
+        }
+
+        /* Ensure dropdown is above other elements */
+        .btn-group {
+            position: relative;
+            display: inline-block;
+        }
+
+        /* Button group styling */
+        .dropdown-toggle::after {
+            content: none; /* Remove default Bootstrap caret */
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .screen-only {
+                top: 5px !important;
+                right: 5px !important;
+            }
+            
+            .dropdown-menu {
+                right: auto !important;
+                left: 0 !important;
+            }
+        }
+
+        /* Print styles - hide toolbar */
+        @media print {
+            .screen-only {
+                display: none !important;
+            }
+        }
+        </style>
 
         <!-- Document Title -->
         <div class="document-title">{{ doc_config.header_text if doc_config.header_text else doc_config.title }}</div>

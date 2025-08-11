@@ -6,6 +6,7 @@ from flask import session, render_template, request, make_response
 from flask_login import current_user
 from datetime import datetime
 from typing import Dict, Any, Optional, List
+import os
 import logging
 
 from app.config.entity_configurations import get_entity_config
@@ -191,87 +192,7 @@ class UniversalDocumentService:
         context['entity_name'] = entity_name
         
         return context
-    #  earlier method which was working
-    # def prepare_document_context(self, entity_config, doc_config, doc_data: Dict) -> Dict:
-    #     """
-    #     Prepare context for document template
-    #     Uses existing data, adds organization context
-    #     """
-    #     from app.utils.context_helpers import get_current_hospital, get_current_branch
-        
-    #     # Get organization details
-    #     try:
-    #         hospital = get_current_hospital()  # Returns a dict
-    #         branch = get_current_branch()      # Returns a dict
-            
-    #         organization_data = {
-    #             'organization_name': hospital.get('hospital_name', 'SkinSpire Clinic') if hospital else 'SkinSpire Clinic',
-    #             'organization_address': branch.get('branch_name', '') if branch else '',
-    #             'organization_gst': '',  # Will need to be fetched separately if needed
-    #             'organization_logo': None,  # Will need to be fetched separately if needed
-    #             'branch_name': branch.get('branch_name', '') if branch else ''
-    #         }
-    #     except Exception as e:
-    #         self.logger.warning(f"Could not get organization details: {e}")
-    #         organization_data = {
-    #             'organization_name': 'SkinSpire Clinic',
-    #             'organization_address': '',
-    #             'organization_gst': '',
-    #             'organization_logo': None,
-    #             'branch_name': ''
-    #         }
-        
-    #     # FIX: Better logic for extracting actual data
-    #     actual_data = doc_data
-    #     if isinstance(doc_data, dict):
-    #         # Check if this looks like wrapped data (has only wrapper keys)
-    #         wrapper_keys = {'item', 'payment', 'entity_dict', 'data'}
-    #         doc_keys = set(doc_data.keys())
-            
-    #         # If doc_data has only one key and it's a wrapper key
-    #         if len(doc_keys) == 1 and doc_keys.issubset(wrapper_keys):
-    #             wrapper_key = list(doc_keys)[0]
-    #             if isinstance(doc_data[wrapper_key], dict):
-    #                 actual_data = doc_data[wrapper_key]
-    #                 self.logger.info(f"Unwrapped data from '{wrapper_key}' key")
-    #         # If doc_data has entity_dict as one of the keys (mixed structure)
-    #         elif 'entity_dict' in doc_data and isinstance(doc_data['entity_dict'], dict):
-    #             actual_data = doc_data['entity_dict']
-    #             self.logger.info("Extracted entity_dict from mixed structure")
-    #         # If doc_data contains actual payment fields, use it as-is
-    #         elif any(field in doc_data for field in ['reference_no', 'amount', 'payment_date', 'supplier_name']):
-    #             actual_data = doc_data
-    #             self.logger.info("Using doc_data as-is - contains payment fields")
-    #         else:
-    #             # Last resort - look for the entity name key
-    #             entity_key = entity_config.name.lower() if hasattr(entity_config, 'name') else None
-    #             if entity_key and entity_key in doc_data:
-    #                 actual_data = doc_data[entity_key]
-    #                 self.logger.info(f"Extracted data from entity key '{entity_key}'")
-        
-    #     # Debug logging to verify what we're sending to template
-    #     if isinstance(actual_data, dict):
-    #         self.logger.info(f"Sending {len(actual_data)} fields to template")
-    #         # Log some key fields to verify
-    #         for field in ['reference_no', 'amount', 'supplier_name', 'payment_date']:
-    #             if field in actual_data:
-    #                 self.logger.info(f"  ✓ {field}: {actual_data[field]}")
-    #             else:
-    #                 self.logger.info(f"  ✗ {field}: NOT FOUND")
-    #     else:
-    #         self.logger.warning(f"actual_data is not a dict: {type(actual_data)}")
-
-    #     # Build complete context
-    #     context = {
-    #         'doc_config': doc_config,
-    #         'entity_config': entity_config,
-    #         'data': actual_data,
-    #         'current_user': current_user,
-    #         'current_datetime': datetime.now(),
-    #         **organization_data
-    #     }
-        
-    #     return context
+    
 
     def _convert_amount_to_words(self, amount) -> str:
         """
@@ -379,6 +300,42 @@ class UniversalDocumentService:
                         'label': f'Download {title} PDF',
                         'icon': 'fas fa-file-pdf',
                         'url': f'/universal/{entity_type}/document/{entity_id}/{doc_type}?format=pdf',
+                        'class': 'btn-outline',
+                        'target': '_blank'
+                    })
+
+                # Excel button if Excel format is allowed
+                excel_allowed = False
+                for fmt in allowed_formats:
+                    fmt_str = fmt.lower() if isinstance(fmt, str) else str(fmt).lower()
+                    if 'excel' in fmt_str:
+                        excel_allowed = True
+                        break
+                
+                if excel_allowed:
+                    buttons.append({
+                        'id': f'excel_{doc_type}',
+                        'label': f'Export {title} Excel',
+                        'icon': 'fas fa-file-excel',
+                        'url': f'/universal/{entity_type}/document/{entity_id}/{doc_type}?format=excel',
+                        'class': 'btn-outline',
+                        'target': '_blank'
+                    })
+                
+                # Word button if Word format is allowed
+                word_allowed = False
+                for fmt in allowed_formats:
+                    fmt_str = fmt.lower() if isinstance(fmt, str) else str(fmt).lower()
+                    if 'word' in fmt_str:
+                        word_allowed = True
+                        break
+                
+                if word_allowed:
+                    buttons.append({
+                        'id': f'word_{doc_type}',
+                        'label': f'Export {title} Word',
+                        'icon': 'fas fa-file-word',
+                        'url': f'/universal/{entity_type}/document/{entity_id}/{doc_type}?format=word',
                         'class': 'btn-outline',
                         'target': '_blank'
                     })
@@ -1030,7 +987,672 @@ class UniversalDocumentService:
             self.logger.error(traceback.format_exc())
             return self.render_document_html(context)
         
-        
+    # ========== NEW METHOD 1: Excel Renderer ==========
+    def render_document_excel(self, context: Dict, doc_config: Dict) -> Any:
+        """
+        NEW METHOD - Render document as Excel
+        Uses same context structure as existing render_document_pdf
+        """
+        try:
+            from openpyxl import Workbook
+            from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+            from openpyxl.utils import get_column_letter
+            from io import BytesIO
+            
+            # Extract data using SAME structure as render_document_pdf
+            data = context.get('data', {})
+            entity_config = context.get('entity_config')
+            entity_type = context.get('entity_type')
+            tabs = context.get('tabs', {})
+            sections = context.get('sections', {})
+            item = context.get('item', data)  # Same fallback as PDF
+            item_id = context.get('item_id')
+            hospital = context.get('hospital', {})
+            branch = context.get('branch', {})
+            
+            # Create workbook
+            wb = Workbook()
+            ws = wb.active
+            ws.title = doc_config.get('title', 'Document')[:31]  # Excel sheet name limit
+            
+            current_row = 1
+            
+            # Define styles (similar to PDF styles)
+            header_font = Font(size=16, bold=True)
+            title_font = Font(size=14, bold=True)
+            section_font = Font(size=12, bold=True)
+            label_font = Font(bold=True)
+            header_fill = PatternFill(start_color="E0E0E0", end_color="E0E0E0", fill_type="solid")
+            
+            # HEADER SECTION (matching PDF structure)
+            if doc_config.get('show_company_info'):
+                # Company name
+                ws.merge_cells(f'A{current_row}:F{current_row}')
+                cell = ws[f'A{current_row}']
+                cell.value = hospital.get('name', 'SkinSpire Clinic')
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal='center')
+                current_row += 1
+                
+                # Branch name if exists
+                if branch and branch.get('name'):
+                    ws.merge_cells(f'A{current_row}:F{current_row}')
+                    cell = ws[f'A{current_row}']
+                    cell.value = branch['name']
+                    cell.alignment = Alignment(horizontal='center')
+                    current_row += 1
+                
+                current_row += 1  # Empty row
+            
+            # LOGO HANDLING for Excel (Add after the header section, before Document title)
+            if doc_config.get('show_logo') and hospital.get('hospital_id'):
+                try:
+                    from openpyxl.drawing.image import Image as ExcelImage
+                    
+                    # Build logo search patterns with ABSOLUTE paths
+                    logo_patterns = []
+                    hospital_id_str = str(hospital['hospital_id'])
+
+                    if hospital.get('logo_path'):
+                        logo_path_str = str(hospital['logo_path'])
+                        
+                        # If it's an icon, try to find full-size version first
+                        if 'icon' in logo_path_str.lower():
+                            # Extract base filename (remove 'icon_' prefix)
+                            base_name = logo_path_str.replace('icon_', '')
+                            
+                            # Try full-size version first
+                            logo_patterns.append(os.path.join(os.getcwd(), 'app', 'static', 'uploads', 'hospital_logos', 
+                                                            hospital_id_str, base_name))
+                            # Also try with 'logo_' prefix
+                            logo_patterns.append(os.path.join(os.getcwd(), 'app', 'static', 'uploads', 'hospital_logos', 
+                                                            hospital_id_str, 'logo_' + base_name))
+                        else:
+                            # Non-icon version, use as-is
+                            logo_patterns.append(os.path.join(os.getcwd(), 'app', 'static', 'uploads', 'hospital_logos', 
+                                                            hospital_id_str, logo_path_str))
+
+                    # Add standard patterns with absolute paths
+                    for filename in ['logo_large.png', 'logo_large.jpg', 'logo.png', 'logo.jpg']:
+                        logo_patterns.append(os.path.join(os.getcwd(), 'app', 'static', 'uploads', 'hospital_logos', 
+                                                        hospital_id_str, filename))
+
+                    # Finally add the icon itself as fallback (if it exists)
+                    if hospital.get('logo_path') and 'icon' in str(hospital.get('logo_path')).lower():
+                        logo_patterns.append(os.path.join(os.getcwd(), 'app', 'static', 'uploads', 'hospital_logos', 
+                                                        hospital_id_str, str(hospital['logo_path'])))
+                    
+                    logo_added = False
+                    for logo_path in logo_patterns:
+                        if logo_path and os.path.exists(logo_path):
+                            self.logger.info(f"Logo file exists at: {logo_path}, size: {os.path.getsize(logo_path)} bytes")
+                            try:
+                                self.logger.debug(f"Trying to load logo from: {logo_path}")
+                                img = ExcelImage(logo_path)
+                                # Resize logo to fit
+                                img.height = 80
+                                img.width = 80
+                                # Place logo in cell G1 to avoid merge conflicts
+                                ws.add_image(img, 'G1')
+                                logo_added = True
+                                self.logger.info(f"Successfully added logo to Excel from: {logo_path}")
+                                break
+                            except Exception as e:
+                                self.logger.debug(f"Failed to load logo from {logo_path}: {e}")
+                                continue
+                    
+                    if not logo_added:
+                        self.logger.debug("No logo found for Excel document")
+                        
+                except ImportError:
+                    self.logger.warning("openpyxl Image support not available - install Pillow: pip install Pillow")
+                except Exception as e:
+                    self.logger.error(f"Error adding logo to Excel: {e}")
+
+            current_row += 1  # Add extra spacing after logo area    
+
+            # Document title
+            ws.merge_cells(f'A{current_row}:F{current_row}')
+            cell = ws[f'A{current_row}']
+            cell.value = doc_config.get('title', 'Document')
+            cell.font = title_font
+            cell.alignment = Alignment(horizontal='center')
+            current_row += 2
+            
+            # Metadata
+            ws[f'A{current_row}'] = 'Generated Date:'
+            ws[f'A{current_row}'].font = label_font
+            ws[f'B{current_row}'] = datetime.now().strftime('%d/%m/%Y %H:%M')
+            current_row += 1
+            
+            ws[f'A{current_row}'] = 'Generated By:'
+            ws[f'A{current_row}'].font = label_font
+            ws[f'B{current_row}'] = current_user.full_name if current_user else 'System'
+            current_row += 2
+            
+            # BODY SECTIONS - Process field_sections (same as PDF)
+            assembled_data = context.get('assembled_data', {})
+            field_sections = assembled_data.get('field_sections', [])
+            visible_tabs = doc_config.get('visible_tabs', [])
+            hidden_sections = doc_config.get('hidden_sections', [])
+
+            self.logger.info(f"Excel Gen - Processing {len(field_sections)} sections")
+
+            for section_data in field_sections:
+                if not isinstance(section_data, dict):
+                    continue
+                
+                # Each section_data is a tab with sections inside
+                tab_key = section_data.get('key', '')
+                tab_label = section_data.get('label', '')
+                sections = section_data.get('sections', [])
+                
+                # Check if this tab should be visible
+                if visible_tabs and tab_key not in visible_tabs:
+                    self.logger.debug(f"Skipping tab {tab_key} - not in visible_tabs")
+                    continue
+                
+                # Tab title
+                ws[f'A{current_row}'] = tab_label
+                ws[f'A{current_row}'].font = section_font
+                ws[f'A{current_row}'].fill = header_fill
+                ws.merge_cells(f'A{current_row}:F{current_row}')
+                current_row += 1
+                
+                # Process sections within tab
+                for section in sections:
+                    if not isinstance(section, dict):
+                        continue
+                    
+                    section_key = section.get('key', '')
+                    section_title = section.get('title', 'Information')
+                    fields = section.get('fields', [])
+                    
+                    # Skip hidden sections
+                    if hidden_sections and section_key in hidden_sections:
+                        self.logger.debug(f"Skipping section {section_key} - in hidden_sections")
+                        continue
+                    
+                    # Skip empty sections
+                    if not fields:
+                        continue
+                    
+                    # Section title
+                    if section_title:
+                        ws[f'A{current_row}'] = section_title
+                        ws[f'A{current_row}'].font = Font(bold=True, size=11)
+                        current_row += 1
+                    
+                    # Section fields
+                    for field in fields:
+                        if not isinstance(field, dict):
+                            continue
+                        
+                        field_label = field.get('label', '')
+                        field_value = field.get('value', '')
+                        field_type = field.get('type', 'text')
+                        
+                        # Skip empty fields
+                        if not field_label:
+                            continue
+                        
+                        # Label
+                        ws[f'A{current_row}'] = str(field_label)
+                        ws[f'A{current_row}'].font = label_font
+                        
+                        # Value formatting
+                        if field_type in ['currency', 'amount'] and field_value:
+                            try:
+                                # Try to convert to number for Excel formatting
+                                if isinstance(field_value, str) and '₹' in field_value:
+                                    field_value = field_value.replace('₹', '').replace(',', '').strip()
+                                ws[f'B{current_row}'] = float(field_value) if field_value else 0
+                                ws[f'B{current_row}'].number_format = '₹#,##0.00'
+                            except:
+                                ws[f'B{current_row}'] = str(field_value)
+                        elif field_type == 'date' and field_value:
+                            ws[f'B{current_row}'] = str(field_value)
+                            ws[f'B{current_row}'].number_format = 'DD/MM/YYYY'
+                        else:
+                            ws[f'B{current_row}'] = str(field_value) if field_value else ''
+                        
+                        current_row += 1
+                    
+                    current_row += 1  # Empty row between sections
+            
+            # LINE ITEMS (if configured, same as PDF)
+            if doc_config.get('show_line_items'):
+                current_row += 1
+                
+                # Check for line items in data (same locations as PDF checks)
+                line_items = []
+                if 'linked_invoices' in item:
+                    line_items = item['linked_invoices']
+                elif 'line_items' in item:
+                    line_items = item['line_items']
+                elif 'items' in item:
+                    line_items = item['items']
+                
+                if line_items and len(line_items) > 0:
+                    # Title
+                    ws[f'A{current_row}'] = 'Details'
+                    ws[f'A{current_row}'].font = section_font
+                    ws[f'A{current_row}'].fill = header_fill
+                    ws.merge_cells(f'A{current_row}:F{current_row}')
+                    current_row += 1
+                    
+                    # Get columns from config
+                    columns = doc_config.get('line_item_columns', [])
+                    if columns:
+                        # Headers
+                        for col_idx, col_name in enumerate(columns, 1):
+                            cell = ws.cell(row=current_row, column=col_idx)
+                            cell.value = col_name.replace('_', ' ').title()
+                            cell.font = label_font
+                            cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+                            cell.border = Border(
+                                bottom=Side(style='thin'),
+                                top=Side(style='thin'),
+                                left=Side(style='thin'),
+                                right=Side(style='thin')
+                            )
+                        current_row += 1
+                        
+                        # Data rows
+                        for item_row in line_items:
+                            for col_idx, col_name in enumerate(columns, 1):
+                                cell = ws.cell(row=current_row, column=col_idx)
+                                cell.value = str(item_row.get(col_name, ''))
+                                cell.border = Border(
+                                    bottom=Side(style='thin'),
+                                    left=Side(style='thin'),
+                                    right=Side(style='thin')
+                                )
+                            current_row += 1
+            
+            # FOOTER (if configured)
+            if doc_config.get('show_footer'):
+                current_row += 2
+                
+                # Footer text
+                if doc_config.get('footer_text'):
+                    ws.merge_cells(f'A{current_row}:F{current_row}')
+                    ws[f'A{current_row}'] = doc_config['footer_text']
+                    ws[f'A{current_row}'].alignment = Alignment(horizontal='center')
+                    current_row += 1
+                
+                # Print info
+                if doc_config.get('show_print_info'):
+                    ws.merge_cells(f'A{current_row}:F{current_row}')
+                    ws[f'A{current_row}'] = f"Generated on {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+                    ws[f'A{current_row}'].alignment = Alignment(horizontal='center')
+                    ws[f'A{current_row}'].font = Font(size=9, italic=True)
+            
+            # Auto-adjust column widths
+            for column in ws.columns:
+                max_length = 0
+                column_letter = get_column_letter(column[0].column)
+                
+                for cell in column:
+                    try:
+                        if cell.value:
+                            max_length = max(max_length, len(str(cell.value)))
+                    except:
+                        pass
+                
+                adjusted_width = min(max_length + 2, 50)
+                ws.column_dimensions[column_letter].width = adjusted_width
+            
+            # Save to buffer
+            excel_buffer = BytesIO()
+            wb.save(excel_buffer)
+            excel_buffer.seek(0)
+            
+            # Create response (same pattern as PDF)
+            response = make_response(excel_buffer.read())
+            response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            
+            # Generate filename (same pattern as PDF)
+            title_field = 'reference_no'
+            if entity_config and hasattr(entity_config, 'title_field'):
+                title_field = entity_config.title_field
+            
+            doc_ref = item.get(title_field, 'document')
+            filename = f"{doc_config.get('title', 'Document')}_{doc_ref}_{datetime.now().strftime('%Y%m%d')}.xlsx"
+            
+            response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+            
+            return response
+            
+        except Exception as e:
+            self.logger.error(f"Excel generation failed: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+            # Fallback to HTML (same as PDF does)
+            return self.render_document_html(context)
+    
+    # ========== NEW METHOD 2: Word Renderer ==========
+    def render_document_word(self, context: Dict, doc_config: Dict) -> Any:
+        """
+        NEW METHOD - Render document as Word
+        Uses same context structure as existing render_document_pdf
+        """
+        try:
+            from docx import Document
+            from docx.shared import Inches, Pt
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            from docx.enum.table import WD_TABLE_ALIGNMENT
+            from io import BytesIO
+            
+            # Extract data using SAME structure as render_document_pdf
+            data = context.get('data', {})
+            entity_config = context.get('entity_config')
+            entity_type = context.get('entity_type')
+            tabs = context.get('tabs', {})
+            sections = context.get('sections', {})
+            item = context.get('item', data)
+            item_id = context.get('item_id')
+            hospital = context.get('hospital', {})
+            branch = context.get('branch', {})
+            
+            # Create document
+            doc = Document()
+            
+            # Set document properties
+            doc.core_properties.title = doc_config.get('title', 'Document')
+            doc.core_properties.author = current_user.full_name if current_user else 'System'
+            
+            # HEADER SECTION with LOGO (matching PDF structure)
+            if doc_config.get('show_company_info'):
+                # Create a table for header with logo
+                header_table = doc.add_table(rows=1, cols=2)
+                header_table.autofit = False
+                header_table.allow_autofit = False
+                
+                # Left cell - Company details
+                left_cell = header_table.rows[0].cells[0]
+                left_cell.width = Inches(4.5)
+                
+                # Company name
+                company_para = left_cell.add_paragraph()
+                company_run = company_para.add_run(hospital.get('name', 'SkinSpire Clinic'))
+                company_run.font.size = Pt(16)
+                company_run.font.bold = True
+                
+                # Branch name if exists
+                if branch and branch.get('name'):
+                    branch_para = left_cell.add_paragraph()
+                    branch_run = branch_para.add_run(branch['name'])
+                    branch_run.font.size = Pt(12)
+                
+                # Address and contact info (optional)
+                if hospital.get('address'):
+                    addr_para = left_cell.add_paragraph()
+                    addr_run = addr_para.add_run(hospital['address'])
+                    addr_run.font.size = Pt(10)
+                
+                # Right cell - Logo
+                right_cell = header_table.rows[0].cells[1]
+                right_cell.width = Inches(2)
+                
+                # LOGO HANDLING for Word
+                if doc_config.get('show_logo') and hospital.get('hospital_id'):
+                    # Build logo search patterns with ABSOLUTE paths
+                    logo_patterns = []
+                    hospital_id_str = str(hospital['hospital_id'])
+
+                    if hospital.get('logo_path'):
+                        logo_path_str = str(hospital['logo_path'])
+                        
+                        # If it's an icon, try to find full-size version first
+                        if 'icon' in logo_path_str.lower():
+                            # Extract base filename (remove 'icon_' prefix)
+                            base_name = logo_path_str.replace('icon_', '')
+                            
+                            # Try full-size version first
+                            logo_patterns.append(os.path.join(os.getcwd(), 'app', 'static', 'uploads', 'hospital_logos', 
+                                                            hospital_id_str, base_name))
+                            # Also try with 'logo_' prefix
+                            logo_patterns.append(os.path.join(os.getcwd(), 'app', 'static', 'uploads', 'hospital_logos', 
+                                                            hospital_id_str, 'logo_' + base_name))
+                        else:
+                            # Non-icon version, use as-is
+                            logo_patterns.append(os.path.join(os.getcwd(), 'app', 'static', 'uploads', 'hospital_logos', 
+                                                            hospital_id_str, logo_path_str))
+
+                    # Add standard patterns with absolute paths
+                    for filename in ['logo_large.png', 'logo_large.jpg', 'logo.png', 'logo.jpg']:
+                        logo_patterns.append(os.path.join(os.getcwd(), 'app', 'static', 'uploads', 'hospital_logos', 
+                                                        hospital_id_str, filename))
+
+                    # Finally add the icon itself as fallback (if it exists)
+                    if hospital.get('logo_path') and 'icon' in str(hospital.get('logo_path')).lower():
+                        logo_patterns.append(os.path.join(os.getcwd(), 'app', 'static', 'uploads', 'hospital_logos', 
+                                                        hospital_id_str, str(hospital['logo_path'])))
+                    
+                    logo_added = False
+                    for logo_path in logo_patterns:
+                        if logo_path and os.path.exists(logo_path):
+                            self.logger.info(f"Logo file exists at: {logo_path}, size: {os.path.getsize(logo_path)} bytes")
+                            try:
+                                self.logger.debug(f"Trying to load logo from: {logo_path}")
+                                logo_para = right_cell.paragraphs[0]
+                                logo_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                                logo_run = logo_para.add_run()
+                                logo_run.add_picture(logo_path, width=Inches(1.2))
+                                logo_added = True
+                                self.logger.info(f"Successfully added logo to Word from: {logo_path}")
+                                break
+                            except Exception as e:
+                                self.logger.debug(f"Failed to load logo from {logo_path}: {e}")
+                                continue
+                    
+                    if not logo_added:
+                        self.logger.debug("No logo found for Word document")
+                
+                # Remove table borders
+                for row in header_table.rows:
+                    for cell in row.cells:
+                        for paragraph in cell.paragraphs:
+                            paragraph.paragraph_format.space_after = Pt(0)
+                
+                doc.add_paragraph()  # Empty line after header
+            
+            # Document title
+            title = doc.add_heading(doc_config.get('title', 'Document'), 1)
+            title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            
+            # Metadata
+            metadata = doc.add_paragraph()
+            metadata.add_run('Generated: ').bold = True
+            metadata.add_run(datetime.now().strftime('%d/%m/%Y %H:%M'))
+            metadata.add_run('  |  ')
+            metadata.add_run('By: ').bold = True
+            doc.core_properties.author = current_user.full_name if current_user else 'System'
+            metadata.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            
+            doc.add_paragraph()  # Empty line
+            
+            # BODY SECTIONS - Process field_sections (same as PDF)
+            assembled_data = context.get('assembled_data', {})
+            field_sections = assembled_data.get('field_sections', [])
+            visible_tabs = doc_config.get('visible_tabs', [])
+            hidden_sections = doc_config.get('hidden_sections', [])
+
+            self.logger.info(f"Word Gen - Processing {len(field_sections)} sections")
+
+            for section_data in field_sections:
+                if not isinstance(section_data, dict):
+                    continue
+                
+                # Each section_data is a tab with sections inside
+                tab_key = section_data.get('key', '')
+                tab_label = section_data.get('label', '')
+                sections = section_data.get('sections', [])
+                
+                # Check if this tab should be visible
+                if visible_tabs and tab_key not in visible_tabs:
+                    self.logger.debug(f"Skipping tab {tab_key} - not in visible_tabs")
+                    continue
+                
+                # Tab as heading
+                if tab_label:
+                    doc.add_heading(tab_label, 2)
+                
+                # Process sections within tab
+                for section in sections:
+                    if not isinstance(section, dict):
+                        continue
+                    
+                    section_key = section.get('key', '')
+                    section_title = section.get('title', 'Information')
+                    fields = section.get('fields', [])
+                    
+                    # Skip hidden sections
+                    if hidden_sections and section_key in hidden_sections:
+                        self.logger.debug(f"Skipping section {section_key} - in hidden_sections")
+                        continue
+                    
+                    # Skip empty sections
+                    if not fields:
+                        continue
+                    
+                    # Section title
+                    if section_title:
+                        doc.add_heading(section_title, 3)
+                    
+                    # Create table for fields
+                    if fields:
+                        table = doc.add_table(rows=0, cols=2)
+                        table.style = 'Light Grid Accent 1'
+                        table.alignment = WD_TABLE_ALIGNMENT.CENTER
+                        
+                        for field in fields:
+                            if not isinstance(field, dict):
+                                continue
+                                
+                            field_label = field.get('label', '')
+                            field_value = field.get('value', '')
+                            
+                            # Skip empty fields
+                            if not field_label:
+                                continue
+                            
+                            # Add row to table
+                            row = table.add_row()
+                            row.cells[0].text = str(field_label)
+                            
+                            # Format value
+                            if field_value is None:
+                                value_text = '-'
+                            elif isinstance(field_value, bool):
+                                value_text = 'Yes' if field_value else 'No'
+                            elif isinstance(field_value, (list, dict)):
+                                value_text = str(field_value)
+                            else:
+                                value_text = str(field_value)
+                            
+                            row.cells[1].text = value_text
+                        
+                        # Add spacing after table
+                        doc.add_paragraph()
+            
+            # LINE ITEMS (if configured, same as PDF)
+            if doc_config.get('show_line_items'):
+                # Check for line items in data
+                line_items = []
+                if 'linked_invoices' in item:
+                    line_items = item['linked_invoices']
+                elif 'line_items' in item:
+                    line_items = item['line_items']
+                elif 'items' in item:
+                    line_items = item['items']
+                
+                if line_items and len(line_items) > 0:
+                    doc.add_heading('Details', 2)
+                    
+                    columns = doc_config.get('line_item_columns', [])
+                    if columns:
+                        table = doc.add_table(rows=1, cols=len(columns))
+                        table.style = 'Table Grid'
+                        table.alignment = WD_TABLE_ALIGNMENT.CENTER
+                        
+                        # Headers
+                        for idx, col_name in enumerate(columns):
+                            cell = table.rows[0].cells[idx]
+                            cell.text = col_name.replace('_', ' ').title()
+                            # Make header bold
+                            for paragraph in cell.paragraphs:
+                                for run in paragraph.runs:
+                                    run.font.bold = True
+                        
+                        # Data rows
+                        for item_row in line_items:
+                            row = table.add_row()
+                            for idx, col_name in enumerate(columns):
+                                row.cells[idx].text = str(item_row.get(col_name, ''))
+                        
+                        doc.add_paragraph()
+            
+            # FOOTER (if configured)
+            if doc_config.get('show_footer'):
+                if doc_config.get('footer_text'):
+                    doc.add_paragraph()  # Space before footer
+                    footer = doc.add_paragraph(doc_config['footer_text'])
+                    footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                
+                # Signatures if configured
+                signature_fields = doc_config.get('signature_fields', [])
+                if signature_fields:
+                    doc.add_paragraph()
+                    doc.add_paragraph()
+                    
+                    # Create signature table
+                    sig_table = doc.add_table(rows=2, cols=len(signature_fields))
+                    
+                    for idx, sig in enumerate(signature_fields):
+                        # Signature line
+                        sig_table.rows[0].cells[idx].text = '_' * 30
+                        # Signature label
+                        sig_table.rows[1].cells[idx].text = sig.get('label', '')
+                        
+                        # Center align
+                        for row in sig_table.rows:
+                            row.cells[idx].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            
+            # Save to buffer
+            word_buffer = BytesIO()
+            doc.save(word_buffer)
+            word_buffer.seek(0)
+            
+            # Create response (same pattern as PDF)
+            response = make_response(word_buffer.read())
+            response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            
+            # Generate filename (same pattern as PDF)
+            title_field = 'reference_no'
+            if entity_config and hasattr(entity_config, 'title_field'):
+                title_field = entity_config.title_field
+            
+            doc_ref = item.get(title_field, 'document')
+            filename = f"{doc_config.get('title', 'Document')}_{doc_ref}_{datetime.now().strftime('%Y%m%d')}.docx"
+            
+            response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+            
+            return response
+            
+        except ImportError:
+            self.logger.error("python-docx not installed. Install with: pip install python-docx")
+            # Fallback to HTML
+            return self.render_document_html(context)
+        except Exception as e:
+            self.logger.error(f"Word generation failed: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+            # Fallback to HTML (same as PDF does)
+            return self.render_document_html(context)
+    
+
 # Create singleton instance
 document_service = UniversalDocumentService()
 
