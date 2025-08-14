@@ -27,26 +27,24 @@
                                 {% if field['custom_renderer']['context_function'] and service %}
                                     {% set func_name = field['custom_renderer']['context_function'] %}
                                     
-                                    <!-- ✅ FIXED: Direct method calls based on function name -->
+                                    <!-- ✅ UNIVERSAL: All methods use same parameter pattern -->
                                     {% if func_name == 'get_po_items_for_payment' and hasattr(service, 'get_po_items_for_payment') %}
-                                        {% set data = service.get_po_items_for_payment(payment_id=item_id, hospital_id=current_hospital_id) %}
+                                        {% set data = service.get_po_items_for_payment(item_id=item_id, item=item, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
                                         
                                     {% elif func_name == 'get_invoice_items_for_payment' and hasattr(service, 'get_invoice_items_for_payment') %}
-                                        {% set data = service.get_invoice_items_for_payment(payment_id=item_id, hospital_id=current_hospital_id) %}
+                                        {% set data = service.get_invoice_items_for_payment(item_id=item_id, item=item, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
                                         
                                     {% elif func_name == 'get_supplier_payment_history_6months' and hasattr(service, 'get_supplier_payment_history_6months') %}
-                                        <!-- Note: This function needs supplier_id, not payment_id -->
-                                        {% if item and item.get('supplier_id') %}
-                                            {% set data = service.get_supplier_payment_history_6months(item['supplier_id'], hospital_id=current_hospital_id, branch_id=current_branch_id) %}
-                                        {% else %}
-                                            {% set data = {'error': 'Supplier ID not found', 'has_error': true} %}
-                                        {% endif %}
+                                        {% set data = service.get_supplier_payment_history_6months(item_id=item_id, item=item, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
                                         
                                     {% elif func_name == 'get_payment_workflow_timeline' and hasattr(service, 'get_payment_workflow_timeline') %}
-                                        {% set data = service.get_payment_workflow_timeline(payment_id=item_id, hospital_id=current_hospital_id) %}
+                                        {% set data = service.get_payment_workflow_timeline(item_id=item_id, item=item, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
                                         
                                     {% elif func_name == 'get_supplier_payment_summary' and hasattr(service, 'get_supplier_payment_summary') %}
-                                        {% set data = service.get_supplier_payment_summary(item_id, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
+                                        {% set data = service.get_supplier_payment_summary(item_id=item_id, item=item, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
+                                        
+                                    {% elif func_name == 'get_supplier_invoice_history' and hasattr(service, 'get_supplier_invoice_history') %}
+                                        {% set data = service.get_supplier_invoice_history(item_id=item_id, item=item, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
                                         
                                     {% else %}
                                         <!-- Unknown function - show error -->

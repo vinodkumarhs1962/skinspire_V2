@@ -675,11 +675,13 @@ class SupplierPaymentService(UniversalEntityService):
         
         return query
     
-    def get_po_items_for_payment(self, payment_id: str, **kwargs) -> Dict:
+    def get_po_items_for_payment(self, item_id: str = None, item: dict = None, **kwargs) -> Dict:
         """
         Get purchase order items related to this payment
         FIXED: Removed incorrect iteration over single invoice
         """
+        # Extract payment_id from universal engine pattern
+        payment_id = item_id
         try:
             with get_db_session() as session:
                 payment = session.query(SupplierPayment).filter(
@@ -739,11 +741,13 @@ class SupplierPaymentService(UniversalEntityService):
             logger.error(f"Error getting PO items for payment: {str(e)}")
             return {'items': [], 'has_po': False, 'error': str(e)}
 
-    def get_invoice_items_for_payment(self, payment_id: str, **kwargs) -> Dict:
+    def get_invoice_items_for_payment(self, item_id: str = None, item: dict = None, **kwargs) -> Dict:
         """
         Get invoice line items for this payment
         FIXED: Removed incorrect iteration over single invoice
         """
+        # Extract payment_id from universal engine pattern
+        payment_id = item_id
         try:
             with get_db_session() as session:
                 payment = session.query(SupplierPayment).filter(
@@ -815,12 +819,21 @@ class SupplierPaymentService(UniversalEntityService):
                 'error': str(e)
             }
 
-    def get_payment_workflow_timeline(self, payment_id: str, **kwargs) -> Dict:
+    def get_payment_workflow_timeline(self, item_id: str = None, item: dict = None, **kwargs) -> Dict:
         """
         Get workflow timeline for payment approval process
         Returns data for the workflow timeline custom renderer
         """
         try:
+            # PARAMETER RESOLUTION for payment workflow
+            if item_id:
+                # Template calls: item_id IS the payment_id
+                payment_id = item_id
+            elif item and isinstance(item, dict) and 'payment_id' in item:
+                # If item has payment_id field
+                payment_id = item['payment_id']
+            else:
+                return {'steps': [], 'has_timeline': False, 'error': 'No payment ID found'}
             with get_db_session() as session:  # ✅ Fixed session method
                 payment = session.query(SupplierPayment).filter(
                     SupplierPayment.payment_id == payment_id,
@@ -890,12 +903,21 @@ class SupplierPaymentService(UniversalEntityService):
             logger.error(f"Error getting workflow timeline: {str(e)}")
             return {'steps': [], 'has_timeline': False, 'error': str(e)}
 
-    def get_supplier_payment_history_6months(self, supplier_id: str, **kwargs) -> Dict:
+    def get_supplier_payment_history_6months(self, item_id: str = None, item: dict = None, **kwargs) -> Dict:
         """
         Get last 6 months payment history for a supplier
         Enhanced version of get_supplier_payment_history
         """
         try:
+            # PARAMETER RESOLUTION for payment entity
+            if item and isinstance(item, dict) and 'supplier_id' in item:
+                # Payment context: extract supplier_id from payment item
+                supplier_id = item['supplier_id']
+            elif item_id:
+                # Direct call: might be supplier_id
+                supplier_id = item_id
+            else:
+                return {'payments': [], 'has_history': False, 'error': 'No supplier ID found'}
             with get_db_session() as session:
                 from datetime import datetime, timedelta
                 

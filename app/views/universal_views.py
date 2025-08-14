@@ -40,8 +40,9 @@ logger = get_unicode_safe_logger(__name__)
 # Create universal blueprint following your pattern
 universal_bp = Blueprint('universal_views', __name__, url_prefix='/universal')
 
+
 # =============================================================================
-# HELPER FUNCTIONS (Following Your Exact Patterns)
+# HELPER FUNCTIONS
 # =============================================================================
 
 def get_hospital_and_branch_names_for_header(hospital_id, user_id):
