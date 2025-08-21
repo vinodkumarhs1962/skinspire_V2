@@ -675,14 +675,84 @@ class SupplierPaymentService(UniversalEntityService):
         
         return query
     
+    def get_detail_data(self, item_id: str, hospital_id: uuid.UUID, 
+                   branch_id: Optional[uuid.UUID] = None,
+                   include_calculations: bool = True) -> Optional[Dict]:
+        '''
+        Override to add PO and invoice virtual fields for detail view
+        This is what Universal Engine actually calls!
+        '''
+        # Get base data from parent
+        data = super().get_detail_data(item_id, hospital_id, branch_id, include_calculations)
+        
+        if not data or not include_calculations:
+            return data
+        
+        # Extract payment data we need OUTSIDE of session context
+        payment_data_for_virtual_fields = None
+        
+        try:
+            # Use session in a limited scope
+            with get_db_session() as session:
+                payment = session.query(SupplierPayment).filter(
+                    SupplierPayment.payment_id == item_id,
+                    SupplierPayment.hospital_id == hospital_id
+                ).first()
+                
+                if payment:
+                    # Extract only the data we need while session is open
+                    payment_data_for_virtual_fields = {
+                        'payment_id': str(payment.payment_id),
+                        'invoice_id': str(payment.invoice_id) if payment.invoice_id else None,
+                        'hospital_id': payment.hospital_id,
+                        'branch_id': str(payment.branch_id) if payment.branch_id else None
+                    }
+            # Session is now closed
+            
+            # Now add virtual fields OUTSIDE of session context
+            if payment_data_for_virtual_fields and 'item' in data and isinstance(data['item'], dict):
+                # Create a simple object to pass to _add_detail_virtual_fields
+                # This mimics the SupplierPayment object but without session attachment
+                class PaymentData:
+                    def __init__(self, data_dict):
+                        self.payment_id = data_dict['payment_id']
+                        self.invoice_id = data_dict['invoice_id']
+                        self.hospital_id = data_dict['hospital_id']
+                        self.branch_id = data_dict['branch_id']
+                
+                payment_obj = PaymentData(payment_data_for_virtual_fields)
+                
+                # Add expensive detail virtual fields to the item
+                data['item'] = self._add_detail_virtual_fields(data['item'], payment_obj)
+                
+                # Debug log to verify
+                logger.info(f"[PO_FIX] get_detail_data - Added virtual fields:")
+                logger.info(f"  - purchase_order_no: {data['item'].get('purchase_order_no')}")
+                logger.info(f"  - po_date: {data['item'].get('po_date')}")
+                logger.info(f"  - po_total_amount: {data['item'].get('po_total_amount')}")
+                
+        except Exception as e:
+            logger.error(f"Error adding virtual fields in get_detail_data: {str(e)}")
+        
+        return data
+
     def get_po_items_for_payment(self, item_id: str = None, item: dict = None, **kwargs) -> Dict:
         """
         Get purchase order items related to this payment
-        FIXED: Removed incorrect iteration over single invoice
+        Following the same pattern as get_invoice_items_for_payment
         """
-        # Extract payment_id from universal engine pattern
-        payment_id = item_id
         try:
+            po_info = None  # ✅ Initialize as local variable
+            # PARAMETER RESOLUTION - matching invoice method pattern
+            if item_id:
+                # Template calls: item_id IS the payment_id
+                payment_id = item_id
+            elif item and isinstance(item, dict) and 'payment_id' in item:
+                # If item has payment_id field
+                payment_id = item['payment_id']
+            else:
+                return {'items': [], 'has_po': False, 'error': 'No payment ID found'}
+                
             with get_db_session() as session:
                 payment = session.query(SupplierPayment).filter(
                     SupplierPayment.payment_id == payment_id,
@@ -693,9 +763,12 @@ class SupplierPaymentService(UniversalEntityService):
                     return {'items': [], 'has_po': False}
                 
                 po_items = []
-                po_info = None
+                po_summary = {
+                    'total_amount': 0,
+                    'total_gst': 0
+                }
                 
-                # ✅ FIXED: Access PO through single invoice (no loop needed)
+                # Access PO through single invoice (no loop needed)
                 if payment.invoice_id:
                     invoice = session.query(SupplierInvoice).filter(
                         SupplierInvoice.invoice_id == payment.invoice_id
@@ -708,10 +781,13 @@ class SupplierPaymentService(UniversalEntityService):
                         ).first()
                         
                         if po:
+                            # Store PO info in the main data dict, similar to invoice
                             po_info = {
-                                'po_no': po.po_number,  # Corrected field name
-                                'po_date': po.po_date.isoformat() if po.po_date else None,
-                                'total_amount': float(po.total_amount or 0)
+                                'po_no': po.po_number,
+                                'po_number': po.po_number,  # Both for compatibility
+                                'po_date': po.po_date,  # Keep as date object for template filter
+                                'total_amount': float(po.total_amount or 0),
+                                'status': po.status if hasattr(po, 'status') else 'draft'
                             }
                             
                             po_lines = session.query(PurchaseOrderLine).filter(
@@ -723,23 +799,43 @@ class SupplierPaymentService(UniversalEntityService):
                                     'item_name': item.medicine_name,
                                     'quantity': float(item.units or 0),
                                     'unit_price': float(item.pack_purchase_price or 0),
-                                    'discount': 0,  # PO lines don't have discount_amount
                                     'gst_amount': float(item.total_gst or 0),
-                                    'total': float(item.line_total or 0),
-                                    'batch_no': None,  # PO lines don't have batch_number
-                                    'expiry_date': None  # PO lines don't have expiry_date
+                                    'total_amount': float(item.line_total or 0)
                                 })
+                                
+                                po_summary['total_amount'] += float(item.line_total or 0)
+                                po_summary['total_gst'] += float(item.total_gst or 0)
                 
-                return {
-                    'items': po_items if po_items is not None else [],  # <-- FIX: Ensure list
-                    'po_info': po_info if po_info is not None else {},  # <-- FIX: Ensure dict
+                # Return structure matching invoice pattern
+                result = {
+                    'items': po_items,
+                    'summary': po_summary,
                     'has_po': bool(po_items),
-                    'currency_symbol': '₹'
+                    'currency_symbol': '₹',
+                    'po_info': po_info  # ✅ Always include, will be None or dict
                 }
+
+                # RIGHT BEFORE THE RETURN STATEMENT, ADD:
+                logger.info("[PO_DEBUG_1] get_po_items_for_payment returning:")
+                logger.info(f"  - has_po: {bool(po_items)}")
+                logger.info(f"  - items count: {len(po_items)}")
+                logger.info(f"  - po_info present: {po_info is not None}")
+                if po_info:
+                    logger.info(f"  - po_info.po_number: {po_info.get('po_number')}")
+                    logger.info(f"  - po_info.po_date: {po_info.get('po_date')}")
+                    logger.info(f"  - po_info.total_amount: {po_info.get('total_amount')}")
+
+                return result
                 
         except Exception as e:
             logger.error(f"Error getting PO items for payment: {str(e)}")
-            return {'items': [], 'has_po': False, 'error': str(e)}
+            return {
+                'items': [],
+                'summary': {},
+                'has_po': False,
+                'currency_symbol': '₹',
+                'error': str(e)
+            }
 
     def get_invoice_items_for_payment(self, item_id: str = None, item: dict = None, **kwargs) -> Dict:
         """
@@ -827,21 +923,20 @@ class SupplierPaymentService(UniversalEntityService):
         try:
             # PARAMETER RESOLUTION for payment workflow
             if item_id:
-                # Template calls: item_id IS the payment_id
                 payment_id = item_id
             elif item and isinstance(item, dict) and 'payment_id' in item:
-                # If item has payment_id field
                 payment_id = item['payment_id']
             else:
                 return {'steps': [], 'has_timeline': False, 'error': 'No payment ID found'}
-            with get_db_session() as session:  # ✅ Fixed session method
+                
+            with get_db_session() as session:
                 payment = session.query(SupplierPayment).filter(
                     SupplierPayment.payment_id == payment_id,
                     SupplierPayment.hospital_id == kwargs.get('hospital_id')
                 ).first()
                 
                 if not payment:
-                    return {'steps': [], 'current_status': 'unknown'}
+                    return {'steps': [], 'current_status': 'unknown', 'has_timeline': False}
                 
                 # Build workflow timeline with fields that actually exist
                 steps = []
@@ -850,53 +945,93 @@ class SupplierPaymentService(UniversalEntityService):
                 steps.append({
                     'title': 'Payment Created',
                     'status': 'completed',
-                    'timestamp': payment.created_at,  # ✅ This field exists
-                    'user': payment.created_by,  # ✅ This field exists
+                    'timestamp': payment.created_at,  # PASS DATETIME OBJECT, NOT STRING
+                    'user': payment.created_by,
                     'icon': 'fas fa-plus-circle',
-                    'color': 'success'
+                    'color': 'success',
+                    'description': f'Payment of ₹{payment.amount:,.2f} created'
                 })
                 
-                # Step 2: Based on workflow_status field which exists
+                # Step 2: Submitted for Approval (if applicable)
+                if payment.submitted_for_approval_at:
+                    steps.append({
+                        'title': 'Submitted for Approval',
+                        'status': 'completed',
+                        'timestamp': payment.submitted_for_approval_at,  # DATETIME OBJECT
+                        'user': payment.submitted_by or payment.created_by,
+                        'icon': 'fas fa-paper-plane',
+                        'color': 'info',
+                        'description': 'Payment submitted for approval'
+                    })
+                
+                # Step 3: Current Status based on workflow_status
                 if payment.workflow_status == 'pending_approval':
                     steps.append({
                         'title': 'Awaiting Approval',
                         'status': 'pending',
+                        'timestamp': None,
+                        'user': None,
                         'icon': 'fas fa-clock',
-                        'color': 'warning'
+                        'color': 'warning',
+                        'description': 'Payment is pending approval'
                     })
-                elif payment.workflow_status == 'approved':
+                    
+                elif payment.workflow_status == 'approved' and payment.approved_at:
                     steps.append({
                         'title': 'Payment Approved',
                         'status': 'completed',
-                        'timestamp': payment.modified_at,  # Use modified_at since approved_at doesn't exist
-                        'user': payment.modified_by,  # Use modified_by since approved_by doesn't exist
+                        'timestamp': payment.approved_at,  # DATETIME OBJECT
+                        'user': payment.approved_by,
                         'icon': 'fas fa-check-circle',
-                        'color': 'success'
+                        'color': 'success',
+                        'description': 'Payment has been approved',
+                        'notes': payment.approval_notes
                     })
-                elif payment.workflow_status == 'rejected':
+                    
+                elif payment.workflow_status == 'rejected' and payment.rejected_at:
                     steps.append({
                         'title': 'Payment Rejected',
                         'status': 'rejected',
-                        'timestamp': payment.modified_at,
-                        'user': payment.modified_by,
+                        'timestamp': payment.rejected_at,  # DATETIME OBJECT
+                        'user': payment.rejected_by,
                         'icon': 'fas fa-times-circle',
-                        'color': 'danger'
+                        'color': 'danger',
+                        'description': 'Payment has been rejected',
+                        'notes': payment.rejection_reason
                     })
                 
-                # Step 3: Completed
-                if payment.workflow_status == 'completed':
+                # Step 4: Completed/Processed
+                if payment.workflow_status in ['completed', 'processed']:
                     steps.append({
                         'title': 'Payment Completed',
                         'status': 'completed',
-                        'timestamp': payment.modified_at,
+                        'timestamp': payment.updated_at,  # DATETIME OBJECT
+                        'user': payment.updated_by,
                         'icon': 'fas fa-flag-checkered',
-                        'color': 'success'
+                        'color': 'success',
+                        'description': 'Payment has been completed and processed'
+                    })
+                
+                # Step 5: Reconciliation (if applicable)
+                if hasattr(payment, 'reconciliation_status') and payment.reconciliation_status == 'reconciled':
+                    reconciled_timestamp = getattr(payment, 'reconciliation_date', payment.updated_at)
+                    steps.append({
+                        'title': 'Payment Reconciled',
+                        'status': 'completed',
+                        'timestamp': reconciled_timestamp,  # DATETIME OBJECT
+                        'user': getattr(payment, 'reconciled_by', None),
+                        'icon': 'fas fa-balance-scale',
+                        'color': 'info',
+                        'description': 'Payment has been reconciled with bank statement'
                     })
                 
                 return {
                     'steps': steps,
                     'current_status': payment.workflow_status,
-                    'has_timeline': True
+                    'has_timeline': True,
+                    'workflow_status': payment.workflow_status,
+                    'requires_approval': payment.requires_approval,
+                    'currency_symbol': '₹'
                 }
                 
         except Exception as e:
@@ -996,17 +1131,20 @@ class SupplierPaymentService(UniversalEntityService):
         
         return payment_dict
     
-    def _add_detail_virtual_fields(self, payment_dict: Dict, payment: SupplierPayment) -> Dict:
+
+    def _add_detail_virtual_fields(self, payment_dict: Dict, payment: Any) -> Dict:
         """
         Add expensive virtual fields only for detail views
         Called separately from the main conversion to avoid slowing down list views
+        Note: payment is now a simple object, not a SQLAlchemy model
         """
+        
         # ✅ Add invoice summary virtual fields using existing computation
         if payment.invoice_id:
             try:
                 # Get invoice summary using existing method
                 invoice_data = self.get_invoice_items_for_payment(
-                    str(payment.payment_id), 
+                    str(payment.payment_id),
                     hospital_id=payment.hospital_id,
                     branch_id=payment.branch_id
                 )
@@ -1029,11 +1167,43 @@ class SupplierPaymentService(UniversalEntityService):
                 payment_dict['invoice_total_items'] = 0
                 payment_dict['invoice_total_gst'] = 0
                 payment_dict['invoice_grand_total'] = 0
+                
+            # ✅ Add PO summary virtual fields - EXACT SAME PATTERN AS INVOICE
+            try:
+                # Call with extracted values - no session conflicts
+                po_data = self.get_po_items_for_payment(
+                    item_id=str(payment.payment_id),
+                    hospital_id=payment.hospital_id,
+                    branch_id=payment.branch_id
+                )
+                
+                if po_data and po_data.get('po_info'):
+                    po_info = po_data['po_info']
+                    
+                    # Populate PO virtual fields matching field names exactly
+                    payment_dict['purchase_order_no'] = po_info.get('po_number') or po_info.get('po_no', '')
+                    payment_dict['po_date'] = po_info.get('po_date')  # Keep as date/string
+                    payment_dict['po_total_amount'] = float(po_info.get('total_amount', 0))
+                else:
+                    payment_dict['purchase_order_no'] = ''
+                    payment_dict['po_date'] = None
+                    payment_dict['po_total_amount'] = 0
+                    
+            except Exception as e:
+                logger.error(f"Error calculating PO summary: {str(e)}")
+                payment_dict['purchase_order_no'] = ''
+                payment_dict['po_date'] = None
+                payment_dict['po_total_amount'] = 0
         else:
             # No invoice linked
             payment_dict['invoice_total_items'] = 0
             payment_dict['invoice_total_gst'] = 0
             payment_dict['invoice_grand_total'] = 0
+            
+            # No PO fields either
+            payment_dict['purchase_order_no'] = ''
+            payment_dict['po_date'] = None
+            payment_dict['po_total_amount'] = 0
         
         return payment_dict
 
@@ -1043,8 +1213,11 @@ class SupplierPaymentService(UniversalEntityService):
         result = super().get_by_id(item_id, **kwargs)
         
         if result:
+            # Extract payment data we need OUTSIDE of session context
+            payment_data_for_virtual_fields = None
+            
             try:
-                # Get the payment entity to add detail virtual fields
+                # Use session in a limited scope
                 with get_db_session() as session:
                     payment = session.query(SupplierPayment).filter(
                         SupplierPayment.payment_id == item_id,
@@ -1052,9 +1225,38 @@ class SupplierPaymentService(UniversalEntityService):
                     ).first()
                     
                     if payment:
-                        # Add expensive detail virtual fields
-                        result = self._add_detail_virtual_fields(result, payment)
+                        # Extract only the data we need while session is open
+                        payment_data_for_virtual_fields = {
+                            'payment_id': str(payment.payment_id),
+                            'invoice_id': str(payment.invoice_id) if payment.invoice_id else None,
+                            'hospital_id': payment.hospital_id,
+                            'branch_id': str(payment.branch_id) if payment.branch_id else None
+                        }
+                # Session is now closed
+                
+                # Now add virtual fields OUTSIDE of session context
+                if payment_data_for_virtual_fields:
+                    # Create a simple object to pass to _add_detail_virtual_fields
+                    # This mimics the SupplierPayment object but without session attachment
+                    class PaymentData:
+                        def __init__(self, data_dict):
+                            self.payment_id = data_dict['payment_id']
+                            self.invoice_id = data_dict['invoice_id']
+                            self.hospital_id = data_dict['hospital_id']
+                            self.branch_id = data_dict['branch_id']
+                    
+                    payment_obj = PaymentData(payment_data_for_virtual_fields)
+                    
+                    # Add expensive detail virtual fields
+                    result = self._add_detail_virtual_fields(result, payment_obj)
+                    
+                    # Debug log to verify
+                    logger.info(f"[PO_FIX] get_by_id - Added virtual fields:")
+                    logger.info(f"  - purchase_order_no: {result.get('purchase_order_no')}")
+                    logger.info(f"  - po_date: {result.get('po_date')}")
+                    logger.info(f"  - po_total_amount: {result.get('po_total_amount')}")
+                    
             except Exception as e:
-                logger.error(f"Error adding detail virtual fields: {str(e)}")
+                logger.error(f"Error adding detail virtual fields in get_by_id: {str(e)}")
         
         return result

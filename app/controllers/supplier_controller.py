@@ -1497,7 +1497,8 @@ class SupplierInvoiceFormController(FormController):
         
         # Add menu items
         from flask_login import current_user
-        context['menu_items'] = get_menu_items(current_user) if 'menu_items' not in context else context['menu_items']
+        from app.utils.menu_utils import generate_menu_for_role
+        context['menu_items'] = generate_menu_for_role(getattr(current_user, 'entity_type', 'staff')) if 'menu_items' not in context else context['menu_items']
         
         current_app.logger.info(f"SupplierInvoiceFormController.render_form - Final context keys: {context.keys()}")
         

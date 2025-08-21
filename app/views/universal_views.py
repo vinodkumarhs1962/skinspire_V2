@@ -616,10 +616,15 @@ def universal_list_view(entity_type: str):
         # Determine template
         template = get_template_for_entity(entity_type, 'list')
         
+        # Get menu items for current user
+        from app.utils.menu_utils import get_menu_items
+        menu_items = get_menu_items(current_user)
+
         try:
             logger.info(f"[SUCCESS] Successfully rendered {entity_type} list with {len(assembled_data.get('items', []))} items")
             return render_template(template, 
                              service=service,  # Available if needed
+                             menu_items=menu_items,
                              assembled_data=assembled_data, 
                              **assembled_data)
         except Exception as template_error:
@@ -1042,6 +1047,20 @@ def universal_detail_view(entity_type: str, item_id: str):
             if doc_buttons:
                 assembled_data['document_buttons'] = doc_buttons
 
+        # ADD THIS: Get menu items
+        from app.utils.menu_utils import get_menu_items
+        menu_items = get_menu_items(current_user)
+
+        # CRITICAL DEBUG: Check if virtual fields are in the item dict
+        logger.info(f"[CRITICAL] Item dict being sent to template:")
+        logger.info(f"  - Has purchase_order_no: {'purchase_order_no' in assembled_data.get('item', {})}")
+        logger.info(f"  - purchase_order_no value: {assembled_data.get('item', {}).get('purchase_order_no')}")
+        logger.info(f"  - Has po_date: {'po_date' in assembled_data.get('item', {})}")
+        logger.info(f"  - po_date value: {assembled_data.get('item', {}).get('po_date')}")
+        logger.info(f"  - Has po_total_amount: {'po_total_amount' in assembled_data.get('item', {})}")
+        logger.info(f"  - po_total_amount value: {assembled_data.get('item', {}).get('po_total_amount')}")
+
+
         # DON'T UNPACK - pass everything explicitly to avoid iteration error
         return render_template(
             template_name,
@@ -1050,6 +1069,7 @@ def universal_detail_view(entity_type: str, item_id: str):
             
             # Main data container
             assembled_data=assembled_data,
+            menu_items=menu_items,
             
             # Core view components (extracted from assembled_data)
             entity_config=assembled_data.get('entity_config'),

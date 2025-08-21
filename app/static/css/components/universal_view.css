@@ -1238,3 +1238,93 @@ i.fa-file-invoice { color: rgb(245 158 11) !important; }
 .dark .custom-renderer-field .dark\:bg-indigo-900\/20 {
     background-color: rgb(79 70 229 / 0.2) !important;
 }
+
+/* ==========================================
+   WORKFLOW TIMELINE STYLING
+   ========================================== */
+
+/* Workflow Timeline Container */
+.workflow-timeline-container {
+    max-width: 100%;
+    overflow: visible;
+}
+
+/* Fix icon positioning and prevent overlap */
+.workflow-timeline-container .relative {
+    position: relative;
+}
+
+.workflow-timeline-container .absolute {
+    position: absolute;
+}
+
+/* Ensure proper z-index for icons */
+.workflow-timeline-container .z-10 {
+    z-index: 10;
+}
+
+/* Timeline line styling */
+.workflow-timeline-container .w-0\.5 {
+    width: 2px;
+}
+
+/* Ensure content doesn't overlap with icons */
+.workflow-timeline-container .ml-10 {
+    margin-left: 2.5rem !important; /* 40px - ensures clearance from icon */
+}
+
+/* Icon container positioning */
+.workflow-timeline-container .left-0 {
+    left: 0 !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+    .workflow-timeline-container .ml-10 {
+        margin-left: 2.25rem !important; /* Slightly less on mobile */
+    }
+    
+    .workflow-timeline-container .pl-8 {
+        padding-left: 1.5rem !important;
+    }
+}
+
+/* Dark mode enhancements */
+.dark .workflow-timeline-container .bg-gray-200 {
+    background-color: rgb(55 65 81) !important;
+}
+
+/* Ensure text doesn't wrap awkwardly */
+.workflow-timeline-container h4 {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+/* Status badge improvements */
+.workflow-timeline-container .inline-flex {
+    display: inline-flex !important;
+    white-space: nowrap;
+}
+
+/* Fix for horizontal timeline items if needed */
+.workflow-timeline-horizontal {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: 1rem;
+}
+
+.workflow-timeline-horizontal .workflow-step {
+    min-width: 200px;
+    margin-right: 2rem;
+    position: relative;
+}
+
+/* Ensure proper spacing between elements */
+.workflow-timeline-container .mb-6 {
+    margin-bottom: 1.5rem !important;
+}
+
+.workflow-timeline-container .gap-3 {
+    gap: 0.75rem !important;
+}

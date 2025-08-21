@@ -12,6 +12,7 @@ from app.services.database_service import get_db_session
 from app.security.authorization.permission_validator import has_permission
 from app.models.master import Supplier, Medicine, Branch
 from app.models.transaction import SupplierInvoice, PurchaseOrderHeader, SupplierPayment
+from app.utils.menu_utils import generate_menu_for_role
 
 from app.security.authorization.decorators import (
     require_web_branch_permission, 
@@ -144,7 +145,7 @@ def supplier_list():
                         supplier['branch_name'] = branch.name if branch else 'Unknown Branch'
                 except Exception:
                     supplier['branch_name'] = 'Unknown Branch'
-
+        menu_items = generate_menu_for_role(getattr(current_user, 'entity_type', 'staff'))
         return render_template(
             'supplier/supplier_list.html',
             suppliers=suppliers,
@@ -152,11 +153,13 @@ def supplier_list():
             page=page,
             per_page=per_page,
             total=total,
-            branch_context=getattr(g, 'branch_context', None) 
+            branch_context=getattr(g, 'branch_context', None),
+            menu_items=menu_items 
         )
     except Exception as e:
         current_app.logger.error(f"Error in supplier_list: {str(e)}", exc_info=True)
         flash(f"Error retrieving suppliers: {str(e)}", "error")
+        menu_items = generate_menu_for_role(getattr(current_user, 'entity_type', 'staff'))
         return render_template(
             'supplier/supplier_list.html', 
             form=form, 
@@ -164,7 +167,8 @@ def supplier_list():
             total=0, 
             page=1, 
             per_page=per_page,
-            branch_context=getattr(g, 'branch_context', None) 
+            branch_context=getattr(g, 'branch_context', None),
+            menu_items=menu_items 
         )
 
 
@@ -371,7 +375,9 @@ def supplier_invoice_list():
             'paid_amount': round(paid_amount, 2),
             'listed_total': round(listed_total, 2)
         }
-            
+
+        menu_items = generate_menu_for_role(getattr(current_user, 'entity_type', 'staff'))
+
         return render_template(
             'supplier/supplier_invoice_list.html',
             invoices=invoices,  # Now contains authoritative calculations
@@ -381,19 +387,22 @@ def supplier_invoice_list():
             per_page=per_page,
             total=total,
             summary=summary,
-            branch_context=getattr(g, 'branch_context', None) 
+            branch_context=getattr(g, 'branch_context', None),
+            menu_items=menu_items 
         )
         
     except Exception as e:
         current_app.logger.error(f"Error in supplier_invoice_list: {str(e)}", exc_info=True)
         flash(f"Error retrieving supplier invoices: {str(e)}", "error")
+        menu_items = generate_menu_for_role(getattr(current_user, 'entity_type', 'staff'))
         return render_template(
             'supplier/supplier_invoice_list.html', 
             form=form, 
             invoices=[], 
             suppliers=[],
             summary={'total_invoices': 0, 'unpaid_amount': 0, 'paid_amount': 0, 'listed_total': 0},
-            branch_context=getattr(g, 'branch_context', None) 
+            branch_context=getattr(g, 'branch_context', None),
+            menu_items=menu_items 
         )
 
 
@@ -865,6 +874,9 @@ def purchase_order_list():
             for po in purchase_orders:
                 po['has_invoices'] = po_invoice_map.get(str(po.get('po_id')), False)
 
+        # Generate menu items
+        menu_items = generate_menu_for_role(getattr(current_user, 'entity_type', 'staff'))
+
         return render_template(
             'supplier/purchase_order_list.html',
             purchase_orders=purchase_orders,
@@ -872,7 +884,8 @@ def purchase_order_list():
             page=page,
             per_page=per_page,
             total=total,
-            branch_context=getattr(g, 'branch_context', None)  # Get branch context from decorator
+            branch_context=getattr(g, 'branch_context', None),  # Get branch context from decorator
+            menu_items=menu_items
         )
     except Exception as e:
         current_app.logger.error(f"Error in purchase_order_list: {str(e)}", exc_info=True)
@@ -1915,20 +1928,23 @@ def pending_invoices():
             supplier_id=uuid.UUID(supplier_id) if supplier_id else None,
             branch_id=branch_uuid  # NEW: Pass branch filter
         )
-        
+        menu_items = generate_menu_for_role(getattr(current_user, 'entity_type', 'staff'))
         return render_template(
             'supplier/pending_invoices.html',
             invoices=invoices,
             supplier_id=supplier_id,
-            branch_context=branch_context  # NEW: Pass branch context to template
+            branch_context=branch_context,  # NEW: Pass branch context to template
+            menu_items=menu_items
         )
     except Exception as e:
         current_app.logger.error(f"Error in pending_invoices: {str(e)}", exc_info=True)
         flash(f"Error retrieving pending invoices: {str(e)}", "error")
+        menu_items = generate_menu_for_role(getattr(current_user, 'entity_type', 'staff'))
         return render_template(
             'supplier/pending_invoices.html', 
             invoices=[], 
-            branch_context=branch_context
+            branch_context=branch_context,
+            menu_items=menu_items
         )
     
 # === PAYMENT MANAGEMENT ROUTES ===
@@ -2182,6 +2198,7 @@ def payment_list():
         for key, value in request.args.items():
             if key not in ['page', 'per_page'] and value and value.strip():
                 active_filters[key] = value.strip()
+        menu_items = generate_menu_for_role(getattr(current_user, 'entity_type', 'staff'))
 
         return render_template(
             'supplier/payment_list.html',
@@ -2197,7 +2214,8 @@ def payment_list():
             payment_config=PAYMENT_CONFIG,
             # NEW: Pass filter state for form preservation
             active_filters=active_filters,
-            request_args=request.args.to_dict()
+            request_args=request.args.to_dict(),
+            menu_items=menu_items
         )
         
     except Exception as e:
@@ -2210,13 +2228,15 @@ def payment_list():
             'pending_count': 0,
             'this_month_count': 0
         }
+        menu_items = generate_menu_for_role(getattr(current_user, 'entity_type', 'staff'))
         return render_template('supplier/payment_list.html', 
-                             payments=[], 
-                             suppliers=[],  # NEW: Empty suppliers list on error
-                             total=0, 
-                             filters={},
-                             summary=default_summary,  # ✅ Use default instead of empty 
-                             payment_config=PAYMENT_CONFIG)
+            payments=[], 
+            suppliers=[],  # NEW: Empty suppliers list on error
+            total=0, 
+            filters={},
+            summary=default_summary,  # ✅ Use default instead of empty 
+            payment_config=PAYMENT_CONFIG,
+            menu_items=menu_items)
 
 
 @supplier_views_bp.route('/payment/view/<payment_id>', methods=['GET'])
@@ -3445,3 +3465,4 @@ def payment_list_universal_test():
     """Test universal engine payment list"""
     return redirect(url_for('universal_views.universal_list_view', 
                            entity_type='supplier_payments'))
+

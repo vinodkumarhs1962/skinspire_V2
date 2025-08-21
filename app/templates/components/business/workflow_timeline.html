@@ -18,12 +18,17 @@
         </span>
     </div>
 
-    <!-- Timeline -->
-    <div class="relative">
+    <!-- Timeline - Fixed positioning and spacing -->
+    <div class="relative pl-8">
         {% for step in data['steps'] %}
-        <div class="flex items-start mb-8 {% if not loop.last %}pb-8 border-l-2 border-gray-200 dark:border-gray-700 ml-4{% endif %}">
-            <!-- Timeline Icon -->
-            <div class="absolute -left-2 w-8 h-8 rounded-full flex items-center justify-center
+        <div class="flex items-start mb-6 relative">
+            <!-- Timeline Line (except for last item) -->
+            {% if not loop.last %}
+            <div class="absolute left-4 top-8 w-0.5 h-full bg-gray-200 dark:bg-gray-700"></div>
+            {% endif %}
+            
+            <!-- Timeline Icon - Fixed positioning -->
+            <div class="absolute left-0 w-8 h-8 rounded-full flex items-center justify-center z-10
                 {% if step.color == 'success' %}
                     bg-green-500 text-white
                 {% elif step.color == 'info' %}
@@ -38,35 +43,42 @@
                 <i class="{{ step.icon }} text-sm"></i>
             </div>
             
-            <!-- Timeline Content -->
-            <div class="ml-12 flex-1">
+            <!-- Timeline Content - Adjusted margin -->
+            <div class="ml-10 flex-1">
                 <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">
                     {{ step.title }}
                 </h4>
                 
-                {% if step.timestamp %}
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    <i class="far fa-clock mr-1"></i>
-                    {{ step.timestamp.strftime('%b %d, %Y %I:%M %p') if step.timestamp else '' }}
+                {% if step.description %}
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    {{ step.description }}
                 </p>
                 {% endif %}
                 
-                {% if step.user %}
-                <p class="text-xs text-gray-600 dark:text-gray-300 mt-1">
-                    <i class="far fa-user mr-1"></i>
-                    {% if step.status == 'pending' %}
-                        Awaiting: {{ step.user }}
-                    {% else %}
-                        By: {{ step.user }}
+                <!-- Timestamp and User on same line -->
+                <div class="flex flex-wrap items-center gap-3 mt-2">
+                    {% if step.timestamp %}
+                    <span class="text-xs text-gray-500 dark:text-gray-400">
+                        <i class="far fa-clock mr-1"></i>
+                        {% if step.timestamp is string %}
+                            {{ step.timestamp }}
+                        {% else %}
+                            {{ step.timestamp.strftime('%b %d, %Y at %I:%M %p') if step.timestamp else '' }}
+                        {% endif %}
+                    </span>
                     {% endif %}
-                </p>
-                {% endif %}
+                    
+                    {% if step.user %}
+                    <span class="text-xs text-gray-500 dark:text-gray-400">
+                        <i class="far fa-user mr-1"></i>
+                        {{ step.user }}
+                    </span>
+                    {% endif %}
+                </div>
                 
-                {% if step.reason %}
-                <div class="mt-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
-                    <p class="text-xs text-red-700 dark:text-red-300">
-                        <strong>Reason:</strong> {{ step.reason }}
-                    </p>
+                {% if step.notes %}
+                <div class="mt-2 p-2 bg-gray-50 dark:bg-gray-800 rounded text-xs text-gray-600 dark:text-gray-400">
+                    <strong>Notes:</strong> {{ step.notes }}
                 </div>
                 {% endif %}
             </div>
@@ -75,8 +87,9 @@
     </div>
 </div>
 {% else %}
+<!-- No timeline data -->
 <div class="text-center py-8">
-    <i class="fas fa-tasks text-4xl text-gray-300 dark:text-gray-600 mb-3"></i>
-    <p class="text-gray-500 dark:text-gray-400">No workflow timeline available</p>
+    <i class="fas fa-history text-4xl text-gray-300 dark:text-gray-600 mb-3"></i>
+    <p class="text-gray-500 dark:text-gray-400">No workflow history available</p>
 </div>
 {% endif %}

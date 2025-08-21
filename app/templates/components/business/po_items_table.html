@@ -1,84 +1,159 @@
 <!-- templates/components/business/po_items_table.html -->
-{% if data.has_po and data.po_info %}
+<!-- Backward-compatible version with safe dictionary access -->
+{% if data and data.get('po_info') %}
 <div class="po-items-container">
     <!-- PO Summary Card -->
-    <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
-        <div class="flex items-center justify-between">
+    <!-- <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-                <h4 class="text-sm font-medium text-blue-900 dark:text-blue-100">
-                    Purchase Order: {{ data.po_info.po_no }}
-                </h4>
-                <p class="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                    Date: {{ data.po_info.po_date|date_format if data.po_info.po_date else 'N/A' }}
+                <p class="text-xs text-blue-700 dark:text-blue-300">PO Number</p>
+                <p class="text-sm font-bold text-blue-900 dark:text-blue-100">
+
+                    {{ data.po_info.get('po_number') or data.po_info.get('po_no') or 'N/A' }}
                 </p>
             </div>
-            <div class="text-right">
-                <p class="text-lg font-bold text-blue-900 dark:text-blue-100">
-                    {{ data.currency_symbol }}{{ "{:,.2f}".format(data.po_info.total_amount) }}
+            <div>
+                <p class="text-xs text-blue-700 dark:text-blue-300">Date</p>
+                <p class="text-sm font-bold text-blue-900 dark:text-blue-100">
+                    {{ data.po_info.get('po_date')|dateformat if data.po_info.get('po_date') else 'N/A' }}
                 </p>
+            </div>
+            <div>
+                <p class="text-xs text-blue-700 dark:text-blue-300">Status</p>
+                <p class="text-sm font-bold text-blue-900 dark:text-blue-100">
+                    {% set status = data.po_info.get('status', 'draft') %}
+                    <span class="status-badge status-{{ status|lower|replace(' ', '-') }}">
+                        {{ status|title|replace('_', ' ') }}
+                    </span>
+                </p>
+            </div>
+            <div>
                 <p class="text-xs text-blue-700 dark:text-blue-300">Total Amount</p>
+                <p class="text-sm font-bold text-blue-900 dark:text-blue-100">
+                    {{ data.get('currency_symbol', '₹') }}{{ "{:,.2f}".format(data.po_info.get('total_amount', 0)) }}
+                </p>
             </div>
         </div>
-    </div>
+    </div> -->
 
     <!-- PO Items Table -->
-    <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead class="bg-gray-50 dark:bg-gray-800">
+    <div class="table-responsive">
+        <table class="po-items-table financial-table w-full">
+            <thead>
                 <tr>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Item
-                    </th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Batch
-                    </th>
-                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Qty
-                    </th>
-                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Unit Price
-                    </th>
-                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Discount
-                    </th>
-                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        GST
-                    </th>
-                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Total
-                    </th>
+                    <th class="text-left">Item</th>
+                    <th class="text-left">HSN</th>
+                    <th class="text-right">Qty</th>
+                    <th class="text-right">Unit Price</th>
+                    <th class="text-right">GST</th>
+                    <th class="text-right">Total</th>
                 </tr>
             </thead>
-            <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                {% for item in data['items'] %}
+            <tbody>
+                {% if data.get('items') %}
+                    {% for item in data.get('items', []) %}
+                    <tr>
+                        <td class="text-left">
+                            <span class="font-medium">{{ item.get('item_name') or item.get('medicine_name') or '-' }}</span>
+                            {% if item.get('item_code') or item.get('medicine_code') %}
+                                <span class="text-xs text-gray-500 block">{{ item.get('item_code') or item.get('medicine_code') }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-left">{{ item.get('hsn_code', '-') }}</td>
+                        <td class="text-right">{{ item.get('quantity', 0)|default(0) }}</td>
+                        <td class="text-right">
+                            {{ data.get('currency_symbol', '₹') }}{{ "{:,.2f}".format(item.get('unit_price', 0)) }}
+                        </td>
+                        <td class="text-right">
+                            {% set gst_percent = item.get('gst_percent', 0) %}
+                            {% set gst_amount = item.get('gst_amount', 0) %}
+                            {% if gst_percent > 0 or gst_amount > 0 %}
+                                {% if gst_percent > 0 %}
+                                    {{ "{:.1f}".format(gst_percent) }}%
+                                {% endif %}
+                                <span class="text-xs block">
+                                    {{ data.get('currency_symbol', '₹') }}{{ "{:,.2f}".format(gst_amount) }}
+                                </span>
+                            {% else %}
+                                0%
+                            {% endif %}
+                        </td>
+                        <td class="text-right font-semibold">
+                            <!-- Support both 'total_amount' and 'total' field names -->
+                            {{ data.get('currency_symbol', '₹') }}{{ "{:,.2f}".format(item.get('total_amount') or item.get('total', 0)) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-gray-500 dark:text-gray-400">
+                            No items in this purchase order
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+            {% if data.get('items') and data.get('summary') %}
+            <tfoot>
+                <tr class="total-row">
+                    <td colspan="4" class="text-right font-bold">TOTAL</td>
+                    <td class="text-right font-bold">
+                        {{ data.get('currency_symbol', '₹') }}{{ "{:,.2f}".format(data.get('summary', {}).get('total_gst', 0)) }}
+                    </td>
+                    <td class="text-right font-bold">
+                        {{ data.get('currency_symbol', '₹') }}{{ "{:,.2f}".format(data.get('summary', {}).get('total_amount', 0)) }}
+                    </td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+
+    <!-- Additional PO Details (if needed) -->
+    {% if data.po_info.get('notes') %}
+    <div class="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded">
+        <p class="text-sm text-gray-600 dark:text-gray-400">
+            <strong>Notes:</strong> {{ data.po_info.get('notes') }}
+        </p>
+    </div>
+    {% endif %}
+</div>
+{% elif data and data.get('items') %}
+<!-- Show only items table if no PO info but items exist -->
+<div class="po-items-container">
+    <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4">
+        <p class="text-sm text-yellow-800 dark:text-yellow-200">
+            <i class="fas fa-exclamation-triangle mr-2"></i>
+            Purchase order information not available, showing items only.
+        </p>
+    </div>
+    
+    <!-- Items table -->
+    <div class="table-responsive">
+        <table class="po-items-table financial-table w-full">
+            <thead>
                 <tr>
-                    <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                        {{ item.medicine_name }}
+                    <th class="text-left">Item</th>
+                    <th class="text-right">Qty</th>
+                    <th class="text-right">Unit Price</th>
+                    <th class="text-right">GST</th>
+                    <th class="text-right">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in data.get('items', []) %}
+                <tr>
+                    <td class="text-left">
+                        <span class="font-medium">{{ item.get('item_name') or item.get('medicine_name') or '-' }}</span>
                     </td>
-                    <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                        {{ item.batch_no or '-' }}
-                        {% if item.expiry_date %}
-                        <br><span class="text-xs">Exp: {{ item.expiry_date|date_format }}</span>
-                        {% endif %}
+                    <td class="text-right">{{ item.get('quantity', 0)|default(0) }}</td>
+                    <td class="text-right">
+                        {{ data.get('currency_symbol', '₹') }}{{ "{:,.2f}".format(item.get('unit_price', 0)) }}
                     </td>
-                    <td class="px-4 py-3 text-sm text-right text-gray-900 dark:text-gray-100">
-                        {{ item.quantity }}
+                    <td class="text-right">
+                        {{ data.get('currency_symbol', '₹') }}{{ "{:,.2f}".format(item.get('gst_amount', 0)) }}
                     </td>
-                    <td class="px-4 py-3 text-sm text-right text-gray-900 dark:text-gray-100">
-                        {{ data.currency_symbol }}{{ "{:,.2f}".format(item.unit_price) }}
-                    </td>
-                    <td class="px-4 py-3 text-sm text-right text-gray-900 dark:text-gray-100">
-                        {% if item.discount > 0 %}
-                            {{ data.currency_symbol }}{{ "{:,.2f}".format(item.discount) }}
-                        {% else %}
-                            -
-                        {% endif %}
-                    </td>
-                    <td class="px-4 py-3 text-sm text-right text-gray-900 dark:text-gray-100">
-                        {{ data.currency_symbol }}{{ "{:,.2f}".format(item.gst_amount) }}
-                    </td>
-                    <td class="px-4 py-3 text-sm text-right font-medium text-gray-900 dark:text-gray-100">
-                        {{ data.currency_symbol }}{{ "{:,.2f}".format(item.total) }}
+                    <td class="text-right font-semibold">
+                        {{ data.get('currency_symbol', '₹') }}{{ "{:,.2f}".format(item.get('total_amount') or item.get('total', 0)) }}
                     </td>
                 </tr>
                 {% endfor %}
@@ -87,8 +162,9 @@
     </div>
 </div>
 {% else %}
-<div class="text-center py-8">
-    <i class="fas fa-shopping-cart text-4xl text-gray-300 dark:text-gray-600 mb-3"></i>
-    <p class="text-gray-500 dark:text-gray-400">No purchase order linked to this payment</p>
+<!-- No PO and no items -->
+<div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-8 text-center">
+    <i class="fas fa-file-invoice text-4xl text-gray-400 dark:text-gray-600 mb-4"></i>
+    <p class="text-gray-600 dark:text-gray-400">No purchase order information available</p>
 </div>
 {% endif %}

@@ -183,21 +183,6 @@ SUPPLIER_PAYMENT_FIELDS = [
         section="invoice_summary",
         view_order=2
     ),
-    FieldDefinition(
-        name="po_number_display",
-        label="PO Number",
-        field_type=FieldType.TEXT,
-        show_in_list=False,
-        show_in_detail=True,
-        show_in_form=False,
-        readonly=True,
-        virtual=True,  # VALID parameter
-        related_field="invoice",  # VALID parameter  
-        tab_group="po_details",
-        section="po_summary",
-        view_order=5
-    ),
-
 
     # Amount Fields
     FieldDefinition(
@@ -384,23 +369,23 @@ SUPPLIER_PAYMENT_FIELDS = [
         show_in_form=False,
         readonly=True,
         tab_group="workflow",
-        section="approval_status",
-        view_order=7,
+        section="approval_details",  # Correct section
+        view_order=1,
         conditional_display="item.submitted_for_approval_at"
     ),
 
     # Workflow last updated timestamp
     FieldDefinition(
         name="workflow_updated_at",
-        label="Workflow Last Updated",
+        label="Last Status Change",
         field_type=FieldType.DATETIME,
         show_in_list=False,
         show_in_detail=True,
         show_in_form=False,
         readonly=True,
         tab_group="workflow",
-        section="workflow_steps",
-        view_order=1,
+        section="workflow_status",  # Put with status
+        view_order=2,
         help_text="Last workflow status change",
         conditional_display="item.workflow_updated_at"
     ),
@@ -408,7 +393,7 @@ SUPPLIER_PAYMENT_FIELDS = [
     # Workflow Fields
     FieldDefinition(
         name="workflow_status",
-        label="Status",
+        label="Workflow Status",
         field_type=FieldType.STATUS,
         show_in_list=True,
         show_in_detail=True,
@@ -419,32 +404,22 @@ SUPPLIER_PAYMENT_FIELDS = [
         filter_aliases=["statuses", "status"],
         readonly=True,
         tab_group="workflow",
-        section="approval_status",
-        view_order=6
+        section="workflow_status",  # Correct section
+        view_order=0  # First in status section
     ),
     FieldDefinition(
-        name="requires_approval",  # ADDED: Missing field from model
+        name="requires_approval",
         label="Requires Approval",
         field_type=FieldType.BOOLEAN,
         show_in_list=False,
         show_in_detail=True,
         show_in_form=True,
         tab_group="workflow",
-        section="approval_status",
+        section="workflow_status",  # Put in status section
         view_order=1,
         default_value=False
     ),
-    FieldDefinition(
-        name="approval_required",  # This was already here but let's fix the name
-        label="Approval Required",
-        field_type=FieldType.BOOLEAN,
-        show_in_list=False,
-        show_in_detail=True,
-        show_in_form=True,
-        tab_group="workflow",
-        section="approval_status",
-        view_order=2
-    ),
+
     FieldDefinition(
         name="next_approver_id",
         label="Next Approver",
@@ -787,11 +762,12 @@ SUPPLIER_PAYMENT_FIELDS = [
         show_in_detail=True,
         show_in_form=False,
         readonly=True,
+        virtual=True,  # ADD THIS
         tab_group="po_details",
         section="po_summary",
         view_order=0
     ),
-    
+
     FieldDefinition(
         name="po_date",
         label="PO Date",
@@ -800,11 +776,12 @@ SUPPLIER_PAYMENT_FIELDS = [
         show_in_detail=True,
         show_in_form=False,
         readonly=True,
+        virtual=True,  # ADD THIS
         tab_group="po_details",
         section="po_summary",
         view_order=1
     ),
-    
+
     FieldDefinition(
         name="po_total_amount",
         label="PO Total Amount",
@@ -813,6 +790,7 @@ SUPPLIER_PAYMENT_FIELDS = [
         show_in_detail=True,
         show_in_form=False,
         readonly=True,
+        virtual=True,  # ADD THIS
         tab_group="po_details",
         section="po_summary",
         view_order=2
@@ -916,7 +894,7 @@ SUPPLIER_PAYMENT_FIELDS = [
         readonly=True,
         virtual=True,
         tab_group="workflow",
-        section="workflow_steps",
+        section="workflow_timeline",  # Correct section name
         view_order=0,
         custom_renderer=CustomRenderer(
             template="components/business/workflow_timeline.html",
@@ -928,46 +906,103 @@ SUPPLIER_PAYMENT_FIELDS = [
     # Additional approval fields
     FieldDefinition(
         name="submitted_for_approval_at",
-        label="Submitted for Approval",
+        label="Submitted At",
         field_type=FieldType.DATETIME,
         show_in_list=False,
         show_in_detail=True,
         show_in_form=False,
         readonly=True,
         tab_group="workflow",
-        section="approval_status",
-        view_order=3,
+        section="approval_details",  # Correct section
+        view_order=0,
         conditional_display="item.submitted_for_approval_at"
     ),
     
     FieldDefinition(
         name="approved_at",
-        label="Approved Date",
+        label="Approved At",
         field_type=FieldType.DATETIME,
         show_in_list=False,
         show_in_detail=True,
         show_in_form=False,
         readonly=True,
         tab_group="workflow",
-        section="approval_status",
-        view_order=4,
+        section="approval_details",  # Correct section
+        view_order=2,
         conditional_display="item.approved_at"
     ),
     
     FieldDefinition(
+        name="approved_by",
+        label="Approved By",
+        field_type=FieldType.TEXT,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=False,
+        readonly=True,
+        tab_group="workflow",
+        section="approval_details",  # Correct section
+        view_order=3,
+        conditional_display="item.approved_at"
+    ),
+
+    FieldDefinition(
+        name="next_approver",
+        label="Next Approver",
+        field_type=FieldType.TEXT,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=False,
+        readonly=True,
+        tab_group="workflow",
+        section="approval_details",  # Correct section
+        view_order=4,
+        conditional_display="item.workflow_status == 'pending'"
+    ),
+
+    FieldDefinition(
+        name="approval_notes",
+        label="Approval Notes",
+        field_type=FieldType.TEXTAREA,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=False,
+        readonly=True,
+        tab_group="workflow",
+        section="approval_details",  # Correct section
+        view_order=5,
+        conditional_display="item.approval_notes",
+        rows=3
+    ),
+
+    FieldDefinition(
         name="rejected_at",
-        label="Rejected Date",
+        label="Rejected At",
         field_type=FieldType.DATETIME,
         show_in_list=False,
         show_in_detail=True,
         show_in_form=False,
         readonly=True,
         tab_group="workflow",
-        section="approval_status",
-        view_order=5,
+        section="rejection_details",  # Correct section
+        view_order=0,
         conditional_display="item.rejected_at"
     ),
     
+    FieldDefinition(
+        name="rejected_by",
+        label="Rejected By",
+        field_type=FieldType.TEXT,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=False,
+        readonly=True,
+        tab_group="workflow",
+        section="rejection_details",  # Correct section
+        view_order=1,
+        conditional_display="item.rejected_at"
+    ),
+
     FieldDefinition(
         name="rejection_reason",
         label="Rejection Reason",
@@ -977,8 +1012,8 @@ SUPPLIER_PAYMENT_FIELDS = [
         show_in_form=False,
         readonly=True,
         tab_group="workflow",
-        section="approval_status",
-        view_order=6,
+        section="rejection_details",  # Correct section
+        view_order=2,
         conditional_display="item.rejection_reason",
         rows=3
     ),
@@ -1098,6 +1133,7 @@ SUPPLIER_PAYMENT_SECTIONS = {
         columns=2,
         order=1
     ),
+
     'tax_details': SectionDefinition(
         key='tax_details',
         title='Tax & Deductions',
@@ -1186,7 +1222,7 @@ SUPPLIER_PAYMENT_TABS = {
                 key='po_summary',
                 title='Purchase Order Summary',
                 icon='fas fa-file-alt',
-                columns=1,
+                columns=2,
                 order=0
             ),
             'po_items': SectionDefinition(
@@ -1246,19 +1282,36 @@ SUPPLIER_PAYMENT_TABS = {
         sections={
             'workflow_status': SectionDefinition(
                 key='workflow_status',
-                title='Workflow Information',
-                icon='fas fa-project-diagram',
-                columns=2,  # Organize in 2 columns
+                title='Current Status',  # Clear title
+                icon='fas fa-info-circle',
+                columns=2,
                 order=0,
-                collapsible=False  # Keep this section always open
+                collapsible=False
             ),
-            'workflow_history': SectionDefinition(
-                key='workflow_history',
-                title='Status History',
-                icon='fas fa-history',
-                columns=1,  # Full width for history
+            'workflow_timeline': SectionDefinition(
+                key='workflow_timeline',
+                title='Workflow Timeline',  # Renamed from workflow_steps
+                icon='fas fa-project-diagram',
+                columns=2,  # Full width for timeline
                 order=1,
+                collapsible=False
+            ),
+            'approval_details': SectionDefinition(
+                key='approval_details',
+                title='Approval Details',  # Clear title for approval fields
+                icon='fas fa-check-circle',
+                columns=2,
+                order=2,
                 collapsible=True
+            ),
+            'rejection_details': SectionDefinition(
+                key='rejection_details',
+                title='Rejection Details',  # Separate section for rejection
+                icon='fas fa-times-circle',
+                columns=2,
+                order=3,
+                collapsible=True,
+                conditional_display="item.rejected_at"  # Only show if rejected
             )
         },
         order=4
@@ -1328,7 +1381,7 @@ SUPPLIER_PAYMENT_ACTIONS = [
         id="create",
         label="New Payment",
         icon="fas fa-plus",
-        url_pattern="/universal/{entity_type}/create",
+        route_name="supplier_views.create_payment",
         button_type=ButtonType.PRIMARY,
         permission="supplier_payments_create",
         show_in_list=True,

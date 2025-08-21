@@ -69,33 +69,83 @@
         </div>
         
         <!-- Dynamic menu with simpler tooltips -->
+        <!-- FIXED CODE - WITH STATE PERSISTENCE -->
         <div class="px-4">
             {% for item in menu_items %}
-                <div class="mb-2">
-                    <a 
-                        href="{{ item.url }}" 
-                        class="group flex items-center px-4 py-2 text-white hover:bg-blue-700 transition-all duration-300 relative menu-item"
-                    >
-                        <div class="flex items-center w-full">
-                            <span class="w-8 flex justify-center items-center">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M{{ item.icon_path }}"></path>
-                                </svg>
-                            </span>
-                            <span class="ml-3 text-sm whitespace-nowrap overflow-hidden menu-text">
-                                {{ item.name }}
-                            </span>
-                        </div>
-                    </a>
-                    
+                <div class="mb-2 menu-item" data-menu-name="{{ item.name }}">
                     {% if item.children %}
-                        <div class="pl-8 mt-1 menu-children">
+                        <!-- Parent menu with children - needs expansion handling -->
+                        <div class="menu-header group flex items-center px-4 py-2 text-white hover:bg-blue-700 transition-all duration-300 relative cursor-pointer">
+                            <div class="flex items-center w-full">
+                                <span class="w-8 flex justify-center items-center">
+                                    {% if item.icon %}
+                                        <i class="fas fa-{{ item.icon }} w-5 h-5"></i>
+                                    {% elif item.icon_path %}
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M{{ item.icon_path }}"></path>
+                                        </svg>
+                                    {% else %}
+                                        <i class="fas fa-circle w-5 h-5"></i>
+                                    {% endif %}
+                                </span>
+                                <span class="ml-3 text-sm whitespace-nowrap overflow-hidden menu-text flex-1">
+                                    {{ item.name }}
+                                </span>
+                                {% if item.badge %}
+                                    <span class="badge badge-{{ item.badge_color or 'primary' }} ml-2 text-xs">{{ item.badge }}</span>
+                                {% endif %}
+                                <!-- Expand icon (managed by JavaScript) -->
+                                <span class="expand-icon ml-2 text-xs transition-transform">▶</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Children container - initially hidden -->
+                        <div class="menu-children hidden pl-8 mt-1 border-l border-blue-600 ml-4">
                             {% for child in item.children %}
-                                <a href="{{ child.url }}" class="block py-1 text-sm text-blue-200 hover:text-white pl-2">
-                                    {{ child.name }}
+                                <a href="{{ child.url }}" 
+                                class="menu-item block py-1 px-2 text-sm text-blue-200 hover:bg-blue-700 hover:text-white transition-all duration-200"
+                                data-menu-name="{{ child.name }}">
+                                    <div class="flex items-center">
+                                        <span class="w-6 flex justify-center items-center">
+                                            {% if child.icon %}
+                                                <i class="fas fa-{{ child.icon }} w-4 h-4"></i>
+                                            {% else %}
+                                                <i class="fas fa-dot-circle w-3 h-3"></i>
+                                            {% endif %}
+                                        </span>
+                                        <span class="ml-2 text-sm menu-text">{{ child.name }}</span>
+                                        {% if child.badge %}
+                                            <span class="badge badge-{{ child.badge_color or 'info' }} ml-2 text-xs">{{ child.badge }}</span>
+                                        {% endif %}
+                                    </div>
                                 </a>
                             {% endfor %}
                         </div>
+                    {% else %}
+                        <!-- Direct link (no children) -->
+                        <a href="{{ item.url }}" 
+                        class="menu-item group flex items-center px-4 py-2 text-white hover:bg-blue-700 transition-all duration-300 relative"
+                        data-menu-name="{{ item.name }}">
+                            <div class="flex items-center w-full">
+                                <span class="w-8 flex justify-center items-center">
+                                    {% if item.icon %}
+                                        <i class="fas fa-{{ item.icon }} w-5 h-5"></i>
+                                    {% elif item.icon_path %}
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M{{ item.icon_path }}"></path>
+                                        </svg>
+                                    {% else %}
+                                        <i class="fas fa-circle w-5 h-5"></i>
+                                    {% endif %}
+                                </span>
+                                <span class="ml-3 text-sm whitespace-nowrap overflow-hidden menu-text">
+                                    {{ item.name }}
+                                </span>
+                                {% if item.badge %}
+                                    <span class="badge badge-{{ item.badge_color or 'primary' }} ml-2 text-xs">{{ item.badge }}</span>
+                                {% endif %}
+                            </div>
+                        </a>
                     {% endif %}
                 </div>
             {% endfor %}
@@ -214,85 +264,365 @@
     </div>
 </div>
 
-{% block dashboard_scripts %}
+
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log("DOM loaded - improved icon rotation and centering");
+document.addEventListener('DOMContentLoaded', function() {
+    console.log("🔧 Dashboard menu initialization starting...");
+    
+    // =========================================================================
+    // ELEMENT REFERENCES
+    // =========================================================================
+    
+    // Get sidebar elements
+    const sidebar = document.getElementById('sidebar');
+    const toggleBtn = document.getElementById('toggle-sidebar-btn');
+    const toggleIcon = document.getElementById('toggle-sidebar-icon');
+    const sidebarTitle = document.getElementById('sidebar-title');
+    const userInfo = document.getElementById('user-info');
+    const menuTexts = document.querySelectorAll('.menu-text');
+    const menuChildren = document.querySelectorAll('.menu-children');
+    const menuTooltip = document.getElementById('menu-tooltip');
+    
+    // Debug: Check if elements exist
+    console.log('🔍 Elements found:', {
+        sidebar: !!sidebar,
+        toggleBtn: !!toggleBtn,
+        menuItems: document.querySelectorAll('.menu-item').length,
+        menuHeaders: document.querySelectorAll('.menu-header').length,
+        menuChildren: document.querySelectorAll('.menu-children').length
+    });
+    
+    // =========================================================================
+    // MENU STATE MANAGEMENT
+    // =========================================================================
+    
+    const MENU_STATE_KEY = 'skinspire_menu_state';
+    const SIDEBAR_STATE_KEY = 'skinspire_sidebar_collapsed';
+    
+    // Track states
+    let sidebarCollapsed = false;
+    let menuState = {
+        expandedItems: new Set(),
+        currentPage: window.location.pathname
+    };
+    
+    function saveMenuState() {
+        try {
+            localStorage.setItem(MENU_STATE_KEY, JSON.stringify({
+                expandedItems: Array.from(menuState.expandedItems),
+                currentPage: menuState.currentPage
+            }));
+            localStorage.setItem(SIDEBAR_STATE_KEY, sidebarCollapsed.toString());
+            console.log('💾 Menu state saved:', {
+                expanded: Array.from(menuState.expandedItems),
+                sidebarCollapsed
+            });
+        } catch (e) {
+            console.warn('⚠️ Could not save menu state:', e);
+        }
+    }
+    
+    function loadMenuState() {
+        try {
+            const savedMenuState = localStorage.getItem(MENU_STATE_KEY);
+            const savedSidebarState = localStorage.getItem(SIDEBAR_STATE_KEY);
+            
+            if (savedMenuState) {
+                const parsed = JSON.parse(savedMenuState);
+                menuState.expandedItems = new Set(parsed.expandedItems || []);
+                menuState.currentPage = parsed.currentPage || window.location.pathname;
+                console.log('📂 Menu state loaded:', parsed);
+            }
+            
+            if (savedSidebarState) {
+                sidebarCollapsed = savedSidebarState === 'true';
+                console.log('📂 Sidebar state loaded:', sidebarCollapsed);
+            }
+        } catch (e) {
+            console.warn('⚠️ Could not load menu state:', e);
+        }
+    }
+    
+    // =========================================================================
+    // MENU EXPANSION LOGIC
+    // =========================================================================
+    
+    function toggleMenuItem(menuItemElement, save = true) {
+        // Get menu name from data attribute or text content
+        const menuName = menuItemElement.getAttribute('data-menu-name') || 
+                        menuItemElement.querySelector('.menu-text')?.textContent.trim();
         
-        // Get sidebar elements
-        const sidebar = document.getElementById('sidebar');
-        const toggleBtn = document.getElementById('toggle-sidebar-btn');
-        const toggleIcon = document.getElementById('toggle-sidebar-icon');
-        const sidebarTitle = document.getElementById('sidebar-title');
-        const userInfo = document.getElementById('user-info');
-        const menuTexts = document.querySelectorAll('.menu-text');
-        const menuChildren = document.querySelectorAll('.menu-children');
-        const menuTooltip = document.getElementById('menu-tooltip');
+        if (!menuName) {
+            console.warn('⌛ No menu name found for item:', menuItemElement);
+            return;
+        }
         
-        // Track sidebar state
-        let sidebarCollapsed = false;
+        const childrenContainer = menuItemElement.querySelector('.menu-children');
+        const expandIcon = menuItemElement.querySelector('.expand-icon');
         
-        // Sidebar toggle functionality with improved icon rotation
-        if (toggleBtn && sidebar) {
-            toggleBtn.addEventListener('click', function() {
-                console.log("Toggle button clicked");
-                sidebarCollapsed = !sidebarCollapsed;
+        if (!childrenContainer) {
+            console.warn('⌛ No children container found for:', menuName);
+            return;
+        }
+        
+        const isExpanded = !childrenContainer.classList.contains('hidden');
+        
+        console.log(`🔄 Toggling menu: "${menuName}" (currently ${isExpanded ? 'expanded' : 'collapsed'})`);
+        
+        if (isExpanded) {
+            // Collapse
+            childrenContainer.classList.add('hidden');
+            if (expandIcon) {
+                expandIcon.style.transform = '';
+                expandIcon.classList.remove('rotated');
+            }
+            menuState.expandedItems.delete(menuName);
+            
+            // Remove bg opacity from parent when collapsing
+            menuItemElement.classList.remove('bg-blue-700', 'bg-opacity-50');
+            console.log(`📁 Collapsed: ${menuName}`);
+        } else {
+            // Expand
+            childrenContainer.classList.remove('hidden');
+            if (expandIcon) {
+                expandIcon.style.transform = 'rotate(90deg)';
+                expandIcon.classList.add('rotated');
+            }
+            menuState.expandedItems.add(menuName);
+            console.log(`📂 Expanded: ${menuName}`);
+        }
+        
+        if (save) {
+            saveMenuState();
+        }
+    }
+    
+    function restoreMenuState() {
+        console.log('🔄 Restoring menu state...');
+        console.log('📂 Expanded items:', Array.from(menuState.expandedItems));
+        
+        // Restore sidebar state first
+        if (sidebarCollapsed) {
+            applySidebarCollapse(false); // Don't save during restore
+        }
+        
+        // Restore expanded menu items
+        menuState.expandedItems.forEach(menuName => {
+            // Try to find menu item by data-menu-name attribute
+            let menuItem = document.querySelector(`.menu-item[data-menu-name="${menuName}"]`);
+            
+            // If not found, try to find by text content
+            if (!menuItem) {
+                document.querySelectorAll('.menu-item').forEach(item => {
+                    const textElement = item.querySelector('.menu-text');
+                    if (textElement && textElement.textContent.trim() === menuName) {
+                        menuItem = item;
+                    }
+                });
+            }
+            
+            if (menuItem) {
+                const childrenContainer = menuItem.querySelector('.menu-children');
+                const expandIcon = menuItem.querySelector('.expand-icon');
+                if (childrenContainer) {
+                    childrenContainer.classList.remove('hidden');
+                    if (expandIcon) {
+                        expandIcon.style.transform = 'rotate(90deg)';
+                        expandIcon.classList.add('rotated');
+                    }
+                    console.log(`📂 Restored expanded state for: "${menuName}"`);
+                }
+            }
+        });
+        
+        // Highlight current page AFTER restoring expanded states
+        setTimeout(() => {
+            highlightCurrentPage();
+        }, 100);
+    }
+    
+    function highlightCurrentPage() {
+        const currentPath = window.location.pathname;
+        console.log('🎯 Highlighting current page:', currentPath);
+        
+        // Remove existing active states
+        document.querySelectorAll('.menu-item').forEach(item => {
+            item.classList.remove('active', 'bg-blue-700');
+        });
+        
+        // Find and highlight current page - check all links including nested ones
+        let highlighted = false;
+        let bestMatch = null;
+        let bestMatchLength = 0;
+        
+        // First pass: find the best matching URL
+        document.querySelectorAll('.menu-item a').forEach(link => {
+            const href = link.getAttribute('href');
+            
+            // Skip hash links
+            if (!href || href === '#') return;
+            
+            // Check for exact match or prefix match
+            if (href === currentPath) {
+                // Exact match is the best
+                bestMatch = link;
+                bestMatchLength = href.length;
+            } else if (currentPath.startsWith(href) && href !== '/' && href.length > bestMatchLength) {
+                // Prefix match - keep the longest matching prefix
+                bestMatch = link;
+                bestMatchLength = href.length;
+            }
+        });
+        
+        // Apply highlighting to the best match
+        if (bestMatch) {
+            const menuItem = bestMatch.closest('.menu-item');
+            if (menuItem) {
+                menuItem.classList.add('active', 'bg-blue-700');
+                console.log('✨ Highlighted menu item:', menuItem.getAttribute('data-menu-name'));
+                highlighted = true;
                 
-                if (sidebarCollapsed) {
-                    // Collapse sidebar
-                    sidebar.style.width = '5rem'; // 80px / 5rem
-                    
-                    // Rotate toggle icon - explicitly set transform
-                    toggleIcon.style.transform = 'rotate(180deg)';
-                    
-                    // Hide text elements
-                    sidebarTitle.style.display = 'none';
-                    userInfo.style.display = 'none';
-                    menuTexts.forEach(item => {
-                        item.style.display = 'none';
-                    });
-                    menuChildren.forEach(item => {
-                        item.style.display = 'none';
-                    });
-                } else {
-                    // Expand sidebar
-                    sidebar.style.width = '16rem'; // 256px / 16rem
-                    
-                    // Reset toggle icon rotation
-                    toggleIcon.style.transform = '';
-                    
-                    // Show text elements
-                    sidebarTitle.style.display = '';
-                    userInfo.style.display = '';
-                    menuTexts.forEach(item => {
-                        item.style.display = '';
-                    });
-                    menuChildren.forEach(item => {
-                        item.style.display = '';
-                    });
+                // Ensure all parent menus are expanded
+                let parentContainer = menuItem.closest('.menu-children');
+                while (parentContainer) {
+                    const parentMenuItem = parentContainer.closest('.menu-item');
+                    if (parentMenuItem) {
+                        const parentName = parentMenuItem.getAttribute('data-menu-name') || 
+                                         parentMenuItem.querySelector('.menu-text')?.textContent.trim();
+                        if (parentName) {
+                            console.log('📂 Auto-expanding parent menu:', parentName);
+                            menuState.expandedItems.add(parentName);
+                            
+                            // Expand the parent menu visually
+                            const childrenDiv = parentMenuItem.querySelector('.menu-children');
+                            const expandIcon = parentMenuItem.querySelector('.expand-icon');
+                            if (childrenDiv) {
+                                childrenDiv.classList.remove('hidden');
+                                if (expandIcon) {
+                                    expandIcon.style.transform = 'rotate(90deg)';
+                                    expandIcon.classList.add('rotated');
+                                }
+                            }
+                            
+                            // Mark parent as partially active
+                            parentMenuItem.classList.add('bg-blue-700', 'bg-opacity-50');
+                        }
+                    }
+                    // Check for grandparent
+                    parentContainer = parentMenuItem ? parentMenuItem.parentElement.closest('.menu-children') : null;
+                }
+            }
+        }
+        
+        if (!highlighted) {
+            console.log('❓ No menu item found for current path');
+        }
+        
+        // Save the updated state
+        saveMenuState();
+    }
+    
+    // =========================================================================
+    // SIDEBAR COLLAPSE/EXPAND
+    // =========================================================================
+    
+    function applySidebarCollapse(save = true) {
+        if (sidebarCollapsed) {
+            // Collapse sidebar
+            sidebar.style.width = '5rem';
+            toggleIcon.style.transform = 'rotate(180deg)';
+            
+            // Hide text elements
+            sidebarTitle.style.display = 'none';
+            userInfo.style.display = 'none';
+            menuTexts.forEach(item => item.style.display = 'none');
+            menuChildren.forEach(item => item.style.display = 'none');
+            
+        } else {
+            // Expand sidebar
+            sidebar.style.width = '16rem';
+            toggleIcon.style.transform = '';
+            
+            // Show text elements
+            sidebarTitle.style.display = '';
+            userInfo.style.display = '';
+            menuTexts.forEach(item => item.style.display = '');
+            
+            // For expanded menu items, show their children
+            menuState.expandedItems.forEach(menuName => {
+                const menuItem = document.querySelector(`.menu-item[data-menu-name="${menuName}"]`);
+                if (menuItem) {
+                    const childrenContainer = menuItem.querySelector('.menu-children');
+                    if (childrenContainer) {
+                        childrenContainer.style.display = '';
+                    }
                 }
             });
         }
         
-        // Setup tooltip for menu items using a single tooltip element
+        if (save) {
+            saveMenuState();
+        }
+    }
+    
+    // Sidebar toggle functionality
+    if (toggleBtn && sidebar) {
+        toggleBtn.addEventListener('click', function() {
+            console.log("🔄 Sidebar toggle clicked");
+            sidebarCollapsed = !sidebarCollapsed;
+            applySidebarCollapse();
+        });
+    }
+    
+    // =========================================================================
+    // MENU CLICK HANDLERS
+    // =========================================================================
+    
+    function setupMenuClickHandlers() {
+        console.log('🎯 Setting up menu click handlers...');
+        
+        // Add click handlers to all menu headers (items with children)
+        const menuHeaders = document.querySelectorAll('.menu-header');
+        console.log(`🎯 Found ${menuHeaders.length} menu headers`);
+        
+        menuHeaders.forEach((header, index) => {
+            const menuItem = header.closest('.menu-item');
+            const menuName = menuItem?.getAttribute('data-menu-name');
+            
+            console.log(`🎯 Setting up handler ${index + 1}: "${menuName}"`);
+            
+            header.addEventListener('click', function(e) {
+                // Prevent default for all clicks on header
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const menuItem = header.closest('.menu-item');
+                if (menuItem) {
+                    console.log('🖱️ Menu header clicked:', menuItem.getAttribute('data-menu-name'));
+                    toggleMenuItem(menuItem);
+                }
+            });
+        });
+    }
+    
+    // =========================================================================
+    // TOOLTIP FUNCTIONALITY
+    // =========================================================================
+    
+    function setupTooltips() {
         const menuItems = document.querySelectorAll('.menu-item');
         
         menuItems.forEach((item) => {
-            const menuText = item.querySelector('.menu-text').textContent.trim();
+            const menuText = item.querySelector('.menu-text')?.textContent.trim();
             
             item.addEventListener('mouseenter', function(e) {
-                if (sidebarCollapsed && menuTooltip) {
+                if (sidebarCollapsed && menuTooltip && menuText) {
                     const sidebarRect = sidebar.getBoundingClientRect();
                     const itemRect = item.getBoundingClientRect();
                     
-                    // Update tooltip text
                     menuTooltip.textContent = menuText;
-                    
-                    // Position tooltip
                     menuTooltip.style.top = (itemRect.top + (itemRect.height / 2) - 15) + 'px';
                     menuTooltip.style.left = (sidebarRect.right + 10) + 'px';
-                    
-                    // Show tooltip
                     menuTooltip.classList.remove('hidden');
                 }
             });
@@ -303,88 +633,113 @@
                 }
             });
         });
-        
-        // Mobile menu toggle
-        const toggleMobileBtn = document.getElementById('toggle-mobile-sidebar');
-        
-        if (toggleMobileBtn && sidebar) {
-            // Create mobile close button if it doesn't exist
-            let mobileCloseBtn = document.getElementById('close-mobile-sidebar');
-            if (!mobileCloseBtn) {
-                mobileCloseBtn = document.createElement('button');
-                mobileCloseBtn.id = 'close-mobile-sidebar';
-                mobileCloseBtn.innerHTML = `
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                `;
-                mobileCloseBtn.className = 'p-2 text-white absolute top-4 right-4 md:hidden focus:outline-none';
-                sidebar.appendChild(mobileCloseBtn);
-            }
-            
-            // Toggle sidebar visibility on mobile
-            toggleMobileBtn.addEventListener('click', function() {
-                // Make sidebar fixed and full height on mobile
-                sidebar.classList.add('fixed', 'inset-y-0', 'left-0');
-                sidebar.classList.remove('hidden');
-            });
-            
-            // Close sidebar on mobile
-            mobileCloseBtn.addEventListener('click', function() {
-                sidebar.classList.add('hidden');
-            });
-        }
-        
-        // Handle mobile visibility on page load and resize
-        function handleMobileView() {
-            if (window.innerWidth < 768) { // md breakpoint
-                sidebar.classList.add('hidden', 'fixed', 'inset-y-0', 'left-0');
-                sidebar.classList.remove('static');
-                
-                // Reset collapsed state on mobile
-                if (sidebarCollapsed) {
-                    sidebarCollapsed = false;
-                    sidebar.style.width = '16rem';
-                    toggleIcon.style.transform = ''; // Reset icon rotation
-                    sidebarTitle.style.display = '';
-                    userInfo.style.display = '';
-                    menuTexts.forEach(item => {
-                        item.style.display = '';
-                    });
-                    menuChildren.forEach(item => {
-                        item.style.display = '';
-                    });
-                }
-            } else {
-                sidebar.classList.remove('hidden');
-                sidebar.classList.add('static');
-                sidebar.classList.remove('fixed', 'inset-y-0', 'left-0');
-            }
-        }
-        
-        // Initialize mobile view
-        handleMobileView();
-        
-        // Handle window resize
-        window.addEventListener('resize', handleMobileView);
-        
-        // User dropdown functionality
-        const userMenuBtn = document.getElementById('user-menu-button');
-        const userDropdown = document.getElementById('user-dropdown');
-        
-        if (userMenuBtn && userDropdown) {
-            userMenuBtn.addEventListener('click', function() {
-                userDropdown.classList.toggle('hidden');
-            });
-            
-            // Close dropdown when clicking outside
-            document.addEventListener('click', function(event) {
-                if (!userMenuBtn.contains(event.target) && !userDropdown.contains(event.target)) {
-                    userDropdown.classList.add('hidden');
-                }
-            });
-        }
-    });
+    }
+    
+    // =========================================================================
+    // INITIALIZATION SEQUENCE
+    // =========================================================================
+    
+    console.log('🚀 Starting initialization sequence...');
+    
+    // 1. Load saved state
+    loadMenuState();
+    
+    // 2. Setup all event handlers
+    setupMenuClickHandlers();
+    setupTooltips();
+    
+    // 3. Restore menu state after a brief delay to ensure DOM is ready
+    setTimeout(() => {
+        restoreMenuState();
+        console.log('✅ Menu initialization complete!');
+    }, 200);
+    
+    // 4. Save state before page unload
+    window.addEventListener('beforeunload', saveMenuState);
+    
+    console.log('✅ Dashboard menu system loaded successfully!');
+});
 </script>
-{% endblock %}
+
+<!-- Add required CSS if not already present -->
+<style>
+/* Menu Active States */
+.menu-item.active {
+    background-color: rgba(59, 130, 246, 0.2) !important;
+    border-right: 3px solid #60a5fa;
+}
+
+.menu-item.active .menu-text {
+    color: #60a5fa !important;
+    font-weight: 600;
+}
+
+/* Expand icon animation */
+.expand-icon {
+    transition: transform 0.2s ease-in-out;
+    font-size: 0.75rem !important;
+    cursor: pointer;
+    user-select: none;
+}
+
+.expand-icon.rotated {
+    transform: rotate(90deg);
+}
+
+.expand-icon:hover {
+    color: #60a5fa;
+}
+
+/* Menu header cursor */
+.menu-header {
+    cursor: pointer !important;
+}
+
+/* Badge styles */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.badge-primary {
+    background-color: rgba(59, 130, 246, 0.1);
+    color: #1d4ed8;
+}
+
+.badge-info {
+    background-color: rgba(6, 182, 212, 0.1);
+    color: #0891b2;
+}
+
+.badge-warning {
+    background-color: rgba(245, 158, 11, 0.1);
+    color: #d97706;
+}
+
+.badge-success {
+    background-color: rgba(34, 197, 94, 0.1);
+    color: #16a34a;
+}
+
+/* Nested menu styling */
+.menu-children {
+    border-left: 2px solid rgba(96, 165, 250, 0.3);
+}
+
+/* Smooth transitions */
+.menu-item, .menu-header {
+    transition: all 0.2s ease-in-out;
+}
+
+/* Focus states for accessibility */
+.menu-item:focus-within,
+.menu-header:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+</style>
 {% endblock %}
