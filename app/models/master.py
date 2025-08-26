@@ -297,7 +297,7 @@ class CurrencyMaster(Base, TimestampMixin, TenantMixin):
     # Relationship
     hospital = relationship("Hospital")
 
-class PackageFamily(Base, TimestampMixin, TenantMixin):
+class PackageFamily(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     """Package families for grouping related packages"""
     __tablename__ = 'package_families'
     
@@ -311,7 +311,7 @@ class PackageFamily(Base, TimestampMixin, TenantMixin):
     hospital = relationship("Hospital")
     packages = relationship("Package", back_populates="family")
 
-class Package(Base, TimestampMixin, TenantMixin):
+class Package(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     """Treatment or service packages"""
     __tablename__ = 'packages'
     
@@ -339,7 +339,7 @@ class Package(Base, TimestampMixin, TenantMixin):
     family = relationship("PackageFamily", back_populates="packages")
     services = relationship("PackageServiceMapping", back_populates="package")
 
-class Service(Base, TimestampMixin, TenantMixin):
+class Service(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     """Individual services offered"""
     __tablename__ = 'services'
     
@@ -374,7 +374,7 @@ class Service(Base, TimestampMixin, TenantMixin):
     consumable_standards = relationship("ConsumableStandard", back_populates="service")
     gl_account = relationship("ChartOfAccounts")
 
-class PackageServiceMapping(Base, TimestampMixin, TenantMixin):
+class PackageServiceMapping(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     """Maps services to packages"""
     __tablename__ = 'package_service_mapping'
     
@@ -390,7 +390,7 @@ class PackageServiceMapping(Base, TimestampMixin, TenantMixin):
     package = relationship("Package", back_populates="services")
     service = relationship("Service", back_populates="package_mappings")
 
-class MedicineCategory(Base, TimestampMixin, TenantMixin):
+class MedicineCategory(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     """Categories of medicines"""
     __tablename__ = 'medicine_categories'
     
@@ -415,7 +415,7 @@ class MedicineCategory(Base, TimestampMixin, TenantMixin):
     hospital = relationship("Hospital")
     medicines = relationship("Medicine", back_populates="category")
 
-class Manufacturer(Base, TimestampMixin, TenantMixin):
+class Manufacturer(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     """Medicine manufacturers"""
     __tablename__ = 'manufacturers'
     
@@ -438,7 +438,7 @@ class Manufacturer(Base, TimestampMixin, TenantMixin):
     hospital = relationship("Hospital")
     medicines = relationship("Medicine", back_populates="manufacturer")
 
-class Supplier(Base, TimestampMixin, TenantMixin):
+class Supplier(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     """Medicine and equipment suppliers"""
     __tablename__ = 'suppliers'
     
@@ -503,7 +503,7 @@ class Supplier(Base, TimestampMixin, TenantMixin):
         except Exception:
             return False
 
-class Medicine(Base, TimestampMixin, TenantMixin):
+class Medicine(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     """Medicine master data"""
     __tablename__ = 'medicines'
     

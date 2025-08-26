@@ -61,11 +61,25 @@
                 <tr>
                     <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                         {% if payment.payment_date %}
-                            {% set date_parts = payment.payment_date.split('T')[0].split('-') %}
-                            {% set months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] %}
-                            {{ months[date_parts[1]|int - 1] }} {{ date_parts[2] }}, {{ date_parts[0] }}
+                            {% if 'T' in payment.payment_date %}
+                                {# Handle ISO format dates #}
+                                {% set date_parts = payment.payment_date.split('T')[0].split('-') %}
+                                {% set time_part = payment.payment_date.split('T')[1].split('.')[0] if 'T' in payment.payment_date else '' %}
+                                {% set months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] %}
+                                {% if date_parts|length >= 3 %}
+                                    {{ date_parts[2] }}/{{ months[date_parts[1]|int - 1] }}/{{ date_parts[0] }}
+                                    {% if time_part %}
+                                        <br><span class="text-xs text-gray-500 dark:text-gray-400">{{ time_part[:5] }}</span>
+                                    {% endif %}
+                                {% else %}
+                                    {{ payment.payment_date }}
+                                {% endif %}
+                            {% else %}
+                                {# Handle pre-formatted dates #}
+                                {{ payment.payment_date }}
+                            {% endif %}
                         {% else %}
-                            
+                            —
                         {% endif %}
                     </td>
                     <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">

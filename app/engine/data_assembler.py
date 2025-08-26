@@ -470,37 +470,50 @@ class EnhancedUniversalDataAssembler:
                         'label': field.label,
                         'sortable': getattr(field, 'sortable', False),
                         'css_class': getattr(field, 'css_class', ''),
-                        'width': getattr(field, 'width', 'auto'),
+                        'width': getattr(field, 'width', None),
+                        'max_width': getattr(field, 'max_width', None),
                         'align': getattr(field, 'align', 'left'),
                         'field_type': self._get_field_type_safe(field),
                         'format_pattern': getattr(field, 'format_pattern', None),
                         'complex_display_type': complex_display_type_value,
                         'css_classes': getattr(field, 'css_classes', ''),
                         'related_field': getattr(field, 'related_field', None),
-                        'related_display_field': getattr(field, 'related_display_field', None)
+                        'related_display_field': getattr(field, 'related_display_field', None),
+                        
+                        # Universal virtual field metadata for template
+                        'virtual': getattr(field, 'virtual', False),
+                        'virtual_target': getattr(field, 'virtual_target', None),
+                        'virtual_key': getattr(field, 'virtual_key', None)
                     }
-                    # Debug log for supplier_name
-                    if field.name == 'supplier_name':
-                        logger.info(f"🔍 SUPPLIER COLUMN ASSEMBLY: {column}")
                     columns.append(column)
             
-            logger.info("🔍 [DEBUG TABLE COLUMNS]")
-            for field in config.fields:
-                if field.name == 'supplier_name':
-                    logger.info(f"✅ Found supplier_name field config:")
-                    logger.info(f"  - show_in_list: {getattr(field, 'show_in_list', False)}")
-                    logger.info(f"  - field_type: {getattr(field, 'field_type', 'unknown')}")
-                    logger.info(f"  - complex_display_type: {getattr(field, 'complex_display_type', 'NOT SET')}")
-                    logger.info(f"  - css_classes: {getattr(field, 'css_classes', 'NOT SET')}")
-
             return columns
             
         except Exception as e:
             logger.error(f"Error assembling table columns: {str(e)}")
             return []
 
+    def _extract_virtual_field_value(self, field, item: Dict):
+        """Extract virtual field value from JSONB or nested structure - ONLY FOR VIRTUAL FIELDS"""
+        try:
+            virtual_target = getattr(field, 'virtual_target', None)
+            virtual_key = getattr(field, 'virtual_key', None)
+            
+            if virtual_target and virtual_key:
+                target_data = item.get(virtual_target, {})
+                if isinstance(target_data, dict):
+                    return target_data.get(virtual_key, '')
+                else:
+                    return ''
+            else:
+                return ''
+        
+        except Exception as e:
+            logger.error(f"Error extracting virtual field value for {field.name}: {str(e)}")
+            return ''
+
     def _assemble_table_data(self, config: EntityConfiguration, items: List[Dict]) -> List[Dict]:
-        """Assemble table data from raw items"""
+        """Assemble table data from raw items - PRESERVES ORIGINAL LOGIC"""
         try:
             if not items:
                 return []
@@ -510,11 +523,21 @@ class EnhancedUniversalDataAssembler:
             for item in items:
                 row_data = {}
                 
-                # Process each field
+                # Process each field that should show in list
                 for field in config.fields:
                     if getattr(field, 'show_in_list', False):
-                        raw_value = item.get(field.name)
-                        row_data[field.name] = self._format_field_value(field, raw_value)
+                        
+                        # HYBRID APPROACH: Only use virtual field logic for virtual fields
+                        if getattr(field, 'virtual', False):
+                            # Virtual field - use new extraction logic
+                            raw_value = self._extract_virtual_field_value(field, item)
+                        else:
+                            # Direct field - use ORIGINAL logic (preserve existing behavior)
+                            raw_value = item.get(field.name)
+                        
+                        # Store current item for badge formatting
+                        self._current_item = item  
+                        row_data[field.name] = self._format_field_value(field, raw_value, item)
                 
                 # Add row metadata
                 row_data['_row_id'] = item.get(config.primary_key)
@@ -525,27 +548,100 @@ class EnhancedUniversalDataAssembler:
             return table_data
             
         except Exception as e:
-            logger.error(f"Error assembling table data: {str(e)}")
+            logger.error(f"Error assembling table data for {config.entity_type}: {str(e)}")
             return []
 
-    def _format_field_value(self, field, raw_value) -> str:
+    def _format_field_value(self, field, raw_value, item=None) -> str:
         """Format field value for display"""
         try:
             if raw_value is None:
                 return '—'
             
             field_type = self._get_field_type_safe(field)
+
+            # SPECIAL CASE: Currency fields with format patterns should return raw values
+            # Let the template handle the formatting
+            if field_type == 'currency' and getattr(field, 'format_pattern', None) == 'mixed_payment_breakdown':
+                # Return raw numeric value for template processing
+                try:
+                    return str(float(raw_value))
+                except (ValueError, TypeError):
+                    return '0'
+            
+            if field_type == 'currency' or field_type == 'amount':
+                try:
+                    amount = float(raw_value)
+                    return f"₹{amount:,.2f}"
+                except (ValueError, TypeError):
+                    return raw_value
             
             if field_type == 'date':
                 if isinstance(raw_value, (date, datetime)):
-                    return raw_value.strftime('%b %d, %Y')
+                    return raw_value.strftime('%d/%b/%Y')  # Was: '%b %d, %Y'
                 elif isinstance(raw_value, str):
                     try:
                         date_obj = datetime.strptime(raw_value, '%Y-%m-%d').date()
-                        return date_obj.strftime('%b %d, %Y')
+                        return date_obj.strftime('%d/%b/%Y')  # Was: '%b %d, %Y'
                     except:
                         return raw_value
             
+            elif field_type == 'datetime':
+                if isinstance(raw_value, datetime):
+                    # For datetime objects, show date and time
+                    return raw_value.strftime('%d/%b/%Y %H:%M')
+                elif isinstance(raw_value, date):
+                    # For date objects, just show date
+                    return raw_value.strftime('%d/%b/%Y')
+                elif isinstance(raw_value, str):
+                    try:
+                        # ✅ FIXED: Handle timezone-aware datetime strings first
+                        from dateutil import parser
+                        dt_obj = parser.parse(raw_value)
+                        return dt_obj.strftime('%d/%b/%Y %H:%M')
+                    except:
+                        try:
+                            # Try parsing as full datetime first
+                            dt_obj = datetime.strptime(raw_value, '%Y-%m-%d %H:%M:%S')
+                            return dt_obj.strftime('%d/%b/%Y %H:%M')
+                        except:
+                            try:
+                                # Try parsing as datetime without seconds
+                                dt_obj = datetime.strptime(raw_value, '%Y-%m-%d %H:%M')
+                                return dt_obj.strftime('%d/%b/%Y %H:%M')
+                            except:
+                                try:
+                                    # Try parsing as just date
+                                    date_obj = datetime.strptime(raw_value, '%Y-%m-%d').date()
+                                    return date_obj.strftime('%d/%b/%Y')
+                                except:
+                                    return raw_value
+
+            # Also handle the case where a field is marked as DATE but contains datetime
+            elif field_type == 'date':
+                if isinstance(raw_value, datetime):
+                    # If it's actually a datetime, format as date only
+                    return raw_value.strftime('%d/%b/%Y')
+                elif isinstance(raw_value, date):
+                    return raw_value.strftime('%d/%b/%Y')
+                elif isinstance(raw_value, str):
+                    try:
+                        # ✅ FIXED: Handle timezone-aware datetime strings first
+                        from dateutil import parser
+                        dt_obj = parser.parse(raw_value)
+                        return dt_obj.strftime('%d/%b/%Y')
+                    except:
+                        try:
+                            # Try parsing as datetime first (common case)
+                            dt_obj = datetime.strptime(raw_value, '%Y-%m-%d %H:%M:%S')
+                            return dt_obj.strftime('%d/%b/%Y')
+                        except:
+                            try:
+                                # Try parsing as date
+                                date_obj = datetime.strptime(raw_value, '%Y-%m-%d').date()
+                                return date_obj.strftime('%d/%b/%Y')
+                            except:
+                                return raw_value
+
             elif field_type in ['currency', 'amount']:
                 try:
                     amount = float(raw_value)
@@ -554,7 +650,15 @@ class EnhancedUniversalDataAssembler:
                     return str(raw_value)
             
             elif field_type == 'status_badge':
-                return self._format_status_badge(field, raw_value)
+                result = self._format_status_badge(field, raw_value, item)
+                # Return the badge HTML, or create default badge
+                if isinstance(result, dict) and 'badge_html' in result:
+                    return result['badge_html']
+                elif isinstance(result, dict) and 'formatted_value' in result:
+                    css_class = result.get('css_class', 'status-badge status-default')
+                    return f'<span class="{css_class}">{result["formatted_value"]}</span>'
+                else:
+                    return f'<span class="status-badge status-default">{str(raw_value)}</span>'
             
             return str(raw_value)
             
@@ -562,20 +666,49 @@ class EnhancedUniversalDataAssembler:
             logger.error(f"Error formatting field value: {str(e)}")
             return str(raw_value) if raw_value is not None else '—'
 
-    def _format_status_badge(self, field, value) -> Dict:
-        """Format status badge with CSS class"""
+    def _format_status_badge(self, field, value, item=None) -> Dict:
+        """
+        Format status badge with CSS class
+        ENHANCED: Universal deleted status detection
+        """
         try:
+            # Universal DELETED STATUS DETECTION
+            is_deleted = False
+            if item:
+                # Check multiple possible deleted flags (handle both dict and object)
+                if isinstance(item, dict):
+                    is_deleted = (item.get('is_deleted', False) or 
+                                item.get('deleted_flag', False) or
+                                item.get('deleted', False))
+                else:
+                    is_deleted = (getattr(item, 'is_deleted', False) or 
+                                getattr(item, 'deleted_flag', False) or
+                                getattr(item, 'deleted', False))
+            
+            # If deleted, override status to show "Deleted" regardless of actual status
+            if is_deleted:
+                logger.debug(f"[STATUS_BADGE_DEBUG] Detected deleted item, showing Deleted badge")
+                return {
+                    'formatted_value': 'Deleted',
+                    'css_class': 'status-badge status-deleted',
+                    'badge_html': '<span class="status-badge status-deleted"><i class="fas fa-trash-alt"></i> Deleted</span>'
+                }
+
+            # ✅ FIXED: Return consistent structure for non-deleted status
             if hasattr(field, 'options') and field.options:
                 for option in field.options:
-                    if option.get('value') == value:
+                    if str(option.get('value', '')).lower() == str(value).lower():
                         return {
-                            'text': option.get('label', value),
-                            'css_class': option.get('css_class', 'status-default')
+                            'formatted_value': option.get('label', value),
+                            'css_class': f"status-badge {option.get('css_class', 'status-default')}",
+                            'badge_html': f'<span class="status-badge {option.get("css_class", "status-default")}">{option.get("label", value)}</span>'
                         }
-            
+
+            # ✅ FIXED: Default case with consistent structure
             return {
-                'text': str(value).title(),
-                'css_class': 'status-default'
+                'formatted_value': str(value).title(),
+                'css_class': 'status-badge status-default',
+                'badge_html': f'<span class="status-badge status-default">{str(value).title()}</span>'
             }
             
         except Exception as e:
@@ -1416,7 +1549,7 @@ class EnhancedUniversalDataAssembler:
                     'title': self._get_section_title(section_key, config),
                     'icon': self._get_section_icon(section_key, config),
                     'columns': 2,  # Default
-                    'collapsed_by_default': False,  # Can be enhanced later
+                    'default_collapsed': False,  # Can be enhanced later
                     'order': 0,  # Can be enhanced later
                     'fields': []
                 }

@@ -1447,7 +1447,69 @@ table .supplier-column {
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch !important;
     border-radius: 0.5rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
 }
+
+.universal-data-table {
+    width: 100% !important;
+    table-layout: fixed !important; /* ✅ FIXED: Change to fixed for controlled column widths */
+    min-width: 100% !important; /* ✅ FIXED: Force table to fit container width */
+    max-width: 100% !important; /* ✅ ADDED: Prevent expansion beyond container */
+}
+
+/* ✅ ENHANCED: Text truncation with hover tooltip for fixed layout */
+.universal-data-table th,
+.universal-data-table td {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    position: relative !important;
+}
+
+/* ✅ NEW: Hover tooltip for truncated text */
+.universal-data-table td:hover::after {
+    content: attr(title) !important;
+    position: absolute !important;
+    background: rgb(17 24 39) !important;
+    color: white !important;
+    padding: 0.5rem !important;
+    border-radius: 0.25rem !important;
+    font-size: 0.75rem !important;
+    white-space: nowrap !important;
+    z-index: 1000 !important;
+    bottom: 100% !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    margin-bottom: 0.25rem !important;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
+    display: block !important;
+    opacity: 0 !important;
+    transition: opacity 0.2s !important;
+    pointer-events: none !important;
+}
+
+.universal-data-table td:hover::after {
+    opacity: 1 !important;
+}
+
+.dark .universal-data-table td:hover::after {
+    background: rgb(55 65 81) !important;
+    color: rgb(243 244 246) !important;
+}
+
+
+/* ✅ ENHANCED: Universal table container improvements */
+.universal-list-container .universal-table-container {
+    width: 100% !important;
+    max-width: calc(100vw - 3rem) !important; /* ✅ FIXED: Account for page padding */
+    overflow-x: auto !important;
+    border: 1px solid rgb(229 231 235) !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1) !important;
+}
+
+
 
 .universal-table-container::-webkit-scrollbar {
     height: 6px !important;
@@ -1637,10 +1699,22 @@ table .supplier-column {
 }
 
 .actions-column {
-    width: 100px !important;
+    width: 160px !important;
     text-align: center !important;
     padding-left: 0.25rem !important;
     padding-right: 0.25rem !important;
+}
+
+/* ✅ ADDED: Payment-specific action column - needs more space */
+.entity-supplier_payments .actions-column {
+    width: 140px !important; /* ✅ Even more space for payment actions */
+    min-width: 140px !important;
+}
+
+/* ✅ ADDED: Supplier table can use less space */
+.entity-suppliers .actions-column {
+    width: 100px !important; /* ✅ Original width is fine for suppliers */
+    min-width: 100px !important;
 }
 
 /* ==========================================

@@ -32,6 +32,10 @@ from app.engine.data_assembler import EnhancedUniversalDataAssembler
 from app.engine.universal_services import search_universal_entity_data, get_universal_service, get_universal_item_data
 from app.engine.document_service import get_document_service, prepare_document_data, get_document_buttons
 from app.utils.context_helpers import ensure_request_context, get_user_branch_context, get_branch_uuid_from_context_or_request, get_current_hospital, get_current_branch, get_hospital_and_branch_for_display
+from app.engine.universal_crud_service import get_universal_crud_service
+from app.engine.universal_scope_controller import get_universal_scope_controller
+from app.config.core_definitions import CRUDOperation, FieldType
+from app.engine.virtual_field_transformer import VirtualFieldTransformer
 from app.utils.unicode_logging import get_unicode_safe_logger
 
 
@@ -40,7 +44,8 @@ logger = get_unicode_safe_logger(__name__)
 # Create universal blueprint following your pattern
 universal_bp = Blueprint('universal_views', __name__, url_prefix='/universal')
 
-
+crud_service = get_universal_crud_service()
+scope_controller = get_universal_scope_controller()
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
@@ -587,6 +592,57 @@ def universal_list_view(entity_type: str):
     ✅ REPLACE: Fixed service integration and error handling
     """
     try:
+        # Handle toggle deleted preference if requested
+        toggle_deleted = request.args.get('toggle_deleted')
+        # DEBUG: Always log current user preference state
+        logger.info(f"[USER_PREF_DEBUG] Current user: {current_user.user_id}")
+        logger.info(f"[USER_PREF_DEBUG] Current show_deleted_records: {current_user.show_deleted_records}")
+        logger.info(f"[USER_PREF_DEBUG] ui_preferences raw: {current_user.ui_preferences}")
+        if toggle_deleted is not None:
+            # Update user preference
+            from app.models.transaction import User
+            from sqlalchemy.orm.attributes import flag_modified
+            
+            show_deleted = toggle_deleted.lower() == 'true'
+            # DEBUG: Log user preference operation
+            logger.info(f"[USER_PREF_DEBUG] User {current_user.user_id} toggling deleted visibility to {show_deleted}")
+            
+            with get_db_session() as session:
+                user = session.query(User).filter_by(
+                    user_id=current_user.user_id,
+                    hospital_id=current_user.hospital_id
+                ).first()
+                
+                if user:
+                    if user.ui_preferences is None:
+                        user.ui_preferences = {}
+                    
+                    user.ui_preferences['show_deleted_records'] = show_deleted
+                    flag_modified(user, "ui_preferences")
+                    session.commit()
+                    
+                    # DEBUG: Log successful update
+                    logger.info(f"[USER_PREF_DEBUG] Successfully updated show_deleted_records: {show_deleted} → {show_deleted}")
+                    logger.info(f"[USER_PREF_DEBUG] Current user.ui_preferences: {user.ui_preferences}")
+
+                    # Flash message
+                    if show_deleted:
+                        flash("Deleted records are now visible", 'info')
+                    else:
+                        flash("Deleted records are now hidden", 'info')
+            
+            # Redirect to clean URL without toggle parameter
+            clean_params = {}
+            system_params = {'toggle_deleted', 'csrf_token', 'entity_type', 'redirect_url', '_'}
+            
+            for key, value in request.args.items():
+                if key not in system_params and not key.startswith('_'):
+                    clean_params[key] = value
+            
+            # Redirect to clean URL
+            return redirect(url_for('universal_views.universal_list_view', 
+                                  entity_type=entity_type, 
+                                  **clean_params))
         # Validate entity type
         if not is_valid_entity_type(entity_type):
             flash(f"Entity type '{entity_type}' not found", 'error')
@@ -786,7 +842,8 @@ def get_service_data_safe(entity_type: str, config, current_filters: Dict,
                 branch_id=branch_uuid,
                 current_user_id=current_user.user_id,
                 page=int(current_filters.get('page', 1)),
-                per_page=int(current_filters.get('per_page', config.items_per_page))
+                per_page=int(current_filters.get('per_page', config.items_per_page)),
+                current_user=current_user
             )
         else:
             # ✅ FIXED: Fallback with correct service calling
@@ -984,9 +1041,20 @@ def universal_detail_view(entity_type: str, item_id: str):
             item_id=item_id,
             hospital_id=current_user.hospital_id,
             branch_id=branch_uuid,
-            current_user_id=current_user.user_id
+            current_user_id=current_user.user_id,
+            current_user=current_user
         )
         
+        logger.info(f"📊 RAW DATA RECEIVED: has_data={raw_item_data is not None}")
+        if raw_item_data:
+            logger.info(f"📊 RAW DATA KEYS: {list(raw_item_data.keys())}")
+            logger.info(f"📊 BALANCE DATA CHECK:")
+            logger.info(f"  - current_balance: {raw_item_data.get('current_balance', 'NOT FOUND')}")
+            logger.info(f"  - total_invoiced: {raw_item_data.get('total_invoiced', 'NOT FOUND')}")
+            logger.info(f"  - total_paid: {raw_item_data.get('total_paid', 'NOT FOUND')}")
+            logger.info(f"  - total_purchases: {raw_item_data.get('total_purchases', 'NOT FOUND')}")
+            logger.info(f"  - outstanding_balance: {raw_item_data.get('outstanding_balance', 'NOT FOUND')}")
+
         if raw_item_data.get('has_error'):
             flash(raw_item_data.get('error', 'Record not found'), 'error')
             return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
@@ -1143,19 +1211,26 @@ def universal_detail_view(entity_type: str, item_id: str):
         return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
 
 # =============================================================================
-# UNIVERSAL CREATE VIEW
+# UNIVERSAL CREATE VIEW - Main Route
 # =============================================================================
 
 @universal_bp.route('/<entity_type>/create', methods=['GET', 'POST'])
 @login_required
-@require_web_branch_permission('universal', 'add')
+@require_web_branch_permission('universal', 'create')
 def universal_create_view(entity_type: str):
-    """Universal create view for any entity type"""
+    """Universal create view for master entities"""
     try:
+        logger.info(f"📝 Universal create requested for {entity_type}")
+        
         # Validate entity type
         if not is_valid_entity_type(entity_type):
             flash(f"Entity type '{entity_type}' not found", 'error')
             return redirect(url_for('auth_views.dashboard'))
+        
+        # Check if CRUD is allowed
+        if not scope_controller.validate_operation(entity_type, CRUDOperation.CREATE):
+            flash(f"Create operation not allowed for {entity_type}", 'error')
+            return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
         
         # Get entity configuration
         config = get_entity_config(entity_type)
@@ -1165,87 +1240,191 @@ def universal_create_view(entity_type: str):
             flash(f"You don't have permission to create {config.name}", 'warning')
             return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
         
+        # Route to appropriate handler
         if request.method == 'POST':
             return handle_universal_create_post(entity_type, config)
         else:
             return handle_universal_create_get(entity_type, config)
             
     except Exception as e:
-        logger.error(f"❌ Error in universal create view for {entity_type}: {str(e)}")
-        flash(f"Error in create form for {entity_type}: {str(e)}", 'error')
+        logger.error(f"❌ Error in create view for {entity_type}: {str(e)}", exc_info=True)
+        flash("An error occurred. Please try again.", 'error')
         return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
 
-def handle_universal_create_get(entity_type: str, config):
-    """Handle GET request for create form"""
-    branch_uuid, branch_name = get_branch_uuid_from_context_or_request()
-    
-    form_data = {
-        'entity_config': _make_template_safe_config(config),
-        'entity_type': entity_type,
-        'page_title': f"Create {config.name}",
-        'form_action': url_for('universal_views.universal_create_view', entity_type=entity_type),
-        'cancel_url': url_for('universal_views.universal_list_view', entity_type=entity_type),
-        'current_user': current_user,
-        'branch_context': {
-            'branch_id': branch_uuid,
-            'branch_name': branch_name
-        },
-        'breadcrumbs': [
-            {'label': 'Dashboard', 'url': url_for('main.dashboard')},
-            {'label': config.plural_name, 'url': url_for('universal_views.universal_list_view', entity_type=entity_type)},
-            {'label': f"Create {config.name}", 'url': '#'}
-        ]
-    }
-    
-    template_name = get_template_for_entity(entity_type, 'create')
-    return render_template(template_name, **form_data)
+# =============================================================================
+# CREATE HANDLER METHODS (KEEP/UPDATE THESE)
+# =============================================================================
 
-def handle_universal_create_post(entity_type: str, config):
-    """Handle POST request for create form submission"""
+def handle_universal_create_get(entity_type: str, config):
+    """Handle GET request for universal create - prepare form"""
     try:
-        # Get universal service
-        service = get_universal_service(entity_type)
-        branch_uuid, _ = get_branch_uuid_from_context_or_request()
+        logger.info(f"📝 Preparing create form for {entity_type}")
         
-        # Process form data
-        form_data = request.form.to_dict()
+        # Prepare form fields
+        form_fields = []
+        field_map = {f.name: f for f in config.fields}
         
-        # Create new item
-        new_item = service.create(
-            data=form_data,
-            hospital_id=current_user.hospital_id,
-            branch_id=branch_uuid,
-            current_user_id=current_user.user_id
+        # Get create fields from config
+        create_fields = getattr(config, 'create_fields', None)
+        if not create_fields:
+            create_fields = [f.name for f in config.fields if f.show_in_form]
+        
+        for field_name in create_fields:
+            if field_name in field_map:
+                field_def = field_map[field_name]
+                if not field_def.readonly:
+                    # Convert field to template format
+                    field_type = field_def.field_type.value if hasattr(field_def.field_type, 'value') else str(field_def.field_type)
+                    field_type = field_type.lower().replace('fieldtype.', '')
+                    
+                    form_fields.append({
+                        'name': field_def.name,
+                        'label': field_def.label,
+                        'field_type': field_type,
+                        'required': field_def.required,
+                        'placeholder': getattr(field_def, 'placeholder', ''),
+                        'help_text': getattr(field_def, 'help_text', ''),
+                        'options': getattr(field_def, 'options', []),
+                        'value': getattr(field_def, 'default_value', ''),
+                        'column_width': getattr(field_def, 'columns_span', 6),
+                        'readonly': False,
+                        'section': getattr(field_def, 'section', 'default'),
+                        'view_order': getattr(field_def, 'view_order', 0),
+                        'tab_group': getattr(field_def, 'tab_group', None),
+                    })
+        
+        # IMPORTANT: Create a modified config for forms
+        # Use form_section_definitions if available, otherwise fall back to section_definitions
+        form_config = config
+        if hasattr(config, 'form_section_definitions') and config.form_section_definitions:
+            # Create a shallow copy of config with form sections
+            import copy
+            form_config = copy.copy(config)
+            form_config.section_definitions = config.form_section_definitions
+            logger.info(f"✅ Using form_section_definitions for create form")
+        else:
+            logger.info(f"ℹ️ Using default section_definitions for create form")
+        
+        # Generate CSRF token
+        def generate_csrf_token():
+            try:
+                from flask_wtf.csrf import generate_csrf
+                return generate_csrf()
+            except:
+                return ''
+        
+        # Get current date for display in dd-mmm-yyyy format
+        from datetime import datetime
+        current_date = datetime.now().strftime('%d-%b-%Y')
+
+        # Render template with form_config
+        return render_template(
+            getattr(config, 'create_form_template', 'engine/universal_create.html'),
+            entity_type=entity_type,
+            entity_config=form_config,  # Pass modified config with form sections
+            form_fields=form_fields,
+            form_action=url_for('universal_views.universal_create_view', entity_type=entity_type),
+            csrf_token=generate_csrf_token,
+            form_errors=[],
+            current_date=current_date  # Add current date
         )
         
-        flash(f"{config.name} created successfully!", 'success')
+    except Exception as e:
+        logger.error(f"❌ Error preparing create form: {str(e)}")
+        flash(f"Error loading form: {str(e)}", "danger")
+        return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+    
+
+def handle_universal_create_post(entity_type: str, config):
+    """Handle POST request for universal create - process form"""
+    try:
+        logger.info(f"🔍 Processing create POST for {entity_type}")
         
-        # Redirect to detail view or list view
-        if new_item and hasattr(new_item, config.primary_key):
-            item_id = getattr(new_item, config.primary_key)
-            return redirect(url_for('universal_views.universal_detail_view', entity_type=entity_type, item_id=item_id))
-        else:
-            return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
-            
+        # Get form data
+        form_data = request.form.to_dict()
+        
+        # Get field definitions to identify field types
+        field_definitions = {field.name: field for field in config.fields}
+        
+        # Handle checkboxes and boolean fields properly
+        for field_name, field_def in field_definitions.items():
+            if field_def and getattr(field_def, 'field_type', None) == FieldType.BOOLEAN:
+                # For boolean fields, check if they're in the form
+                # Checkboxes only appear in form data when checked
+                if field_name in form_data:
+                    # Field is present, could be 'on', 'true', '1', etc.
+                    value = form_data[field_name]
+                    form_data[field_name] = value.lower() in ('on', 'true', '1', 'yes', 'checked')
+                else:
+                    # Field not in form means checkbox was unchecked
+                    form_data[field_name] = False
+        
+        # Also check for known boolean field patterns (backward compatibility)
+        for key in list(form_data.keys()):
+            if key.startswith('is_') or key.endswith('_enabled') or key == 'black_listed':
+                if key not in field_definitions:  # Only if not already handled above
+                    value = form_data[key]
+                    if isinstance(value, str):
+                        form_data[key] = value.lower() in ('on', 'true', '1', 'yes', 'checked')
+        
+        # Prepare context
+        context = {
+            'hospital_id': current_user.hospital_id,
+            'branch_id': getattr(current_user, 'branch_id', None),
+            'user_id': current_user.user_id
+        }
+        
+        # Create entity using CRUD service
+        new_entity = crud_service.create_entity(entity_type, form_data, context)
+        
+        # Success message
+        flash(f"{config.name} created successfully!", "success")
+        
+        # Check if save and add another
+        action = request.form.get('action')
+        if action == 'save_and_add_another':
+            flash(f"{config.name} created! Add another one...", "success")
+            return redirect(url_for('universal_views.universal_create_view', entity_type=entity_type))
+
+        # Redirect to list view
+        return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+        
+    except ValueError as e:
+        logger.error(f"❌ Validation error creating {entity_type}: {str(e)}")
+        flash(str(e), "danger")
+        
+        # Re-render form with error
+        return handle_universal_create_get(entity_type, config)
+        
     except Exception as e:
         logger.error(f"❌ Error creating {entity_type}: {str(e)}")
-        flash(f"Error creating {config.name}: {str(e)}", 'error')
-        return redirect(url_for('universal_views.universal_create_view', entity_type=entity_type))
+        flash(f"Error creating {config.name}: {str(e)}", "danger")
+        
+        # Re-render form with error
+        return handle_universal_create_get(entity_type, config)
 
 # =============================================================================
-# UNIVERSAL EDIT VIEW
+# UNIVERSAL EDIT VIEW - Main Route
 # =============================================================================
 
 @universal_bp.route('/<entity_type>/edit/<item_id>', methods=['GET', 'POST'])
 @login_required
 @require_web_branch_permission('universal', 'edit')
 def universal_edit_view(entity_type: str, item_id: str):
-    """Universal edit view for any entity type"""
+    """Universal edit view for master entities"""
     try:
+        logger.info(f"✏️ Universal edit requested for {entity_type}/{item_id}")
+        
         # Validate entity type
         if not is_valid_entity_type(entity_type):
             flash(f"Entity type '{entity_type}' not found", 'error')
             return redirect(url_for('auth_views.dashboard'))
+        
+        # Check if CRUD is allowed
+        if not scope_controller.validate_operation(entity_type, CRUDOperation.UPDATE):
+            flash(f"Edit operation not allowed for {entity_type}", 'error')
+            return redirect(url_for('universal_views.universal_detail_view', 
+                                  entity_type=entity_type, item_id=item_id))
         
         # Get entity configuration
         config = get_entity_config(entity_type)
@@ -1253,123 +1432,537 @@ def universal_edit_view(entity_type: str, item_id: str):
         # Check permissions
         if not has_entity_permission(current_user, entity_type, 'edit'):
             flash(f"You don't have permission to edit {config.name}", 'warning')
-            return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+            return redirect(url_for('universal_views.universal_detail_view', 
+                                  entity_type=entity_type, item_id=item_id))
         
-        # Get existing item
+        # Get existing entity - FIXED to pass all required params
         service = get_universal_service(entity_type)
-        item = service.get_by_id(
+        existing_entity = service.get_by_id(
             item_id=item_id,
             hospital_id=current_user.hospital_id,
+            branch_id=getattr(current_user, 'branch_id', None),
             current_user_id=current_user.user_id
         )
         
-        if not item:
+        if not existing_entity:
             flash(f"{config.name} not found", 'error')
             return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
         
+        # FIXED: Handle dict response from service
+        if isinstance(existing_entity, dict):
+            # Create a wrapper that provides both dict and attribute access
+            class EntityWrapper:
+                def __init__(self, data):
+                    self._data = data
+                    # Set all dict items as attributes
+                    for key, value in data.items():
+                        setattr(self, key, value)
+                
+                def get(self, key, default=None):
+                    return self._data.get(key, default)
+                
+                def __getitem__(self, key):
+                    return self._data[key]
+                
+                def __contains__(self, key):
+                    return key in self._data
+                
+                def keys(self):
+                    return self._data.keys()
+            
+            existing_entity = EntityWrapper(existing_entity)
+        
+        # Route to appropriate handler
         if request.method == 'POST':
-            return handle_universal_edit_post(entity_type, item_id, config, service, item)
+            return handle_universal_edit_post(entity_type, item_id, config)
         else:
-            return handle_universal_edit_get(entity_type, item_id, config, item)
+            return handle_universal_edit_get(entity_type, item_id, config, existing_entity)
             
     except Exception as e:
-        logger.error(f"❌ Error in universal edit view for {entity_type}/{item_id}: {str(e)}")
-        flash(f"Error in edit form for {entity_type}: {str(e)}", 'error')
-        return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
-
-def handle_universal_edit_get(entity_type: str, item_id: str, config, item):
-    """Handle GET request for edit form"""
-    branch_uuid, branch_name = get_branch_uuid_from_context_or_request()
-    
-    form_data = {
-        'entity_config': _make_template_safe_config(config),
-        'entity_type': entity_type,
-        'item': item,
-        'item_id': item_id,
-        'page_title': f"Edit {config.name}",
-        'form_action': url_for('universal_views.universal_edit_view', entity_type=entity_type, item_id=item_id),
-        'cancel_url': url_for('universal_views.universal_detail_view', entity_type=entity_type, item_id=item_id),
-        'current_user': current_user,
-        'branch_context': {
-            'branch_id': branch_uuid,
-            'branch_name': branch_name
-        },
-        'breadcrumbs': [
-            {'label': 'Dashboard', 'url': url_for('main.dashboard')},
-            {'label': config.plural_name, 'url': url_for('universal_views.universal_list_view', entity_type=entity_type)},
-            {'label': f"Edit {config.name}", 'url': '#'}
-        ]
-    }
-    
-    template_name = get_template_for_entity(entity_type, 'edit')
-    return render_template(template_name, **form_data)
-
-def handle_universal_edit_post(entity_type: str, item_id: str, config, service, item):
-    """Handle POST request for edit form submission"""
-    try:
-        # Process form data
-        form_data = request.form.to_dict()
-        branch_uuid, _ = get_branch_uuid_from_context_or_request()
-        
-        # Update item
-        updated_item = service.update(
-            item_id=item_id,
-            data=form_data,
-            hospital_id=current_user.hospital_id,
-            branch_id=branch_uuid,
-            current_user_id=current_user.user_id
-        )
-        
-        flash(f"{config.name} updated successfully!", 'success')
-        return redirect(url_for('universal_views.universal_detail_view', entity_type=entity_type, item_id=item_id))
-        
-    except Exception as e:
-        logger.error(f"❌ Error updating {entity_type}/{item_id}: {str(e)}")
-        flash(f"Error updating {config.name}: {str(e)}", 'error')
-        return redirect(url_for('universal_views.universal_edit_view', entity_type=entity_type, item_id=item_id))
+        logger.error(f"❌ Error in edit view for {entity_type}/{item_id}: {str(e)}", exc_info=True)
+        flash("An error occurred. Please try again.", 'error')
+        return redirect(url_for('universal_views.universal_detail_view', 
+                              entity_type=entity_type, item_id=item_id))
 
 # =============================================================================
-# UNIVERSAL DELETE VIEW
+# EDIT HANDLER METHODS (NEW)
+# =============================================================================
+
+def handle_universal_edit_get(entity_type: str, item_id: str, config, existing_entity):
+    """Handle GET request for universal edit - prepare form"""
+    try:
+        logger.info(f"✏️ Preparing edit form for {entity_type}/{item_id}")
+        
+        # Import VirtualFieldTransformer
+        from app.engine.virtual_field_transformer import VirtualFieldTransformer
+        
+        # Extract virtual fields for display
+        virtual_data = VirtualFieldTransformer.extract_virtual_fields_for_display(existing_entity, config)
+        logger.info(f"Extracted virtual fields: {list(virtual_data.keys())}")
+        
+        # Prepare form fields
+        form_fields = []
+        field_map = {f.name: f for f in config.fields}
+        
+        # Get edit fields from config
+        edit_fields = getattr(config, 'edit_fields', None)
+        if not edit_fields:
+            edit_fields = [f.name for f in config.fields if f.show_in_form and not f.readonly]
+        
+        for field_name in edit_fields:
+            if field_name in field_map:
+                field_def = field_map[field_name]
+                
+                # Get current value - check virtual data first, then entity
+                current_value = ''
+                
+                # First check virtual data
+                if field_name in virtual_data:
+                    current_value = virtual_data[field_name]
+                # Then check entity (works for both dict and object)
+                elif isinstance(existing_entity, dict):
+                    value = existing_entity.get(field_name)
+                    if value is not None:
+                        # Handle date/datetime formatting
+                        if hasattr(value, 'strftime'):
+                            if field_def.field_type == FieldType.DATE:
+                                current_value = value.strftime('%Y-%m-%d')
+                            elif field_def.field_type == FieldType.DATETIME:
+                                current_value = value.strftime('%Y-%m-%dT%H:%M')
+                            else:
+                                current_value = str(value)
+                        else:
+                            current_value = str(value) if value != '' else ''
+                elif hasattr(existing_entity, field_name):
+                    value = getattr(existing_entity, field_name)
+                    if value is not None:
+                        # Handle date/datetime formatting
+                        if hasattr(value, 'strftime'):
+                            if field_def.field_type == FieldType.DATE:
+                                current_value = value.strftime('%Y-%m-%d')
+                            elif field_def.field_type == FieldType.DATETIME:
+                                current_value = value.strftime('%Y-%m-%dT%H:%M')
+                            else:
+                                current_value = str(value)
+                        else:
+                            current_value = str(value) if value != '' else ''
+                
+                logger.debug(f"Field {field_name}: value = {current_value[:50] if current_value else 'empty'}")
+                
+                # Convert field to template format
+                field_type = field_def.field_type.value if hasattr(field_def.field_type, 'value') else str(field_def.field_type)
+                field_type = field_type.lower().replace('fieldtype.', '')
+                
+                form_fields.append({
+                    'name': field_def.name,
+                    'label': field_def.label,
+                    'field_type': field_type,
+                    'required': field_def.required,
+                    'placeholder': getattr(field_def, 'placeholder', ''),
+                    'help_text': getattr(field_def, 'help_text', ''),
+                    'options': getattr(field_def, 'options', []),
+                    'value': current_value,  # Pre-populated value
+                    'column_width': getattr(field_def, 'columns_span', 6),
+                    'readonly': False,
+                    'section': getattr(field_def, 'section', 'default'),
+                    'view_order': getattr(field_def, 'view_order', 0),
+                    'tab_group': getattr(field_def, 'tab_group', None),
+                })
+        
+        # IMPORTANT: Create a modified config for forms
+        # Use form_section_definitions if available, otherwise fall back to section_definitions
+        form_config = config
+        if hasattr(config, 'form_section_definitions') and config.form_section_definitions:
+            # Create a shallow copy of config with form sections
+            import copy
+            form_config = copy.copy(config)
+            form_config.section_definitions = config.form_section_definitions
+            logger.info(f"✅ Using form_section_definitions for edit form")
+        else:
+            logger.info(f"ℹ️ Using default section_definitions for edit form")
+        
+        # Generate CSRF token
+        def generate_csrf_token():
+            try:
+                from flask_wtf.csrf import generate_csrf
+                return generate_csrf()
+            except:
+                return ''
+        
+        # Get current date for display
+        from datetime import datetime
+        current_date = datetime.now().strftime('%d-%b-%Y')
+
+        # Render template with form_config
+        return render_template(
+            getattr(config, 'edit_form_template', 'engine/universal_edit.html'),
+            entity_type=entity_type,
+            entity_config=form_config,  # Pass modified config with form sections
+            entity=existing_entity,
+            item_id=item_id,
+            form_fields=form_fields,
+            form_action=url_for('universal_views.universal_edit_view', 
+                              entity_type=entity_type, item_id=item_id),
+            csrf_token=generate_csrf_token,
+            form_errors=[],
+            current_date=current_date  # current date
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Error preparing edit form: {str(e)}")
+        flash(f"Error loading form: {str(e)}", "danger")
+        return redirect(url_for('universal_views.universal_detail_view', 
+                              entity_type=entity_type, item_id=item_id))
+
+def handle_universal_edit_post(entity_type: str, item_id: str, config):
+    """Handle POST request for universal edit - process form"""
+    try:
+        logger.info(f"💾 Processing edit form for {entity_type}/{item_id}")
+        
+        # Import required service
+        from app.engine.universal_crud_service import UniversalCRUDService
+        crud_service = UniversalCRUDService()
+        
+        # Get form data
+        form_data = request.form.to_dict()
+        
+        # Handle boolean fields (checkboxes) - same as create
+        field_definitions = {field.name: field for field in config.fields}
+        for field_name, field_def in field_definitions.items():
+            if field_def.field_type == FieldType.BOOLEAN:
+                if field_name in form_data:
+                    value = form_data[field_name]
+                    form_data[field_name] = value.lower() in ('on', 'true', '1', 'yes', 'checked')
+                elif field_name in getattr(config, 'edit_fields', []):
+                    # Checkbox exists in form but wasn't checked
+                    form_data[field_name] = False
+        
+        # Also check for known boolean field patterns (backward compatibility)
+        for key in list(form_data.keys()):
+            if key.startswith('is_') or key.endswith('_enabled') or key == 'black_listed':
+                if key not in field_definitions:  # Only if not already handled above
+                    value = form_data[key]
+                    if isinstance(value, str):
+                        form_data[key] = value.lower() in ('on', 'true', '1', 'yes', 'checked')
+        
+        # Prepare context with audit fields
+        context = {
+            'hospital_id': current_user.hospital_id,
+            'branch_id': getattr(current_user, 'branch_id', None),
+            'user_id': current_user.user_id  # This will be used for updated_by
+        }
+        
+        # Update entity using CRUD service
+        updated_entity = crud_service.update_entity(entity_type, item_id, form_data, context)
+        
+        # Success message
+        flash(f"{config.name} updated successfully!", "success")
+        
+        # Check if save and continue (handle both old and new button name formats)
+        action = request.form.get('action') or request.form.get('save_and_continue')
+        if action == 'save_and_continue':
+            flash(f"{config.name} saved successfully! Continue editing...", "success")
+            return redirect(url_for('universal_views.universal_edit_view', 
+                                entity_type=entity_type, item_id=item_id))
+        
+        # Redirect to detail view
+        return redirect(url_for('universal_views.universal_detail_view', 
+                              entity_type=entity_type, item_id=item_id))
+        
+    except ValueError as e:
+        logger.error(f"❌ Validation error updating {entity_type}: {str(e)}")
+        flash(str(e), "danger")
+        
+        # Re-load entity for re-rendering the form with error
+        try:
+            # Get entity service
+            from app.engine.universal_services import get_entity_service
+            service = get_entity_service(entity_type)
+            
+            # Load existing entity
+            existing_entity = service.get_by_id(
+                item_id, 
+                hospital_id=current_user.hospital_id,
+                branch_id=getattr(current_user, 'branch_id', None)
+            )
+            
+            if existing_entity:
+                # If it's a dict from service, convert to object-like access
+                if isinstance(existing_entity, dict):
+                    class DictWrapper:
+                        def __init__(self, data):
+                            self._data = data
+                        def __getattr__(self, name):
+                            return self._data.get(name)
+                        def __hasattr__(self, name):
+                            return name in self._data
+                    existing_entity = DictWrapper(existing_entity)
+                
+                return handle_universal_edit_get(entity_type, item_id, config, existing_entity)
+            else:
+                flash(f"{config.name} not found", "error")
+                return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+                
+        except Exception as load_error:
+            logger.error(f"Error reloading entity for form: {str(load_error)}")
+            flash("Error loading form. Please try again.", "error")
+            return redirect(url_for('universal_views.universal_detail_view', 
+                                  entity_type=entity_type, item_id=item_id))
+        
+    except Exception as e:
+        logger.error(f"❌ Error updating {entity_type}: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        flash(f"Error updating {config.name}: {str(e)}", "danger")
+        
+        # Try to redirect to detail view on error
+        return redirect(url_for('universal_views.universal_detail_view', 
+                              entity_type=entity_type, item_id=item_id))
+
+# =============================================================================
+# UNIVERSAL DELETE VIEW - Main Route (Already structured well)
 # =============================================================================
 
 @universal_bp.route('/<entity_type>/delete/<item_id>', methods=['POST'])
 @login_required
 @require_web_branch_permission('universal', 'delete')
 def universal_delete_view(entity_type: str, item_id: str):
-    """Universal delete endpoint for any entity type"""
+    """Universal delete endpoint for master entities"""
     try:
+        logger.info(f"🗑️ Universal delete requested for {entity_type}/{item_id}")
+        
         # Validate entity type
         if not is_valid_entity_type(entity_type):
+            if request.is_json:
+                return jsonify({'success': False, 'message': f"Entity type '{entity_type}' not found"}), 404
             flash(f"Entity type '{entity_type}' not found", 'error')
             return redirect(url_for('auth_views.dashboard'))
+        
+        # Check if CRUD is allowed
+        if not scope_controller.validate_operation(entity_type, CRUDOperation.DELETE):
+            if request.is_json:
+                return jsonify({'success': False, 'message': f"Delete operation not allowed for {entity_type}"}), 403
+            flash(f"Delete operation not allowed for {entity_type}", 'error')
+            return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
         
         # Get entity configuration
         config = get_entity_config(entity_type)
         
         # Check permissions
         if not has_entity_permission(current_user, entity_type, 'delete'):
+            if request.is_json:
+                return jsonify({'success': False, 'message': f"You don't have permission to delete {config.name}"}), 403
             flash(f"You don't have permission to delete {config.name}", 'warning')
             return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
         
-        # Get universal service and delete item
-        service = get_universal_service(entity_type)
-        success = service.delete(
-            item_id=item_id,
-            hospital_id=current_user.hospital_id,
-            current_user_id=current_user.user_id
-        )
+        # Call handler
+        return handle_universal_delete(entity_type, item_id, config)
+        
+    except Exception as e:
+        logger.error(f"❌ Error in delete view for {entity_type}/{item_id}: {str(e)}", exc_info=True)
+        if request.is_json:
+            return jsonify({'success': False, 'message': 'An error occurred'}), 500
+        flash("An error occurred while deleting", 'error')
+        return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+
+# =============================================================================
+# DELETE HANDLER METHOD (NEW)
+# =============================================================================
+
+def handle_universal_delete(entity_type: str, item_id: str, config):
+    """Handle delete request - process deletion"""
+    try:
+        logger.info(f"🗑️ Processing delete for {entity_type}/{item_id}")
+        
+        # Prepare context
+        context = {
+            'hospital_id': current_user.hospital_id,
+            'branch_id': getattr(current_user, 'branch_id', None),
+            'user_id': current_user.user_id
+        }
+        
+        # Delete entity using CRUD service
+        success = crud_service.delete_entity(entity_type, item_id, context)
         
         if success:
-            flash(f"{config.name} deleted successfully!", 'success')
+            logger.info(f"✅ Successfully deleted {entity_type}/{item_id}")
+            message = f"{config.name} deleted successfully!"
+            
+            if request.is_json:
+                return jsonify({
+                    'success': True,
+                    'message': message,
+                    'redirect_url': url_for('universal_views.universal_list_view', entity_type=entity_type)
+                })
+            
+            flash(message, 'success')
+            return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
         else:
-            flash(f"Error deleting {config.name}", 'error')
+            raise ValueError("Delete operation failed")
+            
+    except ValueError as e:
+        logger.warning(f"⚠️ Delete failed for {entity_type}/{item_id}: {str(e)}")
+        if request.is_json:
+            return jsonify({'success': False, 'message': str(e)}), 400
+        flash(str(e), 'error')
+        return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+    except Exception as e:
+        logger.error(f"❌ Error deleting {entity_type}/{item_id}: {str(e)}")
+        if request.is_json:
+            return jsonify({'success': False, 'message': str(e)}), 500
+        flash(f"Error: {str(e)}", 'error')
+        return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+
+@universal_bp.route('/<entity_type>/undelete/<item_id>', methods=['POST'])
+@login_required
+@require_web_branch_permission('universal', 'undelete')
+def universal_undelete_view(entity_type: str, item_id: str):
+    """Universal undelete endpoint for soft-deleted entities"""
+    try:
+        logger.info(f"🔄 Universal undelete requested for {entity_type}/{item_id}")
         
+        # Get configuration
+        config = get_entity_config(entity_type)
+        
+        # Check if soft delete is enabled
+        if not getattr(config, 'enable_soft_delete', False):
+            flash(f"Undelete not supported for {config.name}", 'error')
+            return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+        
+        # Check permissions (might need special undelete permission)
+        if not has_entity_permission(current_user, entity_type, 'undelete'):
+            # Fallback to edit permission
+            if not has_entity_permission(current_user, entity_type, 'edit'):
+                flash(f"You don't have permission to restore {config.name}", 'warning')
+                return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+        
+        # Undelete using service
+        context = {
+            'hospital_id': current_user.hospital_id,
+            'branch_id': getattr(current_user, 'branch_id', None),
+            'user_id': current_user.user_id
+        }
+        
+        success = crud_service.undelete_entity(entity_type, item_id, context)
+        
+        if success:
+            flash(f"{config.name} restored successfully!", 'success')
+        else:
+            flash(f"Failed to restore {config.name}", 'error')
+            
         return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
         
     except Exception as e:
-        logger.error(f"❌ Error deleting {entity_type}/{item_id}: {str(e)}")
-        flash(f"Error deleting {config.name}: {str(e)}", 'error')
+        logger.error(f"Error in undelete: {str(e)}")
+        flash("An error occurred while restoring", 'error')
         return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+
+# =============================================================================
+# UNIVERSAL TOGGLE DELETED VISIBILITY
+# =============================================================================
+
+# @universal_bp.route('/preferences/toggle-deleted', methods=['POST'])
+# @login_required
+# @require_web_branch_permission('universal', 'view')
+# def universal_toggle_deleted():
+#     """
+#     Universal toggle for showing/hiding deleted records
+#     Follows same pattern as other universal operations
+#     """
+#     try:
+#         logger.info(f"🔄 Toggle deleted visibility requested by {current_user.user_id}")
+        
+#         # Get form data (same pattern as other POST handlers)
+#         form_data = request.form.to_dict()
+#         show_deleted = form_data.get('show_deleted') == 'on'
+        
+#         # Clean the referrer URL to remove system parameters
+#         if request.referrer:
+#             from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+            
+#             # Parse the referrer URL
+#             parsed = urlparse(request.referrer)
+#             query_params = parse_qs(parsed.query)
+            
+#             # Remove system parameters
+#             system_params = {'csrf_token', 'entity_type', 'redirect_url', 'show_deleted', '_'}
+#             cleaned_params = {}
+            
+#             for key, values in query_params.items():
+#                 if key not in system_params and not key.startswith('_'):
+#                     # parse_qs returns lists, we want single values
+#                     cleaned_params[key] = values[0] if len(values) == 1 else values
+            
+#             # Rebuild the URL with cleaned parameters
+#             cleaned_query = urlencode(cleaned_params, doseq=True)
+#             redirect_url = urlunparse((
+#                 parsed.scheme,
+#                 parsed.netloc,
+#                 parsed.path,
+#                 '',  # params (not used)
+#                 cleaned_query,
+#                 ''   # fragment
+#             ))
+#         else:
+#             redirect_url = url_for('auth_views.dashboard')
+        
+#         # Log the operation
+#         logger.info(f"Setting show_deleted_records to {show_deleted} for user {current_user.user_id}")
+        
+#         # Update preference using same session pattern
+#         from app.models.transaction import User
+#         from sqlalchemy.orm.attributes import flag_modified
+        
+#         with get_db_session() as session:
+#             user = session.query(User).filter_by(
+#                 user_id=current_user.user_id,
+#                 hospital_id=current_user.hospital_id
+#             ).first()
+            
+#             if not user:
+#                 logger.error(f"User {current_user.user_id} not found in database")
+#                 flash("Error updating preference: User not found", 'error')
+#                 return redirect(redirect_url)
+            
+#             # Initialize ui_preferences if needed
+#             if user.ui_preferences is None:
+#                 user.ui_preferences = {}
+#                 logger.info(f"Initialized ui_preferences for user {current_user.user_id}")
+            
+#             # Update the preference
+#             old_value = user.ui_preferences.get('show_deleted_records', False)
+#             user.ui_preferences['show_deleted_records'] = show_deleted
+            
+#             # Mark JSONB field as modified (required for SQLAlchemy to detect change)
+#             flag_modified(user, "ui_preferences")
+            
+#             # Commit the change
+#             session.commit()
+            
+#             # Log successful update
+#             logger.info(f"✅ Successfully updated show_deleted_records: {old_value} → {show_deleted}")
+            
+#             # Flash message (same style as other operations)
+#             if show_deleted:
+#                 flash("Deleted records are now visible", 'info')
+#             else:
+#                 flash("Deleted records are now hidden", 'info')
+        
+#         return redirect(redirect_url)
+        
+#     except Exception as e:
+#         logger.error(f"❌ Error toggling deleted preference: {str(e)}", exc_info=True)
+#         flash(f"Error updating preference: {str(e)}", 'error')
+        
+#         # Fallback redirect - use cleaned referrer or dashboard
+#         if request.referrer:
+#             from urllib.parse import urlparse
+#             redirect_url = urlparse(request.referrer).path
+#         else:
+#             redirect_url = url_for('auth_views.dashboard')
+        
+#         return redirect(redirect_url)
+
 
 @universal_bp.route('/<entity_type>/document/<item_id>/<doc_type>')
 @login_required
@@ -1959,7 +2552,7 @@ def get_entity_config_for_template(entity_type: str):
         return None
 
 # =============================================================================
-# TEMPLATE HELPER FUNCTIONS (Following Your Patterns)
+# TEMPLATE HELPER FUNCTIONS
 # =============================================================================
 
 @universal_bp.app_template_global()
@@ -1999,8 +2592,33 @@ def get_universal_list_data_template(entity_type: str):
     """
     return get_universal_list_data_with_security(entity_type)
 
+@universal_bp.app_template_global()
+def can_create(entity_type: str) -> bool:
+    """Check if create is allowed for entity type - template helper"""
+    return scope_controller.validate_operation(entity_type, CRUDOperation.CREATE)
+
+@universal_bp.app_template_global()
+def can_edit(entity_type: str) -> bool:
+    """Check if edit is allowed for entity type - template helper"""
+    return scope_controller.validate_operation(entity_type, CRUDOperation.UPDATE)
+
+@universal_bp.app_template_global()
+def can_delete(entity_type: str) -> bool:
+    """Check if delete is allowed for entity type - template helper"""
+    return scope_controller.validate_operation(entity_type, CRUDOperation.DELETE)
+
+@universal_bp.app_template_global()
+def get_crud_url(entity_type: str, operation: str, item_id: str = None) -> str:
+    """Get CRUD operation URL - template helper"""
+    try:
+        op = CRUDOperation(operation.lower())
+        return scope_controller.get_operation_url(entity_type, op, item_id)
+    except:
+        return '#'
+
+
 # =============================================================================
-# ERROR HANDLERS (Following Your Patterns)
+# ERROR HANDLERS 
 # =============================================================================
 
 @universal_bp.errorhandler(404)

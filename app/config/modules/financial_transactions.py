@@ -86,7 +86,8 @@ SUPPLIER_PAYMENT_FIELDS = [
     FieldDefinition(
         name="payment_date",
         label="Payment Date",
-        field_type=FieldType.DATE,
+        field_type=FieldType.DATETIME,  # Change from DATE to DATETIME
+        format_pattern="%d/%b/%Y %H:%M",  # Handle datetime values
         show_in_list=True,
         show_in_detail=False,
         show_in_form=True,
@@ -439,6 +440,7 @@ SUPPLIER_PAYMENT_FIELDS = [
         name="created_at",
         label="Created At",
         field_type=FieldType.DATETIME,
+        format_pattern="%d/%b/%Y %H:%M",  # 24-hour format
         show_in_list=False,
         show_in_detail=True,
         show_in_form=False,

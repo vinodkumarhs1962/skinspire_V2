@@ -1,0 +1,614 @@
+/* =========================================================================
+   Universal Form CSS - Enhanced with Section Cards
+   Preserves all existing functionality while adding improved section styling
+   ========================================================================= */
+
+/* ========== Base Reset for Universal Components ========== */
+.universal-list-container,
+.universal-view-container,
+.universal-table-container {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 1rem !important;
+}
+
+/* ========== List Table Specific (Fix shrinking issue) ========== */
+/* REMOVED: Moved to tables.css to avoid conflicts */
+
+/* Custom renderer tables should not force expansion */
+.payment-history-table,
+.po-items-table,
+.invoice-items-table,
+.custom-renderer-field {
+    max-width: 100% !important;
+    overflow-x: auto !important;
+}
+
+/* ========== Form Container (Only affects forms, not tables) ========== */
+.universal-form-page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1.5rem;
+}
+
+.universal-form-container {
+    background: #ffffff;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* ========== NEW: Form Container with Subtle Background ========== */
+.form-container {
+    background: #f3f4f6;  /* Light grey background for contrast */
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    margin: -1.5rem;  /* Compensate for card-body padding */
+}
+
+.dark .form-container {
+    background: #0f172a;
+}
+
+/* ========== ENHANCED: Section Cards (Replacing old form-section) ========== */
+.section-card,
+.form-section {
+    background: #ffffff;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+    border: 1px solid #e5e7eb;
+    margin-bottom: 1.5rem;
+    overflow: hidden;  /* For rounded corners on header */
+}
+
+.section-card:last-child,
+.form-section:last-child {
+    margin-bottom: 0;
+}
+
+/* Section Header WITHOUT underline - Force override */
+.section-header,
+.form-section-header,
+.section-card .section-header,
+.form-section .form-section-header {
+    background: #f9fafb !important;
+    border-bottom: none !important;
+    border-bottom-width: 0 !important;
+    padding: 1rem 1.5rem;
+    display: flex;
+    align-items: center;
+}
+
+/* Also remove any section title underlines */
+.section-header h4,
+.form-section-header h4,
+.section-title {
+    border-bottom: none !important;
+    text-decoration: none !important;
+}
+
+.section-header h4,
+.form-section-header h4,
+.form-section-title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #1f2937;
+    display: flex;
+    align-items: center;
+    flex-grow: 1;
+}
+
+/* Section Icon */
+.form-section-icon {
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;
+    border-radius: 0.375rem;
+    margin-right: 0.75rem;
+}
+
+.form-section-icon i,
+.section-header h4 i {
+    color: #6b7280;
+    font-size: 1rem;
+    opacity: 0.7;
+}
+
+/* Section Body */
+.section-body,
+.form-section-body,
+.section-card .card-body {
+    background: #ffffff;
+    padding: 1.5rem;
+}
+
+/* Dark Mode Support for Sections */
+.dark .section-card,
+.dark .form-section {
+    background: #1f2937;
+    border-color: #374151;
+}
+
+.dark .section-header,
+.dark .form-section-header {
+    background: #111827;
+    border-color: #374151;
+}
+
+.dark .section-header h4,
+.dark .form-section-header h4,
+.dark .form-section-title {
+    color: #f3f4f6;
+}
+
+.dark .section-body,
+.dark .form-section-body {
+    background: #1f2937;
+}
+
+.dark .form-section-icon {
+    background: #374151;
+}
+
+/* Section-specific colors (preserved from original) */
+.form-section.basic-info { border-left: 3px solid #3b82f6; }
+.form-section.contact-info { border-left: 3px solid #10b981; }
+.form-section.address-info { border-left: 3px solid #f59e0b; }
+.form-section.manager-info { border-left: 3px solid #06b6d4; }
+.form-section.tax-info { border-left: 3px solid #8b5cf6; }
+.form-section.bank-info { border-left: 3px solid #ec4899; }
+.form-section.business-rules { border-left: 3px solid #ef4444; }
+
+/* ========== Form Groups and Controls (Preserved) ========== */
+.form-group,
+.universal-form-group {
+    margin-bottom: 1.25rem;
+}
+
+.form-label,
+.universal-form-label {
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 0.5rem;
+    display: inline-block;
+}
+
+.dark .form-label,
+.dark .universal-form-label {
+    color: #d1d5db;
+}
+
+.form-label .text-danger,
+.universal-form-label .text-red-500 {
+    color: #dc3545;
+    font-size: 0.875rem;
+    margin-left: 2px;
+}
+
+.form-control,
+.form-select,
+.universal-form-input {
+    display: block;
+    width: 100%;
+    padding: 0.375rem 0.75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: #495057;
+    background-color: #fff;
+    background-clip: padding-box;
+    border: 1px solid #ced4da;
+    border-radius: 0.375rem;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-control:focus,
+.form-select:focus,
+.universal-form-input:focus {
+    border-color: #80bdff;
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.form-control:disabled,
+.form-select:disabled,
+.form-control[readonly],
+.universal-form-input:disabled {
+    background-color: #e9ecef;
+    opacity: 1;
+    cursor: not-allowed;
+}
+
+/* Dark Mode Inputs */
+.dark .form-control,
+.dark .form-select,
+.dark .universal-form-input {
+    color: #f3f4f6;
+    background-color: #374151;
+    border-color: #4b5563;
+}
+
+.dark .form-control:focus,
+.dark .form-select:focus,
+.dark .universal-form-input:focus {
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+}
+
+.dark .form-control:disabled,
+.dark .universal-form-input:disabled {
+    background-color: #1f2937;
+}
+
+/* Textarea specific */
+textarea.form-control,
+textarea.universal-form-input {
+    min-height: 100px;
+    resize: vertical;
+}
+
+/* Select specific */
+select.form-control,
+select.universal-form-input {
+    padding-right: 2rem;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.5rem center;
+    background-repeat: no-repeat;
+    background-size: 1.5em 1.5em;
+    appearance: none;
+}
+
+/* Checkbox and Radio */
+.form-check {
+    position: relative;
+    display: block;
+    padding-left: 1.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.form-check-input {
+    position: absolute;
+    margin-top: 0.3rem;
+    margin-left: -1.25rem;
+    width: 1rem;
+    height: 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.25rem;
+    cursor: pointer;
+}
+
+.form-check-input:checked {
+    background-color: #3b82f6;
+    border-color: #3b82f6;
+}
+
+.form-check-label {
+    margin-bottom: 0;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: #4b5563;
+    user-select: none;
+}
+
+.dark .form-check-label {
+    color: #d1d5db;
+}
+
+/* ========== Validation States (Preserved) ========== */
+.was-validated .form-control:valid,
+.form-control.is-valid {
+    border-color: #28a745;
+}
+
+.was-validated .form-control:invalid,
+.form-control.is-invalid,
+.universal-form-input.is-invalid {
+    border-color: #dc3545;
+}
+
+.invalid-feedback {
+    display: none;
+    width: 100%;
+    margin-top: 0.25rem;
+    font-size: 0.875rem;
+    color: #dc3545;
+}
+
+.was-validated .form-control:invalid ~ .invalid-feedback,
+.form-control.is-invalid ~ .invalid-feedback,
+.universal-form-input.is-invalid ~ .invalid-feedback {
+    display: block;
+}
+
+/* ========== Form Actions (Enhanced with better spacing) ========== */
+.form-actions,
+.card-footer {
+    background: #f9fafb;
+    border-top: 1px solid #e5e7eb;
+    padding: 1rem 1.5rem;
+    margin: 0 -1.5rem -1.5rem -1.5rem;  /* Extend to card edges */
+    border-radius: 0 0 0.5rem 0.5rem;
+    display: flex;
+    gap: 0.5rem;
+    justify-content: space-between;
+}
+
+.dark .form-actions,
+.dark .card-footer {
+    background: #111827;
+    border-top-color: #374151;
+}
+
+.form-actions .btn {
+    min-width: 120px;
+}
+
+/* ========== Required Field Note ========== */
+.required-field-note,
+.required-note {
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-radius: 0.25rem;
+}
+
+.dark .required-field-note,
+.dark .required-note {
+    background: #1f2937;
+    color: #9ca3af;
+}
+
+/* ========== Grid Layout for Forms (Preserved) ========== */
+.row,
+.grid {
+    display: flex;
+    flex-wrap: wrap;
+    margin-right: -0.75rem;
+    margin-left: -0.75rem;
+}
+
+.grid {
+    display: grid;
+}
+
+.grid-cols-1 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.col-md-6 {
+    flex: 0 0 50%;
+    max-width: 50%;
+    padding-right: 0.75rem;
+    padding-left: 0.75rem;
+}
+
+.col-md-4 {
+    flex: 0 0 33.333333%;
+    max-width: 33.333333%;
+    padding-right: 0.75rem;
+    padding-left: 0.75rem;
+}
+
+.col-md-12,
+.md\:col-span-2 {
+    flex: 0 0 100%;
+    max-width: 100%;
+    padding-right: 0.75rem;
+    padding-left: 0.75rem;
+}
+
+@media (min-width: 768px) {
+    .md\:grid-cols-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    
+    .md\:col-span-2 {
+        grid-column: span 2 / span 2;
+    }
+}
+
+.gap-4 {
+    gap: 1rem;
+}
+
+/* ========== Responsive Design (Preserved) ========== */
+@media (max-width: 768px) {
+    .col-md-4,
+    .col-md-6 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+    }
+    
+    .form-actions .btn {
+        width: 100%;
+    }
+    
+    .form-container {
+        padding: 1rem;
+        margin: -1rem;
+    }
+    
+    .section-card .section-header,
+    .form-section-header {
+        padding: 0.875rem 1rem;
+    }
+    
+    .section-card .section-body,
+    .form-section-body {
+        padding: 1rem;
+    }
+}
+
+/* ========== Loading State (Preserved) ========== */
+.form-loading {
+    position: relative;
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.form-loading::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 2rem;
+    height: 2rem;
+    margin-left: -1rem;
+    margin-top: -1rem;
+    border: 0.25rem solid #007bff;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spinner 0.75s linear infinite;
+}
+
+@keyframes spinner {
+    to { transform: rotate(360deg); }
+}
+
+/* ========== Help Text (Preserved) ========== */
+.form-text,
+.help-text,
+small.text-gray-500 {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.dark .form-text,
+.dark .help-text,
+.dark small.text-gray-500 {
+    color: #9ca3af;
+}
+
+/* ========== Collapsible Sections ========== */
+.section-header.collapsible,
+.form-section-header.collapsible {
+    cursor: pointer;
+    user-select: none;
+}
+
+.section-header.collapsible:hover,
+.form-section-header.collapsible:hover {
+    background: #f3f4f6;
+}
+
+.dark .section-header.collapsible:hover,
+.dark .form-section-header.collapsible:hover {
+    background: #1f2937;
+}
+
+.section-header .fa-chevron-down,
+.section-header .fa-chevron-up,
+.section-toggle-icon {
+    transition: transform 0.3s ease;
+}
+
+/* ========== Metadata Section ========== */
+.metadata-section {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e5e7eb;
+    color: #6b7280;
+    font-size: 0.875rem;
+}
+
+.dark .metadata-section {
+    border-top-color: #374151;
+    color: #9ca3af;
+}
+
+.metadata-section strong {
+    font-weight: 600;
+    color: #4b5563;
+}
+
+.dark .metadata-section strong {
+    color: #d1d5db;
+}
+
+/* ========== Animation Classes ========== */
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.section-card,
+.form-section {
+    animation: slideDown 0.3s ease-out;
+}
+
+/* Stagger animation for multiple sections */
+.section-card:nth-child(1),
+.form-section:nth-child(1) { animation-delay: 0ms; }
+.section-card:nth-child(2),
+.form-section:nth-child(2) { animation-delay: 50ms; }
+.section-card:nth-child(3),
+.form-section:nth-child(3) { animation-delay: 100ms; }
+.section-card:nth-child(4),
+.form-section:nth-child(4) { animation-delay: 150ms; }
+.section-card:nth-child(5),
+.form-section:nth-child(5) { animation-delay: 200ms; }
+
+/* ========== ENHANCED: Collapsible Section Cards ========== */
+.section-card.collapsible .section-header {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s;
+}
+
+.section-card.collapsible .section-header:hover {
+    background: #f3f4f6;
+}
+
+.dark .section-card.collapsible .section-header:hover {
+    background: #1f2937;
+}
+
+.section-card.collapsible .section-toggle {
+    transition: transform 0.3s ease;
+}
+
+.section-card.collapsible.collapsed .section-toggle {
+    transform: rotate(-90deg);
+}
+
+.section-card.collapsible.collapsed .section-body {
+    display: none;
+}
+
+/* Icon spacing standardization */
+.btn-primary i,
+.btn-secondary i,
+.btn-outline i,
+.btn-danger i {
+    font-size: 0.875rem;
+}
+
+/* Standard icon colors */
+.section-header i.fas {
+    color: #6b7280;
+}
+
+.section-header i.fa-user { color: #3b82f6; }
+.section-header i.fa-phone { color: #10b981; }
+.section-header i.fa-map-marker-alt { color: #f59e0b; }
+.section-header i.fa-user-tie { color: #06b6d4; }
+.section-header i.fa-file-invoice { color: #8b5cf6; }
+.section-header i.fa-university { color: #ec4899; }
+.section-header i.fa-business-time { color: #ef4444; }

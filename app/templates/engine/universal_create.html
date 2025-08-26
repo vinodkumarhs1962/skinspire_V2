@@ -1,0 +1,481 @@
+<!-- app/templates/engine/universal_create.html -->
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}Create {{ entity_config.name }}{% endblock %}
+
+{% block styles %}
+    {{ super() }}
+    <!-- Universal styles are already included in app.css -->
+{% endblock %}
+
+{% block content %}
+<div class="universal-form-page">
+    <!-- Enhanced Page Header with Info Card -->
+    <div class="page-header mb-4">
+        <!-- Header Card with 3-row layout -->
+        <div class="info-card mb-3">
+            <div class="card-body">
+                <!-- Row 1: Title and Date -->
+                <div class="flex justify-between items-center mb-3">
+                    <h1 class="text-2xl font-bold">
+                        <i class="{{ entity_config.icon }} text-blue-500 text-2xl"></i>
+                        <span class="ml-2">Create New {{ entity_config.entity_label or entity_config.name }}</span>
+                    </h1>
+                    <span class="text-sm text-gray-600">{{ current_date if current_date else '' }}</span>
+                </div>
+                
+                <!-- Row 2: Breadcrumb Navigation -->
+                <div class="mb-4 p-3 bg-gray-50 rounded">
+                    <nav class="flex items-center space-x-1 text-sm text-gray-500">
+                        <a href="{{ url_for('auth_views.dashboard') }}" class="hover:text-gray-700">Dashboard</a>
+                        <span class="text-gray-400 mx-2">/</span>
+                        <a href="{{ url_for('universal_views.universal_list_view', entity_type=entity_type) }}" class="hover:text-gray-700">
+                            {{ entity_config.plural_name }}
+                        </a>
+                        <span class="text-gray-400 mx-2">/</span>
+                        <span class="text-gray-700 font-medium">Create New</span>
+                    </nav>
+                </div>
+                
+                <!-- Row 3: Action Button -->
+                <div class="flex justify-between items-center">
+                    <a href="{{ url_for('universal_views.universal_list_view', entity_type=entity_type) }}" 
+                       class="btn-secondary">
+                        <i class="fas fa-arrow-left"></i>
+                        <span class="ml-2">Back to List</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Form Section -->
+    <form id="universal-create-form" 
+          method="POST" 
+          action="{{ form_action }}"
+          data-entity-type="{{ entity_type }}"
+          class="universal-crud-form needs-validation"
+          novalidate>
+        
+        <!-- CSRF Token (global function) -->
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        
+        <div class="info-card">
+            <div class="card-header">
+                <h3 class="text-xl font-bold text-gray-700">
+                    <i class="{{ entity_config.icon }} text-gray-500 text-lg"></i>
+                    <span class="ml-2">{{ entity_config.name }} Information</span>
+                </h3>
+            </div>
+            
+            <div class="card-body">
+                <!-- Display any form errors -->
+                {% if form_errors %}
+                <div class="alert alert-danger mb-4">
+                    <strong>Please correct the following errors:</strong>
+                    <ul class="mt-2 mb-0">
+                        {% for error in form_errors %}
+                        <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <!-- Simple section rendering -->
+                {% set processed_sections = [] %}
+                {% for field in form_fields|sort(attribute='view_order') %}
+                    {% if field.section and field.section not in processed_sections %}
+                        {% set _ = processed_sections.append(field.section) %}
+                        
+                        {% set section_def = entity_config.section_definitions.get(field.section) if entity_config.section_definitions else None %}
+                        
+                        <!-- Collapsible Form Section Card -->
+                        <div class="section-card collapsible {{ field.section }}" 
+                             data-section="{{ field.section }}">
+                            
+                            <!-- Section Header without underline -->
+                            <div class="section-header" onclick="toggleSection('{{ field.section }}')">
+                                <h4 class="section-title flex items-center flex-grow">
+                                    {% if section_def and section_def.icon %}
+                                        <i class="{{ section_def.icon }} text-gray-600"></i>
+                                    {% endif %}
+                                    <span class="ml-2">{{ section_def.title if section_def else field.section|replace('_', ' ')|title }}</span>
+                                    <i class="fas fa-chevron-down ml-auto transition-transform section-toggle ml-4"></i>
+                                </h4>
+                            </div>
+                            
+                            <!-- Section Body with Grid -->
+                            <div class="form-section-body">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <!-- Fields for this section -->
+                                    {% for section_field in form_fields|selectattr('section', 'equalto', field.section)|sort(attribute='view_order') %}
+                                    <div class="{% if section_field.field_type in ['textarea', 'rich_text'] %}md:col-span-2{% endif %}">
+                                        <div class="form-group">
+                                            <label for="{{ section_field.name }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                {{ section_field.label }}
+                                                {% if section_field.required %}
+                                                <span class="text-red-500">*</span>
+                                                {% endif %}
+                                            </label>
+                                            
+                                            <!-- Input based on field type -->
+                                            {% if section_field.field_type == 'select' %}
+                                                <select class="form-control w-full" 
+                                                        id="{{ section_field.name }}" 
+                                                        name="{{ section_field.name }}"
+                                                        {% if section_field.required %}required{% endif %}>
+                                                    <option value="">Select {{ section_field.label }}</option>
+                                                    {% for option in section_field.options %}
+                                                    <option value="{{ option.value }}" 
+                                                            {% if section_field.value == option.value %}selected{% endif %}>
+                                                        {{ option.label }}
+                                                    </option>
+                                                    {% endfor %}
+                                                </select>
+                                            {% elif section_field.field_type == 'textarea' %}
+                                                <textarea class="form-control w-full" 
+                                                          id="{{ section_field.name }}" 
+                                                          name="{{ section_field.name }}"
+                                                          rows="3"
+                                                          placeholder="{{ section_field.placeholder or '' }}"
+                                                          {% if section_field.required %}required{% endif %}>{{ section_field.value or '' }}</textarea>
+                                            {% elif section_field.field_type == 'boolean' %}
+                                                <div class="flex items-center">
+                                                    <input type="checkbox" 
+                                                           class="form-checkbox h-4 w-4 text-blue-600" 
+                                                           id="{{ section_field.name }}" 
+                                                           name="{{ section_field.name }}"
+                                                           value="true"
+                                                           {% if section_field.value %}checked{% endif %}>
+                                                    <label class="ml-2 text-sm text-gray-700 dark:text-gray-300" for="{{ section_field.name }}">
+                                                        {{ section_field.help_text or 'Enable' }}
+                                                    </label>
+                                                </div>
+                                            {% elif section_field.field_type == 'date' %}
+                                                <input type="date" 
+                                                       class="form-control w-full" 
+                                                       id="{{ section_field.name }}" 
+                                                       name="{{ section_field.name }}"
+                                                       value="{{ section_field.value or '' }}"
+                                                       {% if section_field.required %}required{% endif %}>
+                                            {% elif section_field.field_type == 'number' %}
+                                                <input type="number" 
+                                                       class="form-control w-full" 
+                                                       id="{{ section_field.name }}" 
+                                                       name="{{ section_field.name }}"
+                                                       value="{{ section_field.value or '' }}"
+                                                       placeholder="{{ section_field.placeholder or '' }}"
+                                                       {% if section_field.required %}required{% endif %}>
+                                            {% elif section_field.field_type == 'email' %}
+                                                <input type="email" 
+                                                       class="form-control w-full" 
+                                                       id="{{ section_field.name }}" 
+                                                       name="{{ section_field.name }}"
+                                                       value="{{ section_field.value or '' }}"
+                                                       placeholder="{{ section_field.placeholder or '' }}"
+                                                       pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
+                                                       {% if section_field.required %}required{% endif %}>
+                                            {% else %}
+                                                <input type="text" 
+                                                       class="form-control w-full" 
+                                                       id="{{ section_field.name }}" 
+                                                       name="{{ section_field.name }}"
+                                                       value="{{ section_field.value or '' }}"
+                                                       placeholder="{{ section_field.placeholder or '' }}"
+                                                       {% if section_field.required %}required{% endif %}>
+                                            {% endif %}
+                                            
+                                            <!-- Help text -->
+                                            {% if section_field.help_text %}
+                                            <p class="mt-1 text-sm text-gray-500">{{ section_field.help_text }}</p>
+                                            {% endif %}
+                                            
+                                            <!-- Validation feedback -->
+                                            <div class="invalid-feedback text-red-500 text-sm mt-1" style="display: none;">
+                                                Please provide a valid {{ section_field.label|lower }}.
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+
+                <!-- Required Fields Note -->
+                <div class="mt-4 text-sm text-gray-600">
+                    <span class="text-red-500">*</span> Required fields
+                </div>
+            </div>
+            
+            <!-- Form Actions with Universal Engine Color Standards -->
+            <div class="card-footer">
+                <div class="flex justify-center gap-4 w-full">
+                    <!-- PRIMARY: Main save action (blue) -->
+                    <button type="submit" name="action" value="save" class="btn-primary" style="min-width: 120px;">
+                        <i class="fas fa-save"></i>
+                        <span class="ml-2">Save</span>
+                    </button>
+                    
+                    <!-- SUCCESS: Create and continue (green) -->
+                    <button type="submit" name="action" value="save_and_add_another" class="btn-success" style="min-width: 180px;">
+                        <i class="fas fa-plus"></i>
+                        <span class="ml-2">Save & Add Another</span>
+                    </button>
+                    
+                    <!-- SECONDARY: Navigation away (gray) -->
+                    <a href="{{ url_for('universal_views.universal_list_view', entity_type=entity_type) }}" 
+                       class="btn-secondary text-center" style="min-width: 100px;">
+                        <i class="fas fa-times"></i>
+                        <span class="ml-2">Cancel</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+
+<!-- Include Universal Form CRUD JS -->
+<script src="{{ url_for('static', filename='js/components/universal_form_crud.js') }}"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Initializing Universal Create Form');
+    
+    // =========================================================================
+    // COLLAPSIBLE SECTIONS HANDLER
+    // =========================================================================
+    
+    function initializeCollapsibleSections() {
+        document.querySelectorAll('.form-section.collapsible .form-section-header').forEach(header => {
+            header.addEventListener('click', function() {
+                const section = this.closest('.form-section');
+                const icon = this.querySelector('.section-toggle-icon');
+                
+                // Toggle collapsed state
+                section.classList.toggle('collapsed');
+                
+                // Rotate chevron icon
+                if (icon) {
+                    if (section.classList.contains('collapsed')) {
+                        icon.style.transform = 'rotate(-90deg)';
+                        // Hide section body
+                        const body = section.querySelector('.form-section-body');
+                        if (body) body.style.display = 'none';
+                    } else {
+                        icon.style.transform = 'rotate(0deg)';
+                        // Show section body
+                        const body = section.querySelector('.form-section-body');
+                        if (body) body.style.display = 'block';
+                    }
+                }
+            });
+        });
+        
+        // Initialize collapsed sections on load
+        document.querySelectorAll('.form-section.collapsed').forEach(section => {
+            const body = section.querySelector('.form-section-body');
+            const icon = section.querySelector('.section-toggle-icon');
+            if (body) body.style.display = 'none';
+            if (icon) icon.style.transform = 'rotate(-90deg)';
+        });
+    }
+    
+    // =========================================================================
+    // FORM VALIDATION (Before Universal CRUD takes over)
+    // =========================================================================
+    
+    function initializeBasicValidation() {
+        const form = document.getElementById('universal-create-form');
+        if (!form) return;
+        
+        // Add Bootstrap validation on submit
+        form.addEventListener('submit', function(event) {
+            // Let Universal CRUD handle submission if it's initialized
+            if (window.formCRUD && window.formCRUD.state.isInitialized) {
+                return; // Universal CRUD will handle it
+            }
+            
+            // Otherwise, do basic validation
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+                
+                // Focus first invalid field
+                const firstInvalid = form.querySelector(':invalid');
+                if (firstInvalid) {
+                    firstInvalid.focus();
+                    firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+            form.classList.add('was-validated');
+        }, false);
+    }
+    
+    // =========================================================================
+    // INITIALIZE UNIVERSAL FORM CRUD
+    // =========================================================================
+    
+    function initializeUniversalCRUD() {
+        // Check if UniversalFormCRUD class is available
+        if (typeof UniversalFormCRUD !== 'undefined') {
+            console.log('✅ UniversalFormCRUD class found, initializing...');
+            
+            // Create instance with configuration
+            const formCRUD = new UniversalFormCRUD({
+                autoSaveEnabled: true,
+                autoSaveInterval: 30000, // 30 seconds
+                unsavedWarningEnabled: true,
+                validationEnabled: true,
+                formattingEnabled: true,
+                deleteConfirmationEnabled: false, // Not needed for create
+                notificationDuration: 5000
+            });
+            
+            // Initialize with form ID and entity type
+            formCRUD.initialize('universal-create-form', '{{ entity_type }}');
+            
+            // Store instance globally for debugging
+            window.formCRUD = formCRUD;
+            
+            console.log('✅ Universal Form CRUD initialized successfully');
+            
+            // Add custom field formatters based on field names
+            initializeFieldFormatters();
+            
+        } else {
+            console.warn('⚠️ UniversalFormCRUD class not found, using basic functionality');
+            
+            // Fallback to basic validation
+            initializeBasicValidation();
+        }
+    }
+    
+    // =========================================================================
+    // FIELD FORMATTERS (Work with Universal CRUD)
+    // =========================================================================
+    
+    function initializeFieldFormatters() {
+        // GST Number formatting
+        const gstField = document.getElementById('gst_registration_number');
+        if (gstField && window.formCRUD) {
+            gstField.addEventListener('input', function() {
+                this.value = this.value.toUpperCase();
+            });
+        }
+        
+        // PAN Number formatting
+        const panField = document.getElementById('pan_number');
+        if (panField && window.formCRUD) {
+            panField.addEventListener('input', function() {
+                this.value = this.value.toUpperCase();
+            });
+        }
+        
+        // Phone number formatting
+        ['phone', 'mobile', 'manager_phone', 'manager_mobile'].forEach(fieldName => {
+            const field = document.getElementById(fieldName);
+            if (field && window.formCRUD) {
+                field.addEventListener('input', function() {
+                    // Remove non-digits
+                    let value = this.value.replace(/\D/g, '');
+                    
+                    // Limit to 10 digits for mobile
+                    if (fieldName.includes('mobile') && value.length > 10) {
+                        value = value.substr(0, 10);
+                    }
+                    
+                    this.value = value;
+                });
+            }
+        });
+        
+        // Pincode formatting
+        const pincodeField = document.getElementById('pincode');
+        if (pincodeField) {
+            pincodeField.addEventListener('input', function() {
+                // Remove non-digits and limit to 6
+                this.value = this.value.replace(/\D/g, '').substr(0, 6);
+            });
+        }
+    }
+    
+    // =========================================================================
+    // SUBMIT BUTTON STATE MANAGEMENT
+    // =========================================================================
+    
+    function initializeSubmitButton() {
+        const submitBtn = document.getElementById('submit-btn');
+        const form = document.getElementById('universal-create-form');
+        
+        if (submitBtn && form) {
+            form.addEventListener('submit', function() {
+                // Show loading state
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+            });
+        }
+    }
+    
+    // =========================================================================
+    // AUTO-SAVE STATUS DISPLAY
+    // =========================================================================
+    
+    function initializeAutoSaveStatus() {
+        // Listen for auto-save events if Universal CRUD is active
+        if (window.formCRUD) {
+            // Override showAutoSaveIndicator to update our status
+            const originalShowIndicator = window.formCRUD.showAutoSaveIndicator;
+            window.formCRUD.showAutoSaveIndicator = function() {
+                originalShowIndicator.call(this);
+                
+                // Update status text
+                const statusEl = document.getElementById('auto-save-status');
+                if (statusEl) {
+                    statusEl.innerHTML = '<i class="fas fa-check-circle text-green-500"></i> Draft saved';
+                    setTimeout(() => {
+                        statusEl.innerHTML = '';
+                    }, 3000);
+                }
+            };
+        }
+    }
+    
+    // =========================================================================
+    // INITIALIZE ALL COMPONENTS
+    // =========================================================================
+    
+    // Initialize components in order
+    initializeCollapsibleSections();
+    initializeUniversalCRUD();
+    initializeSubmitButton();
+    initializeAutoSaveStatus();
+    
+    console.log('✅ Universal Create Form fully initialized');
+});
+// Collapsible sections functionality
+function toggleSection(sectionKey) {
+    const section = document.querySelector(`.section-card[data-section="${sectionKey}"]`);
+    if (section) {
+        section.classList.toggle('collapsed');
+        // Save state to localStorage
+        const isCollapsed = section.classList.contains('collapsed');
+        localStorage.setItem(`section_${sectionKey}_collapsed`, isCollapsed);
+    }
+}
+
+// Restore collapsed state on page load
+document.querySelectorAll('.section-card.collapsible').forEach(section => {
+    const sectionKey = section.dataset.section;
+    const isCollapsed = localStorage.getItem(`section_${sectionKey}_collapsed`) === 'true';
+    if (isCollapsed) {
+        section.classList.add('collapsed');
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,518 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block styles %}
+    {{ super() }}
+    <!-- <link rel="stylesheet" href="{{ url_for('static', filename='css/components/universal_form.css') }}"> -->
+{% endblock %}
+
+{% block title %}Edit {{ entity_config.name }} - {{ entity.get(entity_config.title_field, 'Item') if entity else 'Item' }}{% endblock %}
+
+{% block content %}
+<div class="universal-form-page">
+    <!-- Enhanced Page Header with Info Card -->
+    <div class="page-header mb-4">
+        <!-- Header Card with 3-row layout -->
+        <div class="info-card mb-3">
+            <div class="card-body">
+                <!-- Row 1: Title and Date -->
+                <div class="flex justify-between items-center mb-3">
+                    <h1 class="text-2xl font-bold">
+                        <i class="{{ entity_config.icon }} text-blue-500"></i>
+                        <span class="ml-2">Edit {{ entity_config.entity_label or entity_config.name }}</span>
+                    </h1>
+                    <span class="text-sm text-gray-600">{{ current_date if current_date else '' }}</span>
+                </div>
+                
+                <!-- Row 2: Entity Details with Print Profile -->
+                <div class="mb-4 p-3 bg-gray-50 rounded">
+                    <div class="flex justify-between items-center text-lg">
+                        <div class="flex-1">
+                            {% if entity and entity_config.title_field and entity.get(entity_config.title_field) %}
+                                <span class="font-semibold text-gray-800">{{ entity.get(entity_config.title_field) }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="flex-1 text-center">
+                            <span class="text-gray-600">ID: {{ item_id[:8] }}...</span>
+                        </div>
+                        <div class="flex-1 text-right">
+                            {% if entity and entity.get('status') %}
+                                <span class="text-gray-600">Status:</span>
+                                <span class="badge badge-{{ 'success' if entity.get('status') == 'active' else 'warning' }} text-base ml-1">
+                                    {{ entity.get('status')|title }}
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Row 3: Action Buttons -->
+                <div class="flex justify-between items-center">
+                    <a href="{{ url_for('universal_views.universal_list_view', entity_type=entity_type) }}" 
+                       class="btn-secondary">
+                        <i class="fas fa-arrow-left"></i>
+                        <span class="ml-2">Back to List</span>
+                    </a>
+                    <div class="flex gap-2">
+                        <a href="{{ url_for('universal_views.universal_detail_view', entity_type=entity_type, item_id=item_id) }}"
+                           class="btn-secondary">
+                            <i class="fas fa-eye"></i>
+                            <span class="ml-2">View Details</span>
+                        </a>
+                        <a href="{{ url_for('universal_views.universal_document_view', entity_type=entity_type, item_id=item_id, doc_type='profile') }}" 
+                            class="btn-outline btn-sm" 
+                            target="_blank">
+                            <i class="fas fa-print"></i>
+                            <span class="ml-2">Print Profile</span>
+                        </a>
+                        {% if can_delete(entity_config.entity_type) %}
+                        <button type="button" 
+                                class="btn-danger" 
+                                onclick="confirmDelete('{{ url_for('universal_views.universal_delete_view', entity_type=entity_type, item_id=item_id) }}')"
+                                title="Delete {{ entity[entity_config.title_field] if entity and entity_config.title_field and entity_config.title_field in entity else 'this item' }}">
+                            <i class="fas fa-trash"></i>
+                            <span class="ml-2">Delete</span>
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Form Section -->
+    <form method="POST" 
+          action="{{ url_for('universal_views.universal_edit_view', entity_type=entity_type, item_id=item_id) }}"
+          id="universal-edit-form"
+          class="universal-crud-form"
+          novalidate>
+         
+        <!-- CSRF Token -->
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        
+        <div class="info-card">
+            <div class="card-header">
+                <h3 class="text-xl font-bold text-gray-700">
+                    <i class="{{ entity_config.icon }} text-gray-500 text-lg"></i>
+                    <span class="ml-2">{{ entity_config.name }} Information</span>
+                </h3>
+            </div>
+            
+            <div class="card-body">
+                <!-- Display any form errors -->
+                {% if form_errors %}
+                <div class="alert alert-danger mb-4">
+                    <strong>Please correct the following errors:</strong>
+                    <ul class="mt-2 mb-0">
+                        {% for error in form_errors %}
+                        <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                
+                <!-- Form container with subtle background -->
+                <div class="form-container">
+                    <!-- Group fields by section -->
+                    {% set fields_by_section = {} %}
+                    {% for field_name in entity_config.edit_fields %}
+                        {% set field = entity_config.fields|selectattr('name', 'equalto', field_name)|first %}
+                        {% if field %}
+                            {% set section_key = field.section|default('basic_info') %}
+                            {% if section_key not in fields_by_section %}
+                                {% set _ = fields_by_section.update({section_key: []}) %}
+                            {% endif %}
+                            {% set _ = fields_by_section[section_key].append(field) %}
+                        {% endif %}
+                    {% endfor %}
+
+                    <!-- Render each section as a separate card -->
+                    {% for section_key, section_fields in fields_by_section.items() %}
+                        {% set section_def = entity_config.form_section_definitions.get(section_key) if entity_config.form_section_definitions else None %}
+                        
+                        <!-- Collapsible Form Section Card -->
+                        <div class="section-card collapsible {{ section_key }}" data-section="{{ section_key }}">
+                            <div class="section-header" onclick="toggleSection('{{ section_key }}')">
+                                <h4 class="section-title flex items-center flex-grow">
+                                    {% if section_def and section_def.icon %}
+                                        <i class="{{ section_def.icon }} text-gray-600"></i>
+                                    {% endif %}
+                                    <span class="ml-2">{{ section_def.title if section_def else section_key|replace('_', ' ')|title }}</span>
+                                    <i class="fas fa-chevron-down ml-auto transition-transform section-toggle ml-4"></i>
+                                </h4>
+                            </div>
+                            
+                            <!-- Section Body -->
+                            <div class="section-body">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {% for field in section_fields|sort(attribute='view_order') %}
+                                        {% set current_value = entity[field.name] if entity and field.name in entity else '' %}
+                                        
+                                        <!-- Full width for textarea and address fields -->
+                                        <div class="{% if field.field_type.value in ['textarea', 'rich_text'] or field.name == 'address' %}md:col-span-2{% endif %}">
+                                            <div class="universal-form-group">
+                                                <label for="{{ field.name }}" class="universal-form-label">
+                                                    {{ field.label }}
+                                                    {% if field.name in entity_config.required_fields %}
+                                                        <span class="text-red-500">*</span>
+                                                    {% endif %}
+                                                </label>
+                                                
+                                                {% if field.field_type.value == 'boolean' or field.name == 'black_listed' %}
+                                                    <!-- Checkbox handling -->
+                                                    <div class="form-check">
+                                                        <input type="checkbox" 
+                                                               class="form-check-input" 
+                                                               id="{{ field.name }}" 
+                                                               name="{{ field.name }}"
+                                                               value="true"
+                                                               {% if current_value == True or current_value == 'true' or current_value == 'True' or current_value == 1 or current_value == '1' %}checked{% endif %}
+                                                               {% if field.name in entity_config.required_fields %}required{% endif %}>
+                                                        <label class="form-check-label" for="{{ field.name }}">
+                                                            {{ field.help_text if field.help_text else 'Check if ' + field.label.lower() }}
+                                                        </label>
+                                                    </div>
+                                                    
+                                                {% elif field.field_type.value == 'select' or field.name == 'status' %}
+                                                    <select class="universal-form-input" 
+                                                            id="{{ field.name }}" 
+                                                            name="{{ field.name }}"
+                                                            {% if field.name in entity_config.required_fields %}required{% endif %}>
+                                                        {% if field.name == 'status' %}
+                                                            <option value="active" {% if current_value == 'active' %}selected{% endif %}>Active</option>
+                                                            <option value="inactive" {% if current_value == 'inactive' %}selected{% endif %}>Inactive</option>
+                                                        {% elif field.options %}
+                                                            <option value="">Select {{ field.label }}</option>
+                                                            {% for option in field.options %}
+                                                                {% if option is mapping %}
+                                                                    <option value="{{ option.value }}" {% if current_value == option.value %}selected{% endif %}>
+                                                                        {{ option.label }}
+                                                                    </option>
+                                                                {% else %}
+                                                                    <option value="{{ option }}" {% if current_value == option %}selected{% endif %}>
+                                                                        {{ option }}
+                                                                    </option>
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                    </select>
+                                                    
+                                                {% elif field.field_type.value == 'textarea' or field.name == 'address' %}
+                                                    <textarea class="universal-form-input" 
+                                                              id="{{ field.name }}" 
+                                                              name="{{ field.name }}"
+                                                              rows="3"
+                                                              placeholder="{{ field.placeholder or 'Enter ' + field.label.lower() }}"
+                                                              {% if field.name in entity_config.required_fields %}required{% endif %}>{{ current_value }}</textarea>
+                                                              
+                                                {% elif field.field_type.value in ['date', 'datetime'] %}
+                                                    <input type="{{ field.field_type.value }}" 
+                                                           class="universal-form-input" 
+                                                           id="{{ field.name }}" 
+                                                           name="{{ field.name }}"
+                                                           value="{{ current_value }}"
+                                                           {% if field.name in entity_config.required_fields %}required{% endif %}>
+                                                           
+                                                {% elif field.field_type.value in ['number', 'amount', 'currency'] or field.name in ['credit_limit', 'credit_days'] %}
+                                                    <input type="number" 
+                                                           class="universal-form-input" 
+                                                           id="{{ field.name }}" 
+                                                           name="{{ field.name }}"
+                                                           value="{{ current_value }}"
+                                                           step="{% if field.field_type.value == 'currency' or field.name == 'credit_limit' %}0.01{% else %}1{% endif %}"
+                                                           placeholder="{{ field.placeholder or 'Enter ' + field.label.lower() }}"
+                                                           {% if field.name == 'credit_days' %}min="0" max="365"{% endif %}
+                                                           {% if field.min_value %}min="{{ field.min_value }}"{% endif %}
+                                                           {% if field.name in entity_config.required_fields %}required{% endif %}>
+                                                           
+                                                {% elif field.name == 'gst_registration_number' %}
+                                                    <input type="text" 
+                                                           class="universal-form-input" 
+                                                           id="{{ field.name }}" 
+                                                           name="{{ field.name }}"
+                                                           value="{{ current_value }}"
+                                                           placeholder="15-character GST Number"
+                                                           pattern="[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}"
+                                                           maxlength="15"
+                                                           style="text-transform: uppercase;">
+                                                           
+                                                {% elif field.name == 'pan_number' %}
+                                                    <input type="text" 
+                                                           class="universal-form-input" 
+                                                           id="{{ field.name }}" 
+                                                           name="{{ field.name }}"
+                                                           value="{{ current_value }}"
+                                                           placeholder="10-character PAN"
+                                                           pattern="[A-Z]{5}[0-9]{4}[A-Z]{1}"
+                                                           maxlength="10"
+                                                           style="text-transform: uppercase;">
+                                                           
+                                                {% elif field.name == 'pincode' %}
+                                                    <input type="text" 
+                                                           class="universal-form-input" 
+                                                           id="{{ field.name }}" 
+                                                           name="{{ field.name }}"
+                                                           value="{{ current_value }}"
+                                                           placeholder="6-digit PIN code"
+                                                           pattern="[0-9]{6}"
+                                                           maxlength="6">
+                                                           
+                                                {% elif field.name == 'email' %}
+                                                    <input type="email" 
+                                                           class="universal-form-input" 
+                                                           id="{{ field.name }}" 
+                                                           name="{{ field.name }}"
+                                                           value="{{ current_value }}"
+                                                           placeholder="{{ field.placeholder or 'email@example.com' }}"
+                                                           {% if field.name in entity_config.required_fields %}required{% endif %}>
+                                                           
+                                                {% else %}
+                                                    <!-- Default text input -->
+                                                    <input type="text" 
+                                                           class="universal-form-input" 
+                                                           id="{{ field.name }}" 
+                                                           name="{{ field.name }}"
+                                                           value="{{ current_value }}"
+                                                           placeholder="{{ field.placeholder or 'Enter ' + field.label.lower() }}"
+                                                           {% if field.max_length %}maxlength="{{ field.max_length }}"{% endif %}
+                                                           {% if field.pattern %}pattern="{{ field.pattern }}"{% endif %}
+                                                           {% if field.name in entity_config.required_fields %}required{% endif %}>
+                                                {% endif %}
+                                                
+                                                {% if field.help_text %}
+                                                    <small class="help-text">{{ field.help_text }}</small>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                    
+                    <!-- Required Fields Note -->
+                    <div class="required-note">
+                        <span class="text-red-500">*</span> Required fields
+                    </div>
+                </div> <!-- Close form-container -->
+                
+                <!-- Metadata Section -->
+                {% if entity %}
+                <div class="metadata-section">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <strong>Created:</strong> 
+                            {% if entity.created_at %}
+                                {{ entity.created_at.strftime("%Y-%m-%d %H:%M") if entity.created_at else 'Unknown' }}
+                            {% else %}
+                                Unknown
+                            {% endif %}
+                            {% if entity.created_by %}
+                                by {{ entity.created_by }}
+                            {% endif %}
+                        </div>
+                        <div>
+                            <strong>Last Updated:</strong> 
+                            {% if entity.updated_at %}
+                                {{ entity.updated_at.strftime("%Y-%m-%d %H:%M") if entity.updated_at else 'Never' }}
+                            {% else %}
+                                Never
+                            {% endif %}
+                            {% if entity.updated_by %}
+                                by {{ entity.updated_by }}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div> <!-- Close card-body -->
+            
+            <!-- Form Actions with Universal Engine Color Standards -->
+            <div class="card-footer">
+                <div class="flex justify-center gap-4 w-full">
+                    <!-- PRIMARY: Main save action (blue) -->
+                    <button type="submit" name="action" value="save" class="btn-primary" style="min-width: 120px;">
+                        <i class="fas fa-save"></i>
+                        <span class="ml-2">Update</span>
+                    </button>
+                    
+                    <!-- SUCCESS: Positive continuation (green) -->
+                    <button type="submit" name="action" value="save_and_continue" class="btn-success" style="min-width: 150px;">
+                        <i class="fas fa-edit"></i>
+                        <span class="ml-2">Save & Continue</span>
+                    </button>
+                    
+                    <!-- WARNING: Caution - data loss possible (amber) -->
+                    <button type="reset" class="btn-warning" style="min-width: 100px;">
+                        <i class="fas fa-undo"></i>
+                        <span class="ml-2">Reset</span>
+                    </button>
+                    
+                    <!-- SECONDARY: Navigation away (gray) -->
+                    <a href="{{ url_for('universal_views.universal_detail_view', entity_type=entity_type, item_id=item_id) }}" 
+                       class="btn-secondary text-center" style="min-width: 100px;">
+                        <i class="fas fa-times"></i>
+                        <span class="ml-2">Cancel</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Delete Confirmation Modal (Optional) -->
+<div id="deleteModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div class="mt-3 text-center">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">Confirm Delete</h3>
+            <div class="mt-2 px-7 py-3">
+                <p class="text-sm text-gray-500">
+                    Are you sure you want to delete this item? This action cannot be undone.
+                </p>
+            </div>
+            <div class="items-center px-4 py-3">
+                <button id="confirmDeleteBtn" class="btn-danger">
+                    <i class="fas fa-trash mr-2"></i>Delete
+                </button>
+                <button onclick="closeDeleteModal()" class="btn-secondary ml-2">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<!-- Include Universal Form CRUD JS if available -->
+<script src="{{ url_for('static', filename='js/components/universal_form_crud.js') }}"></script>
+
+<script>
+// Set global entity type and ID for the CRUD engine
+window.entityType = '{{ entity_type }}';
+window.entityId = '{{ item_id }}';
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Edit form initialized for {{ entity_type }}/{{ item_id }}');
+    
+    // Store original values for change detection
+    const form = document.getElementById('universal-edit-form');
+    const originalValues = {};
+    let isSubmitting = false; // Add flag to track submission
+    
+    if (form) {
+        // Store original values
+        const inputs = form.querySelectorAll('input, select, textarea');
+        inputs.forEach(input => {
+            if (input.type === 'checkbox' || input.type === 'radio') {
+                originalValues[input.name] = input.checked;
+            } else {
+                originalValues[input.name] = input.value;
+            }
+        });
+        
+        // Mark changed fields
+        form.addEventListener('change', function(e) {
+            const field = e.target;
+            if (field.name in originalValues) {
+                const currentValue = field.type === 'checkbox' || field.type === 'radio' ? 
+                                   field.checked : field.value;
+                
+                if (currentValue !== originalValues[field.name]) {
+                    field.classList.add('field-changed');
+                    field.parentElement.classList.add('has-changes');
+                } else {
+                    field.classList.remove('field-changed');
+                    field.parentElement.classList.remove('has-changes');
+                }
+            }
+        });
+        
+        // Warn before leaving if changes exist
+        window.addEventListener('beforeunload', function(e) {
+            // Don't warn if we're submitting the form
+            if (isSubmitting) {
+                return;
+            }
+            
+            const changedFields = form.querySelectorAll('.field-changed');
+            if (changedFields.length > 0) {
+                e.preventDefault();
+                e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+                return e.returnValue;
+            }
+        });
+        
+        // Handle form submission properly
+        form.addEventListener('submit', function(e) {
+            console.log('Form submit triggered');
+            isSubmitting = true; // Set flag to prevent beforeunload warning
+            
+            // Show loading state on clicked button only
+            const submitButtons = form.querySelectorAll('button[type="submit"]');
+            submitButtons.forEach(btn => {
+                // Only disable the clicked button
+                if (e.submitter === btn) {
+                    btn.disabled = true;
+                    const originalHTML = btn.innerHTML;
+                    btn.dataset.originalHTML = originalHTML;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span class="ml-2">Saving...</span>';
+                }
+            });
+            
+            // Form will submit normally
+            return true;
+        });
+    }
+});
+
+// Delete confirmation
+function confirmDelete(url) {
+    if (confirm('Are you sure you want to delete this item? This action cannot be undone.')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = url;
+        
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrf_token';
+        csrfInput.value = '{{ csrf_token() }}';
+        form.appendChild(csrfInput);
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// Optional: Modal functions if using modal
+function openDeleteModal() {
+    document.getElementById('deleteModal').classList.remove('hidden');
+}
+
+function closeDeleteModal() {
+    document.getElementById('deleteModal').classList.add('hidden');
+}
+// Collapsible sections functionality
+function toggleSection(sectionKey) {
+    const section = document.querySelector(`.section-card[data-section="${sectionKey}"]`);
+    if (section) {
+        section.classList.toggle('collapsed');
+        // Save state to localStorage
+        const isCollapsed = section.classList.contains('collapsed');
+        localStorage.setItem(`section_${sectionKey}_collapsed`, isCollapsed);
+    }
+}
+
+// Restore collapsed state on page load
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.section-card.collapsible').forEach(section => {
+        const sectionKey = section.dataset.section;
+        const isCollapsed = localStorage.getItem(`section_${sectionKey}_collapsed`) === 'true';
+        if (isCollapsed) {
+            section.classList.add('collapsed');
+        }
+    });
+});
+</script>
+{% endblock %}

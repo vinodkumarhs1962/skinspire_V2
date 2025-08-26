@@ -60,7 +60,11 @@
                                         <div class="text-center py-4">
                                             <i class="fas fa-info-circle text-3xl text-gray-300 dark:text-gray-600 mb-2"></i>
                                             <p class="text-gray-500 dark:text-gray-400 text-sm">
-                                                {{ data.get('error', 'No data available') }}
+                                                {% if data %}
+                                                    {{ data.get('error', 'No data available') }}
+                                                {% else %}
+                                                    No data available
+                                                {% endif %}
                                             </p>
                                         </div>
                                     {% endif %}

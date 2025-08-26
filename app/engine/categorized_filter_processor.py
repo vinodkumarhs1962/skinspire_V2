@@ -12,7 +12,7 @@ Categorized Filter Processor - Replaces all existing filter logic
 - Preserves all existing functionality while eliminating conflicts
 """
 
-from typing import Dict, Any, List, Optional, Set, Tuple
+from typing import Dict, Any, List, Optional, Set, Tuple, Type
 import uuid
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
@@ -142,19 +142,21 @@ class CategorizedFilterProcessor:
             return None
 
     def process_entity_filters(self, entity_type: str, filters: Dict[str, Any], 
-                             query: Query, session: Session, config=None) -> Tuple[Query, Set[str], int]:
+                         query: Query, model_class: Type, session: Session,
+                         hospital_id: uuid.UUID = None, branch_id: uuid.UUID = None,
+                         config=None) -> Tuple[Query, Set[str], int]:
         """
         Main entry point - processes ALL filters by category
         
         Args:
             entity_type: Entity type ('supplier_payments', etc.)
-            filters: Dictionary of filter values from request
-            query: SQLAlchemy query object to modify
-            session: Database session to use
-            config: Entity configuration (will auto-load if not provided)
-            
-        Returns:
-            Tuple of (modified_query, applied_filter_names, filter_count)
+            filters: Filter values from request
+            query: SQLAlchemy Query object
+            model_class: SQLAlchemy model class for the entity
+            session: Database session
+            hospital_id: Hospital ID for filtering (optional)
+            branch_id: Branch ID for filtering (optional)
+            config: Entity configuration (optional)
         """
         try:
             self.session = session
@@ -1534,7 +1536,13 @@ def process_filters_for_entity(entity_type: str, filters: Dict[str, Any],
     Direct replacement for existing filter processing methods
     """
     processor = get_categorized_filter_processor()
-    return processor.process_entity_filters(entity_type, filters, query, session, config)
+    # ✅ Get model class from processor's _get_model_class method
+    model_class = processor._get_model_class(entity_type)
+    if not model_class:
+        logger.error(f"Could not get model class for entity type: {entity_type}")
+        return query, set(), 0
+        
+    return processor.process_entity_filters(entity_type, filters, query, model_class, session, config=config)
 
 def organize_filters_by_category(filters: Dict[str, Any], entity_type: str) -> Dict[FilterCategory, Dict]:
     """

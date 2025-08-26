@@ -42,6 +42,7 @@ class UniversalEntityService(ABC):
             # Extract standard parameters
             hospital_id = kwargs.get('hospital_id')
             branch_id = kwargs.get('branch_id')
+            user = kwargs.get('current_user') 
             page = kwargs.get('page', 1)
             per_page = kwargs.get('per_page', 20)
             sort_by = kwargs.get('sort_by')
@@ -52,7 +53,7 @@ class UniversalEntityService(ABC):
             
             with get_db_session() as session:
                 # Get base query
-                query = self._get_base_query(session, hospital_id, branch_id)
+                query = self._get_base_query(session, hospital_id, branch_id, user=user)
                 
                 # Apply search terms if configured
                 search_term = filters.get('search_term') or filters.get('search')
@@ -61,13 +62,14 @@ class UniversalEntityService(ABC):
                 
                 # Apply filters using categorized processor
                 query, applied_filters, filter_count = self.filter_processor.process_entity_filters(
-                    self.entity_type,
-                    query,
-                    filters,
-                    self.model_class,
-                    session,
-                    hospital_id,
-                    branch_id
+                    self.entity_type,    # entity_type: str
+                    filters,             # ✅ FIXED: filters parameter
+                    query,               # ✅ FIXED: query parameter  
+                    self.model_class,    # model_class: Type
+                    session,             # session: Session
+                    hospital_id,         # hospital_id: Optional[uuid.UUID] = None
+                    branch_id,           # branch_id: Optional[uuid.UUID] = None  
+                    self.config          # config=None
                 )
                 
                 # Get total count before pagination
@@ -106,8 +108,10 @@ class UniversalEntityService(ABC):
             return self._get_error_result(str(e))
     
     def _get_base_query(self, session: Session, hospital_id: uuid.UUID, 
-                       branch_id: Optional[uuid.UUID]):
-        """Get base query with hospital/branch filtering"""
+               branch_id: Optional[uuid.UUID],
+               user: Optional[Any] = None): 
+        """Get base query with hospital/branch filtering - ENTITY AGNOSTIC"""
+        logger.info(f"[SERVICE_DEBUG] _get_base_query called for entity: {self.entity_type}, model: {self.model_class.__name__}")
         query = session.query(self.model_class)
         
         # Apply hospital filter
@@ -118,11 +122,52 @@ class UniversalEntityService(ABC):
         if branch_id and hasattr(self.model_class, 'branch_id'):
             query = query.filter(self.model_class.branch_id == branch_id)
         
-        # Apply default filters (e.g., exclude deleted)
-        if hasattr(self.model_class, 'is_deleted'):
-            query = query.filter(self.model_class.is_deleted == False)
+        # ✅ ENHANCED: Universal soft delete filter supporting multiple field names
+        show_deleted = self._get_user_show_deleted_preference(user)
+        
+        if not show_deleted:
+            # Check for multiple possible soft delete fields (entity-agnostic)
+            if hasattr(self.model_class, 'is_deleted'):
+                query = query.filter(self.model_class.is_deleted == False)
+            elif hasattr(self.model_class, 'deleted_flag'):
+                query = query.filter(self.model_class.deleted_flag == False)
+            elif hasattr(self.model_class, 'deleted'):
+                query = query.filter(self.model_class.deleted == False)
         
         return query
+
+    def _get_user_show_deleted_preference(self, user: Optional[Any] = None) -> bool:
+        """
+        ✅ NEW: Universal method to get user's show_deleted preference
+        Entity-agnostic with multiple fallback strategies
+        """
+        show_deleted = False
+        
+        try:
+            # Strategy 1: Use passed user parameter
+            if user:
+                if hasattr(user, 'ui_preferences') and user.ui_preferences:
+                    show_deleted = user.ui_preferences.get('show_deleted_records', False)
+                elif hasattr(user, 'show_deleted_records'):
+                    show_deleted = user.show_deleted_records
+            
+            # Strategy 2: Fallback to current_user
+            if not user:
+                try:
+                    from flask_login import current_user
+                    if current_user and hasattr(current_user, 'ui_preferences') and current_user.ui_preferences:
+                        show_deleted = current_user.ui_preferences.get('show_deleted_records', False)
+                    elif current_user and hasattr(current_user, 'show_deleted_records'):
+                        show_deleted = current_user.show_deleted_records
+                except Exception as e:
+                    logger.debug(f"Could not access current_user: {e}")
+            
+            logger.info(f"[CRITICAL_DEBUG] Entity:{self.entity_type} | User:{getattr(user, 'user_id', None) if user else 'None'} | show_deleted:{show_deleted} | ui_pref:{getattr(user, 'ui_preferences', None) if user else 'No user'}")
+            return show_deleted
+            
+        except Exception as e:
+            logger.warning(f"Error getting show_deleted preference: {e}")
+            return False  # Safe default: don't show deleted
     
     def _apply_search_filter(self, query, search_term: str):
         """Apply text search across configured searchable fields"""
@@ -173,12 +218,26 @@ class UniversalEntityService(ABC):
         return query.limit(per_page).offset(offset)
     
     def _convert_items_to_dict(self, items: List, session: Session) -> List[Dict]:
-        """Convert model instances to dictionaries"""
+        """Convert model instances to dictionaries - ENTITY AGNOSTIC"""
         items_dict = []
         
         for item in items:
             # Get base dictionary
             item_dict = get_entity_dict(item)
+            
+            # ✅ UNIVERSAL: Ensure all possible deleted flags are included
+            if hasattr(item, 'is_deleted'):
+                item_dict['is_deleted'] = item.is_deleted
+            if hasattr(item, 'deleted_flag'):
+                item_dict['deleted_flag'] = item.deleted_flag
+            if hasattr(item, 'deleted'):
+                item_dict['deleted'] = item.deleted
+                
+            # ✅ UNIVERSAL: Add deleted timestamp fields for additional context
+            if hasattr(item, 'deleted_at'):
+                item_dict['deleted_at'] = item.deleted_at
+            if hasattr(item, 'deleted_by'):
+                item_dict['deleted_by'] = item.deleted_by
             
             # Add any relationships
             self._add_relationships(item_dict, item, session)
@@ -268,29 +327,48 @@ class UniversalEntityService(ABC):
         """
         pass
     
-    def get_by_id(self, item_id: str, **kwargs):
-        """Get single item by ID"""
+    def get_by_id(self, item_id: str, **kwargs) -> Optional[Dict]:
+        """Get single item by ID with virtual field extraction"""
         try:
             hospital_id = kwargs.get('hospital_id')
-            if not hospital_id:
+            user = kwargs.get('current_user') 
+
+            if not hospital_id or not item_id:
                 return None
             
             with get_db_session() as session:
-                query = self._get_base_query(session, hospital_id, kwargs.get('branch_id'))
+                # First try with user preference
+                query = self._get_base_query(session, hospital_id, 
+                                            kwargs.get('branch_id'),
+                                            user=user)  # PASS USER
                 
                 # Find ID field dynamically
                 id_field = self._get_id_field()
-                # ===== ADD THIS DEBUG =====
                 logger.info(f"[{self.entity_type}] get_by_id: Looking for {id_field}={item_id}")
-                # ===== END DEBUG =====
                 if not id_field:
                     return None
                 
                 item = query.filter(getattr(self.model_class, id_field) == item_id).first()
-                
+                # If not found and user doesn't show deleted, try including deleted
+                # This allows viewing a specific deleted record via direct link
+                if not item and hasattr(self.model_class, 'is_deleted'):
+                    query_with_deleted = session.query(self.model_class)
+                    if hasattr(self.model_class, 'hospital_id'):
+                        query_with_deleted = query_with_deleted.filter(
+                            self.model_class.hospital_id == hospital_id
+                        )
+                    item = query_with_deleted.filter(
+                        getattr(self.model_class, id_field) == item_id
+                    ).first()
+
                 if item:
                     item_dict = get_entity_dict(item)
                     self._add_relationships(item_dict, item, session)
+                    
+                    # CRITICAL FIX: Extract virtual fields from JSONB
+                    if self.config:
+                        item_dict = self._extract_virtual_fields_for_single_item(item_dict)
+                    
                     return item_dict
                 
                 return None
@@ -298,6 +376,25 @@ class UniversalEntityService(ABC):
         except Exception as e:
             logger.error(f"Error getting {self.entity_type} by id: {str(e)}")
             return None
+
+    def _extract_virtual_fields_for_single_item(self, item_dict: Dict) -> Dict:
+        """
+        Extract virtual fields from JSONB columns for a single item
+        Uses configuration to determine which fields are virtual
+        """
+        from app.engine.virtual_field_transformer import VirtualFieldTransformer
+        
+        # Use VirtualFieldTransformer to extract fields
+        virtual_data = VirtualFieldTransformer.extract_virtual_fields_for_display(
+            item_dict, self.config
+        )
+        
+        # Merge virtual data into item dict
+        item_dict.update(virtual_data)
+        
+        logger.info(f"[{self.entity_type}] Extracted {len(virtual_data)} virtual fields for item")
+        
+        return item_dict
     
     def _get_id_field(self) -> Optional[str]:
         """Get the primary key field name for the model"""

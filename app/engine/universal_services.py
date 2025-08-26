@@ -51,6 +51,10 @@ class UniversalServiceRegistry:
         try:
             service_path = self.service_registry.get(entity_type)
             
+            # ADD THIS LOG
+            # if entity_type == 'suppliers':
+            #     logger.info(f"🔍 SUPPLIERS SERVICE: path={service_path}")
+
             if not service_path:
                 logger.info(f"No specific service for {entity_type}, using generic")
                 return GenericUniversalService(entity_type)
@@ -60,6 +64,11 @@ class UniversalServiceRegistry:
                 module_path, class_name = service_path.rsplit('.', 1)
                 module = importlib.import_module(module_path)
                 service_class = getattr(module, class_name)
+
+                # ADD THIS LOG
+                # if entity_type == 'suppliers':
+                #     logger.info(f"✅ Loaded {service_class.__name__} for suppliers")
+
                 return service_class()
             except (ImportError, AttributeError) as e:
                 logger.warning(f"Could not load service {service_path}: {str(e)}, using fallback")
@@ -87,6 +96,15 @@ class UniversalServiceRegistry:
         try:
             logger.info(f"🔄 [CLEAN_ROUTING] Routing {entity_type} to existing complete system")
             
+            # 🔍 CRITICAL DEBUG: Add these 4 lines
+            service = self.get_service(entity_type)
+            logger.info(f"🔍 [CRITICAL] Got service: {type(service).__name__}")
+            if hasattr(service, 'search_data'):
+                logger.info(f"🔍 [CRITICAL] Service HAS search_data method - should call it")
+                return service.search_data(filters, **kwargs)
+            else:
+                logger.info(f"🔍 [CRITICAL] Service has NO search_data - using categorized processor")
+
             # ✅ NEW: Extract complete filters from request if available
             import flask
             if flask.has_request_context() and flask.request:

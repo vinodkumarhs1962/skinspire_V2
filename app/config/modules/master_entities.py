@@ -15,10 +15,10 @@ from app.config.core_definitions import (
     TabDefinition, ViewLayoutConfiguration, LayoutType,
     EntityConfiguration, ActionDefinition,
     EntitySearchConfiguration, EntityFilterConfiguration, ButtonType,
-    ComplexDisplayType, ActionDisplayType,
+    ComplexDisplayType, ActionDisplayType, INDIAN_STATES,
     DocumentConfiguration, PrintLayoutType, DocumentType,
     PageSize, Orientation, DocumentSectionType, ExportFormat,
-    CustomRenderer  # Added for transaction history custom rendering
+    EntityCategory, CRUDOperation, CustomRenderer  # Added for transaction history custom rendering
 )
 from app.config.filter_categories import FilterCategory
 
@@ -37,7 +37,7 @@ SUPPLIER_FIELDS = [
         show_in_form=False,
         readonly=True,
         tab_group="profile",  # Changed from basic_info
-        section="identification",
+        section="basic_info",
         view_order=0
     ),
     
@@ -66,7 +66,7 @@ SUPPLIER_FIELDS = [
         autocomplete_enabled=True,
         autocomplete_source="backend",
         tab_group="profile",  # Changed from basic_info
-        section="identification",
+        section="basic_info",
         view_order=1
     ),
     
@@ -83,10 +83,9 @@ SUPPLIER_FIELDS = [
         filterable=True,
         required=True,
         placeholder="Enter supplier name",
-        tab_group="profile",  # Changed from basic_info
-        section="identification",
-        view_order=2,
-        css_classes="text-lg font-bold"
+        tab_group="profile",
+        section="basic_info",  # For form grouping
+        view_order=1
     ),
     FieldDefinition(
         name="supplier_category",
@@ -104,12 +103,10 @@ SUPPLIER_FIELDS = [
             {"value": "service", "label": "Service Provider"},
             {"value": "consumable", "label": "Consumable Supplier"}
         ],
-        tab_group="business_info",
-        section="business_details",
-        view_order=1
+        section="basic_info",
+        tab_group="profile",
+        view_order=2
     ),
-    
-    # ========== CONTACT INFORMATION ==========
     FieldDefinition(
         name="contact_person_name",
         label="Contact Person",
@@ -119,24 +116,16 @@ SUPPLIER_FIELDS = [
         show_in_form=True,
         searchable=True,
         sortable=True,
+        required=True,
         placeholder="Enter contact person name",
-        tab_group="profile",  # Changed from contact_info
-        section="primary_contact",
-        view_order=1
+        section="basic_info",
+        tab_group="profile",
+        view_order=3
     ),
+    
+    # ========== CONTACT INFO VIRTUAL FIELDS (contact_info JSONB) ==========
     FieldDefinition(
-        name="contact_info",
-        label="Contact Information",
-        field_type=FieldType.JSONB,
-        show_in_list=False,
-        show_in_detail=True,
-        show_in_form=True,
-        tab_group="profile",  # Changed from contact_info
-        section="primary_contact",
-        view_order=2
-    ),
-    FieldDefinition(
-        name="phone",  # Virtual field - extracted from contact_info JSONB
+        name="phone",
         label="Phone",
         field_type=FieldType.TEXT,
         show_in_list=True,
@@ -144,10 +133,32 @@ SUPPLIER_FIELDS = [
         show_in_form=True,
         searchable=True,
         virtual=True,
+        virtual_target="contact_info",
+        virtual_key="phone",
+        required=False,  # Not mandatory
         placeholder="Enter phone number",
-        tab_group="profile",  # Changed from contact_info
-        section="primary_contact",
-        view_order=3
+        validation_pattern=r'^[0-9]{10}$',
+        section="contact_info",
+        tab_group="profile",
+        view_order=1
+    ),
+    FieldDefinition(
+        name="mobile",
+        label="Mobile",
+        field_type=FieldType.TEXT,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=True,
+        virtual=True,
+        virtual_target="contact_info",
+        virtual_key="mobile",
+        required=True,  # MANDATORY (Issue #5)
+        placeholder="Enter 10-digit mobile number",
+        validation_pattern=r'^[6-9][0-9]{9}$',  # Indian mobile validation
+        help_text="Enter 10-digit mobile starting with 6-9",
+        section="contact_info",
+        tab_group="profile",
+        view_order=2
     ),
     FieldDefinition(
         name="email",
@@ -158,12 +169,112 @@ SUPPLIER_FIELDS = [
         show_in_form=True,
         searchable=True,
         sortable=True,
+        required=False,
         placeholder="Enter email address",
-        validation_pattern=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
-        tab_group="profile",  # <- MISSING!
-        section="primary_contact",  # <- MISSING!
-        view_order=4  # <- MISSING!
-        ),
+        validation_pattern=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',  # Issue #8
+        help_text="Enter valid email address",
+        section="contact_info",
+        tab_group="profile",
+        view_order=3
+    ),
+    FieldDefinition(
+        name="fax",
+        label="Fax",
+        field_type=FieldType.TEXT,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=True,
+        virtual=True,
+        virtual_target="contact_info",
+        virtual_key="fax",
+        placeholder="Enter fax number",
+        section="contact_info",
+        tab_group="profile",
+        view_order=4
+    ),
+    
+    # ========== ADDRESS VIRTUAL FIELDS (supplier_address JSONB) ==========
+    FieldDefinition(
+        name="address",
+        label="Street Address",
+        field_type=FieldType.TEXTAREA,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=True,
+        virtual=True,
+        virtual_target="supplier_address",
+        virtual_key="address",
+        placeholder="Enter street address",
+        section="address_info",
+        tab_group="profile",
+        view_order=1
+    ),
+    FieldDefinition(
+        name="city",
+        label="City",
+        field_type=FieldType.TEXT,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=True,
+        searchable=True,
+        virtual=True,
+        virtual_target="supplier_address",
+        virtual_key="city",
+        placeholder="Enter city",
+        section="address_info",
+        tab_group="profile",
+        view_order=2
+    ),
+    FieldDefinition(
+        name="state",
+        label="State",
+        field_type=FieldType.TEXT,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=True,
+        virtual=True,
+        virtual_target="supplier_address",
+        virtual_key="state",
+        placeholder="Enter state",
+        section="address_info",
+        tab_group="profile",
+        view_order=3
+    ),
+    FieldDefinition(
+        name="country",
+        label="Country",
+        field_type=FieldType.TEXT,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=True,
+        virtual=True,
+        virtual_target="supplier_address",
+        virtual_key="country",
+        placeholder="Enter country",
+        default_value="India",
+        section="address_info",
+        tab_group="profile",
+        view_order=4
+    ),
+    FieldDefinition(
+        name="pincode",
+        label="Pincode",
+        field_type=FieldType.TEXT,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=True,
+        virtual=True,
+        virtual_target="supplier_address",
+        virtual_key="pincode",
+        placeholder="Enter 6-digit pincode",
+        validation_pattern=r'^\d{6}$',
+        help_text="Enter 6-digit pincode",
+        section="address_info",
+        tab_group="profile",
+        view_order=5
+    ),
+    
+    # ========== MANAGER CONTACT VIRTUAL FIELDS (manager_contact_info JSONB) ==========
     FieldDefinition(
         name="manager_name",
         label="Manager Name",
@@ -171,32 +282,138 @@ SUPPLIER_FIELDS = [
         show_in_list=False,
         show_in_detail=True,
         show_in_form=True,
-        tab_group="profile",
-        section="secondary_contact",
+        placeholder="Enter manager name",
+        section="manager_info",
+        tab_group="business_info",
         view_order=1
     ),
     FieldDefinition(
-        name="manager_contact_info",
-        label="Manager Contact",
-        field_type=FieldType.JSONB,
+        name="manager_phone",
+        label="Manager Phone",
+        field_type=FieldType.TEXT,
         show_in_list=False,
         show_in_detail=True,
         show_in_form=True,
-        tab_group="profile",
-        section="secondary_contact",
+        virtual=True,
+        virtual_target="manager_contact_info",
+        virtual_key="phone",
+        placeholder="Enter manager phone",
+        section="manager_info",
+        tab_group="business_info",
         view_order=2
     ),
     FieldDefinition(
-        name="supplier_address",
-        label="Address",
-        field_type=FieldType.JSONB,
+        name="manager_mobile",
+        label="Manager Mobile",
+        field_type=FieldType.TEXT,
         show_in_list=False,
         show_in_detail=True,
         show_in_form=True,
-        tab_group="profile",
-        section="address",
+        virtual=True,
+        virtual_target="manager_contact_info",
+        virtual_key="mobile",
+        placeholder="Enter manager mobile",
+        section="manager_info",
+        tab_group="business_info",
+        view_order=3
+    ),
+    FieldDefinition(
+        name="manager_email",
+        label="Manager Email",
+        field_type=FieldType.EMAIL,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=True,
+        virtual=True,
+        virtual_target="manager_contact_info",
+        virtual_key="email",
+        placeholder="Enter manager email",
+        validation_pattern=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+        section="manager_info",
+        tab_group="business_info",
+        view_order=4
+    ),
+    
+    # ========== BANK DETAILS VIRTUAL FIELDS (bank_details JSONB) ==========
+    FieldDefinition(
+        name="bank_name",
+        label="Bank Name",
+        field_type=FieldType.TEXT,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=True,
+        virtual=True,
+        virtual_target="bank_details",
+        virtual_key="bank_name",
+        placeholder="Enter bank name",
+        section="banking_info",
+        tab_group="business_info",
         view_order=1
     ),
+    FieldDefinition(
+        name="bank_account_name",
+        label="Account Name",
+        field_type=FieldType.TEXT,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=True,
+        virtual=True,
+        virtual_target="bank_details",
+        virtual_key="account_name",
+        placeholder="Enter account holder name",
+        section="banking_info",
+        tab_group="business_info",
+        view_order=2
+    ),
+    FieldDefinition(
+        name="bank_account_number",
+        label="Account Number",
+        field_type=FieldType.TEXT,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=True,
+        virtual=True,
+        virtual_target="bank_details",
+        virtual_key="account_number",
+        placeholder="Enter account number",
+        section="banking_info",
+        tab_group="business_info",
+        view_order=3
+    ),
+    FieldDefinition(
+        name="ifsc_code",
+        label="IFSC Code",
+        field_type=FieldType.TEXT,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=True,
+        virtual=True,
+        virtual_target="bank_details",
+        virtual_key="ifsc_code",
+        placeholder="Enter IFSC code",
+        validation_pattern=r'^[A-Z]{4}0[A-Z0-9]{6}$',  # Issue #8
+        help_text="Format: 4 letters, 0, then 6 alphanumeric",
+        section="banking_info",
+        tab_group="business_info",
+        view_order=4
+    ),
+    FieldDefinition(
+        name="bank_branch",
+        label="Bank Branch",
+        field_type=FieldType.TEXT,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=True,
+        virtual=True,
+        virtual_target="bank_details",
+        virtual_key="branch",
+        placeholder="Enter bank branch",
+        section="banking_info",
+        tab_group="business_info",
+        view_order=5
+    ),
+    
+    
     # ========== TAX INFORMATION ==========
     FieldDefinition(
         name="gst_registration_number",
@@ -208,9 +425,10 @@ SUPPLIER_FIELDS = [
         searchable=True,
         filterable=True,
         placeholder="Enter GST registration number",
-        validation_pattern=r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$',
+        validation_pattern=r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$',  # Issue #8
+        help_text="Format: 2 digits, 5 letters, 4 digits, 1 letter, 1 char, Z, 1 char",
+        section="tax_info",
         tab_group="business_info",
-        section="tax_details",
         view_order=1
     ),
     FieldDefinition(
@@ -222,8 +440,9 @@ SUPPLIER_FIELDS = [
         show_in_form=True,
         placeholder="Enter PAN number",
         validation_pattern=r'^[A-Z]{5}[0-9]{4}[A-Z]{1}$',
+        help_text="Format: 5 letters, 4 digits, 1 letter",
+        section="tax_info",
         tab_group="business_info",
-        section="tax_details",
         view_order=2
     ),
     FieldDefinition(
@@ -239,25 +458,28 @@ SUPPLIER_FIELDS = [
             {"value": "composition", "label": "Composition"},
             {"value": "unregistered", "label": "Unregistered"}
         ],
+        section="tax_info",
         tab_group="business_info",
-        section="tax_details",
         view_order=3
     ),
     FieldDefinition(
         name="state_code",
-        label="State Code",
-        field_type=FieldType.TEXT,
+        label="State",
+        field_type=FieldType.SELECT,  # Issue #9: Dropdown
         show_in_list=False,
         show_in_detail=True,
         show_in_form=True,
-        placeholder="Enter state code",
-        validation_pattern=r'^[0-9]{2}$',
+        filterable=True,
+        virtual=False,
+        required=True,  
+        options=INDIAN_STATES,  # Use state list
+        placeholder="Select state",
+        section="tax_info",
         tab_group="business_info",
-        section="tax_details",
         view_order=4
     ),
     
-    # ========== PAYMENT & BANKING ==========
+    # ========== BUSINESS RULES ==========
     FieldDefinition(
         name="payment_terms",
         label="Payment Terms",
@@ -265,7 +487,6 @@ SUPPLIER_FIELDS = [
         show_in_list=False,
         show_in_detail=True,
         show_in_form=True,
-        filterable=True,
         options=[
             {"value": "immediate", "label": "Immediate"},
             {"value": "7_days", "label": "7 Days"},
@@ -275,30 +496,52 @@ SUPPLIER_FIELDS = [
             {"value": "60_days", "label": "60 Days"},
             {"value": "90_days", "label": "90 Days"}
         ],
+        section="business_rules",
         tab_group="business_info",
-        section="payment_info",
         view_order=1
     ),
     FieldDefinition(
-        name="bank_details",
-        label="Bank Details",
-        field_type=FieldType.JSONB,
+        name="performance_rating",
+        label="Performance Rating",
+        field_type=FieldType.SELECT,  # Issue #4: Changed to dropdown
         show_in_list=False,
         show_in_detail=True,
         show_in_form=True,
+        filterable=True,
+        options=[
+            {"value": "1", "label": "1 - Poor"},
+            {"value": "2", "label": "2 - Below Average"},
+            {"value": "3", "label": "3 - Average"},
+            {"value": "4", "label": "4 - Good"},
+            {"value": "5", "label": "5 - Excellent"}
+        ],
+        default_value="3",
+        section="business_rules",
         tab_group="business_info",
-        section="bank_details",
-        view_order=1
+        view_order=2
     ),
-    
-    # ========== COMPLIANCE & STATUS ==========
+    FieldDefinition(
+        name="black_listed",
+        label="Blacklisted",
+        field_type=FieldType.BOOLEAN,  # Issue #3: Already correct
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=True,
+        filterable=True,
+        default_value=False,
+        help_text="Check if supplier is blacklisted",
+        section="business_rules",
+        tab_group="business_info",
+        view_order=3
+    ),
     FieldDefinition(
         name="status",
         label="Status",
-        field_type=FieldType.SELECT,
+        field_type=FieldType.STATUS_BADGE,  # Change from SELECT to STATUS_BADGE
         show_in_list=True,
         show_in_detail=True,
-        show_in_form=True,
+        show_in_form=False,  # Issue #2: Don't show in create form
+        show_in_edit=True,   # But show in edit form
         filterable=True,
         sortable=True,
         required=True,
@@ -308,41 +551,10 @@ SUPPLIER_FIELDS = [
             {"value": "pending", "label": "Pending Approval"}
         ],
         default_value="active",
-        tab_group="profile",  # Changed from basic_info
-        section="status",
-        view_order=1,
-        css_classes="status-badge"
-    ),
-    FieldDefinition(
-        name="black_listed",
-        label="Blacklisted",
-        field_type=FieldType.BOOLEAN,
-        show_in_list=False,
-        show_in_detail=True,
-        show_in_form=True,
-        filterable=True,
-        default_value=False,
+        section="business_rules",
         tab_group="business_info",
-        section="compliance",
-        view_order=1
+        view_order=4
     ),
-    FieldDefinition(
-        name="performance_rating",
-        label="Performance Rating",
-        field_type=FieldType.NUMBER,
-        show_in_list=False,
-        show_in_detail=True,
-        show_in_form=True,
-        filterable=True,
-        min_value=1,
-        max_value=5,
-        placeholder="1-5 rating",
-        tab_group="business_info",
-        section="performance",
-        view_order=1
-    ),
-    
-    # ========== ADDITIONAL INFORMATION ==========
     FieldDefinition(
         name="remarks",
         label="Remarks",
@@ -351,11 +563,13 @@ SUPPLIER_FIELDS = [
         show_in_detail=True,
         show_in_form=True,
         placeholder="Enter any remarks or notes",
-        tab_group="business_info",  # Changed from additional_info
-        section="notes",
-        view_order=1
+        section="business_rules",
+        tab_group="business_info",
+        view_order=5
     ),
+
     
+           
     # ========== AUDIT FIELDS (from TimestampMixin) ==========
     FieldDefinition(
         name="created_at",
@@ -367,7 +581,7 @@ SUPPLIER_FIELDS = [
         readonly=True,
         sortable=True,
         tab_group="system_info",
-        section="audit",
+        section="audit_info",
         view_order=1
     ),
     FieldDefinition(
@@ -379,7 +593,7 @@ SUPPLIER_FIELDS = [
         show_in_form=False,
         readonly=True,
         tab_group="system_info",
-        section="audit",
+        section="audit_info",
         view_order=2
     ),
     FieldDefinition(
@@ -392,7 +606,7 @@ SUPPLIER_FIELDS = [
         readonly=True,
         sortable=True,
         tab_group="system_info",
-        section="audit",
+        section="audit_info",
         view_order=3
     ),
     FieldDefinition(
@@ -404,7 +618,7 @@ SUPPLIER_FIELDS = [
         show_in_form=False,
         readonly=True,
         tab_group="system_info",
-        section="audit",
+        section="audit_info",
         view_order=4
     ),
     
@@ -412,7 +626,7 @@ SUPPLIER_FIELDS = [
     FieldDefinition(
         name="total_purchases",
         label="Total Purchases",
-        field_type=FieldType.DECIMAL,
+        field_type=FieldType.CURRENCY,
         show_in_list=False,
         show_in_detail=True,
         show_in_form=False,
@@ -425,7 +639,7 @@ SUPPLIER_FIELDS = [
     FieldDefinition(
         name="outstanding_balance",
         label="Outstanding Balance",
-        field_type=FieldType.DECIMAL,
+        field_type=FieldType.CURRENCY,
         show_in_list=False,
         show_in_detail=True,
         show_in_form=False,
@@ -450,10 +664,11 @@ SUPPLIER_FIELDS = [
         tab_group="transaction_history",
         section="payment_history",
         view_order=1,
+        columns_span=12,
         custom_renderer=CustomRenderer(
             template="components/business/payment_history_table.html",
             context_function="get_supplier_payment_history_6months",
-            css_classes="payment-history-table"
+            css_classes="table-responsive payment-history-table"
         )
     ),
     
@@ -481,7 +696,7 @@ SUPPLIER_FIELDS = [
     FieldDefinition(
         name="current_balance",
         label="Current Balance",
-        field_type=FieldType.DECIMAL,
+        field_type=FieldType.CURRENCY, 
         show_in_list=False,
         show_in_detail=True,
         show_in_form=False,
@@ -495,7 +710,7 @@ SUPPLIER_FIELDS = [
     FieldDefinition(
         name="total_invoiced",
         label="Total Invoiced Amount",
-        field_type=FieldType.DECIMAL,
+        field_type=FieldType.CURRENCY, 
         show_in_list=False,
         show_in_detail=True,
         show_in_form=False,
@@ -508,7 +723,7 @@ SUPPLIER_FIELDS = [
     FieldDefinition(
         name="total_paid",
         label="Total Paid Amount",
-        field_type=FieldType.DECIMAL,
+        field_type=FieldType.CURRENCY, 
         show_in_list=False,
         show_in_detail=True,
         show_in_form=False,
@@ -538,190 +753,389 @@ SUPPLIER_FIELDS = [
 # SECTION DEFINITIONS (Dictionary format like financial_transactions.py)
 # =============================================================================
 
-SUPPLIER_SECTIONS = {
-    'identification': SectionDefinition(
-        key='identification',
-        title='Identification',
-        icon='fas fa-id-card',
+# SUPPLIER_SECTIONS = {
+#     'identification': SectionDefinition(
+#         key='identification',
+#         title='Identification',
+#         icon='fas fa-id-card',
+#         columns=2,
+#         order=0
+#     ),
+#     'status': SectionDefinition(
+#         key='status',
+#         title='Status',
+#         icon='fas fa-toggle-on',
+#         columns=1,
+#         order=1
+#     ),
+#     'primary_contact': SectionDefinition(
+#         key='primary_contact',
+#         title='Primary Contact',
+#         icon='fas fa-user',
+#         columns=2,
+#         order=0
+#     ),
+#     'secondary_contact': SectionDefinition(
+#         key='secondary_contact',
+#         title='Secondary Contact',
+#         icon='fas fa-user-friends',
+#         columns=2,
+#         order=1
+#     ),
+#     'address': SectionDefinition(
+#         key='address',
+#         title='Address',
+#         icon='fas fa-map-marker-alt',
+#         columns=2,
+#         order=2
+#     ),
+#     'business_details': SectionDefinition(
+#         key='business_details',
+#         title='Business Details',
+#         icon='fas fa-building',
+#         columns=2,
+#         order=0
+#     ),
+#     'tax_details': SectionDefinition(
+#         key='tax_details',
+#         title='Tax Information',
+#         icon='fas fa-percent',
+#         columns=2,
+#         order=1
+#     ),
+#     'payment_info': SectionDefinition(
+#         key='payment_info',
+#         title='Payment Information',
+#         icon='fas fa-credit-card',
+#         columns=2,
+#         order=2
+#     ),
+#     'bank_details': SectionDefinition(
+#         key='bank_details',
+#         title='Bank Details',
+#         icon='fas fa-university',
+#         columns=2,
+#         order=3
+#     ),
+#     'compliance': SectionDefinition(
+#         key='compliance',
+#         title='Compliance',
+#         icon='fas fa-clipboard-check',
+#         columns=2,
+#         order=4
+#     ),
+#     'performance': SectionDefinition(
+#         key='performance',
+#         title='Performance',
+#         icon='fas fa-chart-line',
+#         columns=2,
+#         order=5
+#     ),
+#     'statistics': SectionDefinition(
+#         key='statistics',
+#         title='Statistics',
+#         icon='fas fa-chart-bar',
+#         columns=2,
+#         order=6
+#     ),
+#     'notes': SectionDefinition(
+#         key='notes',
+#         title='Notes & Remarks',
+#         icon='fas fa-sticky-note',
+#         columns=1,
+#         order=7  # Now under business_info
+#     ),
+#     'payment_history': SectionDefinition(
+#         key='payment_history',
+#         title='Last 6 Months Payment History',
+#         icon='fas fa-clock',
+#         columns=1,  # Full width for table
+#         order=0
+#     ),
+#     'invoice_history': SectionDefinition(
+#         key='invoice_history',
+#         title='Recent Supplier Invoices',
+#         icon='fas fa-file-invoice',
+#         columns=1,  # Full width for table
+#         order=1
+#     ),
+#     'balance_summary': SectionDefinition(
+#         key='balance_summary',
+#         title='Balance Summary',
+#         icon='fas fa-balance-scale',
+#         columns=2,
+#         order=2
+#     ),
+#     'technical': SectionDefinition(
+#         key='technical',
+#         title='Technical Details',
+#         icon='fas fa-server',
+#         columns=2,
+#         order=0
+#     ),
+#     'audit': SectionDefinition(
+#         key='audit',
+#         title='Audit Trail',
+#         icon='fas fa-history',
+#         columns=2,
+#         order=1
+#     ),
+#     # Basic Information Section
+#     "basic_info": SectionDefinition(
+#         key="basic_info",
+#         title="Basic Information",
+#         icon="fas fa-info-circle",
+#         columns=2,
+#         order=1,
+#         collapsible=False,
+#         default_collapsed=False
+#     ),
+    
+#     # Contact Information Section
+#     "contact_info": SectionDefinition(
+#         key="contact_info",
+#         title="Contact Information",
+#         icon="fas fa-phone",
+#         columns=2,
+#         order=2,
+#         collapsible=True,
+#         default_collapsed=False
+#     ),
+    
+#     # Address Section
+#     "address_info": SectionDefinition(
+#         key="address_info",
+#         title="Address Details",
+#         icon="fas fa-map-marker-alt",
+#         columns=2,
+#         order=3,
+#         collapsible=True,
+#         default_collapsed=False
+#     ),
+    
+#     # Manager Contact Section
+#     "manager_info": SectionDefinition(
+#         key="manager_info",
+#         title="Manager Information",
+#         icon="fas fa-user-tie",
+#         columns=2,
+#         order=4,
+#         collapsible=True,
+#         default_collapsed=True
+#     ),
+    
+#     # Banking Section
+#     "banking_info": SectionDefinition(
+#         key="banking_info",
+#         title="Banking Details",
+#         icon="fas fa-university",
+#         columns=2,
+#         order=5,
+#         collapsible=True,
+#         default_collapsed=True
+#     ),
+    
+#     # Tax/Compliance Section
+#     "tax_info": SectionDefinition(
+#         key="tax_info",
+#         title="Tax & Compliance",
+#         icon="fas fa-file-invoice",
+#         columns=2,
+#         order=6,
+#         collapsible=True,
+#         default_collapsed=False
+#     ),
+    
+#     # Business Rules Section
+#     "business_rules": SectionDefinition(
+#         key="business_rules",
+#         title="Business Rules",
+#         icon="fas fa-cogs",
+#         columns=2,
+#         order=7,
+#         collapsible=True,
+#         default_collapsed=True
+#     )
+# }
+
+SUPPLIER_FORM_SECTIONS = {
+    # Basic Information Section
+    "basic_info": SectionDefinition(
+        key="basic_info",
+        title="Basic Information",
+        icon="fas fa-info-circle",
         columns=2,
-        order=0
+        order=1,
+        collapsible=False,
+        default_collapsed=False
     ),
-    'status': SectionDefinition(
-        key='status',
-        title='Status',
-        icon='fas fa-toggle-on',
-        columns=1,
-        order=1
-    ),
-    'primary_contact': SectionDefinition(
-        key='primary_contact',
-        title='Primary Contact',
-        icon='fas fa-user',
+    
+    # Contact Information Section
+    "contact_info": SectionDefinition(
+        key="contact_info",
+        title="Contact Information",
+        icon="fas fa-phone",
         columns=2,
-        order=0
+        order=2,
+        collapsible=True,
+        default_collapsed=False
     ),
-    'secondary_contact': SectionDefinition(
-        key='secondary_contact',
-        title='Secondary Contact',
-        icon='fas fa-user-friends',
+    
+    # Address Section
+    "address_info": SectionDefinition(
+        key="address_info",
+        title="Address Details",
+        icon="fas fa-map-marker-alt",
         columns=2,
-        order=1
+        order=3,
+        collapsible=True,
+        default_collapsed=False
     ),
-    'address': SectionDefinition(
-        key='address',
-        title='Address',
-        icon='fas fa-map-marker-alt',
+    
+    # Manager Contact Section
+    "manager_info": SectionDefinition(
+        key="manager_info",
+        title="Manager Information",
+        icon="fas fa-user-tie",
         columns=2,
-        order=2
+        order=4,
+        collapsible=True,
+        default_collapsed=True
     ),
-    'business_details': SectionDefinition(
-        key='business_details',
-        title='Business Details',
-        icon='fas fa-building',
+    
+    # Banking Section
+    "banking_info": SectionDefinition(
+        key="banking_info",
+        title="Banking Details",
+        icon="fas fa-university",
         columns=2,
-        order=0
+        order=5,
+        collapsible=True,
+        default_collapsed=True
     ),
-    'tax_details': SectionDefinition(
-        key='tax_details',
-        title='Tax Information',
-        icon='fas fa-percent',
+    
+    # Tax/Compliance Section
+    "tax_info": SectionDefinition(
+        key="tax_info",
+        title="Tax & Compliance",
+        icon="fas fa-file-invoice",
         columns=2,
-        order=1
+        order=6,
+        collapsible=True,
+        default_collapsed=False
     ),
-    'payment_info': SectionDefinition(
-        key='payment_info',
-        title='Payment Information',
-        icon='fas fa-credit-card',
+    
+    # Business Rules Section
+    "business_rules": SectionDefinition(
+        key="business_rules",
+        title="Business Rules & Settings",
+        icon="fas fa-cogs",
         columns=2,
-        order=2
+        order=7,
+        collapsible=True,
+        default_collapsed=True
     ),
-    'bank_details': SectionDefinition(
-        key='bank_details',
-        title='Bank Details',
-        icon='fas fa-university',
+    "audit_info": SectionDefinition(
+        key="audit_info",
+        title="Audit Information",
+        icon="fas fa-history",
         columns=2,
-        order=3
+        order=8,
+        collapsible=True,
+        default_collapsed=True
     ),
-    'compliance': SectionDefinition(
-        key='compliance',
-        title='Compliance',
-        icon='fas fa-clipboard-check',
+    "technical_info": SectionDefinition(
+        key="technical_info",
+        title="Technical Details",
+        icon="fas fa-server",
         columns=2,
-        order=4
+        order=9,
+        collapsible=True,
+        default_collapsed=True
     ),
-    'performance': SectionDefinition(
-        key='performance',
-        title='Performance',
-        icon='fas fa-chart-line',
-        columns=2,
-        order=5
-    ),
-    'statistics': SectionDefinition(
-        key='statistics',
-        title='Statistics',
-        icon='fas fa-chart-bar',
-        columns=2,
-        order=6
-    ),
-    'notes': SectionDefinition(
-        key='notes',
-        title='Notes & Remarks',
-        icon='fas fa-sticky-note',
-        columns=1,
-        order=7  # Now under business_info
-    ),
-    'payment_history': SectionDefinition(
-        key='payment_history',
-        title='Last 6 Months Payment History',
-        icon='fas fa-clock',
+    "payment_history": SectionDefinition(
+        key="payment_history",
+        title="Payment History (Last 12 Months)",
+        icon="fas fa-clock",
         columns=1,  # Full width for table
-        order=0
+        order=10,
+        collapsible=False,
+        default_collapsed=False
     ),
-    'invoice_history': SectionDefinition(
-        key='invoice_history',
-        title='Recent Supplier Invoices',
-        icon='fas fa-file-invoice',
+    "invoice_history": SectionDefinition(
+        key="invoice_history",
+        title="Recent Supplier Invoices",
+        icon="fas fa-file-invoice",
         columns=1,  # Full width for table
-        order=1
+        order=11,
+        collapsible=False,
+        default_collapsed=False
     ),
-    'balance_summary': SectionDefinition(
-        key='balance_summary',
-        title='Balance Summary',
-        icon='fas fa-balance-scale',
+    "balance_summary": SectionDefinition(
+        key="balance_summary",
+        title="Balance Summary",
+        icon="fas fa-balance-scale",
         columns=2,
-        order=2
-    ),
-    'technical': SectionDefinition(
-        key='technical',
-        title='Technical Details',
-        icon='fas fa-server',
-        columns=2,
-        order=0
-    ),
-    'audit': SectionDefinition(
-        key='audit',
-        title='Audit Trail',
-        icon='fas fa-history',
-        columns=2,
-        order=1
+        order=12,
+        collapsible=False,
+        default_collapsed=False
     )
 }
 
+# For backward compatibility, alias SUPPLIER_SECTIONS to SUPPLIER_FORM_SECTIONS
+SUPPLIER_SECTIONS = SUPPLIER_FORM_SECTIONS
+
 # =============================================================================
-# TAB DEFINITIONS (Dictionary format like financial_transactions.py)
+# TAB DEFINITIONS - NOW USING UNIFIED SECTIONS
 # =============================================================================
 
 SUPPLIER_TABS = {
     'profile': TabDefinition(
-        key='profile',  # CRITICAL: This key must match exactly
+        key='profile',
         label='Profile',
         icon='fas fa-user-circle',
         sections={
-            'identification': SUPPLIER_SECTIONS['identification'],
-            'status': SUPPLIER_SECTIONS['status'],
-            'primary_contact': SUPPLIER_SECTIONS['primary_contact'],
-            'secondary_contact': SUPPLIER_SECTIONS['secondary_contact'],
-            'address': SUPPLIER_SECTIONS['address']
+            # Now using the same section keys as form sections!
+            'basic_info': SUPPLIER_FORM_SECTIONS['basic_info'],
+            'contact_info': SUPPLIER_FORM_SECTIONS['contact_info'],
+            'address_info': SUPPLIER_FORM_SECTIONS['address_info']
         },
         order=0,
-        default_active=True  # This tab will be active by default
+        default_active=True
     ),
     'business_info': TabDefinition(
-        key='business_info',  # CRITICAL: This key must match exactly
+        key='business_info',
         label='Business Information',
         icon='fas fa-briefcase',
         sections={
-            'business_details': SUPPLIER_SECTIONS['business_details'],
-            'tax_details': SUPPLIER_SECTIONS['tax_details'],
-            'payment_info': SUPPLIER_SECTIONS['payment_info'],
-            'bank_details': SUPPLIER_SECTIONS['bank_details'],
-            'compliance': SUPPLIER_SECTIONS['compliance'],
-            'performance': SUPPLIER_SECTIONS['performance'],
-            'statistics': SUPPLIER_SECTIONS['statistics'],
-            'notes': SUPPLIER_SECTIONS['notes']
+            'manager_info': SUPPLIER_FORM_SECTIONS['manager_info'],
+            'banking_info': SUPPLIER_FORM_SECTIONS['banking_info'],
+            'tax_info': SUPPLIER_FORM_SECTIONS['tax_info'],
+            'business_rules': SUPPLIER_FORM_SECTIONS['business_rules']
         },
         order=1
     ),
-    'transaction_history': TabDefinition(
-        key='transaction_history',  # CRITICAL: This key must match exactly
-        label='Transaction History',
-        icon='fas fa-history',
-        sections={
-            'payment_history': SUPPLIER_SECTIONS['payment_history'],
-            'invoice_history': SUPPLIER_SECTIONS['invoice_history'],
-            'balance_summary': SUPPLIER_SECTIONS['balance_summary']
-        },
-        order=2
-    ),
     'system_info': TabDefinition(
-        key='system_info',  # CRITICAL: This key must match exactly
+        key='system_info',
         label='System Information',
         icon='fas fa-cogs',
         sections={
-            'technical': SUPPLIER_SECTIONS['technical'],
-            'audit': SUPPLIER_SECTIONS['audit']
+            'audit_info': SUPPLIER_FORM_SECTIONS['audit_info'],
+            'technical_info': SUPPLIER_FORM_SECTIONS['technical_info']
         },
-        order=3
+        order=2
+    ),
+    'transaction_history': TabDefinition(
+        key='transaction_history',
+        label='Transaction History',
+        icon='fas fa-history',
+        sections={
+            'payment_history': SUPPLIER_FORM_SECTIONS['payment_history'],
+            'invoice_history': SUPPLIER_FORM_SECTIONS['invoice_history'],
+            'balance_summary': SUPPLIER_FORM_SECTIONS['balance_summary']
+        },
+        order=3,  # Proper order instead of 999
+        default_active=False
     )
 }
 
@@ -1177,6 +1591,8 @@ SUPPLIER_CONFIG = EntityConfiguration(
     
     # ========== CORE CONFIGURATIONS ==========
     fields=SUPPLIER_FIELDS,
+    section_definitions=SUPPLIER_FORM_SECTIONS,  # Used by view
+    form_section_definitions=SUPPLIER_FORM_SECTIONS,  # Used by forms
     actions=SUPPLIER_ACTIONS,
     summary_cards=SUPPLIER_SUMMARY_CARDS,
     permissions=SUPPLIER_PERMISSIONS,
@@ -1188,7 +1604,7 @@ SUPPLIER_CONFIG = EntityConfiguration(
     
     # View Layout Configuration
     view_layout=SUPPLIER_VIEW_LAYOUT,
-    section_definitions=SUPPLIER_SECTIONS,
+    # section_definitions=SUPPLIER_SECTIONS,
     
     # Filter Configuration
     filter_category_mapping=SUPPLIER_FILTER_CATEGORY_MAPPING,
@@ -1199,6 +1615,171 @@ SUPPLIER_CONFIG = EntityConfiguration(
     primary_date_field="created_at",
     primary_amount_field=None,  # Suppliers don't have a primary amount field
     
+    # Entity Classification (matches registry)
+    entity_category=EntityCategory.MASTER,
+    universal_crud_enabled=True,
+    
+    # Allowed Operations
+    allowed_operations=[
+        CRUDOperation.CREATE,
+        CRUDOperation.READ,
+        CRUDOperation.UPDATE, 
+        CRUDOperation.DELETE,
+        CRUDOperation.LIST,
+        CRUDOperation.VIEW,
+        CRUDOperation.DOCUMENT,
+        CRUDOperation.EXPORT
+    ],
+    
+    # Model Configuration (matches registry)
+    model_class_path="app.models.master.Supplier",
+    primary_key_field="supplier_id",
+    soft_delete_field="is_deleted",  # If you have soft delete
+    
+    # Form Configuration
+    create_form_template="engine/universal_create.html",
+    edit_form_template="engine/universal_edit.html",
+    
+    # Simple service delegation - just specify the module
+    # service_module='app.services.supplier_service_CRUD',
+    # Convention: expects create_supplier, update_supplier, delete_supplier
+    
+    # Default values for fields when using generic CRUD
+    default_field_values={
+        'status': 'active',
+        'black_listed': False,
+        'performance_rating': '3'  # Middle rating as default
+    },
+
+    # CRUD Field Control - Fields shown in create/edit forms
+    create_fields=[
+        # Basic Info
+        "supplier_name",
+        "supplier_category",
+        "contact_person_name",
+        
+        # Contact Virtual Fields (contact_info JSONB)
+        "phone",
+        "mobile",
+        "fax",
+        "email",  # Direct column
+        
+        # Address Virtual Fields (supplier_address JSONB)
+        "address",
+        "city",
+        "state",
+        "country",
+        "pincode",
+        
+        # Manager Info
+        "manager_name",  # Direct column
+        "manager_phone",  # Virtual -> manager_contact_info
+        "manager_mobile",  # Virtual -> manager_contact_info
+        "manager_email",  # Virtual -> manager_contact_info
+        
+        # Bank Virtual Fields (bank_details JSONB)
+        "bank_name",
+        "bank_account_name",
+        "bank_account_number",
+        "ifsc_code",
+        "bank_branch",
+        
+        # Tax Info (Direct columns)
+        "gst_registration_number",
+        "pan_number",
+        "tax_type",
+        "state_code",
+        
+        # Business Rules (Direct columns)
+        "payment_terms",
+        "performance_rating",
+        "black_listed",
+        "remarks"
+    ],
+    
+    edit_fields=[  # Same as create but might exclude some system fields
+        # Basic Info
+        "supplier_name",
+        "supplier_category",
+        "contact_person_name",
+        
+        # Contact Virtual Fields (contact_info JSONB)
+        "phone",
+        "mobile",
+        "fax",
+        "email",  # Direct column
+        
+        # Address Virtual Fields (supplier_address JSONB)
+        "address",
+        "city",
+        "state",
+        "country",
+        "pincode",
+        
+        # Manager Info
+        "manager_name",  # Direct column
+        "manager_phone",  # Virtual -> manager_contact_info
+        "manager_mobile",  # Virtual -> manager_contact_info
+        "manager_email",  # Virtual -> manager_contact_info
+        
+        # Bank Virtual Fields (bank_details JSONB)
+        "bank_name",
+        "bank_account_name",
+        "bank_account_number",
+        "ifsc_code",
+        "bank_branch",
+        
+        # Tax Info (Direct columns)
+        "gst_registration_number",
+        "pan_number",
+        "tax_type",
+        "state_code",
+        
+        # Business Rules (Direct columns)
+        "payment_terms",
+        "performance_rating",
+        "black_listed",
+        "status",
+        "remarks"
+    ],
+    
+    readonly_fields=[  # Fields that are never editable
+        "supplier_id",
+        "hospital_id",
+        "branch_id",
+        "created_at",
+        "created_by",
+        "updated_at",
+        "updated_by",
+        "total_purchases",      # Calculated
+        "outstanding_balance",   # Calculated
+        "last_payment_date"     # Calculated
+    ],
+    
+    # Validation Rules
+    unique_fields=["gst_number", "pan_number"],
+    required_fields=[
+        "supplier_name",
+        "contact_person_name",
+        "mobile",
+        "status"
+    ],
+    
+    # CRUD Permissions
+    create_permission="suppliers_create",
+    edit_permission="suppliers_edit", 
+    delete_permission="suppliers_delete",
+    
+    # Delete Configuration
+    enable_soft_delete=True,
+    cascade_delete=[],  # No cascading needed
+    delete_confirmation_message="Are you sure you want to delete this supplier? This action cannot be undone.",
+    
+    # Success Messages (with field interpolation)
+    create_success_message="Supplier '{supplier_name}' created successfully",
+    update_success_message="Supplier '{supplier_name}' updated successfully",
+    delete_success_message="Supplier deleted successfully",
+
     # Document Generation Support
     document_enabled=True,
     document_configs=SUPPLIER_DOCUMENT_CONFIGS,
@@ -1221,7 +1802,10 @@ SUPPLIER_CONFIG = EntityConfiguration(
         "profile": "suppliers_view",
         "statement": "suppliers_view_financial"
     }
+    
 )
+
+
 
 # =============================================================================
 # MODULE REGISTRY
@@ -1259,3 +1843,11 @@ def get_module_filter_configs():
 def get_module_search_configs():
     """Return all search configurations from this module"""
     return MASTER_ENTITY_SEARCH_CONFIGS
+
+# helper function to get entity config
+def get_entity_config(entity_type: str) -> EntityConfiguration:
+    """Get entity configuration by type"""
+    if entity_type == "suppliers":
+        return SUPPLIER_CONFIG
+    # Add other entities as you implement them
+    return None

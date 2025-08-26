@@ -510,6 +510,9 @@ class SupplierPaymentService(UniversalEntityService):
                 summary[f'{method}_amount'] = float(amount or 0)
                 summary[f'{method}_count'] = count
         
+        # Remove the 'when' import - only import case
+        from sqlalchemy import case
+
         # Bank transfer amount (including mixed payments)
         bank_amount = base_query.filter(
             or_(
@@ -521,9 +524,8 @@ class SupplierPaymentService(UniversalEntityService):
             )
         ).with_entities(
             func.sum(
-                func.case(
-                    [(SupplierPayment.payment_method == 'bank_transfer', 
-                      SupplierPayment.amount)],
+                case(
+                    (SupplierPayment.payment_method == 'bank_transfer', SupplierPayment.amount),
                     else_=SupplierPayment.bank_transfer_amount
                 )
             )
@@ -534,7 +536,7 @@ class SupplierPaymentService(UniversalEntityService):
         return summary
     
     def _get_active_suppliers(self, session: Session, hospital_id: uuid.UUID,
-                            branch_id: Optional[uuid.UUID]) -> List[Dict]:
+                        branch_id: Optional[uuid.UUID]) -> List[Dict]:
         """
         Get list of active suppliers for dropdowns
         """
@@ -550,12 +552,20 @@ class SupplierPaymentService(UniversalEntityService):
         
         suppliers = []
         for supplier in query.all():
+            # ✅ FIXED: Extract phone from contact_info JSONB
+            phone = ''
+            if hasattr(supplier, 'contact_info') and supplier.contact_info:
+                contact_info = supplier.contact_info
+                if isinstance(contact_info, dict):
+                    # Try to get phone in order of preference
+                    phone = contact_info.get('phone') or contact_info.get('mobile') or contact_info.get('telephone') or ''
+            
             suppliers.append({
                 'supplier_id': str(supplier.supplier_id),
                 'supplier_name': supplier.supplier_name,
                 'contact_person': supplier.contact_person_name,
                 'email': supplier.email,
-                'phone': supplier.phone or ''
+                'phone': phone  # ✅ FIXED: Use extracted phone
             })
         
         return suppliers
@@ -660,20 +670,38 @@ class SupplierPaymentService(UniversalEntityService):
             return entity_dict
         
     def _get_base_query(self, session: Session, hospital_id: uuid.UUID, 
-                   branch_id: Optional[uuid.UUID] = None):
+               branch_id: Optional[uuid.UUID] = None,
+               user: Optional[Any] = None):
         """
-        Override base query to include supplier relationship only
+        Override base query to include supplier relationship
+        Matches parent signature but user parameter is optional
+        ✅ FIXED: Use universal soft delete pattern from Universal Engine
         """
+        # Start with basic query including joinedload for supplier
         query = session.query(SupplierPayment).options(
             joinedload(SupplierPayment.supplier)
-        ).filter(
-            SupplierPayment.hospital_id == hospital_id,
         )
         
+        # Apply hospital filter
+        query = query.filter(SupplierPayment.hospital_id == hospital_id)
+        
+        # Apply branch filter if provided
         if branch_id:
             query = query.filter(SupplierPayment.branch_id == branch_id)
         
+        # ✅ FIXED: Use Universal Entity Service helper method
+        # This ensures consistent user preference handling across all entities
+        if hasattr(SupplierPayment, 'is_deleted'):
+            show_deleted = self._get_user_show_deleted_preference(user)
+            
+            # Apply filter only if user doesn't want to see deleted records
+            if not show_deleted:
+                query = query.filter(SupplierPayment.is_deleted == False)
+        
         return query
+
+    # NOTE: The _get_user_show_deleted_preference method is inherited from UniversalEntityService
+    # No need to redefine it in SupplierPaymentService - just use the parent method
     
     def get_detail_data(self, item_id: str, hospital_id: uuid.UUID, 
                    branch_id: Optional[uuid.UUID] = None,
@@ -1084,7 +1112,7 @@ class SupplierPaymentService(UniversalEntityService):
                     payment_history.append({
                         'payment_id': str(payment.payment_id),
                         'reference_no': payment.reference_no,
-                        'payment_date': payment.payment_date.isoformat() if payment.payment_date else None,  # ✅ Format as ISO string
+                        'payment_date': payment.payment_date.strftime('%d/%b/%Y %H:%M') if payment.payment_date else None,  # ✅ Format as ISO string
                         'payment_method': payment.payment_method,
                         'amount': float(payment.amount or 0),
                         'workflow_status': payment.workflow_status,
@@ -1127,7 +1155,7 @@ class SupplierPaymentService(UniversalEntityService):
         
         payment_dict['total_invoice_amount'] = float(total_invoice_amount)
         payment_dict['submitted_by'] = getattr(payment, 'submitted_by', payment.created_by)
-        payment_dict['workflow_updated_at'] = payment.modified_at
+        payment_dict['workflow_updated_at'] = payment.updated_at
         
         return payment_dict
     

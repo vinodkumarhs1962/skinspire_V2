@@ -24,6 +24,26 @@ import re
 # CORE ENUMS - Complete type definitions from both files
 # =============================================================================
 
+class EntityCategory(Enum):
+    """Classification of entities for operation scope control"""
+    MASTER = "master"          # Simple entities with full CRUD support
+    TRANSACTION = "transaction" # Complex entities with read-only in Universal Engine
+    REPORT = "report"          # Future: read-only report entities
+    LOOKUP = "lookup"          # Future: simple lookup tables
+
+class CRUDOperation(Enum):
+    """Available CRUD operations in Universal Engine"""
+    CREATE = "create"
+    READ = "read"
+    UPDATE = "update"
+    DELETE = "delete"
+    LIST = "list"
+    VIEW = "view"
+    DOCUMENT = "document"
+    EXPORT = "export"
+    BULK_UPDATE = "bulk_update"
+    BULK_DELETE = "bulk_delete"
+
 class FieldType(Enum):
     """All field types from both files combined"""
     # Text types
@@ -35,6 +55,8 @@ class FieldType(Enum):
     NUMBER = "number"
     AMOUNT = "amount"
     CURRENCY = "currency"
+    INTEGER = "integer"
+    PERCENTAGE = "percentage"
     
     # Date/Time types
     DATE = "date"
@@ -233,6 +255,7 @@ class FieldDefinition:
     show_in_list: bool = False        # Show in list/table view
     show_in_detail: bool = True       # Show in detail/view page
     show_in_form: bool = True         # Show in create/edit forms ✓ FROM entity_configurations
+    show_in_edit: bool = False        # Show in edit view only
     
     # ========== NEW: VIEW ORGANIZATION (v2.1) ==========
     tab_group: Optional[str] = None    # Which tab (eliminates hardcoding)
@@ -249,6 +272,11 @@ class FieldDefinition:
     readonly: bool = False            # Read-only in forms
     virtual: bool = False             # Computed/derived field ✓ FROM usage
     
+    # ========== VIRTUAL FIELD MAPPING ==========
+    virtual_target: Optional[str] = None    # Target JSONB field (e.g., 'contact_info')
+    virtual_key: Optional[str] = None       # Key within JSONB (e.g., 'phone')
+    virtual_transform: Optional[str] = None # Custom transform function name
+
     # ========== FORM CONFIGURATION ==========
     placeholder: str = ""             # Input placeholder text ✓ FROM entity_configurations
     help_text: str = ""               # Help text below field
@@ -679,7 +707,8 @@ class EntityConfiguration:
     # ========== VIEW LAYOUT CONFIGURATION (v2.1) ==========
     view_layout: Optional[ViewLayoutConfiguration] = None
     section_definitions: Dict[str, SectionDefinition] = field(default_factory=dict)
-    
+    form_section_definitions: Optional[Dict[str, SectionDefinition]] = field(default=None)
+
     # ========== ENHANCED FEATURES (v2.0) ==========
     model_class: Optional[str] = None
 
@@ -742,12 +771,98 @@ class EntityConfiguration:
     css_classes: Optional[Dict[str, str]] = None
     validation_rules: Optional[Dict[str, Any]] = None
 
+    # ========== SERVICE DELEGATION ==========
+    service_module: Optional[str] = None  # Module path for entity-specific service
+    # Convention: Functions should be named create_{entity_type}, update_{entity_type}, delete_{entity_type}
+    # Example: 'app.services.supplier_service' expects create_supplier, update_supplier, delete_supplier
+
+    # ========== DEFAULT VALUES ==========
+    default_field_values: Dict[str, Any] = field(default_factory=dict)
+    # Default values for fields when creating new entities
+    # Example: {'status': 'active', 'is_deleted': False}
+
     # Document Generation Support 
     document_enabled: bool = False
     document_configs: Dict[str, DocumentConfiguration] = field(default_factory=dict)
     default_document: str = "receipt"
     include_calculated_fields: List[str] = field(default_factory=list)
     document_permissions: Dict[str, str] = field(default_factory=dict)
+
+    # Entity Classification (defaults to MASTER for backward compatibility)
+    entity_category: EntityCategory = field(default=EntityCategory.MASTER)
+    
+    # CRUD Control (defaults to enabled for backward compatibility)
+    universal_crud_enabled: bool = field(default=True)
+    
+    # Allowed Operations (defaults to all operations)
+    allowed_operations: List[CRUDOperation] = field(
+        default_factory=lambda: [
+            CRUDOperation.LIST,
+            CRUDOperation.VIEW,
+            CRUDOperation.CREATE,
+            CRUDOperation.UPDATE,
+            CRUDOperation.DELETE,
+            CRUDOperation.DOCUMENT,
+            CRUDOperation.EXPORT
+        ]
+    )
+    
+    # Model Discovery (optional - works without these)
+    model_class_path: Optional[str] = field(default=None)
+    primary_key_field: str = field(default="id")
+    soft_delete_field: Optional[str] = field(default="is_deleted")  # Changed from None
+    
+    # Custom URL Overrides (optional - for transaction entities)
+    custom_create_url: Optional[str] = field(default=None)
+    custom_edit_url: Optional[str] = field(default=None)
+    custom_delete_url: Optional[str] = field(default=None)
+    
+    # Form Configuration (optional - uses defaults if not specified)
+    form_class_path: Optional[str] = field(default=None)
+    create_form_template: str = field(default="engine/universal_create.html")
+    edit_form_template: str = field(default="engine/universal_edit.html")
+    
+    # Field-Level CRUD Control (optional - auto-detected if not specified)
+    create_fields: Optional[List[str]] = field(default=None)
+    edit_fields: Optional[List[str]] = field(default=None)
+    readonly_fields: List[str] = field(default_factory=list)
+    
+    # Validation Rules (optional enhancements)
+    unique_fields: List[str] = field(default_factory=list)
+    required_fields: List[str] = field(default_factory=list)
+    
+    # CRUD Permissions (optional - uses general permissions if not specified)
+    create_permission: Optional[str] = field(default=None)
+    edit_permission: Optional[str] = field(default=None)
+    delete_permission: Optional[str] = field(default=None)
+    
+    # Delete Configuration (sensible defaults)
+    enable_soft_delete: bool = field(default=True)
+    cascade_delete: List[str] = field(default_factory=list)
+    delete_confirmation_message: str = field(
+        default="Are you sure you want to delete this item?"
+    )
+    
+    # Success Messages (with defaults using entity_label)
+    create_success_message: str = field(default="{entity_label} created successfully")
+    update_success_message: str = field(default="{entity_label} updated successfully")
+    delete_success_message: str = field(default="{entity_label} deleted successfully")
+    
+    # Bulk Operations (optional)
+    enable_bulk_operations: bool = field(default=False)
+    bulk_operations: List[str] = field(default_factory=list)
+    
+    # Auto-save and Drafts (optional)
+    enable_auto_save: bool = field(default=False)
+    auto_save_interval: int = field(default=30)  # seconds
+    
+    # Audit Trail (optional)
+    enable_audit_trail: bool = field(default=False)
+    audit_fields: List[str] = field(default_factory=lambda: [
+        "created_at", "created_by", "updated_at", "updated_by"
+    ])
+
+
 
 # =============================================================================
 # ENTITY-SPECIFIC HELPER CLASSES
@@ -767,6 +882,54 @@ class EntityFilterConfiguration:
 FieldDefinitionType = FieldDefinition
 ActionDefinitionType = ActionDefinition
 EntityConfigurationType = EntityConfiguration
+
+# =============================================================================
+# INDIAN STATES - GLOBAL CONSTANT
+# Used across multiple entities for GST state codes
+# =============================================================================
+
+INDIAN_STATES = [
+    {"value": "01", "label": "Jammu & Kashmir"},
+    {"value": "02", "label": "Himachal Pradesh"},
+    {"value": "03", "label": "Punjab"},
+    {"value": "04", "label": "Chandigarh"},
+    {"value": "05", "label": "Uttarakhand"},
+    {"value": "06", "label": "Haryana"},
+    {"value": "07", "label": "Delhi"},
+    {"value": "08", "label": "Rajasthan"},
+    {"value": "09", "label": "Uttar Pradesh"},
+    {"value": "10", "label": "Bihar"},
+    {"value": "11", "label": "Sikkim"},
+    {"value": "12", "label": "Arunachal Pradesh"},
+    {"value": "13", "label": "Nagaland"},
+    {"value": "14", "label": "Manipur"},
+    {"value": "15", "label": "Mizoram"},
+    {"value": "16", "label": "Tripura"},
+    {"value": "17", "label": "Meghalaya"},
+    {"value": "18", "label": "Assam"},
+    {"value": "19", "label": "West Bengal"},
+    {"value": "20", "label": "Jharkhand"},
+    {"value": "21", "label": "Odisha"},
+    {"value": "22", "label": "Chhattisgarh"},
+    {"value": "23", "label": "Madhya Pradesh"},
+    {"value": "24", "label": "Gujarat"},
+    {"value": "25", "label": "Daman & Diu"},  # Old code, kept for compatibility
+    {"value": "26", "label": "Dadra & Nagar Haveli and Daman & Diu"},
+    {"value": "27", "label": "Maharashtra"},
+    {"value": "28", "label": "Andhra Pradesh (Before Division)"},
+    {"value": "29", "label": "Karnataka"},
+    {"value": "30", "label": "Goa"},
+    {"value": "31", "label": "Lakshadweep"},
+    {"value": "32", "label": "Kerala"},
+    {"value": "33", "label": "Tamil Nadu"},
+    {"value": "34", "label": "Puducherry"},
+    {"value": "35", "label": "Andaman & Nicobar Islands"},
+    {"value": "36", "label": "Telangana"},
+    {"value": "37", "label": "Andhra Pradesh"},
+    {"value": "38", "label": "Ladakh"},
+]
+
+
 
 # =============================================================================
 # VALIDATION HELPERS
@@ -825,3 +988,68 @@ def validate_entity_configuration(config: EntityConfiguration) -> List[str]:
             errors.append("Tabbed layout requires tab definitions")
     
     return errors
+
+# =============================================================================
+# BACKWARD COMPATIBILITY HELPERS
+# =============================================================================
+
+def migrate_entity_config(config: EntityConfiguration) -> EntityConfiguration:
+    """
+    Helper to migrate old configs to v3.0
+    Called automatically when loading configs
+    """
+    # Auto-detect entity category if not set
+    if not hasattr(config, 'entity_category'):
+        # Use entity type hints to determine category
+        if 'payment' in config.entity_type or 'invoice' in config.entity_type:
+            config.entity_category = EntityCategory.TRANSACTION
+        else:
+            config.entity_category = EntityCategory.MASTER
+    
+    # Auto-detect primary key field if not set
+    if not hasattr(config, 'primary_key_field') or not config.primary_key_field:
+        # Try common patterns
+        if hasattr(config, 'fields'):
+            for field in config.fields:
+                if '_id' in field.name and field.field_type == FieldType.UUID:
+                    config.primary_key_field = field.name
+                    break
+    
+    # Auto-populate create/edit fields if not set
+    if not hasattr(config, 'create_fields') or not config.create_fields:
+        if hasattr(config, 'fields'):
+            config.create_fields = [
+                f.name for f in config.fields 
+                if f.show_in_form and not f.readonly
+            ]
+    
+    if not hasattr(config, 'edit_fields') or not config.edit_fields:
+        config.edit_fields = config.create_fields
+    
+    return config
+
+def is_v3_compatible(config: EntityConfiguration) -> bool:
+    """Check if a config has v3.0 fields"""
+    return hasattr(config, 'entity_category') and hasattr(config, 'universal_crud_enabled')
+
+# =============================================================================
+# COMPATIBILITY WARNINGS
+# =============================================================================
+
+import warnings
+
+def check_config_compatibility(config: EntityConfiguration):
+    """Check and warn about potential compatibility issues"""
+    if not hasattr(config, 'entity_category'):
+        warnings.warn(
+            f"Entity '{config.entity_type}' missing v3.0 category. "
+            f"Defaulting to MASTER. Consider updating configuration.",
+            DeprecationWarning
+        )
+    
+    if not hasattr(config, 'model_class_path') and config.entity_category == EntityCategory.MASTER:
+        warnings.warn(
+            f"Master entity '{config.entity_type}' missing model_class_path. "
+            f"CRUD operations may not work properly.",
+            UserWarning
+        )

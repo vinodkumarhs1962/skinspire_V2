@@ -11,7 +11,8 @@
 {% block content %}
 
 <div class="container mx-auto px-4 py-6" data-entity-type="{{ entity_config.entity_type }}">
-    
+    <!-- Hidden CSRF token - same approach as universal_create.html -->
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <!-- Page Header - Uses existing header-inline component -->
     <div class="universal-page-header mb-6">
         <div class="flex flex-col md:flex-row items-start md:items-center justify-between">
@@ -104,43 +105,66 @@
                 {% endif %}
             </div>
             
-            <!-- Action Buttons Section -->
+            <!-- Smart Action Buttons Section -->
             <div class="flex justify-between items-center mb-4 w-full">
-                <!-- Left side - Navigation and quick access buttons -->
+                <!-- Left side - Navigation and primary actions -->
                 <div class="flex items-center gap-4">
-                    <!-- Navigation button -->
+                    <!-- Back to List -->
                     <a href="{{ url_for('universal_views.universal_list_view', entity_type=entity_type) }}" 
                     class="btn-secondary">
                         <i class="fas fa-arrow-left mr-2"></i>
                         Back to List
                     </a>
                     
-                    <!-- Direct Access Buttons -->
+                    <!-- Smart Edit Button (Master entities only) -->
+                    {% if can_edit(entity_type) %}
+                        {% set edit_url = get_crud_url(entity_type, 'update', item[assembled_data.entity_config.primary_key] if item and assembled_data.entity_config else None) %}
+                        {% if edit_url != '#' %}
+                            <a href="{{ edit_url }}" class="btn-primary">
+                                <i class="fas fa-edit mr-2"></i>
+                                Edit {{ assembled_data.entity_config.name if assembled_data.entity_config else 'Record' }}
+                            </a>
+                        {% endif %}
+                    {% endif %}
+                    
+                    <!-- Smart Create New Button (Master entities only) -->
+                    {% if can_create(entity_type) %}
+                        {% set create_url = get_crud_url(entity_type, 'create') %}
+                        {% if create_url != '#' %}
+                            <a href="{{ create_url }}" class="btn-success">
+                                <i class="fas fa-plus mr-2"></i>
+                                Add New
+                            </a>
+                        {% endif %}
+                    {% endif %}
+                    
+                    <!-- Custom Button Actions from Config (existing actions preserved) -->
                     {% if assembled_data.header_actions and assembled_data.header_actions.button_actions %}
                         {% for action in assembled_data.header_actions.button_actions %}
-                            {% if action.javascript_handler %}
-                                <button type="button"
-                                        class="btn-{{ action.button_type }}"
-                                        onclick="{{ action.javascript_handler }}(); return false;">
-                                    <i class="{{ action.icon }} mr-2"></i>
-                                    {{ action.label }}
-                                </button>
-                            {% else %}
-                                <a href="{{ action.url }}" 
-                                class="btn-{{ action.button_type }}"
-                                {% if action.confirmation_required %}
-                                onclick="return confirm('{{ action.confirmation_message }}')"
-                                {% endif %}>
-                                    <i class="{{ action.icon }} mr-2"></i>
-                                    {{ action.label }}
-                                </a>
+                            {% if action.id not in ['edit', 'create', 'delete'] %}
+                                {% if action.javascript_handler %}
+                                    <button type="button"
+                                            class="btn-{{ action.button_type }}"
+                                            onclick="{{ action.javascript_handler }}(); return false;">
+                                        <i class="{{ action.icon }} mr-2"></i>
+                                        {{ action.label }}
+                                    </button>
+                                {% else %}
+                                    <a href="{{ action.url }}" 
+                                    class="btn-{{ action.button_type }}"
+                                    {% if action.confirmation_required %}
+                                    onclick="return confirm('{{ action.confirmation_message }}')"
+                                    {% endif %}>
+                                        <i class="{{ action.icon }} mr-2"></i>
+                                        {{ action.label }}
+                                    </a>
+                                {% endif %}
                             {% endif %}
                         {% endfor %}
                     {% endif %}
                 </div>
                 
-                <!-- Right side - Actions Dropdown -->
-                {% if assembled_data.header_actions and assembled_data.header_actions.dropdown_actions and assembled_data.header_actions.dropdown_actions|length > 0 %}
+                <!-- Right side - Enhanced Actions Dropdown -->
                 <div class="dropdown">
                     <button type="button" 
                             class="btn-primary dropdown-toggle"
@@ -148,29 +172,71 @@
                         <i class="fas fa-ellipsis-v mr-2"></i>
                         Actions
                     </button>
-                    <div id="header-actions-dropdown" 
-                        class="dropdown-menu origin-top-right hidden">
-                        {% for action in assembled_data.header_actions.dropdown_actions %}
-                            <a href="{{ action.url }}" 
-                            class="dropdown-item"
-                            {% if action.confirmation_required %}
-                            onclick="return confirm('{{ action.confirmation_message }}')"
-                            {% endif %}>
-                                <i class="{{ action.icon }} mr-2"></i>
-                                {{ action.label }}
+                    <div id="header-actions-dropdown" class="dropdown-menu origin-top-right hidden">
+                        <!-- Delete Action (only if not deleted) -->
+                        {% if can_delete(entity_type) and item and not item.get('is_deleted', False) %}
+                            {% set delete_url = get_crud_url(entity_type, 'delete', item[assembled_data.entity_config.primary_key] if assembled_data.entity_config else None) %}
+                            {% if delete_url != '#' %}
+                                <a href="#" 
+                                class="dropdown-item text-danger delete-btn"
+                                data-delete-url="{{ delete_url }}"
+                                data-entity-name="{{ item[assembled_data.entity_config.title_field] if assembled_data.entity_config and assembled_data.entity_config.title_field and item else 'this item' }}"
+                                onclick="return false;">
+                                    <i class="fas fa-trash mr-2"></i>
+                                    Delete
+                                </a>
+                                <div class="dropdown-divider"></div>
+                            {% endif %}
+                        {% endif %}
+                        
+                        <!-- Undelete/Restore Action (only if deleted) -->
+                        {% if item and item.get('is_deleted', False) %}
+                            {% set undelete_url = url_for('universal_views.universal_undelete_view', 
+                                                        entity_type=entity_type, 
+                                                        item_id=item[assembled_data.entity_config.primary_key] if assembled_data.entity_config else None) %}
+                            <a href="#" 
+                            class="dropdown-item text-success undelete-btn"
+                            data-undelete-url="{{ undelete_url }}"
+                            data-entity-name="{{ item[assembled_data.entity_config.title_field] if assembled_data.entity_config and assembled_data.entity_config.title_field and item else 'this item' }}"
+                            onclick="handleUndelete(this); return false;">
+                                <i class="fas fa-undo mr-2"></i>
+                                Restore
                             </a>
-                        {% endfor %}
+                            <div class="dropdown-divider"></div>
+                        {% endif %}
                         
-                        <div class="dropdown-divider"></div>
+                        <!-- Custom Dropdown Actions -->
+                        {% if assembled_data.header_actions and assembled_data.header_actions.dropdown_actions %}
+                            {% for action in assembled_data.header_actions.dropdown_actions %}
+                                {% if action.id not in ['delete'] %}
+                                    <a href="{{ action.url }}" 
+                                    class="dropdown-item"
+                                    {% if action.confirmation_required %}
+                                    onclick="return confirm('{{ action.confirmation_message }}')"
+                                    {% endif %}>
+                                        <i class="{{ action.icon }} mr-2"></i>
+                                        {{ action.label }}
+                                    </a>
+                                {% endif %}
+                            {% endfor %}
+                            <div class="dropdown-divider"></div>
+                        {% endif %}
                         
-                        <a href="{{ url_for('universal_views.universal_export_view', entity_type=entity_type, export_format='pdf', item_id=item[entity_config.primary_key]) }}" 
-                        class="dropdown-item">
-                            <i class="fas fa-file-pdf"></i>
-                            Export as PDF
-                        </a>
+                        <!-- Standard Actions -->
+                        {% if item and assembled_data.entity_config %}
+                            <a href="{{ url_for('universal_views.universal_document_view', entity_type=entity_type, item_id=item[assembled_data.entity_config.primary_key], doc_type='profile') }}" 
+                            class="dropdown-item">
+                                <i class="fas fa-print mr-2"></i>
+                                Print
+                            </a>
+                            <a href="{{ url_for('universal_views.universal_export_view', entity_type=entity_type, export_format='pdf', item_id=item[assembled_data.entity_config.primary_key]) }}" 
+                            class="dropdown-item">
+                                <i class="fas fa-file-pdf mr-2"></i>
+                                Export as PDF
+                            </a>
+                        {% endif %}
                     </div>
                 </div>
-                {% endif %}
             </div>
             
             <!-- Secondary Fields -->
@@ -239,6 +305,7 @@
         }
     }
     </script>
+    
 
     <!-- Alternative Simplified Header (if header_config is not available) -->
     {% if not header_config and item %}
@@ -295,6 +362,51 @@
     </div>
     {% endif %}
 
+    <!--  Show deleted status prominently -->
+    {% if item and item.get('is_deleted', False) %}
+    <div class="alert alert-danger mb-4" role="alert">
+        <div class="flex items-center">
+            <i class="fas fa-trash-alt text-2xl mr-3"></i>
+            <div>
+                <h4 class="alert-heading font-bold">This Record Has Been Deleted</h4>
+                <p class="mb-0">This {{ assembled_data.entity_config.name if assembled_data.entity_config else 'record' }} was deleted on 
+                    {% if item.deleted_at %}
+                        {% if item.is_deleted %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-trash-alt"></i>
+                            This record was deleted on 
+                            <!-- Safe date handling - works with both string and datetime -->
+                            {% if item.deleted_at %}
+                                {% if item.deleted_at.__class__.__name__ == 'datetime' %}
+                                    {{ item.deleted_at.strftime('%d/%b/%Y at %H:%M') }}
+                                {% else %}
+                                    <!-- Handle string format -->
+                                    {{ item.deleted_at|replace('T', ' at ')|truncate(19, True, '') }}
+                                {% endif %}
+                            {% else %}
+                                unknown date
+                            {% endif %}
+                            
+                            {% if config.enable_soft_delete and can_edit(entity_type) %}
+                                <form method="POST" action="{{ url_for('universal_views.universal_undelete_view', entity_type=entity_type, item_id=item[config.primary_key_field]) }}" style="display: inline;">
+                                    <button type="submit" class="btn btn-sm btn-success ml-2">
+                                        <i class="fas fa-undo"></i> Restore
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    {% else %}
+                        unknown date
+                    {% endif %}
+                    {% if item.deleted_by %}
+                        by {{ item.deleted_by }}
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Main Content Area - Supports all 3 layout types -->
     <div class="universal-view-content">
@@ -361,6 +473,73 @@ document.addEventListener('DOMContentLoaded', function() {
         window.initializeUniversalView();
     }
 });
+// Smart delete button handler
+// Updated delete handler using the same pattern as form CRUD
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle all delete buttons with class 'delete-btn'
+    const deleteButtons = document.querySelectorAll('.delete-btn');
+    
+    deleteButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const deleteUrl = this.dataset.deleteUrl;
+            const entityName = this.dataset.entityName || 'this item';
+            
+            if (confirm(`Are you sure you want to delete ${entityName}? This action cannot be undone.`)) {
+                // Create form for POST request
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = deleteUrl;
+                
+                // Get CSRF token using the same method as universal_form_crud.js
+                const csrfInput = document.querySelector('[name=csrf_token]');
+                if (csrfInput) {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'csrf_token';
+                    input.value = csrfInput.value;
+                    form.appendChild(input);
+                } else {
+                    alert('Security token not found. Please refresh the page and try again.');
+                    return;
+                }
+                
+                document.body.appendChild(form);
+                form.submit();
+            }
+        });
+    });
+});
+
+// Same for undelete
+function handleUndelete(button) {
+    const entityName = button.dataset.entityName || 'this item';
+    const undeleteUrl = button.dataset.undeleteUrl;
+    
+    if (confirm(`Are you sure you want to restore ${entityName}?`)) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = undeleteUrl;
+        
+        // Get CSRF token the same way
+        const csrfInput = document.querySelector('[name=csrf_token]');
+        if (csrfInput) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'csrf_token';
+            input.value = csrfInput.value;
+            form.appendChild(input);
+        } else {
+            alert('Security token not found. Please refresh the page and try again.');
+            return;
+        }
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
 </script>
 
 {% endblock %}

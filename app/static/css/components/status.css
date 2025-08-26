@@ -621,3 +621,14 @@
 .universal-workflow-step.completed {
     color: rgb(34 197 94) !important; /* green-500 */
 }
+
+/* Universal deleted status badge */
+.status-badge.status-deleted {
+    background-color: #dc2626 !important;
+    color: white !important;
+    border: 1px solid #b91c1c !important;
+}
+
+.status-badge.status-deleted i {
+    margin-right: 0.25rem !important;
+}

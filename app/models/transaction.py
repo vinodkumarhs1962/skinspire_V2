@@ -292,6 +292,20 @@ class User(Base, TimestampMixin, SoftDeleteMixin, UserMixin):
             return validate_permission_system(self.user_id, self.hospital_id)
         except Exception:
             return {'errors': ['Permission validation failed']}
+        
+    @property
+    def show_deleted_records(self):
+        """Check if user wants to see deleted records"""
+        if not self.ui_preferences:
+            return False
+        return self.ui_preferences.get('show_deleted_records', False)
+    
+    @show_deleted_records.setter
+    def show_deleted_records(self, value: bool):
+        """Set preference for showing deleted records"""
+        if not self.ui_preferences:
+            self.ui_preferences = {}
+        self.ui_preferences['show_deleted_records'] = value
     
 class LoginHistory(Base, TimestampMixin):
     """Track user login attempts and sessions"""

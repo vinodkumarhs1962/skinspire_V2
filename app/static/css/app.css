@@ -55,6 +55,8 @@
 /* Universal Document components - Print and document generation */
 @import url('./components/universal_document.css');
 
+/* Universal CRUD form components - Create, Edit and delete generation */
+@import url('./components/universal_form.css');
 
 /* ==========================================
    MODULE-SPECIFIC STYLES (OPTIONAL)
