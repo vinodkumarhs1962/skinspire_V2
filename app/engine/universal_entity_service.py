@@ -111,7 +111,6 @@ class UniversalEntityService(ABC):
                branch_id: Optional[uuid.UUID],
                user: Optional[Any] = None): 
         """Get base query with hospital/branch filtering - ENTITY AGNOSTIC"""
-        logger.info(f"[SERVICE_DEBUG] _get_base_query called for entity: {self.entity_type}, model: {self.model_class.__name__}")
         query = session.query(self.model_class)
         
         # Apply hospital filter
@@ -162,7 +161,6 @@ class UniversalEntityService(ABC):
                 except Exception as e:
                     logger.debug(f"Could not access current_user: {e}")
             
-            logger.info(f"[CRITICAL_DEBUG] Entity:{self.entity_type} | User:{getattr(user, 'user_id', None) if user else 'None'} | show_deleted:{show_deleted} | ui_pref:{getattr(user, 'ui_preferences', None) if user else 'No user'}")
             return show_deleted
             
         except Exception as e:

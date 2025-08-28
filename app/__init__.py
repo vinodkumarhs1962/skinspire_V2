@@ -119,6 +119,7 @@ def create_app() -> Flask:
         # NEW: Ensure Flask app logger uses Unicode-safe formatters
         setup_flask_unicode_logging(app)
 
+        configure_werkzeug_logging(app)
         
         # Get database URL - use centralized Environment if available
         if ENVIRONMENT_MODULE_AVAILABLE:
@@ -182,7 +183,6 @@ def create_app() -> Flask:
             try:
                 import redis
                 redis_client = redis.from_url(settings.REDIS_URL)
-                app.logger.info("Redis initialized successfully")
             except ImportError:
                 app.logger.warning("Redis package not installed. Session management will use alternative storage.")
             except Exception as e:
@@ -217,7 +217,6 @@ def create_app() -> Flask:
         try:
             # Use the imported register_filters function directly
             register_filters(app)
-            app.logger.info("Successfully registered Jinja filters")
         except NameError as e:
             app.logger.error(f"register_filters not available: {e}")
             # Basic fallback registration
@@ -328,10 +327,8 @@ def register_view_blueprints(app: Flask) -> None:
         
         # SAFE: Universal Views Blueprint - NO EMOJI
         try:
-            app.logger.info("[PROCESS] Attempting to import universal views...")
             from app.views.universal_views import universal_bp
             view_blueprints.append(universal_bp)
-            app.logger.info("[SUCCESS] ✅✅🚀 Successfully imported universal views blueprint")
         except ImportError as e:
             app.logger.warning(f"[WARNING] Universal views blueprint could not be loaded: {str(e)}")
         except Exception as e:
@@ -342,20 +339,14 @@ def register_view_blueprints(app: Flask) -> None:
             # GL views
             from app.views.gl_views import gl_views_bp
             view_blueprints.append(gl_views_bp)
-            app.logger.info("Successfully imported GL views blueprint")
             
             # Inventory views
             from app.views.inventory_views import inventory_views_bp
             view_blueprints.append(inventory_views_bp)
-            app.logger.info("Successfully imported inventory views blueprint")
             
             # Supplier views - SAFE LOGGING
-            app.logger.info("Attempting to import supplier views...")
-            app.logger.info("Attempting to import supplier views...")
             from app.views.supplier_views import supplier_views_bp
-            app.logger.info(f"supplier_views_bp: {supplier_views_bp}")
             view_blueprints.append(supplier_views_bp)
-            app.logger.info("Successfully imported supplier views blueprint")
             
         except ImportError as e:
             app.logger.warning(f"Additional views blueprint could not be loaded: {str(e)}")
@@ -364,7 +355,6 @@ def register_view_blueprints(app: Flask) -> None:
             # Billing views
             from app.views.billing_views import billing_views_bp
             view_blueprints.append(billing_views_bp)
-            app.logger.info("Successfully imported billing views blueprint")
         except ImportError as e:
             app.logger.warning(f"Billing views blueprint could not be loaded: {str(e)}")
 
@@ -378,26 +368,9 @@ def register_view_blueprints(app: Flask) -> None:
             continue
         try:
             app.register_blueprint(blueprint)
-            app.logger.info(f"Successfully registered view blueprint: {blueprint.name}")
         except Exception as e:
             app.logger.error(f"Failed to register view blueprint {getattr(blueprint, 'name', 'unknown')}: {str(e)}")
 
-    # Debug: Check if supplier blueprint is actually registered - SAFE LOGGING
-    if 'supplier_views' in app.blueprints:
-        app.logger.info("supplier_views blueprint is registered")
-        app.logger.info(f"  URL prefix: {app.blueprints['supplier_views'].url_prefix}")
-    else:
-        app.logger.error("supplier_views blueprint is NOT registered")
-        app.logger.error(f"  Registered blueprints: {list(app.blueprints.keys())}")
-
-    # Debug: Check if universal views blueprint is registered - SAFE LOGGING
-    if 'universal_views' in app.blueprints:
-        app.logger.info("[SUCCESS] universal_views blueprint is registered")
-        app.logger.info(f"  URL prefix: {app.blueprints['universal_views'].url_prefix}")
-        app.logger.info("[READY] Universal Engine is ready!")
-    else:
-        app.logger.error("[ERROR] universal_views blueprint is NOT registered")
-        app.logger.error(f"  Registered blueprints: {list(app.blueprints.keys())}")
 
 def register_api_blueprints(app: Flask) -> None:
     """Register API blueprints"""
@@ -406,9 +379,7 @@ def register_api_blueprints(app: Flask) -> None:
     # Register core API blueprints
     try:
         from .api.routes import admin_bp, patient_bp
-        app.logger.info("Successfully imported core blueprints")
         blueprints.extend([admin_bp, patient_bp])
-        app.logger.info("Added core blueprints to registration list")
     except ImportError as e:
         app.logger.warning(f"Core blueprints could not be loaded: {str(e)}")
     
@@ -416,17 +387,13 @@ def register_api_blueprints(app: Flask) -> None:
     try:
         from .api.routes.verification import verification_api
         from .api.routes.approval import approval_api
-        app.logger.info("Successfully imported verification blueprints")
         blueprints.extend([verification_api, approval_api])
-        app.logger.info("Added verification blueprints to registration list")
     except ImportError as e:
         app.logger.warning(f"Verification blueprints could not be loaded: {str(e)}")
 
     # Register security blueprints
     try:
-        app.logger.info("Attempting to import security blueprints...")
         from .security.routes import security_bp, rbac_bp, audit_bp, auth_bp
-        app.logger.info("Successfully imported security blueprints")
         blueprints.extend([security_bp, rbac_bp, audit_bp, auth_bp])
         app.logger.info("Added security blueprints to registration list")
     except ImportError as e:
@@ -437,7 +404,6 @@ def register_api_blueprints(app: Flask) -> None:
         # GL API
         from .api.routes.gl import gl_api_bp
         blueprints.append(gl_api_bp)
-        app.logger.info("Added GL API blueprint to registration list")
     except ImportError as e:
         app.logger.warning(f"GL API blueprint could not be loaded: {str(e)}")
         
@@ -445,7 +411,6 @@ def register_api_blueprints(app: Flask) -> None:
         # Inventory API
         from .api.routes.inventory import inventory_api_bp
         blueprints.append(inventory_api_bp)
-        app.logger.info("Added inventory API blueprint to registration list")
     except ImportError as e:
         app.logger.warning(f"Inventory API blueprint could not be loaded: {str(e)}")
         
@@ -453,7 +418,6 @@ def register_api_blueprints(app: Flask) -> None:
         # Supplier API
         from .api.routes.supplier import supplier_api_bp
         blueprints.append(supplier_api_bp)
-        app.logger.info("Added supplier API blueprint to registration list")
     except ImportError as e:
         app.logger.warning(f"Supplier API blueprint could not be loaded: {str(e)}")
     
@@ -461,7 +425,6 @@ def register_api_blueprints(app: Flask) -> None:
         # Billing API
         from .api.routes.billing import billing_api_bp
         blueprints.append(billing_api_bp)
-        app.logger.info("Added billing API blueprint to registration list")
     except ImportError as e:
         app.logger.warning(f"Billing API blueprint could not be loaded: {str(e)}")
 
@@ -471,7 +434,6 @@ def register_api_blueprints(app: Flask) -> None:
             continue
         try:
             app.register_blueprint(blueprint)
-            app.logger.info(f"Successfully registered API blueprint: {blueprint.name}")
         except Exception as e:
             app.logger.error(f"Failed to register API blueprint {getattr(blueprint, 'name', 'unknown')}: {str(e)}")
             raise
@@ -542,8 +504,8 @@ def setup_flask_unicode_logging(app):
             from logging.handlers import RotatingFileHandler
             file_handler = RotatingFileHandler(
                 os.path.join(logs_dir, 'app.log'),
-                maxBytes=10*1024*1024,  # 10MB
-                backupCount=5,
+                maxBytes=5*1024*1024,  # 5MB
+                backupCount=0,
                 encoding='utf-8'
             )
             file_handler.setLevel(logging.INFO)
@@ -555,7 +517,6 @@ def setup_flask_unicode_logging(app):
             app.logger.addHandler(file_handler)
         
         app.logger.setLevel(logging.INFO)
-        app.logger.info("[SUCCESS] Flask Unicode logging configured using existing utils")
         
     except Exception as e:
         app.logger.warning(f"[WARNING] Could not setup Flask Unicode logging: {e}")
@@ -573,9 +534,7 @@ def fix_logging_rotation_error(app):
         
         # FIXED: Clear ALL app logger handlers to prevent duplicate/conflicting formatters
         app.logger.handlers.clear()
-        
-        app.logger.info("[SUCCESS] Fixed logging rotation error and cleared conflicting handlers")
-        
+                
     except Exception as e:
         app.logger.warning(f"Could not fix logging rotation: {e}")
 
@@ -676,3 +635,39 @@ def ensure_document_filters(app):
             return total
         
         app.jinja_env.filters['sum'] = sum_filter
+
+def configure_werkzeug_logging(app):
+    """Configure Werkzeug to reduce static file logging noise"""
+    import logging
+    
+    # Get werkzeug logger
+    werkzeug_logger = logging.getLogger('werkzeug')
+    
+    if app.debug:
+        # In debug mode, keep werkzeug at INFO but filter static files
+        werkzeug_logger.setLevel(logging.INFO)
+        
+        # Add custom filter to reduce static file noise
+        class StaticFileFilter(logging.Filter):
+            def filter(self, record):
+                # Filter out static file requests (304 responses are cached files)
+                if hasattr(record, 'getMessage'):
+                    message = record.getMessage()
+                    # Skip logging for static files with 304 (Not Modified) responses
+                    if '/static/' in message and '" 304 -' in message:
+                        return False
+                    # Skip common static file extensions
+                    static_extensions = ['.css', '.js', '.jpg', '.png', '.ico', '.woff', '.ttf']
+                    if any(ext in message for ext in static_extensions) and '" 304 -' in message:
+                        return False
+                return True
+        
+        # Apply filter to werkzeug logger
+        static_filter = StaticFileFilter()
+        werkzeug_logger.addFilter(static_filter)
+        
+    else:
+        # In production, set werkzeug to WARNING level to reduce noise
+        werkzeug_logger.setLevel(logging.WARNING)
+    
+    app.logger.info("Werkzeug logging configured for production")

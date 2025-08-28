@@ -30,7 +30,7 @@ def get_hospital_branches(hospital_id: Union[str, uuid.UUID]) -> List[Dict[str, 
                 is_active=True
             ).order_by(Branch.name).all()
             
-            logger.info(f"Found {len(branches)} active branches for hospital {hospital_id}")
+            logger.debug(f"Found {len(branches)} branches for hospital")
             
             return [
                 {
@@ -271,11 +271,10 @@ def get_user_branch_access(user_id: str, hospital_id: Union[str, uuid.UUID],
         if isinstance(hospital_id, str):
             hospital_id = uuid.UUID(hospital_id)
         
-        logger.info(f"Getting branch access for user {user_id}, module {module_name}, action {action}")
+        # logger.info(f"Getting branch access for user {user_id}, module {module_name}")
         
         # TESTING BYPASS
         if user_id == '7777777777':
-            logger.info("TESTING: Testing user bypass")
             all_branches = get_hospital_branches(hospital_id)
             return {
                 'accessible_branches': [

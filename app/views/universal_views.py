@@ -264,9 +264,7 @@ def get_universal_list_data(entity_type: str) -> Dict:
         # Extract filters from request
         filters = request.args.to_dict() if request else {}
         
-        # ✅ CORRECTED: Use proper Universal Service orchestration
-        logger.info(f"🔧 [ORCHESTRATION] Using universal service orchestration for {entity_type}")
-        
+                
         raw_data = search_universal_entity_data(
             entity_type=entity_type,
             filters=filters,
@@ -274,17 +272,7 @@ def get_universal_list_data(entity_type: str) -> Dict:
             branch_id=branch_uuid,
             page=int(filters.get('page', 1)),
             per_page=int(filters.get('per_page', config.items_per_page))
-        )
-        
-        # ✅ ORCHESTRATION VERIFICATION
-        logger.info(f"✅ [ORCHESTRATION] Universal service returned data for {entity_type}")
-        logger.info(f"✅ [ORCHESTRATION] Items count: {len(raw_data.get('items', []))}")
-        logger.info(f"✅ [ORCHESTRATION] Orchestrated by: {raw_data.get('metadata', {}).get('orchestrated_by', 'unknown')}")
-        logger.info(f"✅ [ORCHESTRATION] Categorized filtering: {raw_data.get('metadata', {}).get('categorized_filtering', False)}")
-        
-        # Verify we have actual data
-        logger.info(f"✅ Raw data extracted: {len(raw_data.get('items', []))} items")
-        logger.info(f"Items type: {type(raw_data.get('items'))}")
+        )         
         
         # Use enhanced data assembler
         assembler = EnhancedUniversalDataAssembler()
@@ -295,10 +283,6 @@ def get_universal_list_data(entity_type: str) -> Dict:
                 raw_data=raw_data,
                 form_instance=raw_data.get('form_instance')
             )
-
-            logger.info(f"[FINAL_DEBUG] Assembled data keys: {list(assembled_data.keys())}")
-            logger.info(f"[FINAL_DEBUG] Assembled summary: {assembled_data.get('summary', {})}")
-            logger.info(f"[FINAL_DEBUG] Assembled pagination: {assembled_data.get('pagination', {})}")
 
         except Exception as assembler_error:
             logger.error(f"Assembler error: {assembler_error}")
@@ -342,7 +326,6 @@ def get_universal_list_data(entity_type: str) -> Dict:
         
         # Final verification
         final_items = assembled_data.get('items', [])
-        logger.info(f"✅ Final assembled data: {len(final_items)} items, type: {type(final_items)}")
         
         return assembled_data
         
@@ -372,7 +355,6 @@ def _extract_actual_data_from_service_response(service_response: Any, entity_typ
         
         # Handle different response types
         if isinstance(service_response, dict):
-            logger.info("[SUCCESS] Service response is dict")
             
             # ✅ EXTRACT ITEMS: Extract items with multiple possible keys
             items_data = None
@@ -385,13 +367,10 @@ def _extract_actual_data_from_service_response(service_response: Any, entity_typ
                     
                     # Check if it's callable and call it
                     if callable(items_candidate):
-                        logger.info(f"[SUCCESS] {possible_key} is callable - calling it")
                         try:
                             items_data = items_candidate()
-                            logger.info(f"[SUCCESS] Called method, result type: {type(items_data)}")
                             if hasattr(items_data, '__len__'):
                                 item_count = len(items_data)
-                                logger.info(f"[SUCCESS] Got {item_count} items from callable")
                                 if item_count > 0:
                                     break
                                 else:
@@ -405,11 +384,9 @@ def _extract_actual_data_from_service_response(service_response: Any, entity_typ
                             continue
                     else:
                         # It's already data
-                        logger.info(f"[SUCCESS] {possible_key} is data, not callable")
                         items_data = items_candidate
                         if hasattr(items_data, '__len__'):
                             item_count = len(items_data)
-                            logger.info(f"[SUCCESS] Found {item_count} items in {possible_key}")
                             if item_count > 0:
                                 break
                             else:
@@ -426,11 +403,9 @@ def _extract_actual_data_from_service_response(service_response: Any, entity_typ
             if items_data is not None:
                 if isinstance(items_data, (list, tuple)):
                     extracted_data['items'] = list(items_data)
-                    logger.info(f"[SUCCESS] Extracted {len(extracted_data['items'])} items, type: {type(extracted_data['items'])}")
                 elif hasattr(items_data, '__iter__') and not isinstance(items_data, (str, bytes)):
                     try:
                         extracted_data['items'] = list(items_data)
-                        logger.info(f"[SUCCESS] Converted iterable to list: {len(extracted_data['items'])} items")
                     except Exception as iter_error:
                         logger.error(f"Error converting iterable to list: {iter_error}")
                         extracted_data['items'] = []
@@ -454,7 +429,6 @@ def _extract_actual_data_from_service_response(service_response: Any, entity_typ
                     if isinstance(pagination_data, dict):
                         # Simple dict - safe to use directly
                         extracted_data['pagination'] = pagination_data
-                        logger.info(f"[SUCCESS] Extracted pagination as dict: {list(pagination_data.keys())}")
                     else:
                         # Complex object - extract only safe properties
                         logger.warning(f"[DEFENSIVE] Pagination is complex object: {type(pagination_data)}")
@@ -474,7 +448,6 @@ def _extract_actual_data_from_service_response(service_response: Any, entity_typ
                                 continue
                         
                         extracted_data['pagination'] = safe_pagination
-                        logger.info(f"[SUCCESS] Extracted safe pagination: {list(safe_pagination.keys())}")
                 else:
                     # No pagination data
                     extracted_data['pagination'] = {}
@@ -510,7 +483,6 @@ def _extract_actual_data_from_service_response(service_response: Any, entity_typ
                     extracted_data['metadata'] = {}
                 
         elif isinstance(service_response, (list, tuple)):
-            logger.info("[SUCCESS] Service response is list/tuple")
             extracted_data['items'] = list(service_response)
             extracted_data['total'] = len(service_response)
             # Create basic pagination for list responses
@@ -522,13 +494,10 @@ def _extract_actual_data_from_service_response(service_response: Any, entity_typ
                 'has_prev': False,
                 'has_next': False
             }
-            logger.info(f"[SUCCESS] Extracted {len(extracted_data['items'])} items from list response")
             
         elif callable(service_response):
-            logger.info("[SUCCESS] Service response is callable - calling it")
             try:
                 called_result = service_response()
-                logger.info(f"[SUCCESS] Called service response, got: {type(called_result)}")
                 return _extract_actual_data_from_service_response(called_result, entity_type)
             except Exception as call_error:
                 logger.error(f"Error calling service response: {call_error}")
@@ -555,9 +524,6 @@ def _extract_actual_data_from_service_response(service_response: Any, entity_typ
                 extracted_data['items'] = list(final_items) if final_items else []
             except:
                 extracted_data['items'] = []
-        
-        logger.info(f"[SUCCESS] Final extracted data: {len(extracted_data['items'])} items")
-        logger.info(f"[SUCCESS] Pagination extracted: {extracted_data['pagination']}")
         
         return extracted_data
         
@@ -594,18 +560,13 @@ def universal_list_view(entity_type: str):
     try:
         # Handle toggle deleted preference if requested
         toggle_deleted = request.args.get('toggle_deleted')
-        # DEBUG: Always log current user preference state
-        logger.info(f"[USER_PREF_DEBUG] Current user: {current_user.user_id}")
-        logger.info(f"[USER_PREF_DEBUG] Current show_deleted_records: {current_user.show_deleted_records}")
-        logger.info(f"[USER_PREF_DEBUG] ui_preferences raw: {current_user.ui_preferences}")
+
         if toggle_deleted is not None:
             # Update user preference
             from app.models.transaction import User
             from sqlalchemy.orm.attributes import flag_modified
             
             show_deleted = toggle_deleted.lower() == 'true'
-            # DEBUG: Log user preference operation
-            logger.info(f"[USER_PREF_DEBUG] User {current_user.user_id} toggling deleted visibility to {show_deleted}")
             
             with get_db_session() as session:
                 user = session.query(User).filter_by(
@@ -621,10 +582,6 @@ def universal_list_view(entity_type: str):
                     flag_modified(user, "ui_preferences")
                     session.commit()
                     
-                    # DEBUG: Log successful update
-                    logger.info(f"[USER_PREF_DEBUG] Successfully updated show_deleted_records: {show_deleted} → {show_deleted}")
-                    logger.info(f"[USER_PREF_DEBUG] Current user.ui_preferences: {user.ui_preferences}")
-
                     # Flash message
                     if show_deleted:
                         flash("Deleted records are now visible", 'info')
@@ -677,7 +634,6 @@ def universal_list_view(entity_type: str):
         menu_items = get_menu_items(current_user)
 
         try:
-            logger.info(f"[SUCCESS] Successfully rendered {entity_type} list with {len(assembled_data.get('items', []))} items")
             return render_template(template, 
                              service=service,  # Available if needed
                              menu_items=menu_items,
@@ -981,39 +937,18 @@ def universal_detail_view(entity_type: str, item_id: str):
     NEW: Enhanced Universal view router with advanced layout support
     Same validation, permission checking, orchestrator pattern as universal list
     """
-    try:
-        # ===== SINGLE DEBUG POINT =====
-        logger.info("="*50)
-        logger.info(f"UNIVERSAL DETAIL VIEW CALLED")
-        logger.info(f"Entity Type: {entity_type}")
-        logger.info(f"Item ID from URL: {item_id}")
-        logger.info(f"Item ID Type: {type(item_id)}")
-        logger.info(f"Item ID Length: {len(item_id)}")
-        logger.info(f"Current User: {current_user.user_id if current_user else 'None'}")
-        logger.info(f"Hospital ID: {current_user.hospital_id if current_user else 'None'}")
-        logger.info("="*50)
-        # ===== END DEBUG =====
-
-        # ADD THIS DEBUG BLOCK:
-        logger.info("="*50)
-        logger.info("DEBUG: About to call get_branch_uuid_from_context_or_request")
-        
+    try:       
         # Store the result first before unpacking
         branch_result = get_branch_uuid_from_context_or_request()
-        logger.info(f"DEBUG: branch_result type: {type(branch_result)}")
-        logger.info(f"DEBUG: branch_result value: {branch_result}")
         
         if callable(branch_result):
             logger.error("ERROR: branch_result is a function, not a value!")
             logger.error(f"Function: {branch_result}")
             # Try to fix by calling it
             branch_result = branch_result()
-            logger.info(f"DEBUG: After calling, result: {branch_result}")
         
         # Now try to unpack
         branch_uuid, branch_name = branch_result
-        logger.info(f"DEBUG: Successfully unpacked - UUID: {branch_uuid}, Name: {branch_name}")
-        logger.info("="*50)
 
         # ADD THIS FIX:
         if isinstance(branch_name, dict):
@@ -1044,16 +979,6 @@ def universal_detail_view(entity_type: str, item_id: str):
             current_user_id=current_user.user_id,
             current_user=current_user
         )
-        
-        logger.info(f"📊 RAW DATA RECEIVED: has_data={raw_item_data is not None}")
-        if raw_item_data:
-            logger.info(f"📊 RAW DATA KEYS: {list(raw_item_data.keys())}")
-            logger.info(f"📊 BALANCE DATA CHECK:")
-            logger.info(f"  - current_balance: {raw_item_data.get('current_balance', 'NOT FOUND')}")
-            logger.info(f"  - total_invoiced: {raw_item_data.get('total_invoiced', 'NOT FOUND')}")
-            logger.info(f"  - total_paid: {raw_item_data.get('total_paid', 'NOT FOUND')}")
-            logger.info(f"  - total_purchases: {raw_item_data.get('total_purchases', 'NOT FOUND')}")
-            logger.info(f"  - outstanding_balance: {raw_item_data.get('outstanding_balance', 'NOT FOUND')}")
 
         if raw_item_data.get('has_error'):
             flash(raw_item_data.get('error', 'Record not found'), 'error')
@@ -1070,25 +995,6 @@ def universal_detail_view(entity_type: str, item_id: str):
         
         # Get the service instance for custom renderer calls
         service = get_universal_service(entity_type)
-
-        # ===== DEBUG: Check what service actually is =====
-        logger.error(f"🔍 [SERVICE_DEBUG] Service type: {type(service)}")
-        logger.error(f"🔍 [SERVICE_DEBUG] Service value: {service}")
-        logger.error(f"🔍 [SERVICE_DEBUG] Is callable: {callable(service)}")
-        if hasattr(service, '__name__'):
-            logger.error(f"🔍 [SERVICE_DEBUG] Service name: {service.__name__}")
-        if hasattr(service, '__class__'):
-            logger.error(f"🔍 [SERVICE_DEBUG] Service class: {service.__class__.__name__}")
-
-        # Check if service has the expected methods
-        expected_methods = ['get_po_items_for_payment', 'get_invoice_items_for_payment', 'get_payment_workflow_timeline']
-        for method_name in expected_methods:
-            if hasattr(service, method_name):
-                method = getattr(service, method_name)
-                logger.error(f"🔍 [SERVICE_DEBUG] Has {method_name}: YES (type: {type(method)})")
-            else:
-                logger.error(f"🔍 [SERVICE_DEBUG] Has {method_name}: NO")
-        # ===== END DEBUG =====
 
         # Don't add the service object directly - pass it separately
         assembled_data.update({
@@ -1118,16 +1024,6 @@ def universal_detail_view(entity_type: str, item_id: str):
         # ADD THIS: Get menu items
         from app.utils.menu_utils import get_menu_items
         menu_items = get_menu_items(current_user)
-
-        # CRITICAL DEBUG: Check if virtual fields are in the item dict
-        logger.info(f"[CRITICAL] Item dict being sent to template:")
-        logger.info(f"  - Has purchase_order_no: {'purchase_order_no' in assembled_data.get('item', {})}")
-        logger.info(f"  - purchase_order_no value: {assembled_data.get('item', {}).get('purchase_order_no')}")
-        logger.info(f"  - Has po_date: {'po_date' in assembled_data.get('item', {})}")
-        logger.info(f"  - po_date value: {assembled_data.get('item', {}).get('po_date')}")
-        logger.info(f"  - Has po_total_amount: {'po_total_amount' in assembled_data.get('item', {})}")
-        logger.info(f"  - po_total_amount value: {assembled_data.get('item', {}).get('po_total_amount')}")
-
 
         # DON'T UNPACK - pass everything explicitly to avoid iteration error
         return render_template(

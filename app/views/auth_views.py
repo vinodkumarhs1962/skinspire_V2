@@ -346,7 +346,7 @@ def dashboard():
     # Access Flask session correctly
     from flask import session as flask_session
     current_app.logger.info(f"Session User ID: {flask_session.get('user_id')}")
-    current_app.logger.info(f"Session Contents: {flask_session}")
+    # current_app.logger.info(f"Session Contents: {flask_session}")
     
     # Get hospital information for logo display
     try:
@@ -367,8 +367,8 @@ def dashboard():
                 ).first()
                 
                 # Debug log for hospital logo
-                if hospital and hasattr(hospital, 'logo') and hospital.logo:
-                    current_app.logger.info(f"Hospital has logo: {hospital.logo is not None}")
+                # if hospital and hasattr(hospital, 'logo') and hospital.logo:
+                #     current_app.logger.info(f"Hospital has logo: {hospital.logo is not None}")
             
             # Create detached copies for use outside the session
             if user:
@@ -401,7 +401,7 @@ def dashboard():
     if 'hospital_detached' in locals() and hospital_detached:
         template_args['hospital'] = hospital_detached
     
-    current_app.logger.info(f"Template args: {template_args}")
+    # current_app.logger.info(f"Template args: {template_args}")
     return render_template('dashboard/index.html', **template_args)
 
 @auth_views_bp.route('/settings', methods=['GET'])

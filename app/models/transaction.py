@@ -1080,7 +1080,7 @@ class SupplierPayment(Base, TimestampMixin, TenantMixin):
     
     # Self-reference for reversals
     original_payment = relationship("SupplierPayment", foreign_keys=[original_payment_id], remote_side=[payment_id])
-    reversal_payments = relationship("SupplierPayment", foreign_keys=[original_payment_id])
+    reversal_payments = relationship("SupplierPayment", foreign_keys=[original_payment_id], overlaps="original_payment")
     
     documents = relationship("PaymentDocument", back_populates="payment", cascade="all, delete-orphan")
     next_approver = relationship("User", foreign_keys=[next_approver_id])
@@ -1742,7 +1742,7 @@ class PaymentDocument(Base, TimestampMixin, TenantMixin):
     
     # Self-referential for versions
     parent_document = relationship("PaymentDocument", foreign_keys=[parent_document_id], remote_side=[document_id])
-    versions = relationship("PaymentDocument", foreign_keys=[parent_document_id])
+    versions = relationship("PaymentDocument", foreign_keys=[parent_document_id], overlaps="parent_document")
     
     # === COMPUTED PROPERTIES ===
     @property

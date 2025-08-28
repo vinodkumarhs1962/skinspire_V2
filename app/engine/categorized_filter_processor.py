@@ -88,14 +88,12 @@ class CategorizedFilterProcessor:
                 amount_attr = getattr(model_class, amount_field_name)
                 
                 # Include both exact matches AND mixed payments with this component
-                logger.info(f"✅ [MIXED_PAYMENT] Applying mixed logic: {filter_value} includes mixed with {amount_field_name} > 0")
                 return or_(
                     model_attr == filter_value,
                     and_(model_attr == 'mixed', amount_attr > 0)
                 )
             else:
                 # For payment methods without amount fields, use exact match
-                logger.info(f"✅ [EXACT_MATCH] No amount field found, using exact match for: {filter_value}")
                 return model_attr == filter_value
                 
         except Exception as e:
@@ -111,7 +109,6 @@ class CategorizedFilterProcessor:
             # Strategy 1: Direct naming convention (most common)
             conventional_field_name = f"{payment_method}_amount"
             if hasattr(model_class, conventional_field_name):
-                logger.info(f"✅ [CONFIG_MAPPING] Found amount field by convention: {payment_method} → {conventional_field_name}")
                 return conventional_field_name
             
             # Strategy 2: Search in field definitions with payment method in name
@@ -121,7 +118,6 @@ class CategorizedFilterProcessor:
                 if (payment_method.lower() in field_name.lower() and 
                     'amount' in field_name.lower() and 
                     hasattr(model_class, field_name)):
-                    logger.info(f"✅ [CONFIG_MAPPING] Found amount field by search: {payment_method} → {field_name}")
                     return field_name
             
             # Strategy 3: Look for explicit mapping in field configuration (future enhancement)
@@ -131,7 +127,6 @@ class CategorizedFilterProcessor:
                     payment_method in field.payment_method_mapping):
                     mapped_field = field.payment_method_mapping[payment_method]
                     if hasattr(model_class, mapped_field):
-                        logger.info(f"✅ [CONFIG_MAPPING] Found amount field by explicit mapping: {payment_method} → {mapped_field}")
                         return mapped_field
             
             logger.warning(f"⚠️ [CONFIG_MAPPING] No amount field found for payment method: {payment_method}")
@@ -158,6 +153,15 @@ class CategorizedFilterProcessor:
             branch_id: Branch ID for filtering (optional)
             config: Entity configuration (optional)
         """
+        # DEFENSIVE CHECK: Ensure model_class is provided
+        if model_class is None:
+            logger.error(f"model_class parameter is required for entity_type: {entity_type}")
+            model_class = self._get_model_class(entity_type)
+            if not model_class:
+                logger.error(f"Could not resolve model_class for entity_type: {entity_type}")
+                return query, set(), 0
+            logger.warning(f"Recovered model_class for {entity_type}: {model_class.__name__}")
+
         try:
             self.session = session
             
@@ -172,34 +176,19 @@ class CategorizedFilterProcessor:
             # Enhance config with category information if needed
             enhance_entity_config_with_categories(config)
 
-            # ✅ UNIVERSAL FIX: Ensure filter_category_mapping is available
+            # Check filter_category_mapping availability
             if not hasattr(config, 'filter_category_mapping') or not config.filter_category_mapping:
-                logger.warning(f"⚠️ No filter_category_mapping found for {entity_type} - filters may be miscategorized")
-            else:
-                logger.info(f"🔧 [CATEGORIZATION] Using filter_category_mapping: {list(config.filter_category_mapping.keys())}")
+                logger.warning(f"No filter_category_mapping found for {entity_type}")
 
             # Organize filters by category using the smart function from filter_categories
             from app.config.filter_categories import organize_current_filters_by_category
 
             # This function already has fallback detection for date filters!
             categorized_filters = organize_current_filters_by_category(filters, config)
-
-            # Log the categorization results
-            for category, category_filters in categorized_filters.items():
-                for filter_key in category_filters:
-                    logger.info(f"✅ [CATEGORIZATION_FIX] {filter_key} → {category.value}")
-
-            # Debug categorization results  
-            logger.info(f"🔧 [CATEGORIZATION_DEBUG] Input filters: {list(filters.keys())}")
-            logger.info(f"🔧 [CATEGORIZATION_DEBUG] Categorized result: {[(cat.value, list(cat_filters.keys())) for cat, cat_filters in categorized_filters.items()]}")
             
             if not categorized_filters:
-                logger.info(f"No filterable data provided for {entity_type}")
+                logger.debug(f"No filters provided for {entity_type}")
                 return query, set(), 0
-            
-            logger.info(f"🔄 Processing {len(categorized_filters)} filter categories for {entity_type}")
-            for category, category_filters in categorized_filters.items():
-                logger.info(f"  • {category.value}: {list(category_filters.keys())}")
             
             # Process categories in optimal order
             all_applied_filters = set()
@@ -218,14 +207,12 @@ class CategorizedFilterProcessor:
                         all_applied_filters.update(applied_filters)
                         total_filter_count += filter_count
                         
-                        logger.info(f"✅ {category.value}: Applied {filter_count} filters")
-                        
                     except Exception as e:
                         logger.error(f"❌ Error processing {category.value} filters: {str(e)}")
                         # Continue with other categories on error
                         continue
             
-            logger.info(f"✅ Total filters applied: {total_filter_count}")
+            logger.debug(f"Applied {total_filter_count} categorized filters to {entity_type}")
             return query, all_applied_filters, total_filter_count
             
         except Exception as e:
@@ -314,11 +301,6 @@ class CategorizedFilterProcessor:
             if not model_class:
                 return query, applied_filters, filter_count
             
-            # ✅ PHASE 1A: Log configuration status
-            if config and hasattr(config, 'primary_date_field'):
-                logger.info(f"✅ Using configured primary date field for {entity_type}: {config.primary_date_field}")
-            else:
-                logger.info(f"⚠️ No primary date field configured for {entity_type}, using fallback logic")
 
             # Handle date range filters
             start_date = filters.get('start_date')
@@ -328,7 +310,6 @@ class CategorizedFilterProcessor:
             if not start_date and not end_date:
                 # ✅ PHASE 1A: Configuration-driven default financial year application
                 if config and hasattr(config, 'default_filters') and config.default_filters.get('financial_year'):
-                    logger.info(f"[DATE_DEFAULT] No explicit dates - applying financial year default for {entity_type}")
                     fy_start, fy_end = self._get_financial_year_dates('current')
                     if fy_start and fy_end:
                         date_field = self._get_primary_date_field(model_class, config)
@@ -340,7 +321,6 @@ class CategorizedFilterProcessor:
                         )
                         applied_filters.add('financial_year_default')
                         filter_count += 1
-                        logger.info(f"✅ Applied default financial year for {entity_type}: {fy_start} to {fy_end}")
 
             if start_date or end_date:
                 date_field = self._get_primary_date_field(model_class, config)
@@ -351,7 +331,6 @@ class CategorizedFilterProcessor:
                         query = query.filter(date_field >= start_date_obj)
                         applied_filters.add('start_date')
                         filter_count += 1
-                        logger.info(f"✅ Applied start_date filter: {start_date}")
                     except ValueError:
                         logger.warning(f"Invalid start_date format: {start_date}")
                 
@@ -361,7 +340,6 @@ class CategorizedFilterProcessor:
                         query = query.filter(date_field <= end_date_obj)
                         applied_filters.add('end_date')
                         filter_count += 1
-                        logger.info(f"✅ Applied end_date filter: {end_date}")
                     except ValueError:
                         logger.warning(f"Invalid end_date format: {end_date}")
             
@@ -386,7 +364,6 @@ class CategorizedFilterProcessor:
                         )
                         applied_filters.add(date_preset)
                         filter_count += 1
-                        logger.info(f"✅ Applied {date_preset} filter: {start_date_obj} to {end_date_obj}")
             
             return query, applied_filters, filter_count
             
@@ -401,7 +378,6 @@ class CategorizedFilterProcessor:
         if config and hasattr(config, 'primary_date_field'):
             primary_field = config.primary_date_field
             if hasattr(model_class, primary_field):
-                logger.info(f"✅ Using configured primary date field: {primary_field}")
                 return getattr(model_class, primary_field)
             else:
                 logger.warning(f"⚠️ Configured primary date field '{primary_field}' not found in model {model_class.__name__}")
@@ -411,19 +387,16 @@ class CategorizedFilterProcessor:
         
         for field_name in common_date_fields:
             if hasattr(model_class, field_name):
-                logger.info(f"✅ Using fallback date field: {field_name}")
                 return getattr(model_class, field_name)
         
         # Fallback to first date field found in config
         if config and hasattr(config, 'fields'):
             for field in config.fields:
                 if field.field_type.value in ['date', 'datetime'] and hasattr(model_class, field.name):
-                    logger.info(f"✅ Using config-defined date field: {field.name}")
                     return getattr(model_class, field.name)
         
         # Final fallback
         if hasattr(model_class, 'created_at'):
-            logger.info(f"✅ Using final fallback date field: created_at")
             return model_class.created_at
         
         raise ValueError(f"No date field found for {model_class.__name__}")
@@ -473,12 +446,6 @@ class CategorizedFilterProcessor:
             model_class = self._get_model_class(entity_type)
             if not model_class:
                 return query, applied_filters, filter_count
-            
-            # ✅ PHASE 1B: Log configuration status
-            if config and hasattr(config, 'primary_amount_field'):
-                logger.info(f"✅ Using configured primary amount field for {entity_type}: {config.primary_amount_field}")
-            else:
-                logger.info(f"⚠️ No primary amount field configured for {entity_type}, using fallback logic")
 
             # Handle min/max amount filters
             min_amount = filters.get('min_amount') or filters.get('amount_min')
@@ -495,7 +462,6 @@ class CategorizedFilterProcessor:
                         filter_count += 1
                         # ✅ PHASE 1B: Enhanced logging with field info
                         amount_field_name = getattr(amount_field.property, 'key', 'unknown_field')
-                        logger.info(f"✅ Applied min_amount filter on {amount_field_name}: >= {min_val}")
                     except (ValueError, TypeError):
                         logger.warning(f"Invalid min_amount value: {min_amount}")
 
@@ -507,7 +473,6 @@ class CategorizedFilterProcessor:
                         filter_count += 1
                         # ✅ PHASE 1B: Enhanced logging with field info
                         amount_field_name = getattr(amount_field.property, 'key', 'unknown_field')
-                        logger.info(f"✅ Applied max_amount filter on {amount_field_name}: <= {max_val}")
                     except (ValueError, TypeError):
                         logger.warning(f"Invalid max_amount value: {max_amount}")
             
@@ -524,7 +489,6 @@ class CategorizedFilterProcessor:
         if config and hasattr(config, 'primary_amount_field'):
             primary_field = config.primary_amount_field
             if hasattr(model_class, primary_field):
-                logger.info(f"✅ Using configured primary amount field: {primary_field}")
                 return getattr(model_class, primary_field)
             else:
                 logger.warning(f"⚠️ Configured primary amount field '{primary_field}' not found in model {model_class.__name__}")
@@ -534,14 +498,12 @@ class CategorizedFilterProcessor:
         
         for field_name in common_amount_fields:
             if hasattr(model_class, field_name):
-                logger.info(f"✅ Using fallback amount field: {field_name}")
                 return getattr(model_class, field_name)
         
         # Fallback to config
         if config and hasattr(config, 'fields'):
             for field in config.fields:
                 if field.field_type.value in ['amount', 'currency', 'number'] and hasattr(model_class, field.name):
-                    logger.info(f"✅ Using config-defined amount field: {field.name}")
                     return getattr(model_class, field.name)
         
         raise ValueError(f"No amount field found for {model_class.__name__}")
@@ -555,8 +517,8 @@ class CategorizedFilterProcessor:
         """Process text search filters - Using existing ENTITY_SEARCH_CONFIGS where available"""
         applied_filters = set()
         filter_count = 0
-        # Add at the beginning of the method
-        logger.info(f"🔍 Processing search filters for {entity_type} with filters: {filters}")
+        logger.debug(f"Processing search filters for {entity_type}")
+        
         try:
             model_class = self._get_model_class(entity_type)
             if not model_class:
@@ -582,7 +544,6 @@ class CategorizedFilterProcessor:
             # Check if we have existing search configuration for this entity
             if entity_type in ENTITY_SEARCH_CONFIGS and entity_type != 'supplier_payments':
                 search_config = ENTITY_SEARCH_CONFIGS[entity_type]
-                logger.info(f"✅ Using existing search config for {entity_type}")
                 
                 # Look for search terms in filters
                 search_term = None
@@ -606,11 +567,9 @@ class CategorizedFilterProcessor:
                 
                 # Apply search using existing configuration
                 if search_term and len(search_term) >= search_config.min_chars:
-                    logger.info(f"✅ Applying search for {entity_type} with term '{search_term}' using param '{search_param_used}'")
                     query = self._apply_search_using_existing_config(query, search_term, search_config, model_class)
                     applied_filters.add(search_param_used)
                     filter_count += 1
-                    logger.info(f"✅ Applied search using existing config for {entity_type}: {search_term}")
 
             # ✅ FIXED: Handle reference_no and invoice_id for supplier_payments only if not handled by supplier search
             elif entity_type == 'supplier_payments':
@@ -622,7 +581,6 @@ class CategorizedFilterProcessor:
                             query = query.filter(model_class.reference_no.ilike(f'%{reference_no.strip()}%'))
                             applied_filters.add('reference_no')
                             filter_count += 1
-                            logger.info(f"✅ Applied reference_no filter: {reference_no}")
                 
                 # Process invoice_id search
                 invoice_id = filters.get('invoice_id')
@@ -631,7 +589,6 @@ class CategorizedFilterProcessor:
                         query = query.filter(model_class.invoice_id == invoice_id.strip())
                         applied_filters.add('invoice_id')
                         filter_count += 1
-                        logger.info(f"✅ Applied invoice_id filter: {invoice_id}")
             
             
             # ✅ FIXED: Handle supplier name search (entity-specific) with existing config - avoid double processing
@@ -656,11 +613,9 @@ class CategorizedFilterProcessor:
                     if 'suppliers' in ENTITY_SEARCH_CONFIGS:
                         supplier_config = ENTITY_SEARCH_CONFIGS['suppliers']
                         query = self._apply_supplier_search_with_join(query, supplier_search, supplier_config)
-                        logger.info(f"✅ Applied supplier search using existing config: {supplier_search}")
                     else:
                         # Fallback to existing hardcoded logic
                         query = self._apply_supplier_name_search(query, supplier_search)
-                        logger.info(f"✅ Applied supplier search using fallback logic: {supplier_search}")
                     
                     applied_filters.add(search_filter_used)
                     filter_count += 1
@@ -757,7 +712,6 @@ class CategorizedFilterProcessor:
                     from sqlalchemy import or_
                     query = query.filter(or_(*search_conditions))
             
-            logger.info(f"✅ Applied search with join on {join_model.__name__}")
             return query
             
         except Exception as e:
@@ -784,7 +738,6 @@ class CategorizedFilterProcessor:
                     from sqlalchemy import or_
                     query = query.filter(or_(*search_conditions))
             
-            logger.info(f"✅ Applied direct search on {model_class.__name__}")
             return query
             
         except Exception as e:
@@ -803,7 +756,6 @@ class CategorizedFilterProcessor:
             
             # Apply search filter
             query = query.filter(Supplier.supplier_name.ilike(f'%{search_term}%'))
-            logger.info(f"✅ Applied fallback supplier name search")
             return query
             
         except Exception as e:
@@ -877,15 +829,12 @@ class CategorizedFilterProcessor:
                                     )
                                     if mixed_payment_condition is not None:
                                         query = query.filter(mixed_payment_condition)
-                                        logger.info(f"✅ Applied selection filter with mixed logic: {field.name} = {filter_value}")
                                     else:
                                         # Fallback to exact match if mixed logic fails
                                         query = query.filter(db_field == filter_value)
-                                        logger.info(f"✅ Applied selection filter (exact fallback): {field.name} = {filter_value}")
                                 else:
                                     # For non-payment_method fields, use exact match
                                     query = query.filter(db_field == filter_value)
-                                    logger.info(f"✅ Applied selection filter: {field.name} = {filter_value}")
                                 
                                 applied_filters.add(matched_filter_key)
                                 filter_count += 1
@@ -915,11 +864,9 @@ class CategorizedFilterProcessor:
                         )
                         if mixed_payment_condition is not None:
                             query = query.filter(mixed_payment_condition)
-                            logger.info(f"✅ Applied payment_method with config-driven mixed logic: {filters['payment_method']}")
                         else:
                             # Fallback to exact match only if config-driven logic fails
                             query = query.filter(model_attr == filters['payment_method'])
-                            logger.info(f"✅ Applied payment_method with exact match fallback: {filters['payment_method']}")
                         
                         applied_filters.add('payment_method')
                         filter_count += 1
@@ -949,7 +896,6 @@ class CategorizedFilterProcessor:
             config_processed = False
             
             if config and hasattr(config, 'fields'):
-                logger.info(f"✅ Using existing field configurations for {entity_type} relationship filters")
                 
                 for field in config.fields:
                     # Check if this is a relationship field (UUID, ENTITY_SEARCH, REFERENCE)
@@ -980,11 +926,9 @@ class CategorizedFilterProcessor:
                                 applied_filters.add(matched_filter_key)
                                 filter_count += 1
                                 config_processed = True
-                                logger.info(f"✅ Applied relationship filter using field config {field.name}: {filter_value}")
             
             # ✅ FALLBACK: Original hardcoded logic for backward compatibility
             if not config_processed:
-                logger.info(f"⚠️ No field configurations found for {entity_type}, using fallback relationship logic")
                 
                 # Process entity ID filters with hardcoded list
                 id_fields = ['supplier_id', 'patient_id', 'doctor_id', 'medicine_id', 'branch_id']
@@ -1002,7 +946,6 @@ class CategorizedFilterProcessor:
                                 query = query.filter(model_attr == filter_value)
                                 applied_filters.add(field_name)
                                 filter_count += 1
-                                logger.info(f"✅ Applied fallback {field_name} filter: {filter_value}")
                             except (ValueError, TypeError) as e:
                                 logger.warning(f"Invalid {field_name} value: {filter_value} - {str(e)}")
             
@@ -1036,8 +979,6 @@ class CategorizedFilterProcessor:
             # Apply the filter
             query = query.filter(model_attr == filter_value)
             
-            # Enhanced logging with field info
-            logger.info(f"✅ Applied relationship filter on {model_class.__name__}.{field.name}: {filter_value}")
             return True
             
         except (ValueError, TypeError) as e:
@@ -1247,7 +1188,6 @@ class CategorizedFilterProcessor:
             if self._has_date_fields(config):
                 dropdown_data['date_presets'] = self.get_date_preset_choices()
             
-            logger.info(f"✅ Generated dropdown data for {entity_type}: {list(dropdown_data.keys())}")
             return dropdown_data
             
         except Exception as e:
@@ -1351,7 +1291,6 @@ class CategorizedFilterProcessor:
                 module_path, class_name = config.model_class.rsplit('.', 1)
                 module = __import__(module_path, fromlist=[class_name])
                 model = getattr(module, class_name)
-                logger.info(f"✅ Loaded model from config for {entity_type}: {config.model_class}")
                 return model
             except Exception as e:
                 logger.warning(f"Config model import failed: {str(e)}")
@@ -1363,7 +1302,6 @@ class CategorizedFilterProcessor:
                 module_path, class_name = module_path.rsplit('.', 1)
                 module = __import__(module_path, fromlist=[class_name])
                 model = getattr(module, class_name)
-                logger.info(f"✅ Loaded model from entity_models mapping for {entity_type}")
                 return model
             except Exception as e:
                 logger.warning(f"Entity models import failed: {str(e)}")
@@ -1417,18 +1355,16 @@ class CategorizedFilterProcessor:
                 # Branch filter if supported
                 if branch_id and hasattr(model_class, 'branch_id'):
                     query = query.filter(model_class.branch_id == branch_id)
-                    logger.info(f"Applied branch filter for {entity_type}: {branch_id}")
                 
                 # Apply existing categorized filters
                 query, applied_filters, filter_count = self.process_entity_filters(
                     entity_type=entity_type,
                     filters=filters,
                     query=query,
+                    model_class=model_class,
                     session=session,
                     config=config
                 )
-                
-                logger.info(f"✅ [EXISTING_PROCESSOR] Applied {filter_count} filters for {entity_type}: {applied_filters}")
                 
                 # Apply sorting from configuration
                 sort_field = filters.get('sort_field', getattr(config, 'default_sort_field', 'created_at'))
@@ -1461,11 +1397,9 @@ class CategorizedFilterProcessor:
                 if summary:
                     # Update with actual query count (may differ from summary due to pagination)
                     summary['total_count'] = total_count
-                    logger.info(f"✅ [REUSED_SUMMARY] Using pre-calculated summary, updated count: {total_count}")
                 else:
                     # Fallback if no summary available
                     summary = {'total_count': total_count}
-                    logger.info(f"✅ [BASIC_SUMMARY] Created basic summary: {total_count}")
                 
                 # Build pagination
                 pagination = {
@@ -1530,19 +1464,35 @@ def get_categorized_filter_processor() -> CategorizedFilterProcessor:
     return _categorized_processor
 
 def process_filters_for_entity(entity_type: str, filters: Dict[str, Any], 
-                             query: Query, session: Session, config=None) -> Tuple[Query, Set[str], int]:
+                             query: Query, session: Session, config=None, 
+                             model_class: Optional[Type] = None) -> Tuple[Query, Set[str], int]:
     """
     Convenience function for processing filters
     Direct replacement for existing filter processing methods
+    Enhanced with optional model_class parameter for consistency
     """
     processor = get_categorized_filter_processor()
-    # ✅ Get model class from processor's _get_model_class method
-    model_class = processor._get_model_class(entity_type)
+    
+    # Use provided model_class or get from processor
+    if not model_class:
+        model_class = processor._get_model_class(entity_type)
+        
     if not model_class:
         logger.error(f"Could not get model class for entity type: {entity_type}")
         return query, set(), 0
         
-    return processor.process_entity_filters(entity_type, filters, query, model_class, session, config=config)
+    try:
+        return processor.process_entity_filters(
+            entity_type=entity_type,
+            filters=filters,
+            query=query,
+            model_class=model_class,    # FIXED: Always provide model_class
+            session=session,
+            config=config
+        )
+    except Exception as e:
+        logger.error(f"Error in process_filters_for_entity: {str(e)}")
+        return query, set(), 0
 
 def organize_filters_by_category(filters: Dict[str, Any], entity_type: str) -> Dict[FilterCategory, Dict]:
     """

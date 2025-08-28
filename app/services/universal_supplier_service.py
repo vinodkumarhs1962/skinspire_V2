@@ -23,7 +23,7 @@ from decimal import Decimal
 from app.services.database_service import get_db_session, get_entity_dict
 from app.models.transaction import SupplierPayment
 from app.models.master import Supplier, Branch
-from app.models.transaction import SupplierInvoice
+from app.models.transaction import SupplierInvoice, SupplierPayment
 from app.config.entity_configurations import get_entity_config, get_service_filter_mapping
 from app.config.core_definitions import FieldDefinition, FieldType, ComplexDisplayType
 from app.engine.categorized_filter_processor import get_categorized_filter_processor
@@ -189,6 +189,7 @@ class EnhancedUniversalSupplierService:
                     entity_type='supplier_payments',
                     filters=filters,
                     query=query,
+                    model_class=SupplierPayment,  # ✅ FIXED: Add model_class parameter
                     session=session,
                     config=config
                 )
@@ -435,11 +436,6 @@ class EnhancedUniversalSupplierService:
         import time
         
         start_time = time.time()
-        logger.info(f"🔍 [UNIVERSAL] PAYMENT SEARCH START - Time: {datetime.now().strftime('%H:%M:%S')}")
-        logger.info(f"🔍 [UNIVERSAL] Filters received: {filters}")
-        logger.info(f"🔍 [UNIVERSAL] Hospital ID: {hospital_id}")
-        logger.info(f"🔍 [UNIVERSAL] Branch ID: {branch_id}")
-        logger.info(f"🔍 [UNIVERSAL] User ID: {current_user_id}")
         
         try:
             # Use provided session or create new one
@@ -472,30 +468,24 @@ class EnhancedUniversalSupplierService:
                     entity_type='supplier_payments',
                     filters=filters,
                     query=query,
+                    model_class=SupplierPayment,  # ✅ FIXED: Add model_class parameter
                     session=session_scope,
                     config=config
                 )
-                
-                logger.info(f"✅ [CATEGORIZED] Applied {filter_count} filters: {applied_filters}")
-                logger.info(f"✅ [UNIVERSAL] STEP 3 - Categorized filtering: {time.time() - step_start:.3f}s")
+
                 
                 # 4a: Ordering
                 step_start = time.time()
                 query = query.order_by(SupplierPayment.payment_date.desc())
-                logger.info(f"✅ [UNIVERSAL] STEP 4a - Ordering: {time.time() - step_start:.3f}s")
                 
                 # 4b: Count query
                 step_start = time.time()
-                logger.info(f"🔍 [UNIVERSAL] CRITICAL: Executing COUNT query...")
                 total_count = query.count()
-                logger.info(f"✅ [UNIVERSAL] STEP 4b - Count query: {time.time() - step_start:.3f}s - Found {total_count} records")
                 
                 # 4c: Main query execution
                 step_start = time.time()
-                logger.info(f"🔍 [UNIVERSAL] CRITICAL: Executing MAIN query...")
                 offset = (page - 1) * per_page
                 payments = query.offset(offset).limit(per_page).all()
-                logger.info(f"✅ [UNIVERSAL] STEP 4c - Main query: {time.time() - step_start:.3f}s - Retrieved {len(payments)} records")
                 
                 # STEP 5: Result processing
                 step_start = time.time()
@@ -528,14 +518,11 @@ class EnhancedUniversalSupplierService:
                     
                     payment_dicts.append(payment_dict)
                 
-                logger.info(f"✅ [UNIVERSAL] STEP 5 - Result processing: {time.time() - step_start:.3f}s")
                 
                 # STEP 6: Summary calculation using existing Universal Engine methods
                 step_start = time.time()
                 try:
                     summary = self._calculate_basic_summary_from_filtered_results()
-                    logger.info(f"✅ [UNIVERSAL] STEP 6 - Summary calculation: {time.time() - step_start:.3f}s")
-                    logger.info(f"Summary calculated: total_amount={summary.get('total_amount', 0)}, total_count={summary.get('total_count', 0)}")
                 except Exception as e:
                     logger.error(f"Error calculating summary: {str(e)}")
                     summary = {
@@ -544,12 +531,9 @@ class EnhancedUniversalSupplierService:
                         'pending_count': 0,
                         'this_month_count': 0
                     }
-                logger.info(f"✅ [UNIVERSAL] STEP 6 - Summary: {time.time() - step_start:.3f}s")
                 
                 # Final result
                 total_time = time.time() - start_time
-                logger.info(f"🎯 [UNIVERSAL] TOTAL SEARCH TIME: {total_time:.3f}s")
-                logger.info(f"✅ [UNIVERSAL] SEARCH COMPLETED SUCCESSFULLY in {total_time:.3f}s")
                 
                 # Get suppliers for dropdown
                 suppliers = []
@@ -654,12 +638,9 @@ class EnhancedUniversalSupplierService:
                     result['total'] = len(payments)
                 
                 # Apply enhanced summary calculation
-                logger.info(f"🔧 BEFORE Enhancement - Summary fields: {list(existing_summary.keys())}")
                 enhanced_summary = self._calculate_enhanced_summary(payments, existing_summary)
-                logger.info(f"🎯 AFTER Enhancement - Summary fields: {list(enhanced_summary.keys())}")
 
                 if filters.get('bank_transfer_inclusive'):
-                    logger.info("🔍 [BANK_INCLUSIVE] Filtering fetched payments for bank transfers")
                     
                     # Filter the already-fetched records for bank transfers
                     filtered_payments = []
@@ -676,9 +657,7 @@ class EnhancedUniversalSupplierService:
                         # Include if pure bank transfer OR mixed with bank amount
                         if payment_method == 'bank_transfer' or bank_amount_float > 0:
                             filtered_payments.append(payment)
-                            logger.info(f"🔍 [INCLUDED] Payment: method={payment_method}, bank_amt={bank_amount_float}")
                     
-                    logger.info(f"🎯 [BANK_INCLUSIVE] Filtered {len(payments)} records to {len(filtered_payments)} bank transfers")
                     
                     # Return filtered results with original pagination context
                     return {
@@ -718,7 +697,6 @@ class EnhancedUniversalSupplierService:
         """
         try:
             if existing_summary and isinstance(existing_summary, dict):
-                logger.info(f"🎯 Enhancing existing summary: {list(existing_summary.keys())}")
                 
                 # ✅ Start with existing summary (4 fields)
                 enhanced_summary = existing_summary.copy()
@@ -742,14 +720,12 @@ class EnhancedUniversalSupplierService:
                             else:
                                 static_fields.add(field_name)
                                 
-                    logger.info(f"🔧 Card configuration - Filterable: {filterable_fields}, Static: {static_fields}")
                 
                 # ✅ NEW: Recalculate basic summary fields if they are filterable and filters are applied
                 basic_filterable_fields = [f for f in ['total_count', 'total_amount'] 
                                         if f in filterable_fields]
 
                 if basic_filterable_fields and self._has_active_filters():
-                    logger.info(f"🔍 [FILTERED] Recalculating basic summary fields: {basic_filterable_fields}")
                     
                     # Get filtered totals from the actual filtered results
                     filtered_totals = self._calculate_basic_summary_from_filtered_results()
@@ -758,7 +734,6 @@ class EnhancedUniversalSupplierService:
                         if field in filtered_totals:
                             old_value = enhanced_summary.get(field, 0)
                             enhanced_summary[field] = filtered_totals[field]
-                            logger.info(f"✅ Updated {field}: {old_value} -> {enhanced_summary[field]} (filtered)")
                 
                 # ✅ ENHANCED: Get database counts with configuration-aware filtering
                 status_fields = ['approved_count', 'completed_count', 'bank_transfer_count', 'pending_count']
@@ -769,53 +744,44 @@ class EnhancedUniversalSupplierService:
 
                 # Get filterable card counts (respect current filters) - RECALCULATE ALL when filters applied
                 if filterable_status_fields and self._has_active_filters():
-                    logger.info(f"🔍 [DATABASE] Getting filtered counts for: {filterable_status_fields}")
                     filtered_counts = self._get_actual_database_counts(respect_current_filters=True)
                     
                     for field in filterable_status_fields:
                         old_value = enhanced_summary.get(field, 0)
                         enhanced_summary[field] = filtered_counts.get(field, 0)
-                        logger.info(f"✅ Updated {field}: {old_value} -> {enhanced_summary[field]} (filtered)")
 
                 # Get filterable counts without filters if no active filters
                 elif filterable_status_fields and not self._has_active_filters():
                     missing_filterable_fields = [f for f in filterable_status_fields if f not in enhanced_summary]
                     if missing_filterable_fields:
-                        logger.info(f"🔍 [DATABASE] Getting unfiltered counts for missing: {missing_filterable_fields}")
                         unfiltered_counts = self._get_actual_database_counts(respect_current_filters=True)
                         
                         for field in missing_filterable_fields:
                             enhanced_summary[field] = unfiltered_counts.get(field, 0)
-                            logger.info(f"✅ Added {field} (unfiltered): {enhanced_summary[field]}")
 
                 # Get static card counts (always use "this month" regardless of filters)  
                 if static_status_fields:
                     missing_static_fields = [f for f in static_status_fields if f not in enhanced_summary]
                     if missing_static_fields:
-                        logger.info(f"🔍 [DATABASE] Getting static counts for: {missing_static_fields}")
                         static_counts = self._get_actual_database_counts(respect_current_filters=False)
                         
                         for field in missing_static_fields:
                             enhanced_summary[field] = static_counts.get(field, 0)
-                            logger.info(f"✅ Added {field} (static): {enhanced_summary[field]}")
                 
                 # ✅ BACKWARD COMPATIBLE: Handle fields not in configuration (use existing logic)
                 remaining_fields = [f for f in ['approved_count', 'completed_count', 'bank_transfer_count'] 
                                 if f not in enhanced_summary]
                 if remaining_fields:
-                    logger.info(f"🔍 [DATABASE] Getting counts for unconfigured fields: {remaining_fields}")
                     fallback_counts = self._get_actual_database_counts()
                     
                     for field in remaining_fields:
                         enhanced_summary[field] = fallback_counts.get(field, 0)
-                        logger.info(f"✅ Added {field} (fallback): {enhanced_summary[field]}")
                 
                 # ✅ SPECIAL HANDLING: this_month_amount (configuration-driven static calculation)
                 if 'this_month_amount' not in enhanced_summary:
                     if 'this_month_amount' in static_fields:
                         # Static field - always use actual this month amount regardless of filters
                         enhanced_summary['this_month_amount'] = self._calculate_this_month_amount_from_database(enhanced_summary)
-                        logger.info(f"✅ Added this_month_amount (static DB): Rs.{enhanced_summary['this_month_amount']:.2f}")
                     else:
                         # Existing logic for backward compatibility
                         this_month_count = enhanced_summary.get('this_month_count', 0)
@@ -824,16 +790,13 @@ class EnhancedUniversalSupplierService:
                         
                         if this_month_count == total_count and total_count > 0:
                             enhanced_summary['this_month_amount'] = total_amount
-                            logger.info(f"✅ This month amount = total amount: Rs.{total_amount} (all {total_count} transactions are from this month)")
                         else:
                             if total_count > 0:
                                 ratio = this_month_count / total_count
                                 enhanced_summary['this_month_amount'] = total_amount * ratio
                             else:
                                 enhanced_summary['this_month_amount'] = 0
-                            logger.info(f"✅ Added this_month_amount (calculated): Rs.{enhanced_summary['this_month_amount']:.2f}")
                 
-                logger.info(f"✅ Enhanced summary complete with {len(enhanced_summary)} fields: {list(enhanced_summary.keys())}")
                 return enhanced_summary
             
             # ✅ Fallback: If no existing summary, calculate everything from page items

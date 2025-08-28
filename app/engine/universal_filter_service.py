@@ -33,6 +33,7 @@ from app.config.entity_configurations import get_entity_config, get_entity_filte
 from app.config.core_definitions import FieldType, EntitySearchConfiguration
 from app.engine.categorized_filter_processor import get_categorized_filter_processor
 from app.engine.entity_config_manager import EntityConfigManager
+from app.models.master import Supplier
 from app.utils.unicode_logging import get_unicode_safe_logger
 
 logger = get_unicode_safe_logger(__name__)
@@ -81,8 +82,6 @@ class UniversalFilterService:
             if not config:
                 return self._get_empty_filter_data()
             
-            logger.info(f"🔄 Getting complete filter data for {entity_type}")
-            logger.info(f"🔄 Current filters: {current_filters}")
             
             # 1. Get dropdown options for filter forms (same as before)
             backend_data = self.categorized_processor.get_backend_dropdown_data(
@@ -114,7 +113,6 @@ class UniversalFilterService:
                 'error_messages': []
             }
             
-            logger.info(f"✅ Complete filter data assembled for {entity_type}")
             return result
             
         except Exception as e:
@@ -136,9 +134,7 @@ class UniversalFilterService:
         ✅ No conflicts between summary and list filtering  
         ✅ Single source of truth for all filtering
         """
-        try:
-            logger.info(f"🎯 Getting unified summary data for {entity_type}")
-            
+        try:          
             if entity_type == 'supplier_payments':
                 return self._get_supplier_payment_unified_summary(
                     filters, hospital_id, branch_id, config
@@ -182,10 +178,8 @@ class UniversalFilterService:
             # Get the processed filters using the same logic as main query
             if hasattr(service, '_extract_filters'):
                 processed_filters = service._extract_filters()
-                logger.info(f"🔧 [SUMMARY_FIX] Using service extracted filters: {processed_filters}")
             else:
                 processed_filters = filters
-                logger.info(f"🔧 [SUMMARY_FIX] Using fallback filters: {filters}")
 
             with get_db_session() as session:
                 # Start with base query (same as main search)
@@ -200,11 +194,10 @@ class UniversalFilterService:
                     entity_type='supplier_payments',
                     filters=filters,
                     query=base_query,
+                    model_class=model_class,      # ✅ FIXED: Add model_class parameter
                     session=session,
                     config=config
                 )
-                
-                logger.info(f"🎯 Applied {filter_count} filters for summary: {applied_filters}")
                 
                 # Calculate summary statistics from the SAME filtered query
                 total_count = filtered_query.count()
@@ -279,8 +272,6 @@ class UniversalFilterService:
                 this_month_amount_result = this_month_query.with_entities(func.sum(SupplierPayment.amount)).scalar()
                 this_month_amount = float(this_month_amount_result or 0)
 
-                logger.info(f"🔧 [THIS_MONTH_FINAL_FIX] Truly unfiltered calculation: Count={this_month_count}, Amount={this_month_amount}")
-
                 summary = {
                     'total_count': total_count,
                     'total_amount': total_amount,
@@ -295,7 +286,6 @@ class UniversalFilterService:
                     'filtering_method': 'categorized_unified'
                 }
                 
-                logger.info(f"✅ Unified summary calculated: Total={total_count}, Approved={approved_count}, ThisMonth={this_month_count}")
                 return summary
                 
         except Exception as e:
@@ -334,13 +324,13 @@ class UniversalFilterService:
                 # ✅ FIX: Apply branch filter if provided (same as main query)
                 if branch_id:
                     base_query = base_query.filter(Supplier.branch_id == branch_id)
-                    logger.info(f"✅ Applied branch filter to supplier summary: {branch_id}")
 
                 # Apply categorized filters
                 filtered_query, applied_filters, filter_count = self.categorized_processor.process_entity_filters(
                     entity_type='suppliers',
                     filters=filters,
                     query=base_query,
+                    model_class=Supplier,         # ✅ FIXED: Add model_class parameter
                     session=session,
                     config=config
                 )

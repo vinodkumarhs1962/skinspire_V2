@@ -56,34 +56,21 @@ class EnhancedUniversalDataAssembler:
         🎯 MAIN ASSEMBLY METHOD - Now uses UniversalFilterService
         BACKWARD COMPATIBLE: Same signature, enhanced functionality
         """
-        # ✅ DEBUG: Log assembly start
-        logger.info(f"🔍 [ASSEMBLER_DEBUG] Starting assembly for entity: {config.entity_type}")
-        logger.info(f"🔍 [ASSEMBLER_DEBUG] Config type: {type(config)}")
-        logger.info(f"🔍 [ASSEMBLER_DEBUG] Config primary_key: {config.primary_key}")
-        logger.info(f"🔍 [ASSEMBLER_DEBUG] Number of actions: {len(config.actions) if config.actions else 0}")
-        logger.info(f"🔍 [ASSEMBLER_DEBUG] Raw data keys: {list(raw_data.keys())}")
-        logger.info(f"🔍 [ASSEMBLER_DEBUG] Number of items: {len(raw_data.get('items', []))}")
         
         if raw_data.get('items') and len(raw_data['items']) > 0:
             first_item = raw_data['items'][0]
-            logger.info(f"🔍 [ASSEMBLER_DEBUG] First item type: {type(first_item)}")
-            logger.info(f"🔍 [ASSEMBLER_DEBUG] First item keys: {list(first_item.keys()) if isinstance(first_item, dict) else 'Not a dict'}")
         
         try:
-            logger.info(f"🔧 Assembling data for {config.entity_type}")
             
             # ✅ FIX: Use the same filters that the main query used
             if raw_data.get('request_args'):
                 # Use the exact same filters that the main entity service used
                 current_filters = raw_data['request_args']
-                logger.info(f"[FILTER_SYNC] Using main query filters: {current_filters}")
             elif filters:
                 current_filters = filters  
-                logger.info(f"[FILTER_SYNC] Using passed filters: {current_filters}")
             else:
                 # Fallback to request.args as last resort
                 current_filters = request.args.to_dict() if request else {}
-                logger.info(f"[FILTER_SYNC] Using fallback request filters: {current_filters}")
             
             # Get branch context
             if not branch_context and current_user:
@@ -113,7 +100,6 @@ class EnhancedUniversalDataAssembler:
             
             # ✅ CRITICAL FIX: Merge summary data from filter service with raw data
             if filter_data.get('summary_data') and raw_data.get('summary'):
-                logger.info(f"[SUMMARY_MERGE] Merging filter service summary data with existing summary")
                 existing_summary = raw_data.get('summary', {})
                 filter_summary = filter_data.get('summary_data', {})
                 
@@ -122,10 +108,8 @@ class EnhancedUniversalDataAssembler:
                 for key, value in filter_summary.items():
                     if key not in merged_summary or merged_summary[key] == 0:
                         merged_summary[key] = value
-                        logger.info(f"[SUMMARY_MERGE] Added missing field {key} = {value}")
                 
                 raw_data['summary'] = merged_summary
-                logger.info(f"[SUMMARY_MERGE] Final merged summary: {list(merged_summary.keys())}")
 
             template_safe_config = self._make_template_safe_config(config)
             # Assemble other data components
@@ -134,10 +118,8 @@ class EnhancedUniversalDataAssembler:
             summary = raw_data.get('summary', {})
             if summary and 'total_count' in summary:
                 total_count = summary['total_count']  # Use filtered count
-                logger.info(f"🔍 [TOTAL_COUNT_FIX] Using filtered total_count: {total_count}")
             else:
                 total_count = raw_data.get('total', len(raw_data.get('items', [])))
-                logger.info(f"🔍 [TOTAL_COUNT_FIX] Using fallback total_count: {total_count}")
             
             assembled_data = {
                 # Core data
@@ -178,9 +160,9 @@ class EnhancedUniversalDataAssembler:
                 'error_messages': filter_data.get('error_messages', [])
             }
             
-            logger.info(f"✅ Assembled data for {config.entity_type}: "
-                       f"{assembled_data['total_count']} items, "
-                       f"{filter_data.get('active_filters_count', 0)} active filters")
+            # logger.info(f"✅ Assembled data for {config.entity_type}: "
+            #            f"{assembled_data['total_count']} items, "
+            #            f"{filter_data.get('active_filters_count', 0)} active filters")
             
             return assembled_data
             
@@ -718,12 +700,9 @@ class EnhancedUniversalDataAssembler:
     def _assemble_summary_data(self, config: EntityConfiguration, raw_data: Dict) -> Dict:
         """Assemble summary data from raw data"""
         try:
-            logger.info(f"[ASSEMBLER_SUMMARY_DEBUG] Raw data keys: {list(raw_data.keys())}")
-            logger.info(f"[ASSEMBLER_SUMMARY_DEBUG] Raw summary: {raw_data.get('summary', {})}")
             
             summary = raw_data.get('summary', {})
             
-            logger.info(f"[ASSEMBLER_SUMMARY_DEBUG] Summary after extraction: {summary}")
             # Add computed summary if not provided
             items = raw_data.get('items', [])
             
@@ -732,12 +711,9 @@ class EnhancedUniversalDataAssembler:
                     'total_count': len(items),
                     'current_page_count': len(items)
                 }
-                logger.info(f"[ASSEMBLER_SUMMARY_DEBUG] Created fallback summary: {summary}")
 
             # Add summary cards configuration
             summary['cards'] = getattr(config, 'summary_cards', [])
-            
-            logger.info(f"[ASSEMBLER_SUMMARY_DEBUG] Final assembled summary: {summary}")
 
             return summary
             
@@ -754,7 +730,6 @@ class EnhancedUniversalDataAssembler:
             summary = raw_data.get('summary', {})
             if summary and 'total_count' in summary:
                 filtered_total = summary['total_count']  # Use filtered count
-                logger.info(f"🔍 [PAGINATION_FIX] Using filtered count from summary: {filtered_total}")
                 
                 # Update existing pagination with filtered count
                 if pagination:
@@ -765,7 +740,6 @@ class EnhancedUniversalDataAssembler:
                         'total_count': filtered_total,
                         'total_pages': max(1, (filtered_total + per_page - 1) // per_page)
                     })
-                    logger.info(f"🔍 [PAGINATION_FIX] Updated existing pagination with filtered total: {filtered_total}")
                 else:
                     # Create new pagination with filtered count
                     current_page = int(current_filters.get('page', 1))
@@ -784,7 +758,6 @@ class EnhancedUniversalDataAssembler:
             elif not pagination:
                 # Fallback when no summary and no pagination
                 total_items = raw_data.get('total', len(raw_data.get('items', [])))
-                logger.info(f"🔍 [PAGINATION_FIX] Using fallback count: {total_items}")
                     
                 current_page = int(current_filters.get('page', 1))
                 per_page = int(current_filters.get('per_page', 20))
@@ -878,11 +851,6 @@ class EnhancedUniversalDataAssembler:
         This method was referenced but missing from your data assembler
         """
         try:
-            # ✅ DEBUG: Add these 4 lines to see what's happening
-            print(f"🔍 [SUMMARY_CARDS_DEBUG] Entity: {config.entity_type}")
-            print(f"🔍 [SUMMARY_CARDS_DEBUG] Raw data keys: {list(raw_data.keys())}")
-            print(f"🔍 [SUMMARY_CARDS_DEBUG] Summary data: {raw_data.get('summary', {})}")
-            print(f"🔍 [SUMMARY_CARDS_DEBUG] Config has {len(config.summary_cards)} cards configured")
             summary_data = raw_data.get('summary', {})
             cards = []
             
@@ -891,9 +859,6 @@ class EnhancedUniversalDataAssembler:
             if not hasattr(config, 'summary_cards') or not config.summary_cards:
                 logger.warning(f"No summary_cards configuration for {config.entity_type}")
                 return []
-            
-            logger.info(f"✅ Assembling {len(config.summary_cards)} summary cards for {config.entity_type}")
-            logger.info(f"✅ Summary data available: {list(summary_data.keys())}")
             
             # ✅ ASSEMBLY: Process each configured card
             for card_config in config.summary_cards:
@@ -924,7 +889,6 @@ class EnhancedUniversalDataAssembler:
                             'filter_value': card_config.get('filter_value')
                         }
                         cards.append(card)
-                        logger.info(f"✅ Created detail card '{card['id']}' with breakdown data from service: {breakdown_data}")
                         continue
 
 
@@ -936,7 +900,6 @@ class EnhancedUniversalDataAssembler:
                     if raw_value == 0 and field_name not in summary_data:
                         logger.warning(f"[WARNING]  Card {field_name}: field '{field_name}' missing from summary, using default value 0")
 
-                    logger.info(f"✅ Card {card_config.get('id', field_name)}: field={field_name}, raw_value={raw_value}")
                     
                     # ✅ FORMATTING: Format value based on type
                     card_type = card_config.get('type', 'number')
@@ -975,15 +938,12 @@ class EnhancedUniversalDataAssembler:
                     }
                     
                     cards.append(card)
-                    logger.info(f"✅ Created card: {card['label']} = {card['value']}")
                     
                 except Exception as card_error:
                     logger.error(f"❌ Error processing summary card {card_config}: {str(card_error)}")
                     # Continue with other cards even if one fails
                     continue
             
-            logger.info(f"✅ Successfully assembled {len(cards)} summary cards for {config.entity_type}")
-            print(f"🔍 [SUMMARY_CARDS_DEBUG] Created {len(cards)} cards")
             return cards
             
         except Exception as e:
@@ -998,9 +958,6 @@ class EnhancedUniversalDataAssembler:
     def _make_template_safe_config(self, config: EntityConfiguration) -> Dict:
         """Convert EntityConfiguration dataclass to template-safe dictionary"""
         try:
-            # ✅ DEBUG: Log config conversion
-            logger.info(f"🔍 [TEMPLATE_SAFE_DEBUG] Converting config for: {getattr(config, 'entity_type', 'unknown')}")
-            logger.info(f"🔍 [TEMPLATE_SAFE_DEBUG] Actions before conversion: {len(getattr(config, 'actions', []))}")
             return {
                 'entity_type': getattr(config, 'entity_type', 'unknown'),
                 'name': getattr(config, 'name', 'Unknown'),

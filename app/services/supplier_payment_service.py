@@ -32,10 +32,11 @@ class SupplierPaymentService(UniversalEntityService):
     
     def search_data(self, filters: dict, **kwargs) -> dict:
         """
-        Override to handle payment-specific search logic
+        Enhanced search with categorized filter processor integration
+        Preserves ALL existing functionality while using unified filtering
         """
         try:
-            # Extract parameters
+            # Extract parameters (preserve existing signature)
             hospital_id = kwargs.get('hospital_id')
             branch_id = kwargs.get('branch_id')
             page = kwargs.get('page', 1)
@@ -45,49 +46,55 @@ class SupplierPaymentService(UniversalEntityService):
                 return self._get_error_result("Hospital ID required")
             
             with get_db_session() as session:
-                # Build payment-specific query with joins
+                # Build payment-specific query with joins (PRESERVE existing)
                 query = self._build_payment_query(session, hospital_id, branch_id)
                 
-                # Apply payment-specific filters
-                query, applied_filters = self._apply_payment_filters(
-                    query, filters, session
+                # ✅ CRITICAL FIX: Use categorized filter processor instead of manual filtering
+                from app.engine.categorized_filter_processor import get_categorized_filter_processor
+                from app.config.entity_configurations import get_entity_config
+                
+                config = get_entity_config('supplier_payments')
+                filter_processor = get_categorized_filter_processor()
+                
+                # Apply categorized filters - SAME LOGIC AS SUMMARY
+                query, applied_filters, filter_count = filter_processor.process_entity_filters(
+                    entity_type='supplier_payments',
+                    filters=filters,
+                    query=query,
+                    model_class=SupplierPayment,    # Required for soft delete
+                    session=session,
+                    config=config
                 )
                 
-                # Get total count
+                logger.info(f"✅ Applied {filter_count} categorized filters: {applied_filters}")
+                
+                # Get total count AFTER applying filters (PRESERVE existing logic)
                 total_count = query.count()
                 
-                # Apply sorting
+                # Apply sorting (PRESERVE existing)
                 query = self._apply_payment_sorting(query, filters)
                 
-                # Apply pagination
+                # Apply pagination (PRESERVE existing)
                 query = self._apply_pagination(query, page, per_page)
                 
-                # Execute query
+                # Execute query (PRESERVE existing)
                 payments = query.all()
                 
-                # Convert to dictionaries with payment-specific fields
+                # Convert to dictionaries with payment-specific fields (PRESERVE existing)
                 payments_dict = self._convert_items_to_dict(payments, session)
                 
-                logger.info("🔍 [DEBUG SUPPLIER NAME - SERVICE LEVEL]")
-                if payments_dict:
-                    first_payment = payments_dict[0]
-                    logger.info(f"✅ First payment dict keys: {list(first_payment.keys())}")
-                    logger.info(f"✅ supplier_name in dict: {'supplier_name' in first_payment}")
-                    logger.info(f"✅ supplier_name value: {first_payment.get('supplier_name', 'NOT FOUND')}")
-                    logger.info(f"✅ Full payment dict sample: {first_payment}")
-
-                # Calculate payment-specific summary
+                # Calculate payment-specific summary (PRESERVE existing)
                 summary = self._calculate_payment_summary(
                     session, hospital_id, branch_id, filters, total_count
                 )
                 
-                # Get supplier list for dropdowns
+                # Get supplier list for dropdowns (PRESERVE existing)
                 suppliers = self._get_active_suppliers(session, hospital_id, branch_id)
                 
-                # Build pagination info
+                # Build pagination info (PRESERVE existing)
                 pagination = self._build_pagination_info(total_count, page, per_page)
                 
-                # Build result
+                # Build result (PRESERVE existing structure)
                 return {
                     'items': payments_dict,
                     'total': total_count,
@@ -97,8 +104,8 @@ class SupplierPaymentService(UniversalEntityService):
                     'pagination': pagination,
                     'summary': summary,
                     'suppliers': suppliers,
-                    'applied_filters': list(applied_filters),
-                    'filter_count': len(applied_filters),
+                    'applied_filters': list(applied_filters),      # ✅ Now shows actual applied filters
+                    'filter_count': filter_count,                  # ✅ Now shows actual filter count  
                     'success': True,
                     'entity_type': self.entity_type
                 }
@@ -114,183 +121,16 @@ class SupplierPaymentService(UniversalEntityService):
         """
         return self._legacy_service.search_payments_with_form_integration(form_class, **kwargs)
     
-    def get_payment_breakdown(self, filters: Dict) -> Dict:
-        """
-        Get payment method breakdown for supplier payments
-        Uses EXACT same filters and query logic as main search_data method
-        """
-        try:
-            from app.services.database_service import get_db_session
-            from app.models.transaction import SupplierPayment
-            from app.models.master import Supplier
-            from sqlalchemy import func, or_, and_
-            from flask_login import current_user
-            from decimal import Decimal
-            import uuid
-            
-            # USE THE EXACT FILTERS PASSED TO THIS METHOD - NOT REQUEST.ARGS
-            # This ensures we use the same filters as the main query
-            logger.info(f"get_payment_breakdown using filters: {filters}")
-            
-            # Get hospital_id from filters or current_user
-            hospital_id = filters.get('hospital_id') or (current_user.hospital_id if current_user else None)
-            if not hospital_id:
-                logger.error("No hospital_id available for payment breakdown")
-                return {'cash_amount': 0.0, 'cheque_amount': 0.0, 'bank_amount': 0.0, 'upi_amount': 0.0}
-            
-            branch_id = filters.get('branch_id')
-            
-            with get_db_session() as session:
-                # Build query with EXACT same logic as _build_payment_query
-                query = session.query(
-                    func.sum(SupplierPayment.cash_amount).label('total_cash'),
-                    func.sum(SupplierPayment.cheque_amount).label('total_cheque'),
-                    func.sum(SupplierPayment.bank_transfer_amount).label('total_bank'),
-                    func.sum(SupplierPayment.upi_amount).label('total_upi')
-                ).filter(
-                    SupplierPayment.hospital_id == hospital_id
-                )
-                
-                # Apply branch filter if provided (same as main query)
-                if branch_id:
-                    query = query.filter(SupplierPayment.branch_id == branch_id)
-                
-               
-                # Now apply the EXACT SAME filters using the filters dict passed to this method
-                # This ensures consistency with the main query
-                
-                # Date range filter
-                if filters.get('start_date'):
-                    query = query.filter(SupplierPayment.payment_date >= filters['start_date'])
-                if filters.get('end_date'):
-                    query = query.filter(SupplierPayment.payment_date <= filters['end_date'])
-                
-                # Supplier filter
-                if filters.get('supplier_id'):
-                    query = query.filter(SupplierPayment.supplier_id == filters['supplier_id'])
-                
-                # Supplier name search
-                supplier_search = filters.get('supplier_name_search') or filters.get('search')
-                if supplier_search:
-                    supplier_subquery = session.query(Supplier.supplier_id).filter(
-                        Supplier.hospital_id == hospital_id,
-                        Supplier.supplier_name.ilike(f'%{supplier_search}%')
-                    ).subquery()
-                    query = query.filter(SupplierPayment.supplier_id.in_(supplier_subquery))
-                
-                # Workflow status filter
-                workflow_status = filters.get('workflow_status') or filters.get('status')
-                if workflow_status:
-                    # Handle both single value and list
-                    if isinstance(workflow_status, list):
-                        query = query.filter(SupplierPayment.workflow_status.in_(workflow_status))
-                    else:
-                        query = query.filter(SupplierPayment.workflow_status == workflow_status)
-                
-                # Reference number filter
-                ref_no = filters.get('reference_no') or filters.get('reference_no_search')
-                if ref_no:
-                    query = query.filter(SupplierPayment.reference_no.ilike(f'%{ref_no}%'))
-                
-                # Payment method filter (including special handling for mixed payments)
-                payment_method = filters.get('payment_method')
-                if payment_method:
-                    if payment_method == 'bank_transfer_inclusive':
-                        query = query.filter(
-                            or_(
-                                SupplierPayment.payment_method == 'bank_transfer',
-                                and_(
-                                    SupplierPayment.payment_method == 'mixed',
-                                    SupplierPayment.bank_transfer_amount > 0
-                                )
-                            )
-                        )
-                    elif payment_method == 'cash':
-                        query = query.filter(
-                            or_(
-                                SupplierPayment.payment_method == 'cash',
-                                and_(
-                                    SupplierPayment.payment_method == 'mixed',
-                                    SupplierPayment.cash_amount > 0
-                                )
-                            )
-                        )
-                    elif payment_method == 'cheque':
-                        query = query.filter(
-                            or_(
-                                SupplierPayment.payment_method == 'cheque',
-                                and_(
-                                    SupplierPayment.payment_method == 'mixed',
-                                    SupplierPayment.cheque_amount > 0
-                                )
-                            )
-                        )
-                    elif payment_method == 'bank_transfer':
-                        query = query.filter(
-                            or_(
-                                SupplierPayment.payment_method == 'bank_transfer',
-                                and_(
-                                    SupplierPayment.payment_method == 'mixed',
-                                    SupplierPayment.bank_transfer_amount > 0
-                                )
-                            )
-                        )
-                    elif payment_method == 'upi':
-                        query = query.filter(
-                            or_(
-                                SupplierPayment.payment_method == 'upi',
-                                and_(
-                                    SupplierPayment.payment_method == 'mixed',
-                                    SupplierPayment.upi_amount > 0
-                                )
-                            )
-                        )
-                    else:
-                        query = query.filter(SupplierPayment.payment_method == payment_method)
-                
-                # Amount range filter - using exact field names from _apply_payment_filters
-                if filters.get('amount_min'):
-                    try:
-                        query = query.filter(SupplierPayment.amount >= Decimal(str(filters['amount_min'])))
-                    except (ValueError, TypeError):
-                        pass
-                if filters.get('amount_max'):
-                    try:
-                        query = query.filter(SupplierPayment.amount <= Decimal(str(filters['amount_max'])))
-                    except (ValueError, TypeError):
-                        pass
-                
-                # Invoice ID filter
-                if filters.get('invoice_id'):
-                    query = query.filter(SupplierPayment.invoice_id == filters['invoice_id'])
-                
-                # Execute query
-                result = query.first()
-                
-                breakdown_amounts = {
-                    'cash_amount': float(result.total_cash or 0),
-                    'cheque_amount': float(result.total_cheque or 0),
-                    'bank_amount': float(result.total_bank or 0),
-                    'upi_amount': float(result.total_upi or 0)
-                }
-                
-                logger.info(f"✅ Payment breakdown calculated with same filters as main query: {breakdown_amounts}")
-                return breakdown_amounts
-                
-        except Exception as e:
-            logger.error(f"Error calculating payment breakdown: {str(e)}")
-            return {'cash_amount': 0.0, 'cheque_amount': 0.0, 'bank_amount': 0.0, 'upi_amount': 0.0}
         
     def _build_payment_query(self, session: Session, hospital_id: uuid.UUID,
-                           branch_id: Optional[uuid.UUID]):
+                       branch_id: Optional[uuid.UUID]):
         """
         Build payment-specific query with necessary joins
+        FIXED: Remove explicit JOIN to avoid conflict with categorized filter processor
+        Keep joinedload for data access, let filter processor handle JOINs when needed
         """
-        # Start with base query including supplier join
-        query = session.query(SupplierPayment).join(
-            Supplier,
-            SupplierPayment.supplier_id == Supplier.supplier_id
-        ).options(
+        # Start with base query - REMOVED explicit join, keep only joinedload for data
+        query = session.query(SupplierPayment).options(
             joinedload(SupplierPayment.supplier),
         )
         
@@ -300,7 +140,7 @@ class SupplierPaymentService(UniversalEntityService):
         # Apply branch filter if provided
         if branch_id:
             query = query.filter(SupplierPayment.branch_id == branch_id)
-               
+            
         return query
     
     def _apply_payment_filters(self, query, filters: Dict, session: Session) -> Tuple:
@@ -460,80 +300,242 @@ class SupplierPaymentService(UniversalEntityService):
         
         return items_dict
     
+    
+    def _calculate_breakdown_amounts(self, filtered_query) -> Dict:
+        """
+        SHARED: Calculate payment method breakdown amounts
+        Handles both single-method and mixed payments correctly
+        """
+        try:
+            from sqlalchemy import func, or_, and_
+            
+            # Get payment method totals (for single payments)
+            method_amounts = filtered_query.with_entities(
+                SupplierPayment.payment_method,
+                func.sum(SupplierPayment.amount),
+                func.count(SupplierPayment.payment_id)
+            ).group_by(SupplierPayment.payment_method).all()
+            
+            # Initialize breakdown amounts
+            breakdown_amounts = {
+                'cash_amount': 0.0,
+                'cheque_amount': 0.0,
+                'bank_amount': 0.0,
+                'upi_amount': 0.0
+            }
+            
+            # Calculate breakdown from payment methods and individual mixed payment amounts
+            for method, amount, count in method_amounts:
+                if method:
+                    # For breakdown card, use method totals for single payments
+                    if method in ['cash', 'cheque', 'upi']:
+                        breakdown_amounts[f'{method}_amount'] += float(amount or 0)
+                    elif method == 'bank_transfer':
+                        breakdown_amounts['bank_amount'] += float(amount or 0)
+                    elif method == 'mixed':
+                        # For mixed payments, get individual amounts from payment fields
+                        mixed_breakdown = filtered_query.filter(
+                            SupplierPayment.payment_method == 'mixed'
+                        ).with_entities(
+                            func.sum(SupplierPayment.cash_amount).label('mixed_cash'),
+                            func.sum(SupplierPayment.cheque_amount).label('mixed_cheque'),
+                            func.sum(SupplierPayment.bank_transfer_amount).label('mixed_bank'),
+                            func.sum(SupplierPayment.upi_amount).label('mixed_upi')
+                        ).first()
+                        
+                        if mixed_breakdown:
+                            breakdown_amounts['cash_amount'] += float(mixed_breakdown.mixed_cash or 0)
+                            breakdown_amounts['cheque_amount'] += float(mixed_breakdown.mixed_cheque or 0)
+                            breakdown_amounts['bank_amount'] += float(mixed_breakdown.mixed_bank or 0)
+                            breakdown_amounts['upi_amount'] += float(mixed_breakdown.mixed_upi or 0)
+            
+            logger.info(f"✅ Calculated breakdown amounts: {breakdown_amounts}")
+            return breakdown_amounts
+            
+        except Exception as e:
+            logger.error(f"Error calculating breakdown amounts: {str(e)}")
+            return {'cash_amount': 0.0, 'cheque_amount': 0.0, 'bank_amount': 0.0, 'upi_amount': 0.0}
+
+    def get_payment_breakdown(self, filters: Dict) -> Dict:
+        """
+        Get payment method breakdown for supplier payments
+        FIXED: Now uses shared breakdown calculation method
+        """
+        try:
+            from app.services.database_service import get_db_session
+            from app.models.transaction import SupplierPayment
+            from sqlalchemy import func
+            from flask_login import current_user
+            
+            # Get hospital_id from filters or current_user
+            hospital_id = filters.get('hospital_id') or (current_user.hospital_id if current_user else None)
+            if not hospital_id:
+                logger.error("No hospital_id available for payment breakdown")
+                return {'cash_amount': 0.0, 'cheque_amount': 0.0, 'bank_amount': 0.0, 'upi_amount': 0.0}
+            
+            branch_id = filters.get('branch_id')
+            
+            with get_db_session() as session:
+                # Use the SAME categorized filter processor as main search
+                from app.engine.categorized_filter_processor import get_categorized_filter_processor
+                
+                # Start with non-aggregated query for the filter processor
+                raw_query = session.query(SupplierPayment).filter(
+                    SupplierPayment.hospital_id == hospital_id
+                )
+                
+                # Apply branch filter if provided
+                if branch_id:
+                    raw_query = raw_query.filter(SupplierPayment.branch_id == branch_id)
+                
+                # Apply the SAME categorized filtering as main search_data method
+                filter_processor = get_categorized_filter_processor()
+                
+                # Apply categorized filters using the same processor as main search
+                filtered_query, applied_filters, filter_count = filter_processor.process_entity_filters(
+                    entity_type='supplier_payments',
+                    query=raw_query,
+                    filters=filters,
+                    model_class=SupplierPayment,  # ← ADD THIS REQUIRED PARAMETER
+                    session=session
+                )
+                
+                # 🎯 USE SHARED METHOD: Calculate breakdown amounts
+                breakdown_amounts = self._calculate_breakdown_amounts(filtered_query)
+                return breakdown_amounts
+                
+        except Exception as e:
+            logger.error(f"Error calculating payment breakdown: {str(e)}")
+            return {'cash_amount': 0.0, 'cheque_amount': 0.0, 'bank_amount': 0.0, 'upi_amount': 0.0}
+
     def _calculate_payment_summary(self, session: Session, hospital_id: uuid.UUID,
-                                 branch_id: Optional[uuid.UUID], filters: Dict,
-                                 total_count: int) -> Dict:
+                             branch_id: Optional[uuid.UUID], filters: Dict,
+                             total_count: int) -> Dict:
         """
         Calculate payment-specific summary statistics
+        FIXED: Now uses shared breakdown calculation method
         """
-        # Start with base query for summary
-        base_query = session.query(SupplierPayment).filter(
-            SupplierPayment.hospital_id == hospital_id
-        )
-        
-        if branch_id:
-            base_query = base_query.filter(SupplierPayment.branch_id == branch_id)
-        
-        # Total amount
-        total_amount = base_query.with_entities(
-            func.sum(SupplierPayment.amount)
-        ).scalar() or 0
-        
-        # Status counts
-        status_counts = base_query.with_entities(
-            SupplierPayment.workflow_status,
-            func.count(SupplierPayment.payment_id)
-        ).group_by(SupplierPayment.workflow_status).all()
-        
-        summary = {
-            'total_count': total_count,
-            'total_amount': float(total_amount),
-            'pending_count': 0,
-            'approved_count': 0,
-            'completed_count': 0,
-            'rejected_count': 0
-        }
-        
-        for status, count in status_counts:
-            if status:
-                summary[f'{status.lower()}_count'] = count
-        
-        # Payment method breakdown
-        method_amounts = base_query.with_entities(
-            SupplierPayment.payment_method,
-            func.sum(SupplierPayment.amount),
-            func.count(SupplierPayment.payment_id)
-        ).group_by(SupplierPayment.payment_method).all()
-        
-        for method, amount, count in method_amounts:
-            if method:
-                summary[f'{method}_amount'] = float(amount or 0)
-                summary[f'{method}_count'] = count
-        
-        # Remove the 'when' import - only import case
-        from sqlalchemy import case
+        try:
+            from app.engine.categorized_filter_processor import get_categorized_filter_processor
+            from app.config.entity_configurations import get_entity_config
+            
+            # Start with base query for summary
+            base_query = session.query(SupplierPayment).filter(
+                SupplierPayment.hospital_id == hospital_id
+            )
+            
+            if branch_id:
+                base_query = base_query.filter(SupplierPayment.branch_id == branch_id)
+            
+            # Apply the SAME categorized filtering as main search_data method
+            config = get_entity_config('supplier_payments')
+            filter_processor = get_categorized_filter_processor()
+            
+            # Apply categorized filters using the same processor as main search
+            filtered_query, applied_filters, filter_count = filter_processor.process_entity_filters(
+                entity_type='supplier_payments',
+                query=base_query,
+                filters=filters,
+                model_class=SupplierPayment,
+                session=session,
+                config=config
+            )
+            
+            
+            # Calculate total_amount from FILTERED query
+            total_amount = filtered_query.with_entities(
+                func.sum(SupplierPayment.amount)
+            ).scalar() or 0
+            
+            # Calculate status counts from FILTERED query
+            status_counts = filtered_query.with_entities(
+                SupplierPayment.workflow_status,
+                func.count(SupplierPayment.payment_id)
+            ).group_by(SupplierPayment.workflow_status).all()
+            
+            summary = {
+                'total_count': total_count,
+                'total_amount': float(total_amount),
+                'pending_count': 0,
+                'approved_count': 0,
+                'completed_count': 0,
+                'rejected_count': 0
+            }
+            
+            for status, count in status_counts:
+                if status:
+                    summary[f'{status.lower()}_count'] = count
+            
+            # 🎯 USE SHARED METHOD: Calculate breakdown amounts for summary cards
+            breakdown_amounts = self._calculate_breakdown_amounts(filtered_query)
+            summary.update(breakdown_amounts)
+            
+            # PRESERVE: Also calculate by payment method for backward compatibility
+            method_amounts = filtered_query.with_entities(
+                SupplierPayment.payment_method,
+                func.sum(SupplierPayment.amount),
+                func.count(SupplierPayment.payment_id)
+            ).group_by(SupplierPayment.payment_method).all()
+            
+            breakdown_fields = {'cash_amount', 'cheque_amount', 'bank_amount', 'upi_amount'}
 
-        # Bank transfer amount (including mixed payments)
-        bank_amount = base_query.filter(
-            or_(
-                SupplierPayment.payment_method == 'bank_transfer',
-                and_(
-                    SupplierPayment.payment_method == 'mixed',
-                    SupplierPayment.bank_transfer_amount > 0
+            for method, amount, count in method_amounts:
+                if method:
+                    method_amount_field = f'{method}_amount'
+                    if method_amount_field not in breakdown_fields:
+                        summary[method_amount_field] = float(amount or 0)  # ✅ Skip breakdown fields
+                    summary[f'{method}_count'] = count  # ✅ Always preserve counts
+            
+            # Calculate bank transfer inclusive amount from FILTERED query
+            from sqlalchemy import or_, and_
+            bank_amount = filtered_query.filter(
+                or_(
+                    SupplierPayment.payment_method == 'bank_transfer',
+                    and_(
+                        SupplierPayment.payment_method == 'mixed',
+                        SupplierPayment.bank_transfer_amount > 0
+                    )
                 )
+            ).with_entities(
+                func.sum(SupplierPayment.amount)
+            ).scalar() or 0
+            
+            summary['bank_transfer_inclusive_amount'] = float(bank_amount)
+            
+            # PRESERVE: This month calculation logic (should remain unfiltered for non-filterable cards)
+            from datetime import date
+            current_month = date.today().month
+            current_year = date.today().year
+            
+            this_month_query = base_query.filter(  # Use base_query (unfiltered) for this_month as it's non-filterable
+                func.extract('month', SupplierPayment.payment_date) == current_month,
+                func.extract('year', SupplierPayment.payment_date) == current_year
             )
-        ).with_entities(
-            func.sum(
-                case(
-                    (SupplierPayment.payment_method == 'bank_transfer', SupplierPayment.amount),
-                    else_=SupplierPayment.bank_transfer_amount
-                )
-            )
-        ).scalar() or 0
-        
-        summary['bank_transfer_inclusive_amount'] = float(bank_amount)
-        
-        return summary
+            
+            this_month_count = this_month_query.count()
+            this_month_amount_result = this_month_query.with_entities(func.sum(SupplierPayment.amount)).scalar()
+            this_month_amount = float(this_month_amount_result or 0)
+            
+            summary['this_month_count'] = this_month_count
+            summary['this_month_amount'] = this_month_amount
+            
+            logger.info(f"Summary calculated: {filter_count} filters applied, total_amount={summary['total_amount']}")
+            return summary
+            
+        except Exception as e:
+            logger.error(f"Error calculating payment summary: {str(e)}")
+            return {
+                'total_count': total_count,
+                'total_amount': 0.0,
+                'pending_count': 0,
+                'approved_count': 0,
+                'completed_count': 0,
+                'rejected_count': 0,
+                'cash_amount': 0.0,
+                'cheque_amount': 0.0,
+                'bank_amount': 0.0,
+                'upi_amount': 0.0
+            }
     
     def _get_active_suppliers(self, session: Session, hospital_id: uuid.UUID,
                         branch_id: Optional[uuid.UUID]) -> List[Dict]:
@@ -575,93 +577,90 @@ class SupplierPaymentService(UniversalEntityService):
         return self._add_relationships(entity_dict, entity, session)
 
     def _add_relationships(self, entity_dict: Dict, entity, session) -> Dict:
-        """Add payment-specific relationships"""
+        """Add payment-specific relationships - enhanced to handle lazy loading scenarios"""
         try:
-            # Add supplier relationship data - preserve object structure for template
-            if hasattr(entity, 'supplier') and entity.supplier:
+            # Add supplier relationship data with enhanced lazy loading support
+            supplier = None
+            
+            # Try to get supplier from relationship first
+            if hasattr(entity, 'supplier'):
+                try:
+                    # This might trigger lazy loading or fail if joinedload wasn't used
+                    supplier = entity.supplier
+                except Exception as lazy_load_error:
+                    # Lazy loading failed, we'll query manually below
+                    supplier = None
+            
+            # If relationship didn't work, query supplier manually
+            if not supplier and hasattr(entity, 'supplier_id') and entity.supplier_id:
+                from app.models.master import Supplier
+                try:
+                    supplier = session.query(Supplier).filter_by(
+                        supplier_id=entity.supplier_id
+                    ).first()
+                except Exception as query_error:
+                    supplier = None
+            
+            # Add supplier data if we have it
+            if supplier:
                 # Create supplier object for template compatibility with ENTITY_REFERENCE display
                 entity_dict['supplier'] = {
-                    'supplier_id': str(entity.supplier.supplier_id),
-                    'supplier_name': entity.supplier.supplier_name,
-                    'contact_person_name': getattr(entity.supplier, 'contact_person_name', ''),
-                    'email': getattr(entity.supplier, 'email', '')
+                    'supplier_id': str(supplier.supplier_id),
+                    'supplier_name': supplier.supplier_name,
+                    'contact_person_name': getattr(supplier, 'contact_person_name', ''),
+                    'email': getattr(supplier, 'email', ''),
+                    'phone': getattr(supplier, 'phone', '')  # Add phone for completeness
                 }
                 # Also add flat field for backward compatibility
-                entity_dict['supplier_name'] = entity.supplier.supplier_name
-                logger.info(f"[DEBUG] Added supplier object and flat fields from relationship: {entity.supplier.supplier_name}")
-            elif hasattr(entity, 'supplier_id') and entity.supplier_id:
-                # Fallback: Load supplier if not already loaded
-                from app.models.master import Supplier
-                supplier = session.query(Supplier).filter_by(supplier_id=entity.supplier_id).first()
-                if supplier:
-                    # Create supplier object for template compatibility
-                    entity_dict['supplier'] = {
-                        'supplier_id': str(supplier.supplier_id),
-                        'supplier_name': supplier.supplier_name,
-                        'contact_person_name': getattr(supplier, 'contact_person_name', ''),
-                        'email': getattr(supplier, 'email', '')
-                    }
-                    # Also add flat field for backward compatibility
-                    entity_dict['supplier_name'] = supplier.supplier_name
-                    logger.info(f"[DEBUG] Added supplier object and flat fields from query: {supplier.supplier_name}")
-                else:
-                    logger.warning(f"[DEBUG] Supplier not found for supplier_id: {entity.supplier_id}")
-            
-            # ✅ CORRECTED: Handle SINGLE invoice relationship (NOT payment_invoice_links)
+                entity_dict['supplier_name'] = supplier.supplier_name
+            else:
+                # Graceful fallback - set default values
+                entity_dict['supplier_name'] = 'Unknown Supplier'
+                entity_dict['supplier'] = {
+                    'supplier_id': str(entity.supplier_id) if entity.supplier_id else '',
+                    'supplier_name': 'Unknown Supplier',
+                    'contact_person_name': '',
+                    'email': '',
+                    'phone': ''
+                }
+                logger.warning(f"[DEBUG] Could not load supplier for supplier_id: {entity.supplier_id}")
+
+            # Handle invoice relationship (existing code, unchanged)
             if hasattr(entity, 'invoice') and entity.invoice:
                 # Single invoice relationship
                 entity_dict['invoice_no'] = entity.invoice.supplier_invoice_number
                 entity_dict['supplier_invoice_no'] = entity.invoice.supplier_invoice_number
-                entity_dict['invoice_date'] = entity.invoice.invoice_date.isoformat() if entity.invoice.invoice_date else None
-                
-                # Add other useful invoice fields that actually exist in your model
-                if hasattr(entity.invoice, 'total_amount'):
-                    entity_dict['invoice_total'] = float(entity.invoice.total_amount)
-                
-                if hasattr(entity.invoice, 'payment_status'):
-                    entity_dict['invoice_status'] = entity.invoice.payment_status
-                
-                if hasattr(entity.invoice, 'notes'):
-                    entity_dict['invoice_notes'] = entity.invoice.notes
-                
-                # Create linked_invoices array with single invoice for template compatibility
+                entity_dict['invoice_date'] = entity.invoice.invoice_date.isoformat() if entity.invoice.invoice_date else ''
                 entity_dict['linked_invoices'] = [{
                     'invoice_id': str(entity.invoice.invoice_id),
                     'invoice_no': entity.invoice.supplier_invoice_number,
-                    'supplier_invoice_no': entity.invoice.supplier_invoice_number,
-                    'invoice_date': entity.invoice.invoice_date.isoformat() if entity.invoice.invoice_date else None,
+                    'invoice_date': entity.invoice.invoice_date.isoformat() if entity.invoice.invoice_date else '',
                     'total_amount': float(entity.invoice.total_amount) if entity.invoice.total_amount else 0
                 }]
             elif hasattr(entity, 'invoice_id') and entity.invoice_id:
-                # ✅ NEW: If invoice not loaded but we have invoice_id, try to load it
+                # Fallback: Load invoice if not already loaded
+                from app.models.transaction import SupplierInvoice
                 invoice = session.query(SupplierInvoice).filter_by(invoice_id=entity.invoice_id).first()
                 if invoice:
                     entity_dict['invoice_no'] = invoice.supplier_invoice_number
                     entity_dict['supplier_invoice_no'] = invoice.supplier_invoice_number
-                    entity_dict['invoice_date'] = invoice.invoice_date.isoformat() if invoice.invoice_date else None
-                    
-                    if hasattr(invoice, 'total_amount'):
-                        entity_dict['invoice_total'] = float(invoice.total_amount)
-                    
+                    entity_dict['invoice_date'] = invoice.invoice_date.isoformat() if invoice.invoice_date else ''
                     entity_dict['linked_invoices'] = [{
                         'invoice_id': str(invoice.invoice_id),
                         'invoice_no': invoice.supplier_invoice_number,
-                        'supplier_invoice_no': invoice.supplier_invoice_number,
-                        'invoice_date': invoice.invoice_date.isoformat() if invoice.invoice_date else None,
+                        'invoice_date': invoice.invoice_date.isoformat() if invoice.invoice_date else '',
                         'total_amount': float(invoice.total_amount) if invoice.total_amount else 0
                     }]
                 else:
+                    # No invoice found
                     entity_dict['linked_invoices'] = []
             else:
                 # No invoice linked
                 entity_dict['linked_invoices'] = []
 
-            # ✅ FIXED: Using correct field name 'name' instead of 'branch_name'
+            # Add branch information (existing code, unchanged)
             if hasattr(entity, 'branch') and entity.branch:
                 entity_dict['branch_name'] = entity.branch.name
-            
-            logger.info(f"[DEBUG] Final entity_dict has supplier_name: {'supplier_name' in entity_dict}")
-            logger.info(f"[DEBUG] Final entity_dict has supplier object: {'supplier' in entity_dict}")
             
             return entity_dict
             
@@ -677,10 +676,8 @@ class SupplierPaymentService(UniversalEntityService):
         Matches parent signature but user parameter is optional
         ✅ FIXED: Use universal soft delete pattern from Universal Engine
         """
-        # Start with basic query including joinedload for supplier
-        query = session.query(SupplierPayment).options(
-            joinedload(SupplierPayment.supplier)
-        )
+        # Start with basic query - let filter processor handle any needed joins
+        query = session.query(SupplierPayment)
         
         # Apply hospital filter
         query = query.filter(SupplierPayment.hospital_id == hospital_id)

@@ -34,15 +34,9 @@ class SupplierMasterService(UniversalEntityService):
        include_calculations: bool = True) -> Optional[Dict]:
         """
         Override to add transaction history data using existing service methods
-        """
-        # ADD THIS LOG
-        logger.info(f"✅ SupplierMasterService.get_detail_data CALLED for {item_id}")
-        
+        """        
         # Get base data from parent
         data = super().get_detail_data(item_id, hospital_id, branch_id, include_calculations)
-        
-        # ADD THIS LOG
-        logger.info(f"📦 Parent returned data: {bool(data)}, keys: {list(data.keys()) if data else 'None'}")
         
         if not data:
             return data
@@ -143,7 +137,6 @@ class SupplierMasterService(UniversalEntityService):
         
         # Only add calculations if we have the required context
         hospital_id = kwargs.get('hospital_id')
-        logger.info(f"🔍 hospital_id from kwargs: {hospital_id}")
         
         if not hospital_id:
             logger.warning("❌ No hospital_id - skipping balance calculations")
@@ -165,9 +158,6 @@ class SupplierMasterService(UniversalEntityService):
                 # Merge balance data into result
                 result.update(balance_summary)
                 
-                # ADD THIS LOG TO CONFIRM MERGE
-                logger.info(f"📊 Result after merge - current_balance: {result.get('current_balance')}")
-                
                 # Also try to get statistics if not already present
                 if 'total_purchases' not in result or 'outstanding_balance' not in result:
                     from app.services.supplier_service import get_supplier_statistics
@@ -181,7 +171,6 @@ class SupplierMasterService(UniversalEntityService):
                     if stats:
                         result['total_purchases'] = stats.get('total_business_volume', 0.0)
                         result['outstanding_balance'] = stats.get('outstanding_balance', 0.0)
-                        logger.info(f"📊 Added statistics: total_purchases={result['total_purchases']}")
                 
         except Exception as e:
             logger.error(f"❌ Error in balance calculation: {str(e)}")
@@ -207,10 +196,6 @@ class SupplierMasterService(UniversalEntityService):
                 supplier_id = item['supplier_id']  
             else:
                 return {'payments': [], 'has_history': False, 'error': 'No supplier ID provided'}
-        
-            # FIXED: Add debugging and parameter validation
-            logger.info(f"Fetching payment history for supplier_id: {supplier_id}")
-            logger.info(f"Kwargs received: {kwargs}")
             
             with get_db_session() as session:
                 # FIXED: Extend date range to 12 months for better data availability
@@ -242,8 +227,6 @@ class SupplierMasterService(UniversalEntityService):
                 )
                 
                 payments = query.order_by(desc(SupplierPayment.payment_date)).limit(50).all()
-                
-                logger.info(f"Found {len(payments)} payments for supplier {supplier_id}")
                 
                 payment_history = []
                 total_paid = Decimal('0')
@@ -290,7 +273,6 @@ class SupplierMasterService(UniversalEntityService):
                     'currency_symbol': '₹'
                 }
                 
-                logger.info(f"Returning payment history with {len(payment_history)} payments, total: ₹{total_paid}")
                 return result
                 
         except Exception as e:

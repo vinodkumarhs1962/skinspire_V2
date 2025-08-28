@@ -50,13 +50,8 @@ class UniversalServiceRegistry:
         """Get appropriate service for entity type"""
         try:
             service_path = self.service_registry.get(entity_type)
-            
-            # ADD THIS LOG
-            # if entity_type == 'suppliers':
-            #     logger.info(f"🔍 SUPPLIERS SERVICE: path={service_path}")
 
             if not service_path:
-                logger.info(f"No specific service for {entity_type}, using generic")
                 return GenericUniversalService(entity_type)
             
             # Try to import entity-specific service
@@ -64,10 +59,6 @@ class UniversalServiceRegistry:
                 module_path, class_name = service_path.rsplit('.', 1)
                 module = importlib.import_module(module_path)
                 service_class = getattr(module, class_name)
-
-                # ADD THIS LOG
-                # if entity_type == 'suppliers':
-                #     logger.info(f"✅ Loaded {service_class.__name__} for suppliers")
 
                 return service_class()
             except (ImportError, AttributeError) as e:
@@ -94,16 +85,9 @@ class UniversalServiceRegistry:
         ✅ FIXED: Added breakdown enhancement to maintain feature parity
         """
         try:
-            logger.info(f"🔄 [CLEAN_ROUTING] Routing {entity_type} to existing complete system")
             
-            # 🔍 CRITICAL DEBUG: Add these 4 lines
             service = self.get_service(entity_type)
-            logger.info(f"🔍 [CRITICAL] Got service: {type(service).__name__}")
-            if hasattr(service, 'search_data'):
-                logger.info(f"🔍 [CRITICAL] Service HAS search_data method - should call it")
-                return service.search_data(filters, **kwargs)
-            else:
-                logger.info(f"🔍 [CRITICAL] Service has NO search_data - using categorized processor")
+            logger.debug(f"Routing {entity_type} to service: {type(service).__name__}")
 
             # ✅ NEW: Extract complete filters from request if available
             import flask
@@ -134,7 +118,6 @@ class UniversalServiceRegistry:
                                     if singular_key not in complete_filters:
                                         complete_filters[singular_key] = values[0]
                 
-                logger.info(f"✅ Enhanced filter extraction: {len(filters)} → {len(complete_filters)} parameters")
                 filters = complete_filters
 
 
@@ -155,8 +138,6 @@ class UniversalServiceRegistry:
                 current_filters=filters
             )
             
-            logger.info(f"✅ [COMPLETE_SYSTEM] Filter data obtained for {entity_type}")
-            
             # Route query execution to categorized processor (where DB logic belongs)
             result = self.categorized_processor.execute_complete_search(
                 entity_type=entity_type,
@@ -171,9 +152,7 @@ class UniversalServiceRegistry:
             # ✅ CRITICAL FIX: Enhance result with breakdowns if successful
             # This maintains 100% backward compatibility while fixing the breakdown issue
             if result and result.get('success'):
-                logger.info(f"🔍 [BREAKDOWN_FIX] Enhancing {entity_type} result with breakdowns")
                 result = self._enhance_result_with_breakdowns(entity_type, result, filters)
-                logger.info(f"✅ [BREAKDOWN_FIX] Enhanced {entity_type} result with breakdowns")
             
             return result
             
@@ -295,7 +274,6 @@ class UniversalServiceRegistry:
                 )
                 # ✅ PRESERVE existing summary fields while adding breakdown data
                 summary.update(breakdown_data)
-                logger.info(f"✅ Added {breakdown_config['id']} breakdown to {entity_type}: {breakdown_data}")
 
             result['summary'] = summary
             return result
@@ -355,11 +333,9 @@ class UniversalServiceRegistry:
                         if calculated_breakdown and any(amount > 0 for amount in calculated_breakdown.values()):
                             return calculated_breakdown
                     
-                    logger.info(f"Using existing breakdown data from main service for {entity_type}")
                     return breakdown_data
             
             # ✅ Calculate from database if no existing data
-            logger.info(f"No existing breakdown data found for {entity_type}, calculating from database")
             return self._calculate_breakdown_from_database(entity_type, filters)
             
         except Exception as e:
@@ -427,7 +403,6 @@ class UniversalServiceRegistry:
             if hasattr(service, 'get_payment_breakdown'):
                 # Simply delegate to the service - it will use the same filters
                 breakdown = service.get_payment_breakdown(filters)
-                logger.info(f"✅ Got payment breakdown from {entity_type} service: {breakdown}")
                 return breakdown
             
             # No breakdown support for this entity - return empty dict
@@ -557,9 +532,14 @@ class GenericUniversalService:
                 # Apply categorized filters (including date filters)
                 from app.engine.categorized_filter_processor import get_categorized_filter_processor
                 filter_processor = get_categorized_filter_processor()
-                
+
                 query, applied_filters, filter_count = filter_processor.process_entity_filters(
-                    self.entity_type, filters, query, session, config
+                    entity_type=self.entity_type,
+                    filters=filters,
+                    query=query,
+                    model_class=model_class,    # ✅ FIXED: Add missing model_class parameter
+                    session=session,
+                    config=config
                 )
                 
                 logger.info(f"✅ Applied {filter_count} filters: {applied_filters}")

@@ -20,6 +20,9 @@ from flask_wtf import FlaskForm
 from flask import url_for
 import re
 
+from app.utils.unicode_logging import get_unicode_safe_logger
+logger = get_unicode_safe_logger(__name__)
+
 # =============================================================================
 # CORE ENUMS - Complete type definitions from both files
 # =============================================================================
@@ -385,23 +388,6 @@ class ActionDefinition:
         Returns:
             Generated URL string
         """
-        # ✅ DEBUG: Add unicode-safe logging
-        from app.utils.unicode_logging import get_unicode_safe_logger
-        logger = get_unicode_safe_logger(__name__)
-        
-        logger.info(f"🔍 [ACTION_URL_DEBUG] Action: {self.id}")
-        logger.info(f"🔍 [ACTION_URL_DEBUG] URL Pattern: {self.url_pattern}")
-        logger.info(f"🔍 [ACTION_URL_DEBUG] Route Name: {self.route_name}")
-        logger.info(f"🔍 [ACTION_URL_DEBUG] Item type: {type(item)}")
-        logger.info(f"🔍 [ACTION_URL_DEBUG] Item keys: {list(item.keys()) if item else 'None'}")
-        logger.info(f"🔍 [ACTION_URL_DEBUG] Entity config type: {type(entity_config)}")
-        logger.info(f"🔍 [ACTION_URL_DEBUG] Entity config entity_type: {entity_config.entity_type if entity_config and hasattr(entity_config, 'entity_type') else 'None'}")
-        logger.info(f"🔍 [ACTION_URL_DEBUG] Entity primary key field: {entity_config.primary_key if entity_config and hasattr(entity_config, 'primary_key') else 'None'}")
-        
-        if entity_config and hasattr(entity_config, 'primary_key') and item:
-            pk_value = item.get(entity_config.primary_key)
-            logger.info(f"🔍 [ACTION_URL_DEBUG] Primary key value: {pk_value}")
-            logger.info(f"🔍 [ACTION_URL_DEBUG] Primary key type: {type(pk_value)}")
         
         try:
             if self.route_name:

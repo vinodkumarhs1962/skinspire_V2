@@ -5713,8 +5713,6 @@ def _search_supplier_payments(
                     payment_dict['invoice_amount'] = float(invoice.total_amount)
             
             payment_dicts.append(payment_dict)
-            
-        logger.info(f"[SUCCESS] STEP 5 - Result processing: {time.time() - step_start:.3f}s")
         
         # Summary calculation
         step_start = time.time()
