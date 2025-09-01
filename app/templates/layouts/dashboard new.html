@@ -1,6 +1,6 @@
 {% extends "layouts/base.html" %}
 
-{% block title %}Dashboard - SkinSpire Clinic{% endblock %}
+{% block title %}Dashboard - Skinspire Clinic{% endblock %}
 {% block page_title %}Dashboard{% endblock %}
 
 {% block content %}
@@ -52,7 +52,7 @@
                         {% if current_user.hospital %}
                             {{ current_user.hospital.name }}
                         {% else %}
-                            SkinSpire Clinic
+                            Skinspire Clinic
                         {% endif %}
                         | {{ current_user.entity_type|capitalize if hasattr(current_user, 'entity_type') else 'User' }}
                     </p>

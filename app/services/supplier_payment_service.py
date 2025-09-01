@@ -17,6 +17,7 @@ from app.models.transaction import SupplierPayment, SupplierInvoice
 from app.models.master import Supplier
 from app.engine.universal_entity_service import UniversalEntityService
 from app.services.database_service import get_db_session, get_entity_dict
+from app.engine.universal_service_cache import cache_service_method
 from app.utils.unicode_logging import get_unicode_safe_logger
 
 logger = get_unicode_safe_logger(__name__)
@@ -30,6 +31,7 @@ class SupplierPaymentService(UniversalEntityService):
     def __init__(self):
         super().__init__('supplier_payments', SupplierPayment)
     
+    @cache_service_method('supplier_payments', 'search_data')
     def search_data(self, filters: dict, **kwargs) -> dict:
         """
         Enhanced search with categorized filter processor integration

@@ -36,7 +36,7 @@ class SecurityConfig:
         'max_login_attempts': 5,
         'lockout_duration': timedelta(minutes=30),
         'require_mfa': False,
-        'mfa_issuer': 'SkinSpire Clinic',
+        'mfa_issuer': 'Skinspire Clinic',
         
         # Rate Limiting
         'login_rate_limit': 5,  # requests per minute

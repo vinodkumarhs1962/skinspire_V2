@@ -100,6 +100,50 @@ migrate = Migrate()
 login_manager = LoginManager()
 csrf = CSRFProtect()
 
+def initialize_cache_system(app):
+    """Initialize both service and config cache layers"""
+    
+    # Service Cache Settings
+    app.config.setdefault('SERVICE_CACHE_ENABLED', True)
+    app.config.setdefault('SERVICE_CACHE_MAX_MEMORY_MB', 500)
+    app.config.setdefault('SERVICE_CACHE_DEFAULT_TTL', 1800)  # 30 minutes
+    app.config.setdefault('SERVICE_CACHE_MAX_ENTRIES', 10000)
+    
+    # Config Cache Settings
+    app.config.setdefault('CONFIG_CACHE_ENABLED', True)
+    app.config.setdefault('CONFIG_CACHE_PRELOAD', True)
+    app.config.setdefault('CONFIG_CACHE_TTL', 3600)  # 1 hour
+    
+    # Initialize Service Cache
+    if app.config.get('SERVICE_CACHE_ENABLED'):
+        try:
+            from app.engine.universal_service_cache import init_service_cache
+            init_service_cache(app)
+            app.logger.info("✅ Service cache initialized")
+        except Exception as e:
+            app.logger.error(f"Service cache init failed: {e}")
+            app.config['SERVICE_CACHE_ENABLED'] = False
+    
+    # Initialize Config Cache
+    if app.config.get('CONFIG_CACHE_ENABLED'):
+        try:
+            from app.engine.universal_config_cache import init_config_cache
+            init_config_cache(app)
+            app.logger.info("✅ Config cache initialized")
+            
+            # Preload common configurations
+            if app.config.get('CONFIG_CACHE_PRELOAD'):
+                from app.engine.universal_config_cache import preload_common_configurations
+                preload_common_configurations()
+                app.logger.info("✅ Common configurations preloaded")
+                
+        except Exception as e:
+            app.logger.error(f"Config cache init failed: {e}")
+            app.config['CONFIG_CACHE_ENABLED'] = False
+    
+    app.logger.info("✅ Dual-layer caching system initialized")
+
+
 def create_app() -> Flask:
     """
     Create and configure the Flask application.
@@ -145,12 +189,14 @@ def create_app() -> Flask:
         
         # Initialize core Flask extensions
         db.init_app(app)
+        initialize_cache_system(app)
         migrate.init_app(app, db)
         login_manager.init_app(app)
         csrf.init_app(app)
         
-        # Add hasattr to Jinja globals
+        # Add hasattr and attribute to Jinja globals
         app.jinja_env.globals['hasattr'] = hasattr
+        app.jinja_env.globals['attribute'] = getattr
         
         # Exempt API endpoints from CSRF
         csrf.exempt(r"/api/*")
@@ -427,6 +473,13 @@ def register_api_blueprints(app: Flask) -> None:
         blueprints.append(billing_api_bp)
     except ImportError as e:
         app.logger.warning(f"Billing API blueprint could not be loaded: {str(e)}")
+
+    try:
+        # cache dashboard
+        from app.views.cache_dashboard import cache_dashboard_bp
+        blueprints.append(cache_dashboard_bp)
+    except ImportError as e:
+        app.logger.warning(f"cache dashboard blueprint could not be loaded: {str(e)}")
 
     # Register each blueprint
     for blueprint in blueprints:

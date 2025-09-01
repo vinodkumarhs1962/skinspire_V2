@@ -1,4 +1,4 @@
-# SkinSpire Database Creation and Testing Documentation
+# Skinspire Database Creation and Testing Documentation
 
 ## Table of Contents
 1. [Database Architecture Overview](#database-architecture-overview)
@@ -12,7 +12,7 @@
 
 ## Database Architecture Overview
 
-The SkinSpire application uses a PostgreSQL database with the following key features:
+The Skinspire application uses a PostgreSQL database with the following key features:
 
 ### Entity Relationship Structure
 - **Hospitals**: Top-level entities (tenants)

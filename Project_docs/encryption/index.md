@@ -1,7 +1,7 @@
-# SkinSpire Encryption System
+# Skinspire Encryption System
 
 ## Purpose
-Secure handling of sensitive medical and personal information in the SkinSpire system, ensuring HIPAA compliance and data protection.
+Secure handling of sensitive medical and personal information in the Skinspire system, ensuring HIPAA compliance and data protection.
 
 ## Key Features
 - Field-level encryption

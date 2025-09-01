@@ -18,6 +18,7 @@ from app.config.core_definitions import (
     PageSize, Orientation, DocumentSectionType, ExportFormat, DocumentFieldMapping, TableColumnConfig,
     DocumentSection, DocumentConfiguration, PrintLayoutType
 )
+
 from app.config.filter_categories import FilterCategory
 
 # =============================================================================
@@ -2426,9 +2427,6 @@ SUPPLIER_PAYMENT_SEARCH_CONFIG = EntitySearchConfiguration(
 # Register all financial entity configurations
 FINANCIAL_ENTITY_CONFIGS = {
     "supplier_payments": SUPPLIER_PAYMENT_CONFIG,
-    # Future: Add billing, customer receipts, etc.
-    # "billing": BILLING_CONFIG,
-    # "customer_receipts": CUSTOMER_RECEIPT_CONFIG,
 }
 
 # Filter configurations for module
@@ -2440,7 +2438,6 @@ FINANCIAL_ENTITY_FILTER_CONFIGS = {
 # Search configurations for module
 FINANCIAL_ENTITY_SEARCH_CONFIGS = {
     "supplier_payments": SUPPLIER_PAYMENT_SEARCH_CONFIG,
-    # Future: Add other entity searches
 }
 
 # Export functions for registry

@@ -77,7 +77,7 @@ def send_verification_sms(cls, phone_number: str, code: str) -> bool:
         
         # Send message
         message = client.messages.create(
-            body=f'Your SkinSpire verification code is: {code}. This code will expire in {cls.OTP_EXPIRY_MINUTES} minutes.',
+            body=f'Your Skinspire verification code is: {code}. This code will expire in {cls.OTP_EXPIRY_MINUTES} minutes.',
             from_=twilio_phone,
             to=phone_number
         )

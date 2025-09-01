@@ -1,8 +1,8 @@
-# SkinSpire Clinic - Hospital Management System
+# Skinspire Clinic - Hospital Management System
 ## Project Synopsis
 
 ### System Overview
-SkinSpire Clinic is developing a cloud-hosted healthcare management system designed for mid-size multispecialty hospitals. The system supports multi-tenant architecture, enabling independent instances per hospital while allowing multiple branches within each instance.
+Skinspire Clinic is developing a cloud-hosted healthcare management system designed for mid-size multispecialty hospitals. The system supports multi-tenant architecture, enabling independent instances per hospital while allowing multiple branches within each instance.
 
 ### Key Technical Architecture
 - Development Environment: Python 3.12.8
@@ -46,7 +46,7 @@ SkinSpire Clinic is developing a cloud-hosted healthcare management system desig
 ## Collaboration Guidelines
 
 ### Development Guidelines
-- Please follow comprehensive development Guidelines described in SkinSpire Clinic HMS Technical Development Guidelines v2.0 
+- Please follow comprehensive development Guidelines described in Skinspire Clinic HMS Technical Development Guidelines v2.0 
 - This document provides projct best practices for handling critical errors and standards and approaches to be followed
 
 ### Core Communication Principles
@@ -305,9 +305,9 @@ def get_user_details(user_id):
 
 This guide provides a quick reference for identifying and fixing detached entity errors while maintaining your centralized database access philosophy.
 
-Ready to collaborate on enhancing the SkinSpire Clinic Hospital Management System?
+Ready to collaborate on enhancing the Skinspire Clinic Hospital Management System?
 
-# SkinSpire Healthcare CSS - Developer Quick Reference
+# Skinspire Healthcare CSS - Developer Quick Reference
 
 ## 🚀 **Essential Component Classes**
 

@@ -293,7 +293,7 @@ skinspire_v2/
 │   │   ├── sesson_management_token_handling.md
 │   ├── User Authorization/
 │   │   ├── password hash implementation.md
-│   │   ├── SkinSpire CSRF Protection Implementation Documentation.md
+│   │   ├── Skinspire CSRF Protection Implementation Documentation.md
 │   │   ├── user-auth-documentation.md
 │   │   ├── User_management_approach.md
 │   ├── virtual_environment_setup/

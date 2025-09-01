@@ -3,7 +3,7 @@
 
 ## Introduction
 
-The authentication testing system verifies the security, reliability, and correctness of SkinSpire's authentication mechanisms. The tests ensure that user authentication, session management, and security policies work as intended in a healthcare environment where data security is paramount.
+The authentication testing system verifies the security, reliability, and correctness of Skinspire's authentication mechanisms. The tests ensure that user authentication, session management, and security policies work as intended in a healthcare environment where data security is paramount.
 
 ## Testing Philosophy
 

@@ -48,7 +48,7 @@ class TestPasswordPolicy:
         valid_passwords = [
             "Secure123!",                 # Standard mix of character types
             "P@ssw0rd",                   # Common but complex pattern
-            "SkinSpire#2025",             # Application-specific with complexity
+            "Skinspire#2025",             # Application-specific with complexity
             "L0ng&C0mpl3xP@55w0rd",       # Longer password with multiple character types
             "Abcd-1234-EFGH"              # Using separators with mixed case and numbers
         ]

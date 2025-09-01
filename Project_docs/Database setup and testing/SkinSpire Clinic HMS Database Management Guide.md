@@ -1,8 +1,8 @@
-# SkinSpire Clinic HMS Database Management Guide
+# Skinspire Clinic HMS Database Management Guide
 
 ## Introduction
 
-The SkinSpire Clinic Hospital Management System relies on a robust database architecture that's essential for proper system operation. This document provides a comprehensive guide to managing the database across development, testing, and production environments using our centralized database access approach.
+The Skinspire Clinic Hospital Management System relies on a robust database architecture that's essential for proper system operation. This document provides a comprehensive guide to managing the database across development, testing, and production environments using our centralized database access approach.
 
 The database management system follows these key principles:
 
@@ -411,7 +411,7 @@ python -c "from app.services.database_service import get_database_url; print(get
 
 ## Understanding the Database Structure
 
-The SkinSpire database follows a multi-tenant architecture with these key entity types:
+The Skinspire database follows a multi-tenant architecture with these key entity types:
 
 1. **Hospital**: Top-level tenant entity representing a healthcare facility
 2. **Branch**: Facility within a hospital
@@ -441,7 +441,7 @@ It's advisable to back up databases before major schema changes or migrations.
 
 ## Conclusion
 
-This guide provides a comprehensive overview of database management for the SkinSpire Clinic HMS. By following these procedures and best practices, you can ensure reliable database operations across development, testing, and production environments.
+This guide provides a comprehensive overview of database management for the Skinspire Clinic HMS. By following these procedures and best practices, you can ensure reliable database operations across development, testing, and production environments.
 
 The centralized database access approach via `database_service.py` is the foundation of our database architecture, providing consistent and reliable database operations throughout the application.
 

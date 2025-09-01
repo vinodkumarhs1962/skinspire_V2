@@ -16,6 +16,7 @@ from app.config.core_definitions import (
 )
 from app.engine.virtual_field_transformer import VirtualFieldTransformer
 from app.services.database_service import get_db_session
+from app.engine.universal_service_cache import invalidate_service_cache_for_entity
 from app.utils.unicode_logging import get_unicode_safe_logger
 
 logger = get_unicode_safe_logger(__name__)
@@ -251,6 +252,7 @@ class UniversalCRUDService:
                 session.commit()
                 
                 logger.info(f"Created {entity_type} with ID {entity_data[pk_field]}")
+                invalidate_service_cache_for_entity(entity_type, cascade=True)
                 return entity
                 
         except IntegrityError as e:
@@ -345,6 +347,7 @@ class UniversalCRUDService:
                 
                 session.commit()
                 logger.info(f"Updated {entity_type}/{item_id}")
+                invalidate_service_cache_for_entity(entity_type, cascade=True)
                 return entity
                 
         except Exception as e:
@@ -422,6 +425,7 @@ class UniversalCRUDService:
                 
                 session.commit()
                 logger.info(f"Deleted {entity_type}/{item_id}")
+                invalidate_service_cache_for_entity(entity_type, cascade=True)
                 return {'success': True, 'message': f'{config.name} deleted successfully'}
                 
         except Exception as e:

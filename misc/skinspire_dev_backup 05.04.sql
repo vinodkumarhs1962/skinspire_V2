@@ -949,7 +949,7 @@ COPY public.branches (branch_id, hospital_id, name, address, contact_details, se
 --
 
 COPY public.hospitals (hospital_id, name, license_no, address, contact_details, settings, encryption_enabled, encryption_key, encryption_config, is_active, created_at, updated_at, created_by, updated_by, deleted_at, deleted_by) FROM stdin;
-4ef72e18-e65d-4766-b9eb-0308c42485ca	SkinSpire Main Clinic	HC123456	{"zip": "12345", "city": "Healthcare City", "street": "123 Medical Ave"}	{"email": "contact@skinspire.com", "phone": "1234567890"}	{"currency": "USD", "timezone": "UTC"}	t	\N	{}	t	2025-03-03 12:53:48.448106+05:30	2025-03-03 12:53:48.448112+05:30	\N	\N	\N	\N
+4ef72e18-e65d-4766-b9eb-0308c42485ca	Skinspire Main Clinic	HC123456	{"zip": "12345", "city": "Healthcare City", "street": "123 Medical Ave"}	{"email": "contact@skinspire.com", "phone": "1234567890"}	{"currency": "USD", "timezone": "UTC"}	t	\N	{}	t	2025-03-03 12:53:48.448106+05:30	2025-03-03 12:53:48.448112+05:30	\N	\N	\N	\N
 \.
 
 

@@ -2,7 +2,7 @@ REM working test 3.3.25
 @echo off
 setlocal enabledelayedexpansion
 
-echo Starting SkinSpire test database setup...
+echo Starting Skinspire test database setup...
 
 REM Set environment variables
 set FLASK_APP=wsgi.py

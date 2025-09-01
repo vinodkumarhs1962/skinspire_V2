@@ -9,6 +9,7 @@ from flask_login import current_user
 from app.services.database_service import get_db_session
 from app.config.entity_configurations import get_entity_config, get_entity_filter_config
 from app.config.core_definitions import FieldDefinition, FieldType, EntitySearchConfiguration
+from app.engine.universal_service_cache import cache_service_method
 from app.utils.unicode_logging import get_unicode_safe_logger
 
 logger = get_unicode_safe_logger(__name__)
@@ -19,6 +20,11 @@ class UniversalEntitySearchService:
     ARCHITECTURE: Configuration-driven, entity-agnostic, backend-heavy
     """
     
+    def __init__(self):
+        self.model_mappings = {...}  # Model mappings
+        self.entity_type = 'entity_search'  # ✅ ADD: For cache identification
+    
+    @cache_service_method('entity_search', 'search_entities')  # ✅ ADD: Cache entity searches
     def search_entities(self, config: EntitySearchConfiguration, search_term: str,
                        hospital_id: uuid.UUID, branch_id: uuid.UUID = None) -> List[Dict]:
         """Universal search - works for ANY entity via configuration"""
@@ -178,7 +184,8 @@ class UniversalEntitySearchService:
         except Exception as e:
             logger.error(f"Error importing model for {entity_type}: {str(e)}")
             return None
-        
+
+    @cache_service_method('entity_search', 'get_filter_backend_data')    
     def get_filter_backend_data(self, entity_type: str, hospital_id: uuid.UUID,
                                branch_id: uuid.UUID = None, current_filters: Dict = None) -> Dict:
         """Universal filter data - works for ANY entity via configuration"""

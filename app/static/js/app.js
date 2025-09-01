@@ -1,5 +1,5 @@
 /**
- * SkinSpire Healthcare - Master JavaScript
+ * Skinspire Healthcare - Master JavaScript
  * Central import file for all reusable JavaScript components
  */
 

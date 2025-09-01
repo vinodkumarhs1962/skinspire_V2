@@ -1,6 +1,6 @@
 # =============================================================================
 # UNIVERSAL SERVICE LAYER - INTEGRATED WITH EXISTING SERVICES
-# Following SkinSpire HMS Existing Service Patterns
+# Following Skinspire HMS Existing Service Patterns
 # =============================================================================
 
 # =============================================================================

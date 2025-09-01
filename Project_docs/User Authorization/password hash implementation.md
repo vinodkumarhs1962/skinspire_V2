@@ -1,8 +1,8 @@
-# Password Hashing Implementation Documentation for SkinSpire Hospital Management System
+# Password Hashing Implementation Documentation for Skinspire Hospital Management System
 
 ## Overview
 
-This document details the implementation of password hashing in the SkinSpire Hospital Management System. The system uses Werkzeug's password hashing functions within the Python application layer, replacing the previous PostgreSQL trigger-based approach.
+This document details the implementation of password hashing in the Skinspire Hospital Management System. The system uses Werkzeug's password hashing functions within the Python application layer, replacing the previous PostgreSQL trigger-based approach.
 
 ## Implementation Details
 

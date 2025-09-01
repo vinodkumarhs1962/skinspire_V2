@@ -1,7 +1,7 @@
 <!-- app/templates/dashboard/index.html -->
 {% extends "layouts/dashboard.html" %}
 
-{% block title %}Dashboard - SkinSpire Clinic{% endblock %}
+{% block title %}Dashboard - Skinspire Clinic{% endblock %}
 {% block page_title %}Dashboard{% endblock %}
 
 {% block content %}
@@ -11,7 +11,7 @@
         <div class="px-4 py-5 sm:p-6">
             <h2 class="text-xl font-semibold text-gray-900">Welcome, {{ current_user.first_name if hasattr(current_user, 'first_name') else current_user.user_id }}</h2>
             <p class="mt-1 text-gray-600">
-                Welcome to the SkinSpire Hospital Management System.
+                Welcome to the Skinspire Hospital Management System.
                 {% if current_user.entity_type == 'staff' %}
                     You are logged in as staff member.
                 {% else %}
@@ -70,7 +70,7 @@
             <h3 class="text-lg font-medium text-gray-900">System Information</h3>
             <div class="mt-4">
                 <p class="text-sm text-gray-600">
-                    SkinSpire Clinic Hospital Management System v1.0
+                    Skinspire Clinic Hospital Management System v1.0
                 </p>
                 <p class="mt-2 text-sm text-gray-600">
                     For support, please contact the system administrator.

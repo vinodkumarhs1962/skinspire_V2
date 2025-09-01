@@ -251,7 +251,8 @@
                                 {% endif %}
                                 {{ field.label }}
                             </div>
-                            <div class="universal-view-header-field-value{% if field.type == 'currency' %} currency{% endif %}">
+                            <div class="universal-view-header-field-value{% if field.type == 'currency' %} currency{% endif %}" 
+                                style="{% if field.type == 'currency' %}text-align: right;{% endif %}">
                                 {% if field.type == 'currency' %}
                                     ₹ {{ item[field.field]|default(0)|round(2)|format_number }}
                                 {% elif field.type == 'date' %}

@@ -1,6 +1,6 @@
 # =============================================================================
 # UNIVERSAL VIEWS - INTEGRATED WITH EXISTING VIEW PATTERNS
-# Following SkinSpire HMS Existing View Structure and Patterns
+# Following Skinspire HMS Existing View Structure and Patterns
 # =============================================================================
 
 # =============================================================================

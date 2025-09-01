@@ -1,5 +1,5 @@
 # Universal Engine Architecture
-## Master Implementation Guide for SkinSpire Healthcare Management System
+## Master Implementation Guide for Skinspire Healthcare Management System
 
 ---
 
@@ -7,7 +7,7 @@
 
 | **Attribute** | **Details** |
 |---------------|-------------|
-| **Project** | SkinSpire Clinic HMS - Universal Engine Architecture |
+| **Project** | Skinspire Clinic HMS - Universal Engine Architecture |
 | **Vision** | True Universal Components with Configuration-Driven Behavior |
 | **Approach** | Engine-Based with Backend Assembly |
 | **Date** | June 2025 |

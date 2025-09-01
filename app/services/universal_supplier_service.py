@@ -27,6 +27,7 @@ from app.models.transaction import SupplierInvoice, SupplierPayment
 from app.config.entity_configurations import get_entity_config, get_service_filter_mapping
 from app.config.core_definitions import FieldDefinition, FieldType, ComplexDisplayType
 from app.engine.categorized_filter_processor import get_categorized_filter_processor
+from app.engine.universal_service_cache import cache_service_method
 from app.utils.unicode_logging import get_unicode_safe_logger
 # from app.engine.universal_services import GenericEntitySearchService
 
@@ -42,7 +43,7 @@ class EnhancedUniversalSupplierService:
         self.form_instance = None
         self.filter_processor = get_categorized_filter_processor()
 
-
+    @cache_service_method('supplier_payments', 'search_data') 
     def search_data(self, filters: dict, **kwargs) -> dict:
         """
         ✅ UNIVERSAL INTERFACE: Simple wrapper that calls enhanced method
@@ -576,7 +577,7 @@ class EnhancedUniversalSupplierService:
                 'error': str(e)
             }
 
-
+    @cache_service_method('supplier_payments', 'search_payments_enhanced')
     def _search_payments_enhanced(self, filters: Dict, branch_id=None, current_user_id=None, **kwargs) -> Dict:
         """
         FIXED: Enhanced search with clean parameter handling

@@ -1,6 +1,6 @@
 Comprehensive Patient Search Functionality: Design Approach and Migration Plan
 Executive Summary
-This document outlines a comprehensive strategy for improving the patient search functionality in the SkinSpire Clinic Hospital Management System. After reviewing the current implementation and its limitations, we propose a hybrid approach that introduces dedicated name fields while maintaining backward compatibility with existing JSON-based structures. The plan includes technical details for database schema evolution, changes to search logic, UI improvements, and a phased migration plan.
+This document outlines a comprehensive strategy for improving the patient search functionality in the Skinspire Clinic Hospital Management System. After reviewing the current implementation and its limitations, we propose a hybrid approach that introduces dedicated name fields while maintaining backward compatibility with existing JSON-based structures. The plan includes technical details for database schema evolution, changes to search logic, UI improvements, and a phased migration plan.
 PART 1: Current Patient Search Implementation Analysis
 1.1 Current Database Structure
 The current Patient model in the system stores personal information, including names, within a JSON structure:
@@ -1705,4 +1705,4 @@ Support searching by additional patient attributes
 PART 6: Conclusion
 The proposed patient search implementation offers a significant improvement over the current approach. By adding dedicated name fields while maintaining backward compatibility with JSON structures, we can achieve better performance, enhanced user experience, and improved maintainability.
 The phased migration plan ensures a smooth transition with minimal disruption to existing functionality. The centralized search service and reusable component create a foundation for consistent behavior across the application.
-By implementing this comprehensive approach, SkinSpire Clinic will benefit from a more reliable, efficient, and user-friendly patient search experience.
+By implementing this comprehensive approach, Skinspire Clinic will benefit from a more reliable, efficient, and user-friendly patient search experience.

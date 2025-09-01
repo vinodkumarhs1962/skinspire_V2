@@ -1,8 +1,8 @@
-# SkinSpire Clinic HMS Development Guidelines
+# Skinspire Clinic HMS Development Guidelines
 
 ## Overview
 
-This document consolidates technical guidelines for development on the SkinSpire Clinic Hospital Management System. It provides a clear reference for maintaining consistency across all features and modules while adhering to the established architectural patterns.
+This document consolidates technical guidelines for development on the Skinspire Clinic Hospital Management System. It provides a clear reference for maintaining consistency across all features and modules while adhering to the established architectural patterns.
 
 ## Project Directory Structure
 skinspire_v2/
@@ -582,4 +582,4 @@ Update developer guidelines as needed
 
 
 Conclusion
-Following these guidelines consistently will ensure that the SkinSpire Clinic Hospital Management System maintains a coherent architecture, predictable behavior, and high maintainability across all features and modules. All developers should adhere to these patterns and communicate any necessary deviations or enhancements to the team.
+Following these guidelines consistently will ensure that the Skinspire Clinic Hospital Management System maintains a coherent architecture, predictable behavior, and high maintainability across all features and modules. All developers should adhere to these patterns and communicate any necessary deviations or enhancements to the team.

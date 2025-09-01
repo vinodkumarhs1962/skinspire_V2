@@ -1013,4 +1013,4 @@ Incorporates GST compliance requirements
 Enables profitability tracking
 Provides foundation for future enhancements
 
-The model can now serve as the foundation for implementing the core business processes of billing, inventory, supplier management, and basic financial tracking for the SkinSpire Clinic HMS.
+The model can now serve as the foundation for implementing the core business processes of billing, inventory, supplier management, and basic financial tracking for the Skinspire Clinic HMS.

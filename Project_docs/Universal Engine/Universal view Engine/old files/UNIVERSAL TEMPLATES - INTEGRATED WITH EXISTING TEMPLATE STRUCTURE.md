@@ -1,6 +1,6 @@
 <!-- =============================================================================
 UNIVERSAL TEMPLATES - INTEGRATED WITH EXISTING TEMPLATE STRUCTURE
-Following SkinSpire HMS Existing Template Patterns
+Following Skinspire HMS Existing Template Patterns
 ============================================================================= -->
 
 <!-- =============================================================================

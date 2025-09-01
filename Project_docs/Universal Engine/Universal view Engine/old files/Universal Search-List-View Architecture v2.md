@@ -1,5 +1,5 @@
 # Universal Search-List-View Architecture
-## Integrated Master Implementation Guide for SkinSpire Healthcare Management System
+## Integrated Master Implementation Guide for Skinspire Healthcare Management System
 
 ---
 ## 🎯 **Executive Summary**
@@ -16,7 +16,7 @@ This architecture provides a **unified Search + List + View pattern** for all he
 
 | **Attribute** | **Details** |
 |---------------|-------------|
-| **Project** | SkinSpire Clinic HMS - Universal Entity Interface (Integrated) |
+| **Project** | Skinspire Clinic HMS - Universal Entity Interface (Integrated) |
 | **Version** | 2.0 - Integrated with Existing Structure |
 | **Date** | June 2025 |
 | **Status** | Ready for Implementation |
@@ -28,7 +28,7 @@ This architecture provides a **unified Search + List + View pattern** for all he
 
 ### **Core Principle: Enhance, Don't Replace**
 
-This universal architecture **seamlessly integrates** with your existing SkinSpire HMS structure by:
+This universal architecture **seamlessly integrates** with your existing Skinspire HMS structure by:
 
 - ✅ **Leveraging your established directories** (`app/config/`, `app/services/`, `app/views/`, etc.)
 - ✅ **Following your naming conventions** and architectural patterns
@@ -556,7 +556,7 @@ def supplier_invoice_list_universal():
 
 ---
 
-**This integrated approach ensures that universal architecture enhances your existing SkinSpire HMS investment while providing the scalability and consistency benefits you're seeking. The implementation respects your current architecture while adding powerful universal capabilities.**
+**This integrated approach ensures that universal architecture enhances your existing Skinspire HMS investment while providing the scalability and consistency benefits you're seeking. The implementation respects your current architecture while adding powerful universal capabilities.**
 
 ---
 

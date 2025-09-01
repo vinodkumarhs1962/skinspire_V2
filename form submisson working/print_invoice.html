@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Invoice #{{ invoice.invoice_number }} - SkinSpire Clinic</title>
+    <title>Invoice #{{ invoice.invoice_number }} - Skinspire Clinic</title>
     <style>
         @page {
             size: A4;
@@ -223,7 +223,7 @@
         <!-- Header -->
         <div class="header">
             <div class="logo">
-                SkinSpire Clinic
+                Skinspire Clinic
             </div>
             <div class="hospital-info">
                 <div>{{ hospital.name }}</div>
@@ -699,7 +699,7 @@
         <!-- Authorized Signature -->
         <div class="authorized-signature">
             <div style="margin-bottom: 30px;">
-                For {{ hospital.name if hospital else "SkinSpire Clinic" }}
+                For {{ hospital.name if hospital else "Skinspire Clinic" }}
             </div>
             <div>
                 Authorized Signatory
@@ -709,10 +709,10 @@
         <!-- Footer -->
         <div class="footer">
             <div style="text-align: center;">
-                {{ hospital.name if hospital else "SkinSpire Clinic" }} - {{ hospital.address if hospital else "" }} - Phone: {{ hospital.phone if hospital else "" }} - Email: {{ hospital.email if hospital else "" }}
+                {{ hospital.name if hospital else "Skinspire Clinic" }} - {{ hospital.address if hospital else "" }} - Phone: {{ hospital.phone if hospital else "" }} - Email: {{ hospital.email if hospital else "" }}
             </div>
             <div style="text-align: center; margin-top: 5px;">
-                Thank you for choosing {{ hospital.name if hospital else "SkinSpire Clinic" }} for your healthcare needs!
+                Thank you for choosing {{ hospital.name if hospital else "Skinspire Clinic" }} for your healthcare needs!
             </div>
         </div>
     </div>

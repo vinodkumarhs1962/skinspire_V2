@@ -1,7 +1,7 @@
-SkinSpire CSRF Protection Implementation Documentation
+Skinspire CSRF Protection Implementation Documentation
 Project-Specific CSRF Implementation Analysis
 Core Configuration Location
-The CSRF protection in the SkinSpire Hospital Management System is primarily configured in app/__init__.py, leveraging Flask-WTF's CSRFProtect extension.
+The CSRF protection in the Skinspire Hospital Management System is primarily configured in app/__init__.py, leveraging Flask-WTF's CSRFProtect extension.
 Initialization Code
 pythonCopyfrom flask_wtf.csrf import CSRFProtect
 csrf = CSRFProtect()

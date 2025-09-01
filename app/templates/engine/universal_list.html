@@ -494,7 +494,7 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                             {% for column in table_columns %}
                                 <th class="universal-table-header {% if column.sortable %}universal-sortable-header{% endif %} {{ column.css_class }}"
                                     {% if column.sortable %}onclick="handleUniversalSort('{{ column.name }}')"{% endif %}
-                                    style="{% if column.width and column.width != 'auto' %}width: {{ column.width }};{% endif %} text-align: {{ column.align|default('left') }};">
+                                    style="{% if column.width and column.width != 'auto' %}width: {{ column.width }};{% endif %} text-align: {% if column.field_type in ['currency', 'amount', 'decimal', 'number'] %}right{% else %}{{ column.align|default('left') }}{% endif %};">
                                     {{ column.label }}
                                     {% if column.sortable %}
                                         <i class="fas fa-sort universal-sort-indicator"></i>
@@ -532,7 +532,7 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                                     {% endif %}
                                 {% endif %}
                                 <td class="{{ column.css_class }} {{ column.css_classes }}" 
-                                    style="{% if column.width and column.width != 'auto' %}width: {{ column.width }};{% endif %} text-align: {{ column.align|default('left') }};"
+                                    style="{% if column.width and column.width != 'auto' %}width: {{ column.width }};{% endif %} text-align: {% if column.field_type in ['currency', 'amount', 'decimal', 'number'] %}right{% else %}{{ column.align|default('left') }}{% endif %};"
                                     title="{{ cell_value|striptags if cell_value and cell_value not in ['', '—', '&mdash;', 'â€"'] else '' }}">
                                     
                                     <!-- Handle complex display types first -->

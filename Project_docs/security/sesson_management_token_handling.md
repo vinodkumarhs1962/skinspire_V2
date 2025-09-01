@@ -2,7 +2,7 @@
 
 ## Overview
 
-The SkinSpire session management system implements a hybrid approach combining Redis-based session storage with database-backed audit trails. This system supports multi-tenant healthcare requirements while ensuring security and compliance.
+The Skinspire session management system implements a hybrid approach combining Redis-based session storage with database-backed audit trails. This system supports multi-tenant healthcare requirements while ensuring security and compliance.
 
 The documentation provides a comprehensive overview of the session management system. Let me explain how this builds upon your existing code while preserving functionality:
 
@@ -393,7 +393,7 @@ Security boundary enforcement
 
 ## Architecture Overview
 
-The SkinSpire system implements two complementary security layers that must work in harmony:
+The Skinspire system implements two complementary security layers that must work in harmony:
 
 1. Field-Level Encryption System
 2. Session Management System

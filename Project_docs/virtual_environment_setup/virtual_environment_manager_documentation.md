@@ -1,7 +1,7 @@
 # Virtual Environment Manager Documentation
 
 ## Overview
-The Virtual Environment Manager provides tools for maintaining Python virtual environments for the SkinSpire project, with focus on environment health checks and package management.
+The Virtual Environment Manager provides tools for maintaining Python virtual environments for the Skinspire project, with focus on environment health checks and package management.
 
 ## Program Intent & Scope
 

@@ -6,7 +6,7 @@
 
 | **Attribute** | **Details** |
 |---------------|-------------|
-| **Project** | SkinSpire Clinic HMS - Universal Document Engine |
+| **Project** | Skinspire Clinic HMS - Universal Document Engine |
 | **Status** | **FINAL ARCHITECTURE - INTEGRATED DESIGN** |
 | **Architecture** | Tightly Integrated Extension of Universal Engine |
 | **Date** | December 2024 |

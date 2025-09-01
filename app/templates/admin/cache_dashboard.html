@@ -1,0 +1,783 @@
+<!-- app/templates/admin/cache_dashboard.html -->
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}Cache Performance Dashboard{% endblock %}
+
+{% block styles %}
+    {{ super() }}
+    <style>
+        /* Cache Dashboard Specific Styles */
+        .cache-dashboard {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .dashboard-header {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+        
+        .performance-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+        
+        .metric-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 16px 48px rgba(0,0,0,0.15);
+        }
+        
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #4F46E5, #06B6D4);
+        }
+        
+        .metric-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        
+        .metric-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+        }
+        
+        .metric-icon.service { background: linear-gradient(135deg, #667eea, #764ba2); }
+        .metric-icon.config { background: linear-gradient(135deg, #f093fb, #f5576c); }
+        .metric-icon.memory { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+        .metric-icon.performance { background: linear-gradient(135deg, #43e97b, #38f9d7); }
+        
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: #1f2937;
+        }
+        
+        .metric-label {
+            color: #6b7280;
+            font-size: 0.875rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .metric-trend {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        
+        .trend-positive { color: #059669; }
+        .trend-negative { color: #dc2626; }
+        .trend-neutral { color: #6b7280; }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .status-excellent { background: #10b981; }
+        .status-good { background: #f59e0b; }
+        .status-poor { background: #ef4444; }
+        
+        .entities-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+        }
+        
+        .entity-card {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 16px;
+            border-left: 4px solid #e5e7eb;
+        }
+        
+        .entity-card.top-performer { border-left-color: #10b981; }
+        .entity-card.needs-attention { border-left-color: #ef4444; }
+        
+        .controls-panel {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        
+        .refresh-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+        
+        .refresh-indicator.active {
+            color: #059669;
+        }
+        
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #e5e7eb;
+            border-top: 2px solid #059669;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .btn-dashboard {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #f8fafc;
+            color: #4b5563;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .btn-secondary:hover {
+            background: #f1f5f9;
+            transform: translateY(-1px);
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #f1f5f9;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 12px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            transition: width 0.5s ease;
+            background: linear-gradient(90deg, #10b981, #059669);
+        }
+        
+        .alert {
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        
+        .alert-success {
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            color: #065f46;
+        }
+        
+        .alert-warning {
+            background: #fffbeb;
+            border: 1px solid #fed7aa;
+            color: #92400e;
+        }
+        
+        .alert-error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+        }
+        
+        .last-updated {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 0.75rem;
+            color: #6b7280;
+            background: rgba(255,255,255,0.9);
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        
+        @media (max-width: 768px) {
+            .performance-grid {
+                grid-template-columns: 1fr;
+            }
+            .control-group {
+                justify-content: center;
+            }
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="cache-dashboard">
+    <!-- Dashboard Header -->
+    <div class="dashboard-header">
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900 mb-2">
+                    🏥 Cache Performance Dashboard
+                </h1>
+                <p class="text-gray-600">
+                    Real-time monitoring of Universal Engine cache performance
+                </p>
+            </div>
+            <div class="refresh-indicator" id="refreshIndicator">
+                <span class="spinner" id="refreshSpinner" style="display: none;"></span>
+                <span id="refreshStatus">Auto-refresh: ON</span>
+            </div>
+        </div>
+        <div class="last-updated" id="lastUpdated">
+            Last updated: Loading...
+        </div>
+    </div>
+
+    <!-- Controls Panel -->
+    <div class="controls-panel">
+        <div class="control-group">
+            <button class="btn-dashboard btn-primary" onclick="toggleAutoRefresh()" id="autoRefreshBtn">
+                <i class="fas fa-pause"></i>
+                <span id="autoRefreshText">Pause Auto-refresh</span>
+            </button>
+            
+            <button class="btn-dashboard btn-secondary" onclick="refreshNow()">
+                <i class="fas fa-sync-alt"></i>
+                Refresh Now
+            </button>
+            
+            <button class="btn-dashboard btn-secondary" onclick="clearAllCaches()">
+                <i class="fas fa-trash-alt"></i>
+                Clear Caches
+            </button>
+            
+            <button class="btn-dashboard btn-secondary" onclick="warmupCaches()">
+                <i class="fas fa-fire"></i>
+                Warm Up Caches
+            </button>
+            
+            <select class="btn-dashboard btn-secondary" id="refreshInterval" onchange="updateRefreshInterval()">
+                <option value="5">5 seconds</option>
+                <option value="10">10 seconds</option>
+                <option value="30">30 seconds</option>
+                <option value="60">1 minute</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Performance Metrics Grid -->
+    <div class="performance-grid">
+        <!-- Service Cache Card -->
+        <div class="metric-card">
+            <div class="metric-header">
+                <div class="metric-icon service">
+                    <i class="fas fa-database"></i>
+                </div>
+                <div id="serviceStatus" class="status-indicator status-excellent"></div>
+            </div>
+            <div class="metric-value" id="serviceHitRatio">Loading...</div>
+            <div class="metric-label">Service Cache Hit Ratio</div>
+            <div class="metric-trend" id="serviceTrend">
+                <i class="fas fa-arrow-up trend-positive"></i>
+                <span>Improving</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="serviceProgress" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- Config Cache Card -->
+        <div class="metric-card">
+            <div class="metric-header">
+                <div class="metric-icon config">
+                    <i class="fas fa-cogs"></i>
+                </div>
+                <div id="configStatus" class="status-indicator status-excellent"></div>
+            </div>
+            <div class="metric-value" id="configHitRatio">Loading...</div>
+            <div class="metric-label">Config Cache Hit Ratio</div>
+            <div class="metric-trend" id="configTrend">
+                <i class="fas fa-arrow-right trend-neutral"></i>
+                <span>Stable</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="configProgress" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- Memory Usage Card -->
+        <div class="metric-card">
+            <div class="metric-header">
+                <div class="metric-icon memory">
+                    <i class="fas fa-memory"></i>
+                </div>
+                <div id="memoryStatus" class="status-indicator status-excellent"></div>
+            </div>
+            <div class="metric-value" id="memoryUsage">Loading...</div>
+            <div class="metric-label">Memory Usage</div>
+            <div class="metric-trend" id="memoryTrend">
+                <i class="fas fa-arrow-down trend-positive"></i>
+                <span>Optimized</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="memoryProgress" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- Performance Grade Card -->
+        <div class="metric-card">
+            <div class="metric-header">
+                <div class="metric-icon performance">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div id="performanceStatus" class="status-indicator status-excellent"></div>
+            </div>
+            <div class="metric-value" id="performanceGrade">Loading...</div>
+            <div class="metric-label">Overall Performance Grade</div>
+            <div class="metric-trend" id="performanceTrend">
+                <i class="fas fa-star text-yellow-500"></i>
+                <span>Excellent</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alerts Section -->
+    <div id="alertsContainer"></div>
+
+    <!-- Entity Performance Section -->
+    <div class="metric-card">
+        <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            <i class="fas fa-chart-bar text-blue-500"></i>
+            Entity Performance Analysis
+        </h3>
+        
+        <div class="entities-grid" id="entitiesGrid">
+            <!-- Entity cards will be populated by JavaScript -->
+        </div>
+    </div>
+
+    <!-- System Information -->
+    <div class="metric-card">
+        <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            <i class="fas fa-info-circle text-green-500"></i>
+            System Information
+        </h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <div class="text-sm text-gray-600">Total Requests</div>
+                <div class="text-xl font-semibold" id="totalRequests">Loading...</div>
+            </div>
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <div class="text-sm text-gray-600">System Uptime</div>
+                <div class="text-xl font-semibold" id="systemUptime">Loading...</div>
+            </div>
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <div class="text-sm text-gray-600">Requests/Minute</div>
+                <div class="text-xl font-semibold" id="requestsPerMin">Loading...</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    <script>
+        // Cache Dashboard JavaScript
+        let autoRefreshEnabled = true;
+        let refreshIntervalId;
+        let currentRefreshInterval = 5; // seconds
+        
+        // Dashboard State
+        const dashboardState = {
+            serviceHistory: [],
+            configHistory: [],
+            memoryHistory: [],
+            lastUpdate: null
+        };
+        
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Cache Dashboard initializing...');
+            startAutoRefresh();
+            refreshDashboard();
+        });
+        
+        function startAutoRefresh() {
+            if (refreshIntervalId) {
+                clearInterval(refreshIntervalId);
+            }
+            
+            if (autoRefreshEnabled) {
+                refreshIntervalId = setInterval(refreshDashboard, currentRefreshInterval * 1000);
+                updateRefreshIndicator(true);
+            }
+        }
+        
+        function toggleAutoRefresh() {
+            autoRefreshEnabled = !autoRefreshEnabled;
+            const btn = document.getElementById('autoRefreshBtn');
+            const text = document.getElementById('autoRefreshText');
+            
+            if (autoRefreshEnabled) {
+                btn.innerHTML = '<i class="fas fa-pause"></i><span>Pause Auto-refresh</span>';
+                btn.className = 'btn-dashboard btn-primary';
+                startAutoRefresh();
+            } else {
+                btn.innerHTML = '<i class="fas fa-play"></i><span>Start Auto-refresh</span>';
+                btn.className = 'btn-dashboard btn-secondary';
+                clearInterval(refreshIntervalId);
+                updateRefreshIndicator(false);
+            }
+        }
+        
+        function updateRefreshInterval() {
+            const select = document.getElementById('refreshInterval');
+            currentRefreshInterval = parseInt(select.value);
+            
+            if (autoRefreshEnabled) {
+                startAutoRefresh();
+            }
+        }
+        
+        function updateRefreshIndicator(active) {
+            const indicator = document.getElementById('refreshIndicator');
+            const status = document.getElementById('refreshStatus');
+            const spinner = document.getElementById('refreshSpinner');
+            
+            if (active) {
+                indicator.className = 'refresh-indicator active';
+                status.textContent = `Auto-refresh: ON (${currentRefreshInterval}s)`;
+                spinner.style.display = 'inline-block';
+            } else {
+                indicator.className = 'refresh-indicator';
+                status.textContent = 'Auto-refresh: OFF';
+                spinner.style.display = 'none';
+            }
+        }
+        
+        async function refreshDashboard() {
+            try {
+                console.log('🔄 Refreshing cache dashboard...');
+                
+                const response = await fetch('/admin/cache-dashboard/api/stats');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                updateDashboardUI(data);
+                
+                document.getElementById('lastUpdated').textContent = 
+                    `Last updated: ${new Date().toLocaleTimeString()}`;
+                    
+            } catch (error) {
+                console.error('❌ Error refreshing dashboard:', error);
+                showAlert('error', 'Failed to refresh dashboard data');
+            }
+        }
+        
+        function updateDashboardUI(data) {
+            // Update service cache metrics
+            updateMetricCard('service', data.service_cache);
+            
+            // Update config cache metrics
+            updateMetricCard('config', data.config_cache);
+            
+            // Update memory metrics
+            updateMemoryCard(data.service_cache);
+            
+            // Update performance grade
+            updatePerformanceGrade(data);
+            
+            // Update entity performance
+            updateEntityPerformance(data.service_cache.entity_stats || {});
+            
+            // Update system info
+            updateSystemInfo(data);
+            
+            // Update alerts
+            updateAlerts(data);
+            
+            // Store history for trending
+            storeMetricsHistory(data);
+        }
+        
+        function updateMetricCard(type, cacheData) {
+            const hitRatio = cacheData.hit_ratio || 0;
+            const hitRatioPercent = (hitRatio * 100).toFixed(1);
+            
+            document.getElementById(`${type}HitRatio`).textContent = `${hitRatioPercent}%`;
+            document.getElementById(`${type}Progress`).style.width = `${hitRatio * 100}%`;
+            
+            // Update status indicator
+            const statusElement = document.getElementById(`${type}Status`);
+            if (hitRatio > 0.90) {
+                statusElement.className = 'status-indicator status-excellent';
+            } else if (hitRatio > 0.80) {
+                statusElement.className = 'status-indicator status-good';
+            } else {
+                statusElement.className = 'status-indicator status-poor';
+            }
+            
+            // Update trend (would need historical data for real trending)
+            updateTrend(`${type}Trend`, hitRatio);
+        }
+        
+        function updateMemoryCard(serviceData) {
+            const memoryUsage = serviceData.memory_usage_mb || 0;
+            const memoryLimit = serviceData.max_memory_mb || 1000;
+            const memoryRatio = memoryUsage / memoryLimit;
+            
+            document.getElementById('memoryUsage').textContent = `${memoryUsage.toFixed(1)}MB`;
+            document.getElementById('memoryProgress').style.width = `${memoryRatio * 100}%`;
+            
+            // Update status
+            const statusElement = document.getElementById('memoryStatus');
+            if (memoryRatio < 0.75) {
+                statusElement.className = 'status-indicator status-excellent';
+            } else if (memoryRatio < 0.90) {
+                statusElement.className = 'status-indicator status-good';
+            } else {
+                statusElement.className = 'status-indicator status-poor';
+            }
+        }
+        
+        function updatePerformanceGrade(data) {
+            // Calculate performance grade
+            const serviceHitRatio = data.service_cache.hit_ratio || 0;
+            const configHitRatio = data.config_cache.hit_ratio || 0;
+            const overallRatio = (serviceHitRatio + configHitRatio) / 2;
+            
+            let grade, status;
+            if (overallRatio > 0.95) {
+                grade = 'A+';
+                status = 'status-excellent';
+            } else if (overallRatio > 0.90) {
+                grade = 'A';
+                status = 'status-excellent';
+            } else if (overallRatio > 0.80) {
+                grade = 'B';
+                status = 'status-good';
+            } else {
+                grade = 'C';
+                status = 'status-poor';
+            }
+            
+            document.getElementById('performanceGrade').textContent = grade;
+            document.getElementById('performanceStatus').className = `status-indicator ${status}`;
+        }
+        
+        function updateEntityPerformance(entityStats) {
+            const entitiesGrid = document.getElementById('entitiesGrid');
+            entitiesGrid.innerHTML = '';
+            
+            if (!entityStats || Object.keys(entityStats).length === 0) {
+                entitiesGrid.innerHTML = '<div class="text-gray-500 text-center py-8">No entity performance data available</div>';
+                return;
+            }
+            
+            // Sort entities by hit ratio
+            const sortedEntities = Object.entries(entityStats)
+                .sort(([,a], [,b]) => (b.hit_ratio || 0) - (a.hit_ratio || 0));
+            
+            sortedEntities.forEach(([entity, stats]) => {
+                const hitRatio = stats.hit_ratio || 0;
+                const hits = stats.hits || 0;
+                
+                const cardClass = hitRatio > 0.85 ? 'entity-card top-performer' : 
+                                 hitRatio < 0.70 ? 'entity-card needs-attention' : 'entity-card';
+                
+                const card = document.createElement('div');
+                card.className = cardClass;
+                card.innerHTML = `
+                    <div class="font-medium text-gray-900 capitalize">${entity.replace(/_/g, ' ')}</div>
+                    <div class="text-2xl font-bold mt-2">${(hitRatio * 100).toFixed(1)}%</div>
+                    <div class="text-sm text-gray-600">${hits.toLocaleString()} hits</div>
+                `;
+                
+                entitiesGrid.appendChild(card);
+            });
+        }
+        
+        function updateSystemInfo(data) {
+            const serviceData = data.service_cache;
+            const totalRequests = (serviceData.total_hits || 0) + (serviceData.total_misses || 0);
+            
+            document.getElementById('totalRequests').textContent = totalRequests.toLocaleString();
+            document.getElementById('systemUptime').textContent = `${(serviceData.uptime_hours || 0).toFixed(1)}h`;
+            document.getElementById('requestsPerMin').textContent = (serviceData.requests_per_minute || 0).toFixed(1);
+        }
+        
+        function updateAlerts(data) {
+            const container = document.getElementById('alertsContainer');
+            container.innerHTML = '';
+            
+            const serviceHitRatio = data.service_cache.hit_ratio || 0;
+            const memoryUsage = data.service_cache.memory_usage_mb || 0;
+            const memoryLimit = data.service_cache.max_memory_mb || 1000;
+            const memoryRatio = memoryUsage / memoryLimit;
+            
+            // Check for issues
+            if (serviceHitRatio < 0.80) {
+                showAlert('warning', `Service cache hit ratio is low (${(serviceHitRatio * 100).toFixed(1)}%). Consider cache warming or TTL adjustment.`);
+            }
+            
+            if (memoryRatio > 0.90) {
+                showAlert('error', `Memory usage is critical (${(memoryRatio * 100).toFixed(1)}%). Consider clearing cache or increasing memory limit.`);
+            } else if (memoryRatio > 0.75) {
+                showAlert('warning', `Memory usage is high (${(memoryRatio * 100).toFixed(1)}%). Monitor closely.`);
+            }
+            
+            // Success message if all is well
+            if (serviceHitRatio > 0.90 && memoryRatio < 0.75) {
+                showAlert('success', 'All cache systems are performing optimally!');
+            }
+        }
+        
+        function showAlert(type, message) {
+            const container = document.getElementById('alertsContainer');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            
+            const icon = type === 'success' ? 'fa-check-circle' : 
+                        type === 'warning' ? 'fa-exclamation-triangle' : 'fa-exclamation-circle';
+            
+            alert.innerHTML = `
+                <i class="fas ${icon}"></i>
+                <span>${message}</span>
+            `;
+            
+            container.appendChild(alert);
+        }
+        
+        function updateTrend(elementId, currentValue) {
+            // For now, show neutral trend - would need historical data for real trending
+            const trendElement = document.getElementById(elementId);
+            trendElement.innerHTML = '<i class="fas fa-arrow-right trend-neutral"></i><span>Stable</span>';
+        }
+        
+        function storeMetricsHistory(data) {
+            const timestamp = new Date();
+            
+            dashboardState.serviceHistory.push({
+                timestamp,
+                hitRatio: data.service_cache.hit_ratio || 0
+            });
+            
+            dashboardState.configHistory.push({
+                timestamp,
+                hitRatio: data.config_cache.hit_ratio || 0
+            });
+            
+            // Keep only last 20 entries for trending
+            if (dashboardState.serviceHistory.length > 20) {
+                dashboardState.serviceHistory.shift();
+            }
+            if (dashboardState.configHistory.length > 20) {
+                dashboardState.configHistory.shift();
+            }
+        }
+        
+        // Control functions
+        async function refreshNow() {
+            await refreshDashboard();
+        }
+        
+        async function clearAllCaches() {
+            if (!confirm('Are you sure you want to clear all caches? This may temporarily impact performance.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/admin/cache-dashboard/api/clear', { method: 'POST' });
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert('success', result.message);
+                    await refreshDashboard();
+                } else {
+                    showAlert('error', result.message);
+                }
+            } catch (error) {
+                showAlert('error', 'Failed to clear caches');
+            }
+        }
+        
+        async function warmupCaches() {
+            try {
+                const response = await fetch('/admin/cache-dashboard/api/warmup', { method: 'POST' });
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert('success', result.message);
+                    await refreshDashboard();
+                } else {
+                    showAlert('error', result.message);
+                }
+            } catch (error) {
+                showAlert('error', 'Failed to warm up caches');
+            }
+        }
+    </script>
+{% endblock %}

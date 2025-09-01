@@ -1,5 +1,5 @@
 """
-Authentication utility functions for SkinSpire Clinic
+Authentication utility functions for Skinspire Clinic
 
 This module provides helper functions for user authentication flows,
 focusing on the web route implementation with direct database access.
@@ -28,7 +28,7 @@ def get_or_create_hospital(session: Session) -> Hospital:
     if not hospital:
         # Create a default hospital for development/testing
         hospital = Hospital(
-            name="SkinSpire Clinic",
+            name="Skinspire Clinic",
             license_no="DEFAULT001",
             address={"street": "123 Main St", "city": "Bangalore"},
             contact_details={"phone": "1234567890", "email": "info@skinspire.com"}

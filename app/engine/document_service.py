@@ -1029,7 +1029,7 @@ class UniversalDocumentService:
                 # Company name
                 ws.merge_cells(f'A{current_row}:F{current_row}')
                 cell = ws[f'A{current_row}']
-                cell.value = hospital.get('name', 'SkinSpire Clinic')
+                cell.value = hospital.get('name', 'Skinspire Clinic')
                 cell.font = header_font
                 cell.alignment = Alignment(horizontal='center')
                 current_row += 1
@@ -1375,7 +1375,7 @@ class UniversalDocumentService:
                 
                 # Company name
                 company_para = left_cell.add_paragraph()
-                company_run = company_para.add_run(hospital.get('name', 'SkinSpire Clinic'))
+                company_run = company_para.add_run(hospital.get('name', 'Skinspire Clinic'))
                 company_run.font.size = Pt(16)
                 company_run.font.bold = True
                 

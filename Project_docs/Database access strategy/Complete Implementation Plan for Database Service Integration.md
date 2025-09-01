@@ -1,6 +1,6 @@
 # Complete Implementation Plan for Database Service Integration
 
-This document outlines the complete plan for integrating the new database service throughout the SkinSpire Clinic application.
+This document outlines the complete plan for integrating the new database service throughout the Skinspire Clinic application.
 
 ## Phase 1: Core Implementation (Completed)
 

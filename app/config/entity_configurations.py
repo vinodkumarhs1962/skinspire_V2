@@ -15,6 +15,8 @@ from app.config.core_definitions import (
     EntitySearchConfiguration, LayoutType
 )
 from app.config.filter_categories import FilterCategory
+from app.engine.universal_config_cache import get_cached_configuration_loader
+
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +36,9 @@ MODULE_MAPPING = {
     "users": "app.config.modules.master_entities",
     
     # Inventory entities (when implemented)
-    "medicines": "app.config.modules.inventory",
-    "stock_movements": "app.config.modules.inventory",
-    "purchase_orders": "app.config.modules.inventory",
+    # "medicines": "app.config.modules.inventory",
+    # "stock_movements": "app.config.modules.inventory",
+    "purchase_orders": "app.config.modules.purchase_orders_config",
 }
 
 # =============================================================================
@@ -114,7 +116,15 @@ class ConfigurationLoader:
         return self._search_configs.get(entity_type)
 
 # Global loader instance
-_loader = ConfigurationLoader()
+_loader = None  # Will be initialized with cached loader
+
+def _get_loader():
+    """Get the cached configuration loader (lazy initialization)"""
+    global _loader
+    if _loader is None:
+        from app.engine.universal_config_cache import get_cached_configuration_loader
+        _loader = get_cached_configuration_loader()
+    return _loader
 
 # =============================================================================
 # BACKWARD COMPATIBLE LAZY LOADING
@@ -195,8 +205,9 @@ ENTITY_SEARCH_CONFIGS = LazySearchConfigDict()
 # =============================================================================
 
 def get_entity_config(entity_type: str) -> Optional[EntityConfiguration]:
-    """Get entity configuration by type"""
-    return _loader.get_config(entity_type)
+    """Get entity configuration by type with caching"""
+    loader = _get_loader()
+    return loader.get_config(entity_type)
 
 def is_valid_entity_type(entity_type: str) -> bool:
     """Check if entity type is valid and registered"""
@@ -274,7 +285,8 @@ def get_entity_title_field(entity_type: str) -> Optional[str]:
 
 def get_entity_filter_config(entity_type: str) -> Optional[EntityFilterConfiguration]:
     """Get filter configuration for entity type"""
-    return _loader.get_filter_config(entity_type)
+    loader = _get_loader()
+    return loader.get_filter_config(entity_type)
 
 # =============================================================================
 # ENTITY SEARCH CONFIGURATION - CROSS-CUTTING
@@ -282,7 +294,8 @@ def get_entity_filter_config(entity_type: str) -> Optional[EntityFilterConfigura
 
 def get_entity_search_config(entity_type: str) -> Optional[EntitySearchConfiguration]:
     """Get search configuration for entity type"""
-    return _loader.get_search_config(entity_type)
+    loader = _get_loader()
+    return loader.get_search_config(entity_type)
 
 # =============================================================================
 # VALIDATION FUNCTIONS - PRESERVED

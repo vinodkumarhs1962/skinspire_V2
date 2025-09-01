@@ -1,4 +1,4 @@
-Revised Data Model for SkinSpire Clinic HMS
+Revised Data Model for Skinspire Clinic HMS
 Table Categories
 Based on your existing model structure and best practices, I'll organize the tables into three categories:
 
@@ -1607,7 +1607,7 @@ pythondef validate_discount(item_id, item_type, discount_percent):
             
         return True, "Discount is valid"
 Conclusion
-This comprehensive data model has been designed to efficiently handle the core business processes of SkinSpire Clinic HMS, with special attention to:
+This comprehensive data model has been designed to efficiently handle the core business processes of Skinspire Clinic HMS, with special attention to:
 
 GST Compliance: Proper separation of CGST, SGST, and IGST for accurate tax handling and reporting
 Inventory Management: Detailed batch tracking, expiry monitoring, and correct stock movement records

@@ -1,5 +1,5 @@
 /**
- * SkinSpire Clinic - Common Utilities
+ * Skinspire Clinic - Common Utilities
  * This file contains reusable utility functions for the application.
  */
 

@@ -1,6 +1,6 @@
 AP/AR Subledger Implementation Summary
 Overview
-This document summarizes the implementation of Accounts Payable (AP) and Accounts Receivable (AR) subledgers for the SkinSpire Clinic Hospital Management System. The subledgers provide detailed tracking of receivables and payables while integrating with the existing General Ledger (GL), invoice, and payment systems.
+This document summarizes the implementation of Accounts Payable (AP) and Accounts Receivable (AR) subledgers for the Skinspire Clinic Hospital Management System. The subledgers provide detailed tracking of receivables and payables while integrating with the existing General Ledger (GL), invoice, and payment systems.
 Architecture Highlights
 1. Design Principles
 

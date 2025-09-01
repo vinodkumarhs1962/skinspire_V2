@@ -1,6 +1,6 @@
-Let me review the entire project structure and documentation you've shared to map out the building blocks of the SkinSpire database management system and how they're interconnected.
+Let me review the entire project structure and documentation you've shared to map out the building blocks of the Skinspire database management system and how they're interconnected.
 
-# SkinSpire Database Management System: Building Blocks and Connections
+# Skinspire Database Management System: Building Blocks and Connections
 
 ## Core Building Blocks
 

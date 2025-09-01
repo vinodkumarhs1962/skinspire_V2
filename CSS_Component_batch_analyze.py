@@ -1,7 +1,7 @@
 # CSS_Component_batch_analyze.py
 # python CSS_Component_batch_analyze.py
 # FIXED VERSION - Windows encoding compatible
-# Batch analysis script for SkinSpire supplier templates
+# Batch analysis script for Skinspire supplier templates
 
 import os
 import sys

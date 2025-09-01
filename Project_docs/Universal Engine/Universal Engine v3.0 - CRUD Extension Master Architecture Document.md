@@ -6,7 +6,7 @@
 
 | **Attribute** | **Details** |
 |---------------|-------------|
-| **Project** | SkinSpire Clinic HMS - Universal Engine CRUD Extension |
+| **Project** | Skinspire Clinic HMS - Universal Engine CRUD Extension |
 | **Version** | Universal Engine v3.0 |
 | **Status** | **ARCHITECTURE DESIGN** |
 | **Architecture** | Entity-Agnostic CRUD Extension |

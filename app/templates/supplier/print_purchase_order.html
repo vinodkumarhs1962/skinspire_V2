@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Purchase Order #{{ po.po_number }} - SkinSpire Clinic</title>
+    <title>Purchase Order #{{ po.po_number }} - Skinspire Clinic</title>
     
     <!-- Minimal CSS for print only -->
     <style>
@@ -365,13 +365,13 @@
         <div class="header">
             <div class="logo">
                 {% if logo_url %}
-                    <img src="{{ logo_url }}" alt="SkinSpire Clinic" style="max-height: 80px; max-width: 200px;">
+                    <img src="{{ logo_url }}" alt="Skinspire Clinic" style="max-height: 80px; max-width: 200px;">
                 {% else %}
-                    SkinSpire Clinic
+                    Skinspire Clinic
                 {% endif %}
             </div>
             <div class="hospital-info">
-                <div>{{ hospital.name if hospital else "SkinSpire Clinic" }}</div>
+                <div>{{ hospital.name if hospital else "Skinspire Clinic" }}</div>
                 <div>{{ hospital.address if hospital else "702, Ideal Homes Township, Rajrajeshwari Nagar, Bangalore 560098" }}</div>
                 <div>Phone: {{ hospital.phone if hospital else "+91 9876543210" }}</div>
                 <div>Email: {{ hospital.email if hospital else "info@skinspire.com" }}</div>
@@ -582,7 +582,7 @@
         <!-- Authorized Signature -->
         <div class="authorized-signature">
             <div style="margin-bottom: 30px;">
-                For {{ hospital.name if hospital else "SkinSpire Clinic" }}
+                For {{ hospital.name if hospital else "Skinspire Clinic" }}
             </div>
             <div>
                 Authorized Signatory

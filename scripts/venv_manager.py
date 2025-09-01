@@ -179,7 +179,7 @@ class VenvManager:
             with open(activate_path, 'w') as f:
                 f.write(f"""@echo off
 call "{self.scripts_path}\\activate.bat"
-echo Virtual environment activated for SkinSpire project
+echo Virtual environment activated for Skinspire project
 echo Python path: {self.python_path}
 """)
                 

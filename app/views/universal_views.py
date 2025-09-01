@@ -1987,9 +1987,8 @@ def universal_document_view(entity_type: str, item_id: str, doc_type: str):
                 for section_group in assembled_data.get('field_sections', []):
                     for section in section_group.get('sections', []):
                         for field in section.get('fields', []):
-                            if field.get('name') == 'invoice_items_display':
-                                # Custom renderer data might be here
-                                logger.info(f"Found invoice_items_display field in assembled data")
+                            if field.get('custom_renderer'):
+                                logger.debug(f"Found custom renderer field: {field.get('name')}")
 
             logger.info(f"Document data ready with keys: {doc_data.keys() if isinstance(doc_data, dict) else 'not a dict'}")
         
@@ -2006,7 +2005,15 @@ def universal_document_view(entity_type: str, item_id: str, doc_type: str):
         
         # ===== ADD SERVICE FOR CUSTOM RENDERERS =====
         # Pass service object to template (same as universal_detail_view does)
+        service_methods = {}
+        for method_name in dir(service):
+            if not method_name.startswith('_'):  # Skip private methods
+                method = getattr(service, method_name)
+                if callable(method):
+                    service_methods[method_name] = method
+
         context['service'] = service
+        context['service_methods'] = service_methods
         context['current_hospital_id'] = current_user.hospital_id
         context['current_branch_id'] = branch_uuid
         context['item_id'] = item_id

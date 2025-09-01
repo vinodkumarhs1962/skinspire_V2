@@ -6,7 +6,7 @@
 
 | **Attribute** | **Details** |
 |---------------|-------------|
-| **Project** | SkinSpire Clinic HMS - Universal Engine CRUD Extension |
+| **Project** | Skinspire Clinic HMS - Universal Engine CRUD Extension |
 | **Version** | Universal Engine v3.1 |Built on v 3.0
 | **Status** | **IMPLEMENTED & TESTED** |
 | **Architecture** | Entity-Agnostic CRUD Extension |
@@ -491,7 +491,7 @@ Universal Engine v3.0 successfully extends the Universal Engine with CRUD operat
 - **✅ Delivers immediate value** - Working CRUD for suppliers
 - **✅ Ensures future scalability** - Easy to add new entities
 
-The system is production-ready and provides a solid foundation for managing all master entities in the SkinSpire Clinic HMS.
+The system is production-ready and provides a solid foundation for managing all master entities in the Skinspire Clinic HMS.
 
 ---
 
@@ -501,7 +501,7 @@ The system is production-ready and provides a solid foundation for managing all 
 - Universal Engine v2.0 Master Documentation
 - Entity Configuration Guide
 - Universal Engine Architecture Principles
-- SkinSpire HMS Technical Guidelines v2.0
+- Skinspire HMS Technical Guidelines v2.0
 
 ### **Code References**
 - Entity Registry: `app/config/entity_registry.py`

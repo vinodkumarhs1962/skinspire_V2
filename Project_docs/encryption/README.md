@@ -1,7 +1,7 @@
-# SkinSpire Encryption System Documentation
+# Skinspire Encryption System Documentation
 
 ## Overview
-This documentation covers the complete implementation of the encryption system in SkinSpire, including concepts, technical details, and testing guidelines.
+This documentation covers the complete implementation of the encryption system in Skinspire, including concepts, technical details, and testing guidelines.
 
 ## Documentation Structure
 - **01_concept.md**: Core concepts and system overview

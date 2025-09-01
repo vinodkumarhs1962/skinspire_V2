@@ -1,8 +1,8 @@
-# SkinSpire User Management and Authorization Documentation
+# Skinspire User Management and Authorization Documentation
 
 ## Architecture Overview
 
-SkinSpire implements a comprehensive role-based access control (RBAC) system with a multi-tenant architecture designed for healthcare environments that require rigorous security and data partitioning.
+Skinspire implements a comprehensive role-based access control (RBAC) system with a multi-tenant architecture designed for healthcare environments that require rigorous security and data partitioning.
 
 ### Core Components
 

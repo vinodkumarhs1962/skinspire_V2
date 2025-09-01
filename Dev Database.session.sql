@@ -1,4 +1,4 @@
--- SQL Migration Script for SkinSpire Database
+-- SQL Migration Script for Skinspire Database
 -- Date: 2025-04-19
 
 -- Determine the correct invoice headers table name

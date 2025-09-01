@@ -1,10 +1,10 @@
-# SkinSpire Authentication System: Lessons Learned
+# Skinspire Authentication System: Lessons Learned
 
 ## 1. Authentication System Documentation
 
 ### Key Components
 
-The SkinSpire authentication system consists of the following essential components:
+The Skinspire authentication system consists of the following essential components:
 
 1. **Login Process**
    - Validates user credentials against stored records
@@ -103,7 +103,7 @@ Ideally, we aim for a balance:
 
 ### Improvements for Future
 
-For SkinSpire, here are some recommendations for improving the balance:
+For Skinspire, here are some recommendations for improving the balance:
 
 1. **Move Common Test Logic to Fixtures**
    - Create reusable fixtures for common test setup

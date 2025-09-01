@@ -1,4 +1,4 @@
-# SkinSpire Hospital Management System - Implementation Plan
+# Skinspire Hospital Management System - Implementation Plan
 
 ## 1. Database Layer Improvements
 

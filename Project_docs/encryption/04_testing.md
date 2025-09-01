@@ -1,8 +1,8 @@
-# Testing Guide for SkinSpire Encryption System
+# Testing Guide for Skinspire Encryption System
 
 ## Introduction
 
-The testing framework for the SkinSpire encryption system ensures the security, reliability, and correctness of all encryption operations. This document provides comprehensive guidance on testing the encryption system, including setup procedures, test cases, and validation methods.
+The testing framework for the Skinspire encryption system ensures the security, reliability, and correctness of all encryption operations. This document provides comprehensive guidance on testing the encryption system, including setup procedures, test cases, and validation methods.
 
 ## Test Environment Setup
 

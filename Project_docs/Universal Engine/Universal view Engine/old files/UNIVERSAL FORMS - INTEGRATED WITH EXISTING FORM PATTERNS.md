@@ -1,6 +1,6 @@
 # =============================================================================
 # UNIVERSAL FORMS - INTEGRATED WITH EXISTING FORM PATTERNS
-# Following SkinSpire HMS Existing Form Structure and Patterns
+# Following Skinspire HMS Existing Form Structure and Patterns
 # =============================================================================
 
 # =============================================================================

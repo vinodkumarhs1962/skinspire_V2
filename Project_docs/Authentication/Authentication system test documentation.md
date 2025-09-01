@@ -1,8 +1,8 @@
-# Documentation: SkinSpire Authentication System Verification
+# Documentation: Skinspire Authentication System Verification
 
 ## Overview of verify_core.py
 
-The `verify_core.py` script serves as a comprehensive verification tool for the SkinSpire Hospital Management System's authentication and security components. It provides a structured way to validate both individual components (unit testing) and end-to-end flows (integration testing) across the system.
+The `verify_core.py` script serves as a comprehensive verification tool for the Skinspire Hospital Management System's authentication and security components. It provides a structured way to validate both individual components (unit testing) and end-to-end flows (integration testing) across the system.
 
 ## Running Modes
 
@@ -54,7 +54,7 @@ The script verifies the following key components:
 
 ## Business Significance
 
-A successful run of `verify_core.py` confirms that the SkinSpire HMS meets critical business requirements:
+A successful run of `verify_core.py` confirms that the Skinspire HMS meets critical business requirements:
 
 ### Security Requirements
 
@@ -139,4 +139,4 @@ Regular verification of the authentication system ensures:
 4. **Development Confidence**: Clear feedback on the impact of code changes
 5. **Operational Readiness**: Confirmation that systems are functioning as expected
 
-By maintaining both unit test and integration test capabilities, the verification system provides a comprehensive approach to ensuring the SkinSpire HMS authentication system remains secure, reliable, and user-friendly throughout its development lifecycle.
+By maintaining both unit test and integration test capabilities, the verification system provides a comprehensive approach to ensuring the Skinspire HMS authentication system remains secure, reliable, and user-friendly throughout its development lifecycle.

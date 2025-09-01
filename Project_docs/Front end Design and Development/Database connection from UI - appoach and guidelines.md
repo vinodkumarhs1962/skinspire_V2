@@ -1,8 +1,8 @@
-# Database Connection & Access Patterns in SkinSpire Clinic System
+# Database Connection & Access Patterns in Skinspire Clinic System
 
 ## Overview
 
-The SkinSpire Clinic System uses a dual-approach database access pattern that serves both testing needs and UI operations. Understanding when to use each approach is crucial for maintaining application consistency, security, and testability.
+The Skinspire Clinic System uses a dual-approach database access pattern that serves both testing needs and UI operations. Understanding when to use each approach is crucial for maintaining application consistency, security, and testability.
 
 ## Core Database Access Patterns
 
@@ -317,7 +317,7 @@ def create_appointment():
 
 ## Conclusion
 
-By following these guidelines consistently, the SkinSpire Clinic system will maintain clean database access patterns that work well for both UI components and testing. The dual approach allows flexibility while ensuring code remains testable and maintainable.
+By following these guidelines consistently, the Skinspire Clinic system will maintain clean database access patterns that work well for both UI components and testing. The dual approach allows flexibility while ensuring code remains testable and maintainable.
 
 Remember the key principles:
 - Use direct database access for simple operations and testing compatibility

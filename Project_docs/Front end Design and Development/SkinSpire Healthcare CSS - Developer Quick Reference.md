@@ -1,4 +1,4 @@
-# SkinSpire Healthcare CSS - Developer Quick Reference
+# Skinspire Healthcare CSS - Developer Quick Reference
 
 ## 🚀 **Essential Component Classes**
 

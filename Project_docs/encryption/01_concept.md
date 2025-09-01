@@ -1,4 +1,4 @@
-# SkinSpire Encryption System - Core Concepts
+# Skinspire Encryption System - Core Concepts
 
 ## Table of Contents
 1. [System Overview](#system-overview)
@@ -10,7 +10,7 @@
 ## System Overview
 
 ### Purpose
-The encryption system serves as the security backbone of SkinSpire, providing:
+The encryption system serves as the security backbone of Skinspire, providing:
 - Protection of sensitive patient medical data
 - HIPAA compliance enforcement
 - Multi-tenant data isolation

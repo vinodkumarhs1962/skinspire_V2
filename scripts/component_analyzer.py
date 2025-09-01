@@ -2,7 +2,7 @@
 # scripts/component_analyzer
 # python CSS_Component_batch_analyze.py
 """
-Enhanced Component Analyzer for SkinSpire Healthcare CSS Component Library
+Enhanced Component Analyzer for Skinspire Healthcare CSS Component Library
 Recognizes all financial and healthcare components including new enhancements
 """
 

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Payment Receipt #{{ payment.reference_no or payment.payment_id|string|truncate(8, true, '') }} - {{ hospital.name if hospital else "SkinSpire Clinic" }}</title>
+    <title>Payment Receipt #{{ payment.reference_no or payment.payment_id|string|truncate(8, true, '') }} - {{ hospital.name if hospital else "Skinspire Clinic" }}</title>
     
     <!-- Print-optimized CSS -->
     <style>
@@ -354,13 +354,13 @@
         <div class="header">
             <div class="logo">
                 {% if logo_url %}
-                    <img src="{{ logo_url }}" alt="{{ hospital.name if hospital else 'SkinSpire Clinic' }}" style="max-height: 80px; max-width: 200px;">
+                    <img src="{{ logo_url }}" alt="{{ hospital.name if hospital else 'Skinspire Clinic' }}" style="max-height: 80px; max-width: 200px;">
                 {% else %}
-                    <div style="font-size: 18px; font-weight: bold;">{{ hospital.name if hospital else "SkinSpire Clinic" }}</div>
+                    <div style="font-size: 18px; font-weight: bold;">{{ hospital.name if hospital else "Skinspire Clinic" }}</div>
                 {% endif %}
             </div>
             <div class="hospital-info">
-                <h1>{{ hospital.name if hospital else "SkinSpire Clinic" }}</h1>
+                <h1>{{ hospital.name if hospital else "Skinspire Clinic" }}</h1>
                 <div class="subtitle">Payment Receipt</div>
                 {% if hospital %}
                 <div class="text-sm">
@@ -664,7 +664,7 @@
         <!-- Authorized Signature -->
         <div class="authorized-signature">
             <div style="margin-bottom: 30px;">
-                For {{ hospital.name if hospital else "SkinSpire Clinic" }}
+                For {{ hospital.name if hospital else "Skinspire Clinic" }}
             </div>
             <div>
                 Authorized Signatory

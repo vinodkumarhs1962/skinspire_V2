@@ -58,7 +58,7 @@ class VerificationService:
             
             # Send message
             message = client.messages.create(
-                body=f'Your SkinSpire Clinic verification code is: {code}. This code will expire in {cls.OTP_EXPIRY_MINUTES} minutes.',
+                body=f'Your Skinspire Clinic verification code is: {code}. This code will expire in {cls.OTP_EXPIRY_MINUTES} minutes.',
                 from_=whatsapp_from,
                 to=whatsapp_to
             )
@@ -90,7 +90,7 @@ class VerificationService:
             
             # Create message container
             message = MIMEMultipart('alternative')
-            message['Subject'] = 'SkinSpire Clinic - Email Verification Code'
+            message['Subject'] = 'Skinspire Clinic - Email Verification Code'
             message['From'] = gmail_email
             message['To'] = email
             
@@ -111,7 +111,7 @@ class VerificationService:
             <body>
                 <div class="container">
                     <div class="header">
-                        <h2>SkinSpire Clinic</h2>
+                        <h2>Skinspire Clinic</h2>
                     </div>
                     <div class="content">
                         <p>Dear Patient,</p>
@@ -119,7 +119,7 @@ class VerificationService:
                         <div class="code">{code}</div>
                         <p>This code will expire in {cls.OTP_EXPIRY_MINUTES} minutes.</p>
                         <p>If you did not request this code, please ignore this email.</p>
-                        <p>Regards,<br>SkinSpire Clinic Team</p>
+                        <p>Regards,<br>Skinspire Clinic Team</p>
                     </div>
                     <div class="footer">
                         <p>This is an automated message. Please do not reply to this email.</p>
@@ -131,7 +131,7 @@ class VerificationService:
             
             # Create plain text version (fallback)
             text = f"""
-            SkinSpire Clinic - Email Verification
+            Skinspire Clinic - Email Verification
             
             Your verification code is: {code}
             
@@ -140,7 +140,7 @@ class VerificationService:
             If you did not request this code, please ignore this email.
             
             Regards,
-            SkinSpire Clinic Team
+            Skinspire Clinic Team
             """
             
             # Attach parts to message

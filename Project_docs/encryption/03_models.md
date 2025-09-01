@@ -1,7 +1,7 @@
-# Method Documentation for SkinSpire Encryption System
+# Method Documentation for Skinspire Encryption System
 
 ## Introduction
-This document provides comprehensive documentation for all methods in the SkinSpire encryption system. Each method is documented with its purpose, parameters, return values, exceptions, and usage examples.
+This document provides comprehensive documentation for all methods in the Skinspire encryption system. Each method is documented with its purpose, parameters, return values, exceptions, and usage examples.
 
 ## Field Encryption Methods
 

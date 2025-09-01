@@ -39,7 +39,7 @@ def test_test_hospital_exists():
         
         assert hospital is not None, "Test hospital fixture returned None"
         assert hospital.license_no == "HC123456", "Wrong test hospital license number"
-        assert hospital.name == "SkinSpire Main Clinic", "Wrong test hospital name"
+        assert hospital.name == "Skinspire Main Clinic", "Wrong test hospital name"
     
     logger.info("Test hospital exists with correct attributes")
 

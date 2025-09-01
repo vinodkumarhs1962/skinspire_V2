@@ -22,6 +22,7 @@ from app.services.database_service import get_db_session
 from app.utils.unicode_logging import get_unicode_safe_logger
 from app.engine.universal_filter_service import get_universal_filter_service
 from app.engine.categorized_filter_processor import get_categorized_filter_processor
+from app.engine.universal_service_cache import cache_service_method, cache_universal
 
 logger = get_unicode_safe_logger(__name__)
 
@@ -38,38 +39,250 @@ class UniversalServiceRegistry:
     def __init__(self):
         self.service_registry = {
             'supplier_payments': 'app.services.supplier_payment_service.SupplierPaymentService',  # NEW
-            'suppliers': 'app.services.supplier_master_service.SupplierMasterService',  # NEW
+            'suppliers': 'app.services.supplier_master_service.SupplierMasterService',
+            'purchase_orders': 'app.services.purchase_order_service.PurchaseOrderService',
             'patients': 'app.services.patient_service.PatientService',  # Future
             'medicines': 'app.services.medicine_service.MedicineService'  # Future
         }
         
+        # ⭐ Service instance cache to prevent multiple initializations
+        self._service_instance_cache = {}
+
         self.filter_service = get_universal_filter_service()
         self.categorized_processor = get_categorized_filter_processor()
+        self.entity_type = 'registry'
+        
     
-    def get_service(self, entity_type: str):
-        """Get appropriate service for entity type"""
-        try:
-            service_path = self.service_registry.get(entity_type)
 
-            if not service_path:
-                return GenericUniversalService(entity_type)
+    def get_service(self, entity_type: str):
+        """
+        COMPLETE get_service method with all fixes
+        Priority:
+        1. Check instance cache
+        2. Check entity_registry.py 
+        3. Check legacy hardcoded registry
+        4. Fall back to generic
+        """
+        try:
+            # ⭐ STEP 1: Check if service instance already cached
+            if entity_type in self._service_instance_cache:
+                logger.debug(f"✅ Using cached service instance for {entity_type}")
+                return self._service_instance_cache[entity_type]
             
-            # Try to import entity-specific service
-            try:
+            # ⭐ STEP 2: Try to load from entity_registry.py FIRST
+            service_instance = self._load_from_entity_registry(entity_type)
+            if service_instance:
+                logger.info(f"[SUCCESS] Loaded from entity_registry: {service_instance.__class__.__name__}")
+                # Cache it!
+                self._service_instance_cache[entity_type] = service_instance
+                return service_instance
+            
+            # ⭐ STEP 3: Try legacy hardcoded registry (backward compatibility)
+            service_instance = self._load_from_legacy_registry(entity_type)
+            if service_instance:
+                logger.info(f"⚠️ Loaded from legacy registry for {entity_type}")
+                # Cache it!
+                self._service_instance_cache[entity_type] = service_instance
+                return service_instance
+            
+            # ⭐ STEP 4: Fall back to generic service
+            logger.info(f"ℹ️ No custom service found for {entity_type}, using generic service")
+            from app.engine.universal_entity_service import GenericUniversalService
+            generic_service = GenericUniversalService(entity_type)
+            
+            # Cache even the generic service
+            self._service_instance_cache[entity_type] = generic_service
+            return generic_service
+            
+        except Exception as e:
+            logger.error(f"❌ Error getting service for {entity_type}: {str(e)}")
+            # Return generic on any error
+            from app.engine.universal_entity_service import GenericUniversalService
+            return GenericUniversalService(entity_type)
+    
+    def _load_from_entity_registry(self, entity_type: str):
+        """
+        Helper method to load service from entity_registry.py
+        This is the PREFERRED method
+        """
+        try:
+            from app.config.entity_registry import get_entity_registration
+            
+            registration = get_entity_registration(entity_type)
+            
+            if not registration:
+                logger.debug(f"No registration found for {entity_type}")
+                return None
+            
+            if not registration.service_class:
+                logger.debug(f"No service_class defined for {entity_type}")
+                return None
+            
+            # Parse the service class path
+            service_path = registration.service_class
+            logger.debug(f"Found service_class for {entity_type}: {service_path}")
+            
+            # Handle both string paths and actual class references
+            if isinstance(service_path, str):
+                # It's a string path like 'app.services.purchase_order_service.PurchaseOrderService'
                 module_path, class_name = service_path.rsplit('.', 1)
                 module = importlib.import_module(module_path)
                 service_class = getattr(module, class_name)
-
-                return service_class()
-            except (ImportError, AttributeError) as e:
-                logger.warning(f"Could not load service {service_path}: {str(e)}, using fallback")
-                # Fallback to built-in services
-                return self._get_builtin_service(entity_type)
+            else:
+                # It's already a class reference
+                service_class = service_path
             
+            # Instantiate the service
+            if callable(service_class):
+                service_instance = service_class()
+                logger.debug(f"✅ Successfully instantiated {service_class.__name__} from entity_registry")
+                return service_instance
+            else:
+                # Already an instance (shouldn't happen but handle it)
+                return service_class
+                
         except Exception as e:
-            logger.error(f"Error getting service for {entity_type}: {str(e)}")
-            return GenericUniversalService(entity_type)
+            logger.error(f"Failed to load from entity_registry for {entity_type}: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
     
+    def _load_from_legacy_registry(self, entity_type: str):
+        """
+        Helper method to load from legacy hardcoded registry
+        For backward compatibility only
+        """
+        try:
+            service_path = self.service_registry.get(entity_type)
+            
+            if not service_path:
+                return None
+            
+            logger.debug(f"Found in legacy registry: {entity_type} -> {service_path}")
+            
+            # Parse and load the service
+            module_path, class_name = service_path.rsplit('.', 1)
+            module = importlib.import_module(module_path)
+            service_class = getattr(module, class_name)
+            
+            if callable(service_class):
+                service_instance = service_class()
+                logger.debug(f"✅ Instantiated {class_name} from legacy registry")
+                return service_instance
+            else:
+                # Already an instance
+                return service_class
+                
+        except Exception as e:
+            logger.error(f"Failed to load from legacy registry for {entity_type}: {str(e)}")
+            return None
+    
+    def clear_service_cache(self, entity_type: str = None):
+        """
+        Clear cached service instances
+        Useful for testing or when services are updated
+        """
+        if entity_type:
+            if entity_type in self._service_instance_cache:
+                del self._service_instance_cache[entity_type]
+                logger.info(f"🧹 Cleared cached service for {entity_type}")
+        else:
+            self._service_instance_cache.clear()
+            logger.info("🧹 Cleared all cached services")
+    
+    def search_entity_data(self, entity_type: str, filters: Dict, **kwargs) -> Dict:
+        """
+        Route search to appropriate service
+        This method is called by views
+        """
+        # Get the service (will be cached)
+        service = self.get_service(entity_type)
+        
+        # Call the appropriate method based on what the service has
+        if hasattr(service, 'search_entity_data'):
+            # Preferred method name
+            return service.search_entity_data(filters=filters, **kwargs)
+        elif hasattr(service, 'search_data'):
+            # Alternative method name
+            return service.search_data(filters=filters, **kwargs)
+        else:
+            logger.error(f"Service for {entity_type} has no search method")
+            return {
+                'items': [],
+                'total': 0,
+                'pagination': {'total_count': 0, 'page': 1, 'per_page': 20},
+                'summary': {},
+                'success': False,
+                'error': 'Service has no search method'
+            }
+    
+    def get_item_data(self, entity_type: str, item_id: str, **kwargs) -> Dict:
+        """
+        âœ… FIXED: Universal get item function with proper wrapping for data assembler
+        """
+        logger.info(f"ðŸ get_item_data called for {entity_type}: {item_id}")
+        
+        # Get the service (will be cached)
+        service = self.get_service(entity_type)
+        
+        # Try different method names that services might implement
+        result = None
+        
+        # Try get_by_id first (most common)
+        if hasattr(service, 'get_by_id'):
+            result = service.get_by_id(item_id, **kwargs)
+            if result:
+                logger.info(f"âœ… Found item using get_by_id")
+        
+        # Try get_detail_data if get_by_id didn't work
+        if not result and hasattr(service, 'get_detail_data'):
+            result = service.get_detail_data(item_id, **kwargs)
+            if result:
+                logger.info(f"âœ… Found item using get_detail_data")
+                # Check if already wrapped
+                if isinstance(result, dict) and 'item' in result:
+                    # Already wrapped by service, return as is
+                    return result
+        
+        # Try get_item_data if others didn't work
+        if not result and hasattr(service, 'get_item_data'):
+            result = service.get_item_data(item_id, **kwargs)
+            if result:
+                logger.info(f"âœ… Found item using get_item_data")
+        
+        if not result:
+            logger.error(f"âŒ No item found for {entity_type}: {item_id}")
+            logger.error(f"   Service class: {service.__class__.__name__}")
+            logger.error(f"   Available methods: {[m for m in dir(service) if not m.startswith('_')]}")
+            return None  # Return None if not found
+        
+        # âœ… CRITICAL FIX: Wrap the result for data assembler
+        # The data assembler expects {'item': data} format
+        if isinstance(result, dict):
+            # Check if already wrapped
+            if 'item' in result:
+                # Already wrapped, return as is
+                return result
+            else:
+                # Not wrapped, wrap it now
+                wrapped_result = {
+                    'item': result,
+                    'has_error': False,
+                    'entity_type': entity_type,
+                    'item_id': item_id
+                }
+                logger.info(f"âœ… Wrapped result for data assembler")
+                return wrapped_result
+        else:
+            # Non-dict result (shouldn't happen but handle it)
+            logger.warning(f"âš ï¸ Non-dict result from service: {type(result)}")
+            return {
+                'item': result,
+                'has_error': False,
+                'entity_type': entity_type,
+                'item_id': item_id
+            }
+
     def _get_builtin_service(self, entity_type: str):
         """Get built-in service implementations"""
         # Remove supplier_payments special handling since it's in registry
@@ -78,139 +291,6 @@ class UniversalServiceRegistry:
         else:
             return GenericUniversalService(entity_type)
     
-    def search_entity_data(self, entity_type: str, filters: Dict, **kwargs) -> Dict:
-        """
-        ✅ CLEAN ROUTING: Route to existing complete filtering system
-        Uses existing infrastructure - no duplicate logic
-        ✅ FIXED: Added breakdown enhancement to maintain feature parity
-        """
-        try:
-            
-            service = self.get_service(entity_type)
-            logger.debug(f"Routing {entity_type} to service: {type(service).__name__}")
-
-            # ✅ NEW: Extract complete filters from request if available
-            import flask
-            if flask.has_request_context() and flask.request:
-                complete_filters = filters.copy()
-                
-                # Extract ALL parameters from request.args that aren't already in filters
-                for key in flask.request.args.keys():
-                    if key not in complete_filters:
-                        # Get all values for this key
-                        values = flask.request.args.getlist(key)
-                        
-                        # Skip empty values
-                        values = [v for v in values if v and v.strip()]
-                        
-                        if values:
-                            # Single value - store as string
-                            if len(values) == 1:
-                                complete_filters[key] = values[0]
-                            # Multiple values - store as list
-                            else:
-                                complete_filters[key] = values
-                                
-                                # For backward compatibility, also set singular version
-                                # e.g., 'statuses' -> 'status'
-                                if key.endswith('s') and key != 'status':
-                                    singular_key = key[:-1]
-                                    if singular_key not in complete_filters:
-                                        complete_filters[singular_key] = values[0]
-                
-                filters = complete_filters
-
-
-            # Extract basic parameters
-            hospital_id = kwargs.get('hospital_id') or (current_user.hospital_id if current_user else None)
-            branch_id = kwargs.get('branch_id')
-            page = kwargs.get('page', 1)
-            per_page = kwargs.get('per_page', 20)
-            
-            if not hospital_id:
-                raise ValueError("Hospital ID is required")
-            
-            # Route to existing complete filter system
-            filter_data = self.filter_service.get_complete_filter_data(
-                entity_type=entity_type,
-                hospital_id=hospital_id,
-                branch_id=branch_id,
-                current_filters=filters
-            )
-            
-            # Route query execution to categorized processor (where DB logic belongs)
-            result = self.categorized_processor.execute_complete_search(
-                entity_type=entity_type,
-                filters=filters, # Now has ALL parameters from request
-                filter_data=filter_data,
-                hospital_id=hospital_id,
-                branch_id=branch_id,
-                page=page,
-                per_page=per_page
-            )
-            
-            # ✅ CRITICAL FIX: Enhance result with breakdowns if successful
-            # This maintains 100% backward compatibility while fixing the breakdown issue
-            if result and result.get('success'):
-                result = self._enhance_result_with_breakdowns(entity_type, result, filters)
-            
-            return result
-            
-        except Exception as e:
-            logger.error(f"Error in search_entity_data for {entity_type}: {str(e)}")
-            # ✅ Maintain backward compatibility with existing error response structure
-            return {
-                'items': [],
-                'total': 0,
-                'page': page if 'page' in locals() else 1,
-                'per_page': per_page if 'per_page' in locals() else 20,
-                'total_pages': 0,
-                'pagination': {
-                    'total_count': 0,
-                    'page': page if 'page' in locals() else 1,
-                    'per_page': per_page if 'per_page' in locals() else 20,
-                    'total_pages': 0
-                },
-                'summary': {'total_count': 0},
-                'success': False,
-                'error': str(e),
-                'entity_type': entity_type
-            }
-        
-    def get_item_data(self, entity_type: str, item_id: str, **kwargs) -> Dict:
-        """
-        Get single item data - SAME PATTERN as search_entity_data
-        """
-        try:
-            # Get service using existing registry logic
-            service = self.get_service(entity_type)
-            
-            if not service:
-                return {
-                    'has_error': True, 
-                    'error': f'Service not available for {entity_type}', 
-                    'item': None
-                }
-            
-            # Call get_by_id method (which already exists)
-            item = service.get_by_id(
-                item_id=item_id,
-                hospital_id=kwargs.get('hospital_id'),
-                branch_id=kwargs.get('branch_id'),
-                current_user_id=kwargs.get('current_user_id')
-            )
-            
-            return {
-                'has_error': False if item else True,
-                'error': None if item else 'Record not found',
-                'item': item,
-                'entity_type': entity_type,
-                'item_id': item_id
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Registry get_item_data error: {str(e)}")
-            return {'has_error': True, 'error': str(e), 'item': None}
 
 
     def _get_error_result(self, error_message: str, entity_type: str = None, **kwargs) -> Dict:
@@ -474,6 +554,107 @@ class UniversalServiceRegistry:
             'metadata': {'orchestrated_by': 'universal_service'}
         }
 
+# ============================================================================
+# Create global instance
+# ============================================================================
+
+# Global registry instance that will be used throughout the app
+_service_registry = UniversalServiceRegistry()
+
+# ============================================================================
+# Convenience functions
+# ============================================================================
+
+def get_universal_service(entity_type: str):
+    """
+    Convenience function to get service for an entity type
+    """
+    return _service_registry.get_service(entity_type)
+
+def clear_service_cache(entity_type: str = None):
+    """
+    Convenience function to clear service cache
+    """
+    _service_registry.clear_service_cache(entity_type)
+
+def search_universal_entity_data(entity_type: str, filters: Dict, **kwargs) -> Dict:
+    """
+    Convenience function for searching entity data
+    """
+    return _service_registry.search_entity_data(entity_type, filters, **kwargs)
+
+def get_universal_item_data(entity_type: str, item_id: str, **kwargs) -> Dict:
+    """
+    Convenience function for getting single item
+    """
+    return _service_registry.get_item_data(entity_type, item_id, **kwargs)
+
+# ============================================================================
+# Testing function
+# ============================================================================
+
+def test_service_loading(entity_type: str = 'purchase_orders'):
+    """
+    Test function to verify service is loading correctly
+    """
+    print(f"\n{'='*60}")
+    print(f"Testing service loading for: {entity_type}")
+    print('='*60)
+    
+    # Clear cache first
+    _service_registry.clear_service_cache(entity_type)
+    print("✅ Cache cleared")
+    
+    # Load service
+    service = _service_registry.get_service(entity_type)
+    print(f"✅ Service loaded: {service.__class__.__name__}")
+    
+    # Check if it's cached
+    service2 = _service_registry.get_service(entity_type)
+    if service is service2:
+        print("✅ Service is properly cached (same instance)")
+    else:
+        print("❌ Service not cached (different instances)")
+    
+    # Check methods
+    methods = {
+        '_calculate_summary': hasattr(service, '_calculate_summary'),
+        '_add_relationships_to_item': hasattr(service, '_add_relationships_to_item'),
+        'get_summary_stats': hasattr(service, 'get_summary_stats'),
+        'search_entity_data': hasattr(service, 'search_entity_data'),
+        'search_data': hasattr(service, 'search_data')
+    }
+    
+    print("\nMethods available:")
+    for method, exists in methods.items():
+        status = "✅" if exists else "❌"
+        print(f"  {status} {method}")
+    
+    return service
+
+# Log that the module loaded successfully
+logger.info("✅ Universal Services module loaded with enhanced registry")
+
+# ============================================================================
+# USAGE EXAMPLE
+# ============================================================================
+"""
+# To use this in your app:
+
+# 1. Import the registry
+from app.engine.universal_services import _service_registry
+
+# 2. Get a service
+service = _service_registry.get_service('purchase_orders')
+
+# 3. Use the service
+result = service.search_entity_data(filters={}, hospital_id=some_id)
+
+# 4. Clear cache if needed
+_service_registry.clear_service_cache('purchase_orders')
+"""
+    
+
 class GenericUniversalService:
     """
     ✅ ENTITY AGNOSTIC: Generic service for entities without specific implementations
@@ -483,7 +664,8 @@ class GenericUniversalService:
     def __init__(self, entity_type: str):
         self.entity_type = entity_type
         logger.info(f"✅ Initialized generic service for {entity_type}")
-        
+
+    @cache_service_method()    
     def search_data(self, **kwargs) -> dict:
         """✅ ENTITY AGNOSTIC: Generic search implementation"""
         try:
@@ -674,7 +856,9 @@ class UniversalPatientService:
     
     def __init__(self):
         logger.info("✅ Initialized UniversalPatientService (stub implementation)")
+        self.entity_type = 'patients'
     
+    @cache_service_method('patients', 'search_data')
     def search_data(self, **kwargs) -> Dict:
         """✅ STUB: Search patients - implement using your existing patient service"""
         try:
@@ -760,6 +944,7 @@ def get_universal_item_data(entity_type: str, item_id: str, **kwargs) -> Dict:
     """
     return _service_registry.get_item_data(entity_type, item_id, **kwargs)
 
+@cache_universal('filters', 'get_filter_choices') 
 def get_universal_filter_choices(entity_type: str, hospital_id: Optional[uuid.UUID] = None) -> Dict:
     """
     ✅ ADD: Universal filter choices function
@@ -796,85 +981,3 @@ def get_universal_filter_choices(entity_type: str, hospital_id: Optional[uuid.UU
         }
 
 logger.info("✅ Universal Services loaded with enhanced registry and parameter fixes")
-
-
-# def register_universal_service(entity_type: str, service_path: str):
-#     """
-#     ✅ ENTITY AGNOSTIC: Register a new universal service for ANY entity type
-    
-#     Args:
-#         entity_type: The entity type (e.g., 'medicines', 'invoices')
-#         service_path: Full path to service class (e.g., 'app.services.medicine_service.UniversalMedicineService')
-#     """
-#     try:
-#         _service_registry.service_registry[entity_type] = service_path
-#         logger.info(f"✅ Universal service registered for {entity_type}: {service_path}")
-#     except Exception as e:
-#         logger.error(f"Error registering service for {entity_type}: {str(e)}")
-
-
-# def list_registered_services() -> List[str]:
-#     """✅ ENTITY AGNOSTIC: Get list of all registered universal service entity types"""
-#     return list(_service_registry.service_registry.keys())
-
-
-# Validation and testing functions
-# def validate_service_interface(service_instance, entity_type: str) -> List[str]:
-#     """
-#     Validate that a service implements the required interface
-#     Returns list of missing methods or errors
-#     """
-#     errors = []
-#     required_methods = ['search_data', 'get_by_id', 'create', 'update', 'delete']
-    
-#     for method_name in required_methods:
-#         if not hasattr(service_instance, method_name):
-#             errors.append(f"Missing required method: {method_name}")
-#         elif not callable(getattr(service_instance, method_name)):
-#             errors.append(f"Method {method_name} is not callable")
-    
-#     return errors
-
-
-# def test_universal_service(entity_type: str) -> bool:
-#     """
-#     Test universal service for basic functionality
-#     Returns True if service passes basic tests
-#     """
-#     try:
-#         service = get_universal_service(entity_type)
-        
-#         # Validate interface
-#         errors = validate_service_interface(service, entity_type)
-#         if errors:
-#             logger.error(f"❌ Service validation failed for {entity_type}: {errors}")
-#             return False
-        
-#         logger.info(f"✅ Universal service validation passed for {entity_type}")
-#         return True
-        
-#     except Exception as e:
-#         logger.error(f"❌ Service test failed for {entity_type}: {str(e)}")
-#         return False
-
-
-# Test all registered services
-# def test_all_services():
-#     """Test all registered universal services"""
-#     results = {}
-#     for entity_type in _service_registry.service_registry.keys():
-#         results[entity_type] = test_universal_service(entity_type)
-    
-#     # Print results
-#     print("\n🧪 Universal Service Test Results:")
-#     print("=" * 50)
-#     for entity_type, passed in results.items():
-#         status = "✅ PASSED" if passed else "❌ FAILED"
-#         print(f"{entity_type:20} {status}")
-    
-#     return results
-
-
-# Run tests when module is imported in development
-# if __name__ == "__main__":
-#     test_all_services()

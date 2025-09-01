@@ -1,7 +1,7 @@
-SkinSpire Clinic HMS Technical Development Guidelines
+Skinspire Clinic HMS Technical Development Guidelines
 System Architecture Overview
 Multi-Tenant Architecture
-SkinSpire HMS is designed as a multi-tenant system with the following characteristics:
+Skinspire HMS is designed as a multi-tenant system with the following characteristics:
 Tenant Isolation: Each hospital operates as an independent tenant
 Data Partitioning: Data separation by hospital_id at database level
 Shared Infrastructure: Single codebase serving multiple tenants
@@ -702,4 +702,4 @@ Database Access: Project_docs/Developer Guide-Using database_service.py V5.md
 Migration Strategy: Project_docs/Model-Driven Database Migration Strategy.md
 Frontend Development: Project_docs/Front end Approach and Design.md
 Testing Strategy: Project_docs/Technical Guide - Managing Database Environments in Flask Testing.md
-By adhering to these guidelines, you ensure that your contributions to the SkinSpire Clinic HMS maintain consistency with the established architecture, enabling smooth integration and long-term maintainability.
+By adhering to these guidelines, you ensure that your contributions to the Skinspire Clinic HMS maintain consistency with the established architecture, enabling smooth integration and long-term maintainability.

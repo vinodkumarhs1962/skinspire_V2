@@ -22,6 +22,7 @@ from flask_login import current_user
 from flask_wtf import FlaskForm
 
 from app.config.core_definitions import EntityConfiguration, FieldDefinition, ActionDisplayType, ButtonType, ActionDefinition
+from app.engine.universal_service_cache import cache_service_method
 from app.utils.unicode_logging import get_unicode_safe_logger
 
 logger = get_unicode_safe_logger(__name__)
@@ -331,6 +332,7 @@ class EnhancedUniversalDataAssembler:
             logger.error(f"Error getting backend data: {str(e)}")
             return {}
 
+    @cache_service_method('entity_search', 'get_filter_backend_data')
     def get_filter_backend_data(self, entity_type: str, config: EntityConfiguration) -> Dict:
         """
         🔄 COMPATIBILITY WRAPPER: Old standalone function signature
@@ -447,6 +449,13 @@ class EnhancedUniversalDataAssembler:
                     complex_display_type_enum = getattr(field, 'complex_display_type', None)
                     complex_display_type_value = complex_display_type_enum.value if complex_display_type_enum else None
 
+                    # Determine alignment - currency/amount fields should be right-aligned
+                    field_type = self._get_field_type_safe(field)
+                    if field_type in ['currency', 'amount', 'decimal', 'number']:
+                        default_align = 'right'
+                    else:
+                        default_align = 'left'
+
                     column = {
                         'name': field.name,
                         'label': field.label,
@@ -537,7 +546,7 @@ class EnhancedUniversalDataAssembler:
         """Format field value for display"""
         try:
             if raw_value is None:
-                return '—'
+                return ''
             
             field_type = self._get_field_type_safe(field)
 
@@ -552,10 +561,10 @@ class EnhancedUniversalDataAssembler:
             
             if field_type == 'currency' or field_type == 'amount':
                 try:
-                    amount = float(raw_value)
-                    return f"₹{amount:,.2f}"
+                    # Always return numeric value - let template handle formatting
+                    return float(raw_value) if raw_value is not None else 0.0
                 except (ValueError, TypeError):
-                    return raw_value
+                    return 0.0
             
             if field_type == 'date':
                 if isinstance(raw_value, (date, datetime)):
@@ -1562,120 +1571,93 @@ class EnhancedUniversalDataAssembler:
         }]
 
     def _format_field_for_view(self, field: FieldDefinition, item: Any) -> Dict:
-        """Format individual field for view display"""
+        """
+        Format ANY field for view display - purely configuration-driven.
+        No entity-specific checks or hardcoded field names!
+        """
         try:
+            # Get field name from configuration
             field_name = getattr(field, 'name', 'unknown')
             
-            # DEBUG: Check custom renderer
-            if field_name in ['po_items_display', 'invoice_items_display', 'workflow_timeline', 'supplier_payment_summary']:
-                logger.info(f"DEBUG: Field {field_name}")
-                logger.info(f"  - Has custom_renderer attr: {hasattr(field, 'custom_renderer')}")
-                logger.info(f"  - custom_renderer value: {getattr(field, 'custom_renderer', None)}")
-                if hasattr(field, 'custom_renderer') and field.custom_renderer:
-                    logger.info(f"  - template: {field.custom_renderer.template}")
-                    logger.info(f"  - context_function: {field.custom_renderer.context_function}")
-        
-
-            # For custom renderer fields, we need to ensure the context function is called
-            if (hasattr(field, 'custom_renderer') and 
-                field.custom_renderer and 
-                hasattr(field.custom_renderer, 'context_function')):
-                
-                # The value will be populated by the custom renderer
-                raw_value = None
-                is_custom_renderer = True
-            else:
-                # Get the raw value from item
-                if isinstance(item, dict):
-                    raw_value = item.get(field_name)
-                else:
-                    raw_value = getattr(item, field_name, None)
-                is_custom_renderer = False
+            # REMOVED: Entity-specific debug logging
+            # No more checking for specific field names!
             
-            # Format the value
-            formatted_value = self._format_field_value(field, raw_value)
+            # Determine field characteristics from configuration
+            has_custom_renderer = self._field_has_custom_renderer(field)
+            is_virtual = getattr(field, 'virtual', False)
             
-            custom_renderer_dict = None
-            custom_renderer_obj = getattr(field, 'custom_renderer', None)
-            if custom_renderer_obj:
-                # Handle context_function properly - convert to string if it's a callable
-                context_func = getattr(custom_renderer_obj, 'context_function', None)
-                # Convert to string if it's anything else
-                if context_func is not None:
-                    if callable(context_func):
-                        # If it's a function/method, get its name
-                        context_func = context_func.__name__ if hasattr(context_func, '__name__') else str(context_func)
-                        logger.warning(f"Converted callable {field_name}.context_function to string: {context_func}")
-                    elif not isinstance(context_func, str):
-                        # Convert any other type to string
-                        old_type = type(context_func).__name__
-                        context_func = str(context_func)
-                        logger.warning(f"Converted {old_type} to string for {field_name}.context_function: {context_func}")
-                
-                custom_renderer_dict = {
-                    'template': getattr(custom_renderer_obj, 'template', None),
-                    'context_function': context_func,  # Now safely a string or None
-                    'css_classes': getattr(custom_renderer_obj, 'css_classes', ''),
-                    'javascript': getattr(custom_renderer_obj, 'javascript', None)
-                }
-
-            return {
+            # Initialize the field data structure
+            field_data = {
                 'name': field_name,
                 'label': getattr(field, 'label', field_name),
-                'value': formatted_value,
                 'field_type': self._get_field_type_safe(field),
-                'is_empty': raw_value is None and not is_custom_renderer,
+                'view_order': getattr(field, 'view_order', 0),
                 'css_class': getattr(field, 'css_class', ''),
                 'columns_span': getattr(field, 'columns_span', None),
-                'view_order': getattr(field, 'view_order', 0),
                 'help_text': getattr(field, 'help_text', None),
-                'custom_renderer': custom_renderer_dict,  # ✅ Now passes a dictionary
-                'is_custom_renderer': is_custom_renderer
+                'is_virtual': is_virtual,
+                'is_custom_renderer': has_custom_renderer,
             }
             
+            # Handle value based on field configuration
+            if has_custom_renderer:
+                # Custom renderer fields - value comes from context function
+                field_data['value'] = None  # Will be populated by renderer
+                field_data['is_empty'] = False  # Custom renderers handle their own emptiness
+                field_data['custom_renderer'] = self._extract_renderer_config(field)
+            else:
+                # Regular fields - get value from item
+                raw_value = self._get_field_value(item, field_name)
+                field_data['value'] = self._format_field_value(field, raw_value)
+                field_data['is_empty'] = self._is_value_empty(raw_value)
+                field_data['custom_renderer'] = None
+            
+            # Add display conditions if configured
+            if hasattr(field, 'conditional_display'):
+                field_data['conditional_display'] = getattr(field, 'conditional_display')
+            
+            return field_data
+            
         except Exception as e:
-            logger.error(f"Error formatting field {field_name}: {str(e)}")
+            logger.error(f"Error formatting field {getattr(field, 'name', 'unknown')}: {str(e)}")
             return self._get_error_field_format(field)
 
-    def _should_display_field(self, field: FieldDefinition, item: Any) -> bool:
+    def _should_display_field(self, field: FieldDefinition, item: Any, context: Optional[Dict] = None) -> bool:
         """
-        Check if field should be displayed - reads conditional_display from field definition
-        FIXED: Safe handling of conditional when it might be None
+        Determine if field should be displayed based on configuration.
+        Evaluates conditional_display if present.
+        Entity-agnostic - works based on field configuration only.
         """
         # Check basic display flag
         if not getattr(field, 'show_in_detail', True):
             return False
         
-        # Check conditional display from field definition
+        # Check conditional display if configured
         conditional = getattr(field, 'conditional_display', None)
         if not conditional:
             return True
         
         try:
-            # Convert conditional to string to ensure it's not None
-            conditional_str = str(conditional)
+            # Build evaluation context
+            eval_context = {
+                'item': item,
+            }
             
-            # Simple condition evaluation
-            if 'item.' in conditional_str:
-                import re
-                for attr in re.findall(r'item\.(\w+)', conditional_str):
-                    # FIXED: Handle both dictionary and object access
-                    if isinstance(item, dict):
-                        value = item.get(attr, None)
-                    else:
-                        value = getattr(item, attr, None)
-                        
-                    if value is None:
-                        conditional_str = conditional_str.replace(f'item.{attr}', 'None')
-                    elif isinstance(value, str):
-                        conditional_str = conditional_str.replace(f'item.{attr}', f"'{value}'")
-                    else:
-                        conditional_str = conditional_str.replace(f'item.{attr}', str(value))
+            # Add additional context if provided
+            if context:
+                eval_context.update({
+                    'user': context.get('user'),
+                    'branch_id': context.get('branch_id'),
+                    'hospital_id': context.get('hospital_id'),
+                })
             
-            return eval(conditional_str)
+            # Simple evaluation - you might want to use a safer evaluator
+            result = self._evaluate_condition(conditional, eval_context)
+            return bool(result)
+            
         except Exception as e:
-            logger.debug(f"Conditional display evaluation failed for field {getattr(field, 'name', 'unknown')}: {e}")
-            # If condition fails, default to showing the field
+            logger.warning(f"Error evaluating condition for {getattr(field, 'name', 'unknown')}: {str(e)}")
+            # Default to showing field if condition fails
             return True
 
     def _get_layout_type(self, config: EntityConfiguration) -> str:
@@ -1981,6 +1963,101 @@ class EnhancedUniversalDataAssembler:
                 'sections': []
             }]
 
+    def _field_has_custom_renderer(self, field: FieldDefinition) -> bool:
+        """
+        Check if field has a custom renderer - configuration-based only.
+        No entity-specific checks!
+        """
+        return (
+            hasattr(field, 'custom_renderer') and 
+            field.custom_renderer is not None
+        )
+
+    def _extract_renderer_config(self, field: FieldDefinition) -> Optional[Dict]:
+        """
+        Extract custom renderer configuration in a generic way.
+        Works for ANY field with a custom_renderer attribute.
+        """
+        if not self._field_has_custom_renderer(field):
+            return None
+        
+        renderer = field.custom_renderer
+        config = {}
+        
+        # Template is required
+        if hasattr(renderer, 'template'):
+            config['template'] = renderer.template
+        else:
+            logger.warning(f"Custom renderer for {field.name} missing template")
+            return None
+        
+        # Extract context_function and ensure it's a string
+        if hasattr(renderer, 'context_function'):
+            context_func = renderer.context_function
+            if context_func:
+                # Convert to string if it's a callable
+                if callable(context_func):
+                    config['context_function'] = context_func.__name__
+                    logger.debug(f"Converted callable to string: {context_func.__name__}")
+                else:
+                    config['context_function'] = str(context_func)
+            else:
+                config['context_function'] = None
+        
+        # Extract CSS classes
+        if hasattr(renderer, 'css_classes'):
+            config['css_classes'] = renderer.css_classes or ''
+        
+        # Extract JavaScript if present
+        if hasattr(renderer, 'javascript'):
+            config['javascript'] = renderer.javascript
+        
+        # Extract any other renderer properties dynamically
+        # This makes it future-proof for new properties
+        for attr_name in dir(renderer):
+            if not attr_name.startswith('_') and attr_name not in ['template', 'context_function', 'css_classes', 'javascript']:
+                attr_value = getattr(renderer, attr_name, None)
+                if attr_value is not None:
+                    config[attr_name] = attr_value
+        
+        return config
+
+    def _get_field_value(self, item: Any, field_name: str) -> Any:
+        """
+        Get field value from item - works with dict or object.
+        Entity-agnostic value extraction.
+        """
+        if isinstance(item, dict):
+            return item.get(field_name)
+        else:
+            return getattr(item, field_name, None)
+
+    def _is_value_empty(self, value: Any) -> bool:
+        """
+        Check if a value should be considered empty.
+        Generic check that works for any data type.
+        """
+        if value is None:
+            return True
+        if isinstance(value, str) and not value.strip():
+            return True
+        if isinstance(value, (list, dict)) and not value:
+            return True
+        if isinstance(value, (int, float)) and value == 0:
+            # Consider 0 as non-empty for numbers (it's a valid value)
+            return False
+        return False
+
+    def _safe_string_convert(self, value: Any) -> str:
+        """
+        Safely convert any value to string.
+        Handles callables, None, and other types.
+        """
+        if value is None:
+            return None
+        if callable(value):
+            return value.__name__ if hasattr(value, '__name__') else str(value)
+        return str(value)
 
 # =============================================================================
 # LEGACY COMPATIBILITY FUNCTIONS (STANDALONE)

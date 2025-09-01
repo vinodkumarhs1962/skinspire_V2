@@ -3,7 +3,7 @@ You're right that a consistent approach will be essential when migrating existin
 ## New Chat Background Text
 
 ```
-I'm working on implementing a unified database access strategy for our SkinSpire hospital management system. We've created a centralized database_service.py that serves as the single point of entry for all database operations.
+I'm working on implementing a unified database access strategy for our Skinspire hospital management system. We've created a centralized database_service.py that serves as the single point of entry for all database operations.
 
 Key points about our approach:
 1. All database access should use get_db_session() from database_service.py

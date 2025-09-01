@@ -16,7 +16,9 @@ from sqlalchemy.orm import Session
 from app.models.master import Supplier
 from app.models.transaction import SupplierInvoice, SupplierPayment, SupplierInvoiceLine
 from app.engine.universal_entity_service import UniversalEntityService
+from app.engine.universal_service_cache import cache_service_method
 from app.services.database_service import get_entity_dict, get_db_session
+
 from app.utils.unicode_logging import get_unicode_safe_logger
 
 logger = get_unicode_safe_logger(__name__)
@@ -29,6 +31,7 @@ class SupplierMasterService(UniversalEntityService):
     def __init__(self):
         super().__init__('suppliers', Supplier)
     
+    @cache_service_method('suppliers', 'get_detail_data') 
     def get_detail_data(self, item_id: str, hospital_id: uuid.UUID, 
        branch_id: Optional[uuid.UUID] = None,
        include_calculations: bool = True) -> Optional[Dict]:

@@ -1,8 +1,8 @@
-# SkinSpire Authentication System Documentation
+# Skinspire Authentication System Documentation
 
 ## 1. Overview
 
-The SkinSpire Clinic Authentication System provides secure user authentication and session management for the Hospital Management System. It is designed with security best practices, flexibility, and scalability in mind, supporting multi-tenant architecture with hospital-specific security configurations.
+The Skinspire Clinic Authentication System provides secure user authentication and session management for the Hospital Management System. It is designed with security best practices, flexibility, and scalability in mind, supporting multi-tenant architecture with hospital-specific security configurations.
 
 ## 2. Architecture
 
@@ -10,7 +10,7 @@ The authentication system follows a modular architecture with these key componen
 
 ![Authentication System Architecture](https://i.ibb.co/K75JgBx/auth-architecture.png)
 
-# SkinSpire Authentication System Architecture Diagram
+# Skinspire Authentication System Architecture Diagram
 
 ## Explanation of Components
 
@@ -113,7 +113,7 @@ sequenceDiagram
 ```
 ### 3.4 Web Authentication Flow
 
-The SkinSpire Clinic system implements a specialized authentication flow for web-based login and registration that offers enhanced security and performance while maintaining all protection mechanisms:
+The Skinspire Clinic system implements a specialized authentication flow for web-based login and registration that offers enhanced security and performance while maintaining all protection mechanisms:
 
 ```mermaid
 sequenceDiagram
@@ -308,4 +308,4 @@ Key configuration parameters are managed through the SecurityConfig class:
 
 ---
 
-This documentation provides a comprehensive overview of the SkinSpire Authentication System. For specific implementation details, refer to the accompanying source code and inline documentation.
+This documentation provides a comprehensive overview of the Skinspire Authentication System. For specific implementation details, refer to the accompanying source code and inline documentation.

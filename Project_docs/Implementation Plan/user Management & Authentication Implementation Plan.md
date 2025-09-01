@@ -1,8 +1,8 @@
-# SkinSpire Clinic Hospital Management System
+# Skinspire Clinic Hospital Management System
 ## User Management & Authentication Implementation Plan
 
 ### System Overview
-SkinSpire Clinic Hospital Management System is designed as a multi-tenant healthcare platform that serves multiple hospitals and their branches. The system incorporates role-based access control, configurable authentication flows, and specialized patient and staff management features.
+Skinspire Clinic Hospital Management System is designed as a multi-tenant healthcare platform that serves multiple hospitals and their branches. The system incorporates role-based access control, configurable authentication flows, and specialized patient and staff management features.
 
 ### Business rules
 1. Phone number validation through SMS. Compulsary for staff as well as patient.  If the patient entry is through staff, the SMS validation can be overruled at hospital level
@@ -174,4 +174,4 @@ The system implements a hierarchical role structure:
 - Comprehensive audit trails
 - Encrypted storage for sensitive data
 
-This implementation plan provides a roadmap for developing a robust, secure, and flexible user management system for the SkinSpire Clinic Hospital Management System, addressing the specific requirements of a multi-tenant healthcare environment.
+This implementation plan provides a roadmap for developing a robust, secure, and flexible user management system for the Skinspire Clinic Hospital Management System, addressing the specific requirements of a multi-tenant healthcare environment.

@@ -1,6 +1,6 @@
 # Database Management CLI
 
-The `manage_db.py` script provides a comprehensive command-line interface for managing SkinSpire's database operations across different environments (development, testing, production).
+The `manage_db.py` script provides a comprehensive command-line interface for managing Skinspire's database operations across different environments (development, testing, production).
 
 ## Overview
 

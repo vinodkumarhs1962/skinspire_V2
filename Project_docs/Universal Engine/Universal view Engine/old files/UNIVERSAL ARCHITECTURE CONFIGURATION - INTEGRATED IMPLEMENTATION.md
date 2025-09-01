@@ -1,6 +1,6 @@
 # =============================================================================
 # UNIVERSAL ARCHITECTURE CONFIGURATION - INTEGRATED IMPLEMENTATION
-# Following SkinSpire HMS Existing Structure and Patterns
+# Following Skinspire HMS Existing Structure and Patterns
 # =============================================================================
 
 # =============================================================================

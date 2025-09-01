@@ -7,7 +7,7 @@
 
 | **Attribute** | **Details** |
 |---------------|-------------|
-| **Project** | SkinSpire Clinic HMS - Universal Engine Architecture |
+| **Project** | Skinspire Clinic HMS - Universal Engine Architecture |
 | **Status** | **PRODUCTION READY - 95% COMPLETE** |
 | **Approach** | Multi-Pattern Service Architecture with Backend Assembly |
 | **Date** | June 2025 |

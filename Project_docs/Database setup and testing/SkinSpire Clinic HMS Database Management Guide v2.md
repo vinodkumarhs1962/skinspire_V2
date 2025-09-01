@@ -1,10 +1,10 @@
 I'll create a comprehensive reference document that covers all aspects of the earlier documentation and adds specific sections for Alembic migrations and PostgreSQL tools.
 
-# SkinSpire Clinic HMS: Comprehensive Database Management Reference
+# Skinspire Clinic HMS: Comprehensive Database Management Reference
 
 ## 1. Introduction and Strategy
 
-The SkinSpire Clinic Hospital Management System requires a robust, flexible database management strategy that balances development agility with operational reliability. This document provides a complete reference for database management across development, testing, and production environments.
+The Skinspire Clinic Hospital Management System requires a robust, flexible database management strategy that balances development agility with operational reliability. This document provides a complete reference for database management across development, testing, and production environments.
 
 ### Core Principles
 
@@ -95,9 +95,9 @@ The enhanced `db_copy.py` script will support all these strategies while ensurin
 
 ## 5. Alembic Migration Framework Integration
 
-SkinSpire HMS uses Alembic (via Flask-Migrate) as the database migration engine. This section details our approach to using and extending this framework.
+Skinspire HMS uses Alembic (via Flask-Migrate) as the database migration engine. This section details our approach to using and extending this framework.
 
-### Alembic Architecture in SkinSpire HMS
+### Alembic Architecture in Skinspire HMS
 
 The migration system consists of these key components:
 
@@ -219,7 +219,7 @@ Alembic migrations don't automatically handle PostgreSQL triggers. To ensure tri
 
 ## 6. PostgreSQL Tools Integration
 
-SkinSpire HMS leverages several PostgreSQL native tools for database operations. This section covers how they're integrated into our workflow.
+Skinspire HMS leverages several PostgreSQL native tools for database operations. This section covers how they're integrated into our workflow.
 
 ### Core PostgreSQL Tools Used
 
@@ -551,7 +551,7 @@ python -c "from app.services.database_service import get_database_url; print(get
 
 ### Multi-Tenant Database Design
 
-The SkinSpire database follows a multi-tenant architecture with these key entity types:
+The Skinspire database follows a multi-tenant architecture with these key entity types:
 
 1. **Hospital**: Top-level tenant entity representing a healthcare facility
 2. **Branch**: Facility within a hospital
@@ -783,7 +783,7 @@ Our approach will enhance these scripts rather than replacing them, ensuring bac
 
 ## Conclusion
 
-This comprehensive reference document covers all aspects of the SkinSpire Clinic HMS database management system. It provides detailed information on the architecture, tools, and best practices for maintaining the database across development, testing, and production environments.
+This comprehensive reference document covers all aspects of the Skinspire Clinic HMS database management system. It provides detailed information on the architecture, tools, and best practices for maintaining the database across development, testing, and production environments.
 
 The document serves both as a guide for implementing enhancements and as a reference for developers working with the system. By following the phased implementation approach and maintaining backward compatibility, we can improve the database management capabilities without disrupting existing workflows.
 

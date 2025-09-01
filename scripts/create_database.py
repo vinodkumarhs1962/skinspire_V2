@@ -245,7 +245,7 @@ def create_initial_hospital(session):
     try:
         # Create hospital
         hospital = Hospital(
-            name="SkinSpire Main Clinic",
+            name="Skinspire Main Clinic",
             license_no="HC123456",
             address={
                 "street": "123 Medical Ave",

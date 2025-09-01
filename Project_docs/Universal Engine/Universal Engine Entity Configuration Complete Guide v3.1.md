@@ -7,7 +7,7 @@
 
 | **Attribute** | **Details** |
 |---------------|-------------|
-| **Project** | SkinSpire Clinic HMS - Universal Engine v3.1 |
+| **Project** | Skinspire Clinic HMS - Universal Engine v3.1 |
 | **Version** | Universal Engine v3.1 (Built on v3.0) |
 | **Status** | **PRODUCTION READY** |
 | **Date** | December 2024 |
@@ -1543,7 +1543,7 @@ By following this comprehensive guide, you can configure any entity to work seam
 4. **Test Incrementally**: Validate each component as you build
 5. **Leverage Existing Examples**: Reference working configurations in the project
 
-The Universal Engine v3.1 is production-ready and provides a solid foundation for managing all entities in the SkinSpire Clinic HMS system.
+The Universal Engine v3.1 is production-ready and provides a solid foundation for managing all entities in the Skinspire Clinic HMS system.
 
 ---
 

@@ -1,5 +1,6 @@
 <!-- templates/engine/components/layout_tabbed.html -->
 <!-- Exact extraction from working universal_view.html with custom renderer logic intact -->
+
 <div class="universal-tabbed-view bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
     <!-- Tab Navigation -->
     <div class="universal-tab-navigation">
@@ -42,84 +43,41 @@
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                             {{ field['label'] }}
                                         </label>
-                                        <!-- Check if this field has a custom renderer -->
-                                        {% if field['custom_renderer'] %}
-                                            <div class="custom-renderer-field {{ field['custom_renderer']['css_classes'] }}">
-                                            {% if field['custom_renderer']['context_function'] and service %}
-                                                {% set func_name = field['custom_renderer']['context_function'] %}
+                                        
+                                        {% if field.get('is_custom_renderer') and field.get('custom_renderer') %}
+                                            <!-- Custom Renderer Field -->
+                                            {% set func_name = field['custom_renderer'].get('context_function') %}
+                                            
+                                            {% if func_name and service %}
+                                                {% set method = attribute(service, func_name, None) %}
+                                                {% set data = method(item_id=item_id, item=item, hospital_id=current_hospital_id, branch_id=current_branch_id) if method else None %}
                                                 
-                                                <!-- ✅ FIXED: Direct method calls based on function name -->
-                                                {% if func_name == 'get_po_items_for_payment' and hasattr(service, 'get_po_items_for_payment') %}
-                                                    {% set data = service.get_po_items_for_payment(item_id, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
-                                                    
-                                                {% elif func_name == 'get_invoice_items_for_payment' and hasattr(service, 'get_invoice_items_for_payment') %}
-                                                    {% set data = service.get_invoice_items_for_payment(item_id, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
-                                                    
-                                                {% elif func_name == 'get_supplier_payment_history_6months' and hasattr(service, 'get_supplier_payment_history_6months') %}
-                                                    {% set data = service.get_supplier_payment_history_6months(item_id=item_id, item=item, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
-                                                    
-                                                {% elif func_name == 'get_payment_workflow_timeline' and hasattr(service, 'get_payment_workflow_timeline') %}
-                                                    {% set data = service.get_payment_workflow_timeline(item_id=item_id, item=item, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
-
-                                                {% elif func_name == 'get_supplier_payment_summary' and hasattr(service, 'get_supplier_payment_summary') %}
-                                                    {% set data = service.get_supplier_payment_summary(item_id=item_id, item=item, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
-                                                    
-                                                {% elif func_name == 'get_supplier_invoice_history' and hasattr(service, 'get_supplier_invoice_history') %}
-                                                    {% set data = service.get_supplier_invoice_history(item_id=item_id, item=item, hospital_id=current_hospital_id, branch_id=current_branch_id) %}
-                                                    
+                                                {% if data %}
+                                                    <div class="custom-renderer-wrapper {{ field['custom_renderer'].get('css_classes', '') }}">
+                                                        {% with data=data %}
+                                                            {% include field['custom_renderer'].get('template') ignore missing %}
+                                                        {% endwith %}
+                                                    </div>
                                                 {% else %}
-                                                    <!-- Unknown function - show error -->
-                                                    {% set data = {'error': 'Unknown context function: ' ~ func_name, 'has_error': true} %}
-                                                {% endif %}
-                                                
-                                                <!-- Include the custom template with the data -->
-                                                {% if data and not data.get('has_error') %}
-                                                    {% include field['custom_renderer']['template'] %}
-                                                {% else %}
-                                                    <div class="text-center py-4">
-                                                        <i class="fas fa-info-circle text-3xl text-gray-300 dark:text-gray-600 mb-2"></i>
-                                                        <p class="text-gray-500 dark:text-gray-400 text-sm">
-                                                            {% if data %}
-                                                                {{ data.get('error', 'No data available') }}
-                                                            {% else %}
-                                                                No data available
-                                                            {% endif %}
-                                                        </p>
+                                                    <div class="text-muted">
+                                                        <i class="fas fa-info-circle"></i>
+                                                        {% if not method %}
+                                                            Function '{{ func_name }}' not found
+                                                        {% else %}
+                                                            No data available
+                                                        {% endif %}
                                                     </div>
                                                 {% endif %}
-                                            {% else %}
-                                                <!-- Custom renderer without context function - just include template -->
-                                                {% include field['custom_renderer']['template'] %}
+                                            {% elif field['custom_renderer'].get('template') %}
+                                                <!-- Template without context function -->
+                                                <div class="custom-renderer-wrapper {{ field['custom_renderer'].get('css_classes', '') }}">
+                                                    {% include field['custom_renderer'].get('template') ignore missing %}
+                                                </div>
                                             {% endif %}
-                                        </div>
                                         {% else %}
-                                            <!-- Regular field rendering remains the same -->
-                                            <div class="text-sm text-gray-900 dark:text-gray-100">
-                                                {% if field['field_type'] == 'currency' %}
-                                                    {{ field['value'] or '₹ 0.00' }}
-                                                {% elif field['field_type'] == 'date' %}
-                                                    {{ field['value']|dateformat if field['value'] else '—' }}
-                                                {% elif field['field_type'] == 'datetime' %}
-                                                    {{ field['value']|datetimeformat if field['value'] else '—' }}
-                                                {% elif field['field_type'] == 'boolean' %}
-                                                    {% if field['value'] %}
-                                                        <span class="text-green-600 dark:text-green-400">
-                                                            <i class="fas fa-check-circle"></i> Yes
-                                                        </span>
-                                                    {% else %}
-                                                        <span class="text-gray-400 dark:text-gray-500">
-                                                            <i class="fas fa-times-circle"></i> No
-                                                        </span>
-                                                    {% endif %}
-                                                {% elif field['field_type'] == 'status' %}
-                                                    <span class="status-badge status-{{ field['value']|lower|replace(' ', '-') }}">
-                                                        {{ field['value']|title|replace('_', ' ') }}
-                                                    </span>
-                                                {% elif field['field_type'] == 'textarea' or field['field_type'] == 'text_area' %}
-                                                    <div class="whitespace-pre-wrap">{{ field['value'] or '—' }}</div>
-                                                {% else %}
-                                                    {{ field['value'] or '—' }}
-                                                {% endif %}
+                                            <!-- Regular Field -->
+                                            <div class="text-gray-900 dark:text-gray-100">
+                                                {{ field['value'] if not field['is_empty'] else '-' }}
                                             </div>
                                         {% endif %}
                                     </div>

@@ -71,7 +71,7 @@ class Settings:
         'max_login_attempts': 5,
         'lockout_duration': timedelta(minutes=30),
         'require_mfa': False,
-        'mfa_issuer': 'SkinSpire Clinic',
+        'mfa_issuer': 'Skinspire Clinic',
         
         # Encryption
         'encryption_algorithm': 'AES-256',

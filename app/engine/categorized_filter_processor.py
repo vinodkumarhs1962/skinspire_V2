@@ -542,7 +542,7 @@ class CategorizedFilterProcessor:
             
             # ✅ FIXED: Skip general search config for supplier_payments if we have supplier-specific search
             # Check if we have existing search configuration for this entity
-            if entity_type in ENTITY_SEARCH_CONFIGS and entity_type != 'supplier_payments':
+            if entity_type in ENTITY_SEARCH_CONFIGS and entity_type not in ['supplier_payments', 'purchase_orders']:
                 search_config = ENTITY_SEARCH_CONFIGS[entity_type]
                 
                 # Look for search terms in filters
@@ -591,16 +591,19 @@ class CategorizedFilterProcessor:
                         filter_count += 1
             
             
-            # ✅ FIXED: Handle supplier name search (entity-specific) with existing config - avoid double processing
-            if entity_type == 'supplier_payments':
+            # ✅ FIXED: Handle supplier name search for both supplier_payments AND purchase_orders
+            if entity_type in ['supplier_payments', 'purchase_orders']:
                 # Check if we already processed this search term to avoid double joins
                 supplier_search = None
                 search_filter_used = None
                 
-                # Priority order: supplier_name_search > search > supplier_search
+                # Priority order: supplier_name_search > supplier_name > search > supplier_search
                 if filters.get('supplier_name_search') and str(filters.get('supplier_name_search')).strip():
                     supplier_search = str(filters.get('supplier_name_search')).strip()
                     search_filter_used = 'supplier_name_search'
+                elif filters.get('supplier_name') and str(filters.get('supplier_name')).strip():
+                    supplier_search = str(filters.get('supplier_name')).strip()
+                    search_filter_used = 'supplier_name'
                 elif filters.get('search') and str(filters.get('search')).strip() and 'search' not in applied_filters:
                     supplier_search = str(filters.get('search')).strip()
                     search_filter_used = 'search'
@@ -609,13 +612,8 @@ class CategorizedFilterProcessor:
                     search_filter_used = 'supplier_search'
                 
                 if supplier_search and search_filter_used:
-                    # Try to use existing supplier configuration
-                    if 'suppliers' in ENTITY_SEARCH_CONFIGS:
-                        supplier_config = ENTITY_SEARCH_CONFIGS['suppliers']
-                        query = self._apply_supplier_search_with_join(query, supplier_search, supplier_config)
-                    else:
-                        # Fallback to existing hardcoded logic
-                        query = self._apply_supplier_name_search(query, supplier_search)
+                    # Always use the working method for both entities
+                    query = self._apply_supplier_name_search(query, supplier_search)
                     
                     applied_filters.add(search_filter_used)
                     filter_count += 1
@@ -1444,7 +1442,11 @@ class CategorizedFilterProcessor:
             
             if hasattr(service, 'add_relationships'):
                 return service.add_relationships(entity_dict, entity, session)
-                
+
+            if hasattr(service, 'get_calculated_fields'):
+                calculated = service.get_calculated_fields(entity, config)
+                entity_dict.update(calculated)
+            
             return entity_dict
             
         except Exception as e:

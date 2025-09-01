@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the functionality implemented across multiple services in the SkinSpire Hospital Management System, with a focus on the integration between the billing, inventory, and general ledger (GL) services. The implementation follows best practices for service integration while maintaining backward compatibility with existing code.
+This document describes the functionality implemented across multiple services in the Skinspire Hospital Management System, with a focus on the integration between the billing, inventory, and general ledger (GL) services. The implementation follows best practices for service integration while maintaining backward compatibility with existing code.
 
 ## 1. Billing and Inventory Integration
 

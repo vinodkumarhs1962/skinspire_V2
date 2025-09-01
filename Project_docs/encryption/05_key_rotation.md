@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Key rotation represents a critical security practice in the SkinSpire encryption system. This document explains the implementation, management, and testing of the key rotation process. The system ensures continuous data protection while maintaining data accessibility during and after rotation events.
+Key rotation represents a critical security practice in the Skinspire encryption system. This document explains the implementation, management, and testing of the key rotation process. The system ensures continuous data protection while maintaining data accessibility during and after rotation events.
 
 ## Key Rotation Architecture
 
@@ -216,4 +216,4 @@ Verify proper handling of concurrent operations during rotation.
 Confirm error recovery mechanisms function correctly.
 Test monitoring and alerting systems thoroughly.
 
-This document provides the foundation for implementing secure and reliable key rotation in the SkinSpire system. For implementation details about testing these features, refer to the testing documentation in 04_testing.md.
+This document provides the foundation for implementing secure and reliable key rotation in the Skinspire system. For implementation details about testing these features, refer to the testing documentation in 04_testing.md.

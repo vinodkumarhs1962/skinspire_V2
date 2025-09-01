@@ -1,4 +1,4 @@
-# SkinSpire Clinic Database Trigger System: Implementation Strategy
+# Skinspire Clinic Database Trigger System: Implementation Strategy
 
 ## 1. Overall Trigger Strategy
 

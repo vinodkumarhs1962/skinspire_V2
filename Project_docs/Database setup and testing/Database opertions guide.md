@@ -1,5 +1,5 @@
-Database Operations Guide for SkinSpire HMS
-This guide covers the essential database operations available through the manage_db.py script in the SkinSpire Hospital Management System.
+Database Operations Guide for Skinspire HMS
+This guide covers the essential database operations available through the manage_db.py script in the Skinspire Hospital Management System.
 Basic Environment Setup
 Before using these commands, ensure your environment is properly configured:
 bashCopy# View current environment
@@ -156,4 +156,4 @@ Use reset-migration-tracking if migrations get out of sync
 
 
 
-This comprehensive set of commands should cover most database management needs for the SkinSpire HMS project.
+This comprehensive set of commands should cover most database management needs for the Skinspire HMS project.

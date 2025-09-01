@@ -1,6 +1,6 @@
-# Model-Driven Database Migration Strategy for SkinSpire HMS
+# Model-Driven Database Migration Strategy for Skinspire HMS
 Overview
-This technical document outlines a comprehensive approach to database schema management for the SkinSpire Hospital Management System (HMS). The strategy uses SQLAlchemy models as the authoritative source of truth for database schema, providing a systematic and automated way to detect, generate, and apply database changes.
+This technical document outlines a comprehensive approach to database schema management for the Skinspire Hospital Management System (HMS). The strategy uses SQLAlchemy models as the authoritative source of truth for database schema, providing a systematic and automated way to detect, generate, and apply database changes.
 Core Principles
 
 Models as Source of Truth: SQLAlchemy ORM models define the canonical database structure
@@ -298,4 +298,4 @@ Direct synchronization
 Cleanup and rollback
 
 Conclusion
-This model-driven database migration strategy provides a powerful and flexible approach to managing database schema changes in the SkinSpire HMS. By using SQLAlchemy models as the source of truth, it ensures consistency between application code and database structure while providing appropriate tools for different environments and deployment scenarios.RetryClaude can make mistakes. Please double-check responses.
+This model-driven database migration strategy provides a powerful and flexible approach to managing database schema changes in the Skinspire HMS. By using SQLAlchemy models as the source of truth, it ensures consistency between application code and database structure while providing appropriate tools for different environments and deployment scenarios.RetryClaude can make mistakes. Please double-check responses.

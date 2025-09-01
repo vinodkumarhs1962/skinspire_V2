@@ -34,6 +34,7 @@ from app.config.core_definitions import FieldType, EntitySearchConfiguration
 from app.engine.categorized_filter_processor import get_categorized_filter_processor
 from app.engine.entity_config_manager import EntityConfigManager
 from app.models.master import Supplier
+from app.engine.universal_service_cache import cache_service_method
 from app.utils.unicode_logging import get_unicode_safe_logger
 
 logger = get_unicode_safe_logger(__name__)
@@ -55,6 +56,7 @@ class UniversalFilterService:
     def __init__(self):
         self.cache = {}
         self.categorized_processor = get_categorized_filter_processor()
+        self.entity_type = 'filters'
         self.entity_service_registry = {
             'supplier_payments': 'app.services.supplier_service',
             'suppliers': 'app.services.supplier_service',
@@ -66,6 +68,7 @@ class UniversalFilterService:
     # MAIN PUBLIC API - SINGLE ENTRY POINT
     # =============================================================================
 
+    @cache_service_method()
     def get_complete_filter_data(self, entity_type: str, hospital_id: uuid.UUID, 
                                 branch_id: Optional[uuid.UUID] = None, 
                                 current_filters: Optional[Dict] = None) -> Dict:

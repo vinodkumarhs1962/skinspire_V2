@@ -241,36 +241,45 @@ def generate_menu_for_role(role):
         # =========================================================================
         # 4. ADMIN FUNCTIONS
         # =========================================================================
-        if role in ['system_admin', 'hospital_admin']:
-            menu.append({
-                'name': 'Administration',
-                'url': '#',
-                'icon': 'cog',
-                'icon_path': '10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37',
-                'children': [
-                    {
-                        'name': 'Hospital Settings',
-                        'url': safe_url_for('admin_views.hospital_settings'),
-                        'icon': 'hospital',
-                        'badge': 'Admin',
-                        'badge_color': 'warning'
-                    },
-                    {
-                        'name': 'Staff Management',
-                        'url': safe_url_for('admin_views.staff_management'),
-                        'icon': 'user-tie',
-                        'badge': 'Admin',
-                        'badge_color': 'warning'
-                    },
-                    {
-                        'name': 'User Management',
-                        'url': safe_url_for('admin_views.users'),
-                        'icon': 'users-cog',
-                        'badge': 'Admin',
-                        'badge_color': 'warning'
-                    }
-                ]
-            })
+        # if role in ['system_admin', 'hospital_admin']:
+        menu.append({
+            'name': 'Administration',
+            'url': '#',
+            'icon': 'cog',
+            'icon_path': '10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37',
+            'children': [
+                {
+                    'name': 'Hospital Settings',
+                    'url': safe_url_for('admin_views.hospital_settings'),
+                    'icon': 'hospital',
+                    'badge': 'Admin',
+                    'badge_color': 'warning'
+                },
+                {
+                    'name': 'Staff Management',
+                    'url': safe_url_for('admin_views.staff_management'),
+                    'icon': 'user-tie',
+                    'badge': 'Admin',
+                    'badge_color': 'warning'
+                },
+                {
+                    'name': 'User Management',
+                    'url': safe_url_for('admin_views.user_list'),
+                    'icon': 'users-cog',
+                    'badge': 'Admin',
+                    'badge_color': 'warning'
+                },
+                {
+                    'name': 'Cache Dashboard',
+                    'url': safe_url_for('cache_dashboard.cache_dashboard'),
+                    'icon': 'chart-line',
+                    'badge': 'System',
+                    'badge_color': 'info',
+                    'target': '_blank',
+                    'description': 'Real-time cache performance monitoring'
+                }
+            ]
+        })
         
         # Always have settings as the last item
         menu.append({

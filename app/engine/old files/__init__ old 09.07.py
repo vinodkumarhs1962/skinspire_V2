@@ -1,5 +1,5 @@
 """
-Universal View Engine for SkinSpire HMS
+Universal View Engine for Skinspire HMS
 Core view engine that provides universal functionality for all entities
 """
 

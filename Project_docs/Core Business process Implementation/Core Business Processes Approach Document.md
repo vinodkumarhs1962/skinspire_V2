@@ -9,7 +9,7 @@ Basic GL Framework for Financial Transactions
 Required Master Data Management
 
 Current Architecture Assessment
-Your SkinSpire Hospital Management System has a solid foundation with:
+Your Skinspire Hospital Management System has a solid foundation with:
 
 Python/Flask backend with PostgreSQL database
 SQLAlchemy ORM for database operations

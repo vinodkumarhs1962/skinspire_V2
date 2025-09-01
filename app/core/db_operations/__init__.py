@@ -1,6 +1,6 @@
 # app/core/db_operations/__init__.py
 """
-Core database operations module for SkinSpire HMS.
+Core database operations module for Skinspire HMS.
 
 This package contains core database management functions that are used by
 the CLI interfaces and other application components.

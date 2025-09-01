@@ -264,10 +264,10 @@ skinspire_v2/
 │   │   ├── database-documentation.md
 │   │   ├── databse trigger commands.md
 │   │   ├── desktop.ini
-│   │   ├── Implementation Plan for SkinSpire Database Management Enhancements.md
-│   │   ├── SkinSpire Clinic HMS Database Management Guide v2.md
-│   │   ├── SkinSpire Clinic HMS Database Management Guide.md
-│   │   ├── SkinSpire Database Management System - Building Blocks and Connections.md
+│   │   ├── Implementation Plan for Skinspire Database Management Enhancements.md
+│   │   ├── Skinspire Clinic HMS Database Management Guide v2.md
+│   │   ├── Skinspire Clinic HMS Database Management Guide.md
+│   │   ├── Skinspire Database Management System - Building Blocks and Connections.md
 │   │   ├── Testing Plan for Enhanced Database Management Features.md
 │   ├── desktop.ini
 │   ├── encryption/
@@ -341,10 +341,10 @@ skinspire_v2/
 │   │   ├── security_testing_plan
 │   │   ├── sesson_management_token_handling.md
 │   ├── testing/
-│   │   ├── Comprehensive Testing Strategy and Implementation Guide for SkinSpire Clinic HMS.md
+│   │   ├── Comprehensive Testing Strategy and Implementation Guide for Skinspire Clinic HMS.md
 │   ├── User Authorization/
 │   │   ├── password hash implementation.md
-│   │   ├── SkinSpire CSRF Protection Implementation Documentation.md
+│   │   ├── Skinspire CSRF Protection Implementation Documentation.md
 │   │   ├── user-auth-documentation.md
 │   │   ├── User_management_approach.md
 │   ├── virtual_environment_setup/

@@ -1,4 +1,4 @@
-# Comprehensive CSRF Protection Guide for SkinSpire Clinic Hospital Management System
+# Comprehensive CSRF Protection Guide for Skinspire Clinic Hospital Management System
 
 ## 1. Understanding Cross-Site Request Forgery (CSRF)
 
@@ -6,7 +6,7 @@
 Cross-Site Request Forgery (CSRF) is a sophisticated web security vulnerability that allows malicious actors to trick authenticated users into performing unintended actions on a web application. In essence, it's like a digital impersonation attack where a malicious website can potentially submit unauthorized requests on behalf of an authenticated user without their knowledge or consent.
 
 ### Real-World Risks in Healthcare Systems
-In a hospital management system like SkinSpire Clinic, CSRF vulnerabilities could lead to catastrophic consequences:
+In a hospital management system like Skinspire Clinic, CSRF vulnerabilities could lead to catastrophic consequences:
 - Unauthorized modification of patient medical records
 - Fraudulent appointment bookings
 - Manipulation of user roles and permissions

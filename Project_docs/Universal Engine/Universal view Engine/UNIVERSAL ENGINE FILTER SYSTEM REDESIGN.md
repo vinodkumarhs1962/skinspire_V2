@@ -4,7 +4,7 @@
 # =============================================================================
 
 """
-PROJECT: SkinSpire Clinic HMS - Universal Engine Filter System Redesign
+PROJECT: Skinspire Clinic HMS - Universal Engine Filter System Redesign
 APPROACH: Targeted Cleanup + Categorized Filter System
 OBJECTIVE: Clean, entity-agnostic, configuration-driven filter architecture
 STATUS: Ready for Implementation

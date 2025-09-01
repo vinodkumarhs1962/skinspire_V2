@@ -1,4 +1,4 @@
-Business Logic for SkinSpire Clinic Invoice System
+Business Logic for Skinspire Clinic Invoice System
 Invoice Creation Process
 
 Patient Selection: User selects a patient using the search interface
