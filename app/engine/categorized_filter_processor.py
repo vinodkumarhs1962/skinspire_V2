@@ -16,6 +16,7 @@ from typing import Dict, Any, List, Optional, Set, Tuple, Type
 import uuid
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
+from flask import request 
 from sqlalchemy.orm import Session, Query
 from sqlalchemy import and_, or_, func, desc, asc
 from flask_login import current_user
@@ -29,8 +30,8 @@ from app.config.filter_categories import (
     enhance_entity_config_with_categories,
     FILTER_CATEGORY_CONFIG
 )
-from app.config.entity_configurations import get_entity_config
-from app.config.core_definitions import FieldType
+from app.config.entity_configurations import get_entity_config, get_entity_filter_config
+from app.config.core_definitions import FieldType, FieldDefinition, FilterOperator
 from app.utils.unicode_logging import get_unicode_safe_logger
 
 logger = get_unicode_safe_logger(__name__)
@@ -43,13 +44,151 @@ class CategorizedFilterProcessor:
     
     def __init__(self):
         self.session = None
-        # self.entity_models = {
-        #     'supplier_payments': 'app.models.transaction.SupplierPayment',
-        #     'suppliers': 'app.models.master.Supplier',
-        #     'patients': 'app.models.patient.Patient',
-        #     'medicines': 'app.models.medicine.Medicine'
-        # }
     
+
+    def get_template_filter_fields(self, entity_type: str, 
+                               hospital_id: uuid.UUID,
+                               branch_id: Optional[uuid.UUID] = None) -> List[Dict]:
+        """
+        TEMPLATE WRAPPER: Orchestrates existing methods to prepare template-ready fields
+        
+        Architecture:
+        - This method: Template formatting layer (NEW)
+        - get_backend_dropdown_data(): Backend data provider (KEEP - we use it)
+        - get_choices_for_field(): Field-specific choices (KEEP - fallback)
+        - get_selection_choices(): Enum/select choices (KEEP - used by above)
+        - get_relationship_choices(): FK choices (KEEP - used by above)
+        
+        DO NOT DELETE the above methods - they form the data pipeline!
+        
+        Future cleanup opportunity:
+        - Once all entities use views, some entity-specific logic can be removed
+        - But the core pipeline should remain
+        """
+        try:
+            from app.config.core_definitions import FilterOperator
+            
+            config = get_entity_config(entity_type)
+            if not config:
+                logger.warning(f"No configuration found for entity: {entity_type}")
+                return []
+            
+            filter_config = get_entity_filter_config(entity_type)
+            backend_data = self.get_backend_dropdown_data(entity_type, hospital_id, branch_id)
+            current_filters = request.args.to_dict() if request else {}
+            filter_fields = []
+            
+            # Add search field with simple label
+            if config.searchable_fields:
+                filter_fields.append({
+                    'name': 'search',
+                    'label': 'Text Search',  # Simple, consistent
+                    'type': 'text',
+                    'value': current_filters.get('search', ''),
+                    'placeholder': f"Search in {', '.join(config.searchable_fields[:2])}...",
+                    'required': False,
+                    'options': []
+                })
+            
+            # Process filterable fields
+            for field in config.fields:
+                if not getattr(field, 'filterable', False):
+                    continue
+                
+                field_name = field.name
+                base_label = getattr(field, 'label', field_name.replace('_', ' ').title())
+                
+                # Get filter operator (default to EQUALS if not specified)
+                filter_operator = getattr(field, 'filter_operator', FilterOperator.EQUALS)
+                
+                # Enhance label based on operator
+                enhanced_label = self._enhance_label_with_operator(base_label, filter_operator, field.field_type)
+                
+                # Get the field type
+                field_type = self._map_field_to_input_type(field)
+                field_options = []
+                
+                # Get options for select fields
+                if field_type == 'select':
+                    # Use universal method for options
+                    field_options = self.get_field_options_universal(
+                        entity_type,
+                        field_name,
+                        context='filter',
+                        hospital_id=hospital_id,
+                        branch_id=branch_id
+                    )
+                
+                # Get placeholder based on operator
+                placeholder = self._get_operator_placeholder(field, filter_operator)
+                
+                field_data = {
+                    'name': field_name,
+                    'label': enhanced_label,
+                    'type': field_type,
+                    'value': current_filters.get(field_name, ''),
+                    'placeholder': placeholder,
+                    'required': False,
+                    'options': self._normalize_options(field_options, base_label) if field_options else [],
+                    'operator': filter_operator.value if isinstance(filter_operator, FilterOperator) else 'equals'
+                }
+                
+                filter_fields.append(field_data)
+            
+            return filter_fields
+            
+        except Exception as e:
+            logger.error(f"Error getting template filter fields for {entity_type}: {str(e)}")
+            return []
+
+
+    def _normalize_options(self, options: Any, field_label: str) -> List[Dict]:
+        """
+        NEW METHOD: Normalize options to consistent template format
+        Handles tuples, dicts, and lists
+        """
+        normalized = [{'value': '', 'label': f'All {field_label}'}]
+        
+        if not options:
+            return normalized
+        
+        for option in options:
+            if isinstance(option, tuple) and len(option) >= 2:
+                normalized.append({'value': str(option[0]), 'label': str(option[1])})
+            elif isinstance(option, dict):
+                normalized.append({
+                    'value': str(option.get('value', '')),
+                    'label': str(option.get('label', option.get('value', '')))
+                })
+            else:
+                normalized.append({'value': str(option), 'label': str(option)})
+        
+        return normalized
+
+    def _map_field_to_input_type(self, field) -> str:
+        """
+        Map field type to HTML input type
+        """
+        from app.config.core_definitions import FieldType
+        
+        # ✅ FIX: Handle STATUS_BADGE and STATUS as select
+        if field.field_type in [FieldType.SELECT, FieldType.STATUS_BADGE, FieldType.STATUS]:
+            return 'select'
+        elif field.field_type in [FieldType.DATE, FieldType.DATETIME]:
+            # Check for date range
+            if hasattr(field, 'filter_aliases'):
+                for alias in field.filter_aliases:
+                    if 'start' in alias or 'end' in alias:
+                        return 'date_range'
+            return 'date'
+        elif field.field_type in [FieldType.NUMBER, FieldType.DECIMAL, FieldType.CURRENCY, FieldType.AMOUNT]:
+            return 'number'
+        elif field.field_type == FieldType.EMAIL:
+            return 'email'
+        elif field.field_type == FieldType.BOOLEAN:
+            return 'select'  # Boolean as select with Yes/No options
+        else:
+            return 'text'
 
     
     def _apply_mixed_payment_logic(self, model_class, model_attr, filter_value, config):
@@ -135,6 +274,79 @@ class CategorizedFilterProcessor:
         except Exception as e:
             logger.error(f"❌ Error finding amount field for {payment_method}: {str(e)}")
             return None
+
+    def _apply_field_with_operator(self, query: Query, field_name: str, value: Any, 
+                               operator, model_class, field_def=None) -> Query:
+        """
+        Apply filter with specific operator - UNIVERSAL method for all categories
+        This is the central method that handles all filter operators
+        """
+        from app.config.core_definitions import FilterOperator
+
+        # ✅ Use db_column if specified, otherwise use field_name
+        actual_column = field_name
+        if field_def and hasattr(field_def, 'db_column') and field_def.db_column:
+            actual_column = field_def.db_column
+        
+        if not hasattr(model_class, actual_column):
+            logger.warning(f"Model {model_class.__name__} doesn't have field {actual_column}")
+            return query
+        
+        model_field = getattr(model_class, actual_column)
+        
+        # Handle None or empty values
+        if value is None or value == '':
+            return query
+        
+        # Apply operator-based filtering
+        if operator == FilterOperator.EQUALS:
+            return query.filter(model_field == value)
+            
+        elif operator == FilterOperator.CONTAINS:
+            return query.filter(model_field.ilike(f'%{value}%'))
+            
+        elif operator == FilterOperator.LESS_THAN:
+            return query.filter(model_field < value)
+            
+        elif operator == FilterOperator.LESS_THAN_OR_EQUAL:
+            return query.filter(model_field <= value)
+            
+        elif operator == FilterOperator.GREATER_THAN:
+            return query.filter(model_field > value)
+            
+        elif operator == FilterOperator.GREATER_THAN_OR_EQUAL:
+            return query.filter(model_field >= value)
+            
+        elif operator == FilterOperator.DATE_ON_OR_BEFORE:
+            return query.filter(model_field <= value)
+            
+        elif operator == FilterOperator.DATE_ON_OR_AFTER:
+            return query.filter(model_field >= value)
+            
+        elif operator == FilterOperator.BETWEEN:
+            # Expects value to be a tuple/list (min, max)
+            if isinstance(value, (list, tuple)) and len(value) == 2:
+                return query.filter(model_field.between(value[0], value[1]))
+            else:
+                logger.warning(f"BETWEEN operator requires tuple/list with 2 values, got {value}")
+                return query
+                
+        elif operator == FilterOperator.IN:
+            if isinstance(value, (list, tuple)):
+                return query.filter(model_field.in_(value))
+            else:
+                return query.filter(model_field == value)
+                
+        elif operator == FilterOperator.NOT_IN:
+            if isinstance(value, (list, tuple)):
+                return query.filter(~model_field.in_(value))
+            else:
+                return query.filter(model_field != value)
+                
+        else:
+            # Default to EQUALS if operator unknown
+            logger.warning(f"Unknown operator {operator}, defaulting to EQUALS")
+            return query.filter(model_field == value)
 
     def process_entity_filters(self, entity_type: str, filters: Dict[str, Any], 
                          query: Query, model_class: Type, session: Session,
@@ -301,6 +513,30 @@ class CategorizedFilterProcessor:
             if not model_class:
                 return query, applied_filters, filter_count
             
+            # ✅ Process individual date fields with operators FIRST
+            from app.config.core_definitions import FilterOperator, FieldType
+            if config and hasattr(config, 'fields'):
+                for field in config.fields:
+                    if not getattr(field, 'filterable', False):
+                        continue
+                    
+                    # Check if this field is in the date category and has a value
+                    if (hasattr(config, 'filter_category_mapping') and 
+                        field.name in config.filter_category_mapping and
+                        config.filter_category_mapping[field.name] == FilterCategory.DATE and
+                        field.name in filters):
+                        
+                        field_value = filters.get(field.name)
+                        if field_value:
+                            # Get operator (default to EQUALS)
+                            operator = getattr(field, 'filter_operator', FilterOperator.EQUALS)
+                            
+                            # Apply field with operator
+                            query = self._apply_field_with_operator(
+                                query, field.name, field_value, operator, model_class, field
+                            )
+                            applied_filters.add(field.name)
+                            filter_count += 1
 
             # Handle date range filters
             start_date = filters.get('start_date')
@@ -447,6 +683,35 @@ class CategorizedFilterProcessor:
             if not model_class:
                 return query, applied_filters, filter_count
 
+            # ✅ Process individual amount fields with operators FIRST
+            from app.config.core_definitions import FilterOperator
+            if config and hasattr(config, 'fields'):
+                for field in config.fields:
+                    if not getattr(field, 'filterable', False):
+                        continue
+                    
+                    # Check if this field is in the amount category and has a value
+                    if (hasattr(config, 'filter_category_mapping') and 
+                        field.name in config.filter_category_mapping and
+                        config.filter_category_mapping[field.name] == FilterCategory.AMOUNT and
+                        field.name in filters):
+                        
+                        field_value = filters.get(field.name)
+                        if field_value:
+                            try:
+                                # Convert to float for amount fields
+                                numeric_value = float(field_value)
+                                operator = getattr(field, 'filter_operator', FilterOperator.EQUALS)
+                                
+                                # Apply field with operator
+                                query = self._apply_field_with_operator(
+                                    query, field.name, numeric_value, operator, model_class, field
+                                )
+                                applied_filters.add(field.name)
+                                filter_count += 1
+                            except (ValueError, TypeError):
+                                logger.warning(f"Invalid amount value for {field.name}: {field_value}")
+
             # Handle min/max amount filters
             min_amount = filters.get('min_amount') or filters.get('amount_min')
             max_amount = filters.get('max_amount') or filters.get('amount_max')
@@ -512,253 +777,67 @@ class CategorizedFilterProcessor:
     # SEARCH CATEGORY PROCESSING
     # ==========================================================================
     
-    def _process_search_filters(self, filters: Dict[str, Any], query: Query, 
-                      config, entity_type: str) -> Tuple[Query, Set[str], int]:
-        """Process text search filters - Using existing ENTITY_SEARCH_CONFIGS where available"""
+    def _process_search_filters(self, filters: Dict[str, Any], query: Query,
+                           config, entity_type: str) -> Tuple[Query, Set[str], int]:
+        """Process search-related filters - Standard processing only"""
         applied_filters = set()
         filter_count = 0
-        logger.debug(f"Processing search filters for {entity_type}")
         
         try:
             model_class = self._get_model_class(entity_type)
             if not model_class:
                 return query, applied_filters, filter_count
             
-            # ✅ Ensure ENTITY_SEARCH_CONFIGS is loaded
-            try:
-                from app.config.entity_configurations import ENTITY_SEARCH_CONFIGS, get_entity_search_config
-                
-                # Force load the search config if not in dict
-                if entity_type not in ENTITY_SEARCH_CONFIGS:
-                    search_config = get_entity_search_config(entity_type)
-                    if search_config:
-                        ENTITY_SEARCH_CONFIGS[entity_type] = search_config
-            except Exception as e:
-                logger.warning(f"Could not load ENTITY_SEARCH_CONFIGS: {str(e)}")
-                ENTITY_SEARCH_CONFIGS = {}
-
-            # ✅ PHASE 1C CORRECTED: Use existing ENTITY_SEARCH_CONFIGS first
-            from app.config.entity_configurations import ENTITY_SEARCH_CONFIGS
-            
-            # ✅ FIXED: Skip general search config for supplier_payments if we have supplier-specific search
-            # Check if we have existing search configuration for this entity
-            if entity_type in ENTITY_SEARCH_CONFIGS and entity_type not in ['supplier_payments', 'purchase_orders']:
-                search_config = ENTITY_SEARCH_CONFIGS[entity_type]
-                
-                # Look for search terms in filters
-                search_term = None
-                search_param_used = None
-                
-                # Check various search parameter names based on entity type
-                search_params = []
-                if entity_type == 'suppliers':
-                    # For suppliers, check these parameters
-                    search_params = ['search', 'q', 'supplier_name']
-                else:
-                    # For other entities
-                    search_params = ['search', 'reference_no', 'ref_no']
-
-                for param_name in search_params:
-                    if (param_name in filters and filters[param_name] and str(filters[param_name]).strip() 
-                        and param_name not in applied_filters):
-                        search_term = str(filters[param_name]).strip()
-                        search_param_used = param_name
-                        break
-                
-                # Apply search using existing configuration
-                if search_term and len(search_term) >= search_config.min_chars:
-                    query = self._apply_search_using_existing_config(query, search_term, search_config, model_class)
-                    applied_filters.add(search_param_used)
-                    filter_count += 1
-
-            # ✅ FIXED: Handle reference_no and invoice_id for supplier_payments only if not handled by supplier search
-            elif entity_type == 'supplier_payments':
-                # Process reference_no search only if not already processed
-                if 'reference_no' not in applied_filters and 'ref_no' not in applied_filters:
-                    reference_no = filters.get('reference_no') or filters.get('ref_no')
-                    if reference_no and str(reference_no).strip():
-                        if hasattr(model_class, 'reference_no'):
-                            query = query.filter(model_class.reference_no.ilike(f'%{reference_no.strip()}%'))
-                            applied_filters.add('reference_no')
+            # ✅ Process individual search fields with operators
+            from app.config.core_definitions import FilterOperator
+            if config and hasattr(config, 'fields'):
+                for field in config.fields:
+                    if not getattr(field, 'filterable', False):
+                        continue
+                    
+                    # Check if this field is in search category and has a value
+                    if (hasattr(config, 'filter_category_mapping') and 
+                        field.name in config.filter_category_mapping and
+                        config.filter_category_mapping[field.name] == FilterCategory.SEARCH and
+                        field.name in filters):
+                        
+                        field_value = filters.get(field.name)
+                        if field_value and str(field_value).strip():
+                            search_term = str(field_value).strip()
+                            operator = getattr(field, 'filter_operator', FilterOperator.CONTAINS)
+                            
+                            # Apply field with operator
+                            query = self._apply_field_with_operator(
+                                query, field.name, search_term, operator, model_class, field
+                            )
+                            applied_filters.add(field.name)
                             filter_count += 1
-                
-                # Process invoice_id search
-                invoice_id = filters.get('invoice_id')
-                if invoice_id and str(invoice_id).strip():
-                    if hasattr(model_class, 'invoice_id'):
-                        query = query.filter(model_class.invoice_id == invoice_id.strip())
-                        applied_filters.add('invoice_id')
+            
+            # Handle generic search field (for searchable_fields)
+            searchable_fields = getattr(config, 'searchable_fields', [])
+            if searchable_fields and 'search' in filters and filters['search']:
+                search_term = str(filters['search']).strip()
+                if search_term and 'search' not in applied_filters:
+                    # Apply search across searchable fields
+                    from sqlalchemy import or_
+                    search_conditions = []
+                    
+                    for field_name in searchable_fields:
+                        if hasattr(model_class, field_name):
+                            field = getattr(model_class, field_name)
+                            search_conditions.append(field.ilike(f'%{search_term}%'))
+                    
+                    if search_conditions:
+                        query = query.filter(or_(*search_conditions))
+                        applied_filters.add('search')
                         filter_count += 1
             
-            
-            # ✅ FIXED: Handle supplier name search for both supplier_payments AND purchase_orders
-            if entity_type in ['supplier_payments', 'purchase_orders']:
-                # Check if we already processed this search term to avoid double joins
-                supplier_search = None
-                search_filter_used = None
-                
-                # Priority order: supplier_name_search > supplier_name > search > supplier_search
-                if filters.get('supplier_name_search') and str(filters.get('supplier_name_search')).strip():
-                    supplier_search = str(filters.get('supplier_name_search')).strip()
-                    search_filter_used = 'supplier_name_search'
-                elif filters.get('supplier_name') and str(filters.get('supplier_name')).strip():
-                    supplier_search = str(filters.get('supplier_name')).strip()
-                    search_filter_used = 'supplier_name'
-                elif filters.get('search') and str(filters.get('search')).strip() and 'search' not in applied_filters:
-                    supplier_search = str(filters.get('search')).strip()
-                    search_filter_used = 'search'
-                elif filters.get('supplier_search') and str(filters.get('supplier_search')).strip():
-                    supplier_search = str(filters.get('supplier_search')).strip()
-                    search_filter_used = 'supplier_search'
-                
-                if supplier_search and search_filter_used:
-                    # Always use the working method for both entities
-                    query = self._apply_supplier_name_search(query, supplier_search)
-                    
-                    applied_filters.add(search_filter_used)
-                    filter_count += 1
-                       
             return query, applied_filters, filter_count
             
         except Exception as e:
-            logger.error(f"❌ Error processing search filters: {str(e)}")
+            logger.error(f"Error processing search filters: {str(e)}")
             return query, applied_filters, filter_count
 
-    def _apply_search_using_existing_config(self, query: Query, search_term: str, 
-                                        search_config, model_class) -> Query:
-        """Apply search using existing EntitySearchConfiguration"""
-        try:
-            search_conditions = []
-            
-            for field_name in search_config.search_fields:
-                if hasattr(model_class, field_name):
-                    field_attr = getattr(model_class, field_name)
-                    search_conditions.append(field_attr.ilike(f'%{search_term}%'))
-            
-            if search_conditions:
-                from sqlalchemy import or_
-                query = query.filter(or_(*search_conditions))
-            
-            return query
-            
-        except Exception as e:
-            logger.error(f"❌ Error applying search with existing config: {str(e)}")
-            return query
-
-    def _apply_supplier_search_with_join(self, query: Query, search_term: str, supplier_config) -> Query:
-        """Apply supplier search with join using existing configuration"""
-        try:
-            if supplier_config.model_path:
-                module_path, class_name = supplier_config.model_path.rsplit('.', 1)
-                module = __import__(module_path, fromlist=[class_name])
-                supplier_model = getattr(module, class_name)
-                
-                # Apply join if not already present
-                if not self._query_has_join(query, supplier_model):
-                    query = query.join(supplier_model)
-                
-                # Apply search across configured fields
-                search_conditions = []
-                for field_name in supplier_config.search_fields:
-                    if hasattr(supplier_model, field_name):
-                        field_attr = getattr(supplier_model, field_name)
-                        search_conditions.append(field_attr.ilike(f'%{search_term}%'))
-                
-                if search_conditions:
-                    from sqlalchemy import or_
-                    query = query.filter(or_(*search_conditions))
-            
-            return query
-            
-        except Exception as e:
-            logger.error(f"❌ Error applying supplier search with join: {str(e)}")
-            return query
-    
-    def _apply_search_with_join(self, query: Query, search_term: str, search_config: Dict, entity_type: str) -> Query:
-        """Apply search with join using configuration"""
-        try:
-            join_model_path = search_config.get('join_model')
-            if not join_model_path:
-                logger.warning(f"No join_model specified in search config")
-                return query
-            
-            # Import join model dynamically
-            module_path, class_name = join_model_path.rsplit('.', 1)
-            module = __import__(module_path, fromlist=[class_name])
-            join_model = getattr(module, class_name)
-            
-            # Check if we need to join or if already joined
-            if not self._query_has_join(query, join_model):
-                # For now, use simple join (can be enhanced with join_condition later)
-                query = query.join(join_model)
-            
-            # Apply search across configured fields
-            search_fields = search_config.get('search_fields', [])
-            search_type = search_config.get('search_type', 'ilike')
-            
-            if search_fields:
-                search_conditions = []
-                for field_name in search_fields:
-                    if hasattr(join_model, field_name):
-                        field_attr = getattr(join_model, field_name)
-                        if search_type == 'ilike':
-                            search_conditions.append(field_attr.ilike(f'%{search_term}%'))
-                        elif search_type == 'exact':
-                            search_conditions.append(field_attr == search_term)
-                
-                if search_conditions:
-                    from sqlalchemy import or_
-                    query = query.filter(or_(*search_conditions))
-            
-            return query
-            
-        except Exception as e:
-            logger.error(f"❌ Error applying search with join: {str(e)}")
-            return query
-
-    def _apply_direct_search(self, query: Query, search_term: str, search_config: Dict, model_class) -> Query:
-        """Apply direct search without join using configuration"""
-        try:
-            search_fields = search_config.get('search_fields', [])
-            search_type = search_config.get('search_type', 'ilike')
-            
-            if search_fields:
-                search_conditions = []
-                for field_name in search_fields:
-                    if hasattr(model_class, field_name):
-                        field_attr = getattr(model_class, field_name)
-                        if search_type == 'ilike':
-                            search_conditions.append(field_attr.ilike(f'%{search_term}%'))
-                        elif search_type == 'exact':
-                            search_conditions.append(field_attr == search_term)
-                
-                if search_conditions:
-                    from sqlalchemy import or_
-                    query = query.filter(or_(*search_conditions))
-            
-            return query
-            
-        except Exception as e:
-            logger.error(f"❌ Error applying direct search: {str(e)}")
-            return query
-
-    # ✅ PRESERVE EXISTING METHOD for backward compatibility
-    def _apply_supplier_name_search(self, query: Query, search_term: str) -> Query:
-        """Apply supplier name search with proper join - PRESERVED for fallback"""
-        try:
-            from app.models.master import Supplier
-            
-            # Check if we need to join or if already joined
-            if not self._query_has_join(query, Supplier):
-                query = query.join(Supplier, query.column_descriptions[0]['type'].supplier_id == Supplier.supplier_id)
-            
-            # Apply search filter
-            query = query.filter(Supplier.supplier_name.ilike(f'%{search_term}%'))
-            return query
-            
-        except Exception as e:
-            logger.error(f"❌ Error applying supplier name search: {str(e)}")
-            return query
     
     def _query_has_join(self, query: Query, model_class) -> bool:
         """Check if query already has a join for the specified model"""
@@ -770,6 +849,95 @@ class CategorizedFilterProcessor:
         except:
             return False
     
+    def _enhance_label_with_operator(self, base_label: str, operator, field_type) -> str:
+        """
+        Enhance label based on filter operator
+        """
+        from app.config.core_definitions import FilterOperator, FieldType
+        
+        # If no operator or default equals, return base label
+        if not operator or operator == FilterOperator.EQUALS:
+            return base_label
+        
+        # Add operator context to label
+        operator_labels = {
+            FilterOperator.LESS_THAN: f"{base_label} (Less Than)",
+            FilterOperator.LESS_THAN_OR_EQUAL: f"Max {base_label}",
+            FilterOperator.GREATER_THAN: f"{base_label} (Greater Than)",
+            FilterOperator.GREATER_THAN_OR_EQUAL: f"Min {base_label}",
+            FilterOperator.DATE_ON_OR_BEFORE: f"{base_label} (On/Before)",
+            FilterOperator.DATE_ON_OR_AFTER: f"{base_label} (On/After)",
+            FilterOperator.CONTAINS: base_label,  # No change for contains
+            FilterOperator.BETWEEN: f"{base_label} Range",
+            FilterOperator.IN: f"{base_label} (Any Of)",
+            FilterOperator.NOT_IN: f"{base_label} (Exclude)"
+        }
+        
+        return operator_labels.get(operator, base_label)
+
+    def _get_operator_placeholder(self, field, operator) -> str:
+        """
+        Get appropriate placeholder based on operator
+        """
+        from app.config.core_definitions import FilterOperator
+        
+        base_placeholder = getattr(field, 'placeholder', f"Filter by {field.label}...")
+        
+        if not operator or operator == FilterOperator.EQUALS:
+            return base_placeholder
+        
+        operator_placeholders = {
+            FilterOperator.LESS_THAN_OR_EQUAL: f"Maximum value...",
+            FilterOperator.GREATER_THAN_OR_EQUAL: f"Minimum value...",
+            FilterOperator.DATE_ON_OR_BEFORE: "On or before this date...",
+            FilterOperator.DATE_ON_OR_AFTER: "On or after this date...",
+            FilterOperator.CONTAINS: f"Search in {field.label}...",
+        }
+        
+        return operator_placeholders.get(operator, base_placeholder)
+
+    def _get_search_field_label(self, entity_type: str, searchable_fields: List[str]) -> str:
+        """
+        Simple, consistent label for all entities
+        """
+        return "Text Search"
+
+    def _get_field_options(self, field, filter_config, backend_data, 
+                       entity_type, hospital_id, branch_id):
+        """
+        Consolidated option retrieval logic
+        """
+        field_options = []
+        field_name = field.name
+        
+        # Priority 1: Filter configuration
+        if filter_config and hasattr(filter_config, 'filter_mappings'):
+            if field_name in filter_config.filter_mappings:
+                field_mapping = filter_config.filter_mappings[field_name]
+                if 'options' in field_mapping:
+                    field_options = field_mapping['options']
+        
+        # Priority 2: Field options
+        if not field_options and hasattr(field, 'options'):
+            field_options = field.options
+        
+        # Priority 3: Backend data
+        if not field_options:
+            field_options = backend_data.get(field_name, [])
+        
+        # Priority 4: Dynamic lookup
+        if not field_options:
+            try:
+                choices = self.get_choices_for_field(
+                    field_name, entity_type, hospital_id, branch_id
+                )
+                if choices:
+                    field_options = choices
+            except:
+                pass
+        
+        return field_options
+
     # ==========================================================================
     # SELECTION CATEGORY PROCESSING
     # ==========================================================================
@@ -816,9 +984,14 @@ class CategorizedFilterProcessor:
                             if isinstance(filter_value, list) and len(filter_value) > 0:
                                 filter_value = filter_value[0]
                             
+                            # ✅ FIX: Use db_column if specified
+                            actual_column = field.name
+                            if hasattr(field, 'db_column') and field.db_column:
+                                actual_column = field.db_column
+                            
                             # Apply filter if model has the field
-                            if hasattr(model_class, field.name):
-                                db_field = getattr(model_class, field.name)
+                            if hasattr(model_class, actual_column):  # ✅ Use actual_column
+                                db_field = getattr(model_class, actual_column)  # ✅ Use actual_column
                                 
                                 # ✅ FIX: Use mixed payment logic for payment_method field
                                 if field.name == 'payment_method' and entity_type == 'supplier_payments':
@@ -832,7 +1005,10 @@ class CategorizedFilterProcessor:
                                         query = query.filter(db_field == filter_value)
                                 else:
                                     # For non-payment_method fields, use exact match
-                                    query = query.filter(db_field == filter_value)
+                                    operator = getattr(field, 'filter_operator', FilterOperator.EQUALS)
+                                    query = self._apply_field_with_operator(
+                                        query, field.name, filter_value, operator, model_class, field
+                                    )
                                 
                                 applied_filters.add(matched_filter_key)
                                 filter_count += 1
@@ -1061,45 +1237,24 @@ class CategorizedFilterProcessor:
             logger.error(f"Error getting relationship choices: {str(e)}")
             return []
 
-    def get_selection_choices(self, field_config, entity_type: str) -> List[Tuple]:
+    def get_selection_choices(self, field_name: str, entity_type: str) -> List[Tuple]:
         """
-        ADDED: Get choices for selection fields (enum dropdowns)
+        Get selection choices for a field
+        UPDATED: Now uses universal method as single source of truth
+        
+        Returns:
+            List of tuples (value, label) for backward compatibility
         """
         try:
-            field_name = field_config.name
+            # Use the new universal method
+            options = self.get_field_options_universal(
+                entity_type, 
+                field_name, 
+                context='filter'  # This context adds "All" option
+            )
             
-            # Handle known selection fields
-            if field_name == 'payment_method':
-                return [
-                    ('cash', 'Cash'),
-                    ('cheque', 'Cheque'), 
-                    ('bank_transfer', 'Bank Transfer'),
-                    ('online', 'Online Payment'),
-                    ('credit_card', 'Credit Card'),
-                    ('debit_card', 'Debit Card')
-                ]
-            elif field_name == 'workflow_status':
-                return [
-                    ('pending', 'Pending'),
-                    ('approved', 'Approved'),
-                    ('rejected', 'Rejected'),
-                    ('paid', 'Paid'),
-                    ('cancelled', 'Cancelled')
-                ]
-            elif field_name == 'status':
-                return [
-                    ('active', 'Active'),
-                    ('inactive', 'Inactive'),
-                    ('pending', 'Pending'),
-                    ('cancelled', 'Cancelled')
-                ]
-            else:
-                # Try to get from field configuration
-                if hasattr(field_config, 'choices') and field_config.choices:
-                    return field_config.choices
-                
-                logger.warning(f"No selection choices defined for {field_name}")
-                return []
+            # Convert to tuple format for backward compatibility
+            return [(opt['value'], opt['label']) for opt in options]
             
         except Exception as e:
             logger.error(f"Error getting selection choices for {field_name}: {str(e)}")
@@ -1192,48 +1347,6 @@ class CategorizedFilterProcessor:
             logger.error(f"Error getting backend dropdown data: {str(e)}")
             return {}
 
-    def _get_supplier_dropdown_options(self, hospital_id: uuid.UUID, branch_id: Optional[uuid.UUID]) -> List[Dict]:
-        """Get supplier options for dropdown"""
-        try:
-            from app.services.database_service import get_db_session
-            from app.models.master import Supplier
-            
-            with get_db_session() as session:
-                query = session.query(Supplier).filter_by(hospital_id=hospital_id)
-                if branch_id:
-                    query = query.filter_by(branch_id=branch_id)
-                
-                suppliers = query.filter_by(status='active').order_by(Supplier.supplier_name).all()
-                
-                return [
-                    {'value': str(supplier.supplier_id), 'label': supplier.supplier_name}
-                    for supplier in suppliers
-                ]
-        except Exception as e:
-            logger.error(f"Error getting supplier options: {str(e)}")
-            return []
-
-    def _get_invoice_dropdown_options(self, hospital_id: uuid.UUID, branch_id: Optional[uuid.UUID]) -> List[Dict]:
-        """Get invoice options for dropdown"""
-        try:
-            from app.services.database_service import get_db_session
-            from app.models.transaction import SupplierInvoice
-            
-            with get_db_session() as session:
-                query = session.query(SupplierInvoice).filter_by(hospital_id=hospital_id)
-                if branch_id:
-                    query = query.filter_by(branch_id=branch_id)
-                
-                invoices = query.filter_by(status='active').order_by(SupplierInvoice.invoice_number).limit(20).all()
-                
-                return [
-                    {'value': str(invoice.invoice_id), 'label': invoice.invoice_number}
-                    for invoice in invoices
-                ]
-        except Exception as e:
-            logger.error(f"Error getting invoice options: {str(e)}")
-            return []
-
 
     def _get_field_category(self, field_config, entity_type: str) -> FilterCategory:
         """
@@ -1306,153 +1419,195 @@ class CategorizedFilterProcessor:
         
         logger.warning(f"No model class found for {entity_type}")
         return None
-            
+
+
+    def _is_using_view_model(self, config) -> bool:
+        """
+        Check if entity is using a view model
+        Returns True if using a view (has direct supplier_name field)
+        """
+        # Check table name
+        table_name = getattr(config, 'table_name', '')
+        if table_name.endswith('_view'):
+            logger.debug(f"✅ Entity using view: {table_name}")
+            return True
+        
+        # Check model class path
+        model_class = getattr(config, 'model_class', '')
+        if 'views' in model_class.lower():
+            logger.debug(f"✅ Entity using view model: {model_class}")
+            return True
+        
+        return False
     
-    def get_applied_filter_summary(self, applied_filters: Set[str], categorized_filters: Dict) -> Dict:
-        """Get summary of applied filters by category"""
-        summary = {}
-        
-        for category, filters in categorized_filters.items():
-            applied_in_category = [f for f in filters.keys() if f in applied_filters]
-            if applied_in_category:
-                summary[category.value] = {
-                    'applied_count': len(applied_in_category),
-                    'applied_filters': applied_in_category,
-                    'total_filters': len(filters)
-                }
-        
-        return summary
-
-    def execute_complete_search(self, entity_type: str, filters: Dict, filter_data: Dict,
-                          hospital_id: uuid.UUID, branch_id: Optional[uuid.UUID] = None,
-                          page: int = 1, per_page: int = 20) -> Optional[Dict]:
+    def get_field_options_universal(self, entity_type: str, field_name: str, 
+                                context: str = 'all', 
+                                hospital_id: Optional[uuid.UUID] = None,
+                                branch_id: Optional[uuid.UUID] = None) -> List[Dict]:
         """
-        ✅ COMPLETE SEARCH: Execute complete search using existing categorized filtering
-        Proper place for database query logic
+        Universal method to get field options - single source of truth
+        Used by: filters, universal forms, validators, APIs
+        
+        Args:
+            entity_type: Entity type (e.g., 'supplier_payments', 'purchase_orders')
+            field_name: Field name (e.g., 'status', 'payment_method')
+            context: 'filter', 'create', 'edit', 'api', 'all'
+            hospital_id: Optional hospital context for dynamic options
+            branch_id: Optional branch context for dynamic options
+        
+        Returns:
+            List of {'value': x, 'label': y} dictionaries
         """
         try:
-            from app.services.database_service import get_db_session, get_entity_dict
-            from app.config.entity_configurations import get_entity_config
-            from sqlalchemy import desc
-            
-            # Get configuration and model
+            # Get configuration
             config = get_entity_config(entity_type)
             if not config:
-                logger.warning(f"No configuration found for {entity_type}")
-                return None
+                logger.warning(f"No configuration for entity: {entity_type}")
+                return []
             
-            model_class = self._get_model_class(entity_type)
-            if not model_class:
-                logger.warning(f"No model class found for {entity_type}")
-                return None
+            # Find field by name OR aliases (backward compatibility)
+            field_def = None
+            for field in config.fields:
+                # Direct name match
+                if field.name == field_name:
+                    field_def = field
+                    break
+                # Check filter aliases for backward compatibility
+                if hasattr(field, 'filter_aliases') and field.filter_aliases:
+                    if field_name in field.filter_aliases:
+                        field_def = field
+                        break
             
-            with get_db_session() as session:
-                # Base query
-                query = session.query(model_class).filter_by(hospital_id=hospital_id)
+            if not field_def:
+                logger.debug(f"Field {field_name} not found in {entity_type} config")
                 
-                # Branch filter if supported
-                if branch_id and hasattr(model_class, 'branch_id'):
-                    query = query.filter(model_class.branch_id == branch_id)
-                
-                # Apply existing categorized filters
-                query, applied_filters, filter_count = self.process_entity_filters(
-                    entity_type=entity_type,
-                    filters=filters,
-                    query=query,
-                    model_class=model_class,
-                    session=session,
-                    config=config
-                )
-                
-                # Apply sorting from configuration
-                sort_field = filters.get('sort_field', getattr(config, 'default_sort_field', 'created_at'))
-                sort_direction = filters.get('sort_direction', getattr(config, 'default_sort_order', 'desc'))
-                
-                if hasattr(model_class, sort_field):
-                    sort_attr = getattr(model_class, sort_field)
-                    if sort_direction.lower() == 'desc':
-                        query = query.order_by(desc(sort_attr))
-                    else:
-                        query = query.order_by(sort_attr)
-                
-                # Pagination
-                total_count = query.count()
-                offset = (page - 1) * per_page
-                entities = query.offset(offset).limit(per_page).all()
-                
-                # Convert to dictionaries
-                entity_dicts = []
-                for entity in entities:
-                    entity_dict = get_entity_dict(entity)
-                    
-                    # Add basic relationships (can be enhanced with configuration later)
-                    entity_dict = self._add_basic_relationships(entity_dict, entity, entity_type, session)
-                    
-                    entity_dicts.append(entity_dict)
-                
-                # Use summary from filter_data (already calculated with same filters)
-                summary = filter_data.get('summary_data', {})
-                if summary:
-                    # Update with actual query count (may differ from summary due to pagination)
-                    summary['total_count'] = total_count
+                # Check filter mappings as fallback (for backward compatibility)
+                filter_config = get_entity_filter_config(entity_type)
+                if filter_config and hasattr(filter_config, 'filter_mappings'):
+                    if field_name in filter_config.filter_mappings:
+                        mapping = filter_config.filter_mappings[field_name]
+                        if 'options' in mapping:
+                            options = mapping['options']
+                            if options and isinstance(options[0], dict):
+                                return options
+                            # Convert tuples to dict format
+                            return [{'value': opt[0], 'label': opt[1]} for opt in options]
+                return []
+            
+            # Get options from field definition (single source of truth)
+            options = []
+            if hasattr(field_def, 'options') and field_def.options:
+                # Ensure correct format
+                if isinstance(field_def.options[0], dict):
+                    options = field_def.options.copy()  # Copy to avoid modifying original
                 else:
-                    # Fallback if no summary available
-                    summary = {'total_count': total_count}
+                    # Convert from tuples or lists
+                    options = [{'value': opt[0], 'label': opt[1]} 
+                            for opt in field_def.options]
+            else:
+                # No static options - might need dynamic loading
+                # (e.g., suppliers, branches, etc.)
+                if field_def.field_type in ['entity_search', 'relationship']:
+                    # These would load dynamically - return empty for now
+                    # Could implement dynamic loading here if needed
+                    logger.debug(f"Field {field_name} requires dynamic loading")
+                return []
+            
+            # Apply context-specific filtering
+            if context == 'create':
+                # Filter options for create context
+                if field_def.name == 'status':  # Standardized field name
+                    # Universal logic for ALL status fields
+                    if entity_type in ['supplier_payments', 'purchase_orders', 'supplier_invoices']:
+                        # Transaction entities: limited initial statuses
+                        allowed_values = ['draft', 'pending']
+                        options = [opt for opt in options 
+                                if opt['value'] in allowed_values]
+                    elif entity_type in ['suppliers', 'medicines', 'patients']:
+                        # Master entities: default to active
+                        allowed_values = ['active', 'pending']
+                        options = [opt for opt in options 
+                                if opt['value'] in allowed_values]
                 
-                # Build pagination
-                pagination = {
-                    'page': page,
-                    'per_page': per_page,
-                    'total_count': total_count,
-                    'total_pages': (total_count + per_page - 1) // per_page,
-                    'has_prev': page > 1,
-                    'has_next': page < ((total_count + per_page - 1) // per_page)
-                }
-                
-                return {
-                    'items': entity_dicts,
-                    'total': total_count,
-                    'pagination': pagination,
-                    'summary': summary,
-                    'success': True,
-                    'applied_filters': list(applied_filters),
-                    'filter_count': filter_count,
-                    'metadata': {
-                        'categorized_filtering': True,
-                        'orchestrated_by': 'categorized_processor',
-                        'entity_agnostic': True,
-                        'routing_method': 'complete_system_primary'
-                    }
-                }
-                
+                elif field_name == 'payment_method':
+                    # For create, maybe exclude 'mixed' as it's set automatically
+                    if entity_type == 'supplier_payments':
+                        options = [opt for opt in options 
+                                if opt['value'] != 'mixed']
+            
+            elif context == 'edit':
+                # All options available for edit (unless business rules apply)
+                if field_def.name == 'status':
+                    # Some statuses might not be directly settable
+                    if entity_type in ['supplier_payments', 'purchase_orders']:
+                        # Can't directly set to completed (requires workflow)
+                        excluded = ['completed']
+                        options = [opt for opt in options 
+                                if opt['value'] not in excluded]
+            
+            elif context == 'filter':
+                # Add "All" option at the beginning for filters
+                all_label = f"All {field_def.label}" if hasattr(field_def, 'label') else "All"
+                options = [{'value': '', 'label': all_label}] + options
+            
+            elif context == 'api':
+                # Return all valid options for API validation
+                pass
+            
+            # 'all' context returns everything unfiltered
+            
+            return options
+            
         except Exception as e:
-            logger.error(f"❌ Error in complete search execution for {entity_type}: {str(e)}")
+            logger.error(f"Error getting field options for {entity_type}.{field_name}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return []
+
+    def get_field_definition(self, entity_type: str, field_name: str) -> Optional[FieldDefinition]:
+        """
+        Get field definition by name or alias
+        Helper method for other functions
+        """
+        config = get_entity_config(entity_type)
+        if not config:
             return None
+        
+        for field in config.fields:
+            # Check direct name
+            if field.name == field_name:
+                return field
+            # Check aliases
+            if hasattr(field, 'filter_aliases') and field.filter_aliases:
+                if field_name in field.filter_aliases:
+                    return field
+        
+        return None
 
-    def _add_basic_relationships(self, entity_dict: Dict, entity, entity_type: str, session) -> Dict:
-        """Add relationships based on configuration"""
+    def validate_field_value(self, entity_type: str, field_name: str, 
+                            value: Any, context: str = 'api') -> bool:
+        """
+        Validate if a value is valid for a field
+        Uses universal options as source of truth
+        """
         try:
-            config = get_entity_config(entity_type)
-            if not config:
-                return entity_dict
+            # Get valid options for this context
+            options = self.get_field_options_universal(
+                entity_type, field_name, context
+            )
             
-            # Get service to handle entity-specific relationships
-            from app.engine.universal_services import get_universal_service
-            service = get_universal_service(entity_type)
+            # Extract valid values
+            valid_values = [opt['value'] for opt in options]
             
-            if hasattr(service, 'add_relationships'):
-                return service.add_relationships(entity_dict, entity, session)
-
-            if hasattr(service, 'get_calculated_fields'):
-                calculated = service.get_calculated_fields(entity, config)
-                entity_dict.update(calculated)
+            # Handle empty value for filters
+            if context == 'filter' and (value == '' or value is None):
+                return True
             
-            return entity_dict
+            return value in valid_values
             
         except Exception as e:
-            logger.error(f"Error adding relationships: {str(e)}")
-            return entity_dict
-
+            logger.error(f"Error validating field value: {str(e)}")
+            return False
 
 # =============================================================================
 # GLOBAL INSTANCE AND CONVENIENCE FUNCTIONS

@@ -229,6 +229,14 @@ class UniversalEntityService(ABC):
             # Get base dictionary
             item_dict = get_entity_dict(item)
             
+            # ✅ ADD: Map db_columns to field names for display
+            if self.config and hasattr(self.config, 'fields'):
+                for field in self.config.fields:
+                    if hasattr(field, 'db_column') and field.db_column:
+                        # If data has db_column but not field name, create alias
+                        if field.db_column in item_dict and field.name not in item_dict:
+                            item_dict[field.name] = item_dict[field.db_column]
+
             # ✅ UNIVERSAL: Ensure all possible deleted flags are included
             if hasattr(item, 'is_deleted'):
                 item_dict['is_deleted'] = item.is_deleted
@@ -251,31 +259,135 @@ class UniversalEntityService(ABC):
         return items_dict
     
     def _calculate_summary(self, session: Session, hospital_id: uuid.UUID,
-                          branch_id: Optional[uuid.UUID], filters: Dict,
-                          total_count: int, applied_filters: set = None) -> Dict:
+                      branch_id: Optional[uuid.UUID], filters: Dict,
+                      total_count: int, applied_filters: set = None) -> Dict:
         """
-        Calculate basic summary statistics
-        Entity-specific services should override to add custom metrics
-        Note: applied_filters parameter is optional for backward compatibility
+        Universal summary calculation using configuration
+        Reads summary_cards config and calculates each metric
         """
-        summary = {
-            'total_count': total_count,
-            'filtered_count': total_count if not applied_filters else None
-        }
+        from sqlalchemy import func
+        from datetime import datetime
         
-        # Add status counts if model has status field
-        if hasattr(self.model_class, 'status'):
-            base_query = self._get_base_query(session, hospital_id, branch_id)
-            status_counts = base_query.with_entities(
-                self.model_class.status,
-                func.count(self.model_class.status)
-            ).group_by(self.model_class.status).all()
+        summary = {'total_count': total_count}
+        
+        # Check if we have summary cards configuration
+        if not self.config or not hasattr(self.config, 'summary_cards'):
+            return summary
+        
+        # Get the SAME filtered query that was used for the main list
+        base_query = self._get_base_query(session, hospital_id, branch_id)
+        
+        # Apply ALL the same filters
+        filtered_query, _, _ = self.filter_processor.process_entity_filters(
+            self.entity_type,
+            filters,
+            base_query,
+            self.model_class,
+            session,
+            hospital_id,
+            branch_id,
+            self.config
+        )
+        
+        # Process each summary card from configuration
+        for card in self.config.summary_cards:
+            field_name = card.get('field')
+            if not field_name:
+                continue
             
-            for status, count in status_counts:
-                if status:
-                    summary[f'{status.lower()}_count'] = count
+            try:
+                # Skip total_count as it's already added
+                if field_name == 'total_count':
+                    continue
+                
+                # Handle different card types based on field name patterns and type
+                card_type = card.get('type', 'number')
+                
+                if card_type == 'currency' or field_name.endswith('_sum'):
+                    # Sum calculation for currency/amount fields
+                    actual_field = field_name.replace('_sum', '') if field_name.endswith('_sum') else field_name
+                    
+                    # Handle db_column mapping
+                    db_field = self._get_db_column_name(actual_field)
+                    
+                    if hasattr(self.model_class, db_field):
+                        value = filtered_query.with_entities(
+                            func.sum(getattr(self.model_class, db_field))
+                        ).scalar() or 0
+                        summary[field_name] = float(value)
+                    else:
+                        summary[field_name] = 0.0
+                        
+                elif field_name.endswith('_count'):
+                    # Count calculation with optional status filter
+                    count_query = filtered_query
+                    
+                    # Check if this card has a specific filter
+                    if card.get('filter_field') and card.get('filter_value'):
+                        filter_field = card['filter_field']
+                        filter_value = card['filter_value']
+                        
+                        # Handle db_column mapping for filter field
+                        db_filter_field = self._get_db_column_name(filter_field)
+                        
+                        if hasattr(self.model_class, db_filter_field):
+                            count_query = count_query.filter(
+                                getattr(self.model_class, db_filter_field) == filter_value
+                            )
+                    
+                    # Special handling for date-based counts
+                    if 'current_month' in field_name or 'this_month' in field_name:
+                        # Get the date field to use
+                        date_field = self._get_primary_date_field()
+                        if date_field:
+                            current_month = datetime.now().month
+                            current_year = datetime.now().year
+                            count_query = count_query.filter(
+                                func.extract('month', date_field) == current_month,
+                                func.extract('year', date_field) == current_year
+                            )
+                    
+                    summary[field_name] = count_query.count()
+                    
+                else:
+                    # For other types, check if it's a simple count
+                    if card_type == 'number':
+                        # Could be a filtered count without _count suffix
+                        if card.get('filter_field') and card.get('filter_value'):
+                            count_query = filtered_query.filter(
+                                getattr(self.model_class, self._get_db_column_name(card['filter_field'])) == card['filter_value']
+                            )
+                            summary[field_name] = count_query.count()
+                            
+            except Exception as e:
+                logger.error(f"Error calculating {field_name} for {self.entity_type}: {str(e)}")
+                summary[field_name] = 0
         
         return summary
+
+    def _get_db_column_name(self, field_name: str) -> str:
+        """Helper to get actual database column name considering db_column mapping"""
+        if self.config and hasattr(self.config, 'fields'):
+            for field in self.config.fields:
+                if field.name == field_name and hasattr(field, 'db_column') and field.db_column:
+                    return field.db_column
+        return field_name
+
+    def _get_primary_date_field(self):
+        """Get the primary date field for this entity"""
+        # First check config for primary_date_field
+        if self.config and hasattr(self.config, 'primary_date_field'):
+            date_field_name = self._get_db_column_name(self.config.primary_date_field)
+            if hasattr(self.model_class, date_field_name):
+                return getattr(self.model_class, date_field_name)
+        
+        # Fallback to common date field names
+        common_date_fields = ['po_date', 'payment_date', 'created_at', 'date', 'transaction_date']
+        for field_name in common_date_fields:
+            if hasattr(self.model_class, field_name):
+                return getattr(self.model_class, field_name)
+        
+        return None
     
     def _build_pagination_info(self, total_count: int, page: int, per_page: int) -> Dict:
         """Build pagination metadata"""
@@ -326,14 +438,17 @@ class UniversalEntityService(ABC):
     # Hook methods for entity-specific customization
     
     def get_by_id(self, item_id: str, **kwargs) -> Optional[Dict]:
-        """Get single item by ID with virtual field extraction"""
+        """Get single item by ID with all relationships and virtual fields"""
         try:
-            hospital_id = kwargs.get('hospital_id')
-            user = kwargs.get('current_user') 
-
-            if not hospital_id or not item_id:
+            if not item_id:
                 return None
             
+            hospital_id = kwargs.get('hospital_id')
+            user = kwargs.get('user')
+            
+            if not hospital_id:
+                return None
+                
             with get_db_session() as session:
                 # First try with user preference
                 query = self._get_base_query(session, hospital_id, 
@@ -347,18 +462,7 @@ class UniversalEntityService(ABC):
                     return None
                 
                 item = query.filter(getattr(self.model_class, id_field) == item_id).first()
-                # If not found and user doesn't show deleted, try including deleted
-                # This allows viewing a specific deleted record via direct link
-                if not item and hasattr(self.model_class, 'is_deleted'):
-                    query_with_deleted = session.query(self.model_class)
-                    if hasattr(self.model_class, 'hospital_id'):
-                        query_with_deleted = query_with_deleted.filter(
-                            self.model_class.hospital_id == hospital_id
-                        )
-                    item = query_with_deleted.filter(
-                        getattr(self.model_class, id_field) == item_id
-                    ).first()
-
+                
                 if item:
                     item_dict = get_entity_dict(item)
                     self._add_relationships(item_dict, item, session)
@@ -367,6 +471,9 @@ class UniversalEntityService(ABC):
                     if self.config:
                         item_dict = self._extract_virtual_fields_for_single_item(item_dict)
                     
+                    # NEW HOOK: Add virtual calculations (placeholder for child classes)
+                    item_dict = self._add_virtual_calculations(item_dict, item_id, **kwargs)
+                    
                     return item_dict
                 
                 return None
@@ -374,6 +481,14 @@ class UniversalEntityService(ABC):
         except Exception as e:
             logger.error(f"Error getting {self.entity_type} by id: {str(e)}")
             return None
+
+    def _add_virtual_calculations(self, result: Dict, item_id: str, **kwargs) -> Dict:
+        """
+        PLACEHOLDER: Override in child classes to add virtual calculated fields
+        Called automatically by get_by_id - no need to override get_by_id itself
+        """
+        # Base implementation does nothing - maintains backward compatibility
+        return result
 
     def _extract_virtual_fields_for_single_item(self, item_dict: Dict) -> Dict:
         """

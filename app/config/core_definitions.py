@@ -172,6 +172,20 @@ class ExportFormat(Enum):
     WORD = "word"
     CSV = "csv"
 
+class FilterOperator(Enum):
+    """Filter comparison operators for fields"""
+    EQUALS = "equals"                    # Default for most fields
+    CONTAINS = "contains"                 # Text search (ILIKE)
+    LESS_THAN = "lt"                     # < 
+    LESS_THAN_OR_EQUAL = "lte"          # <=
+    GREATER_THAN = "gt"                  # >
+    GREATER_THAN_OR_EQUAL = "gte"       # >=
+    BETWEEN = "between"                  # Range (needs two values)
+    DATE_ON_OR_BEFORE = "on_or_before"   # Special for dates
+    DATE_ON_OR_AFTER = "on_or_after"     # Special for dates
+    IN = "in"                            # Multiple values
+    NOT_IN = "not_in"                   # Exclude multiple values
+
 # =============================================================================
 # VIEW SECTION DEFINITIONS - Eliminates Hardcoded Values
 # =============================================================================
@@ -319,10 +333,14 @@ class FieldDefinition:
     autocomplete_min_chars: int = 2            # ✓ FROM field_definitions
     entity_search_config: Optional['EntitySearchConfiguration'] = None
     
+    # ========== DATABASE MAPPING ==========
+    db_column: Optional[str] = None      # Actual database column name
+
     # ========== FILTER CONFIGURATION ==========
     filter_aliases: List[str] = field(default_factory=list)  # Alternative parameter names
     filter_type: str = "exact"        # Filter match type: exact, range, contains, etc.
     filter_config: Optional['FilterConfiguration'] = None
+    filter_operator: Optional[FilterOperator] = None
     
     # ========== FORM INTEGRATION ==========
     form_field_name: Optional[str] = None      # WTForms field name override

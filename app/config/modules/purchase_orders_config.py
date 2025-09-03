@@ -14,7 +14,7 @@ from app.config.core_definitions import (
     CRUDOperation, SectionDefinition, ViewLayoutConfiguration, LayoutType,
     TabDefinition, ActionDefinition, ButtonType, ActionDisplayType,
     DocumentConfiguration, EntityFilterConfiguration, EntitySearchConfiguration, 
-    ComplexDisplayType, CustomRenderer
+    ComplexDisplayType, CustomRenderer, FilterOperator
 )
 from app.config.filter_categories import FilterCategory
 
@@ -63,7 +63,7 @@ PURCHASE_ORDER_FIELDS = [
         show_in_detail=False,
         show_in_form=True,
         required=True,
-        filterable=True,
+        filterable=False,
         tab_group="order_details",  # Changed from "header"
         section="supplier_info",
         view_order=10,
@@ -84,15 +84,18 @@ PURCHASE_ORDER_FIELDS = [
         name="supplier_name",
         label="Supplier Name",
         field_type=FieldType.TEXT,
-        virtual=True,
-        searchable=True,
+        virtual=False,
+        filterable=True,  # ✅ ADD THIS
+        filter_operator=FilterOperator.CONTAINS,  # ✅ ADD THIS
+        searchable=False,  # Remove from generic search
+        placeholder="Search supplier name...",
         sortable=True,
         show_in_list=True,
         show_in_detail=True,
         show_in_form=False,
         readonly=True,
-        related_field="supplier",
-        related_display_field="supplier_name",
+        related_field=None,
+        related_display_field=None,
         tab_group="order_details",  # Changed from "header"
         section="supplier_info",
         view_order=11,
@@ -107,7 +110,7 @@ PURCHASE_ORDER_FIELDS = [
         format_pattern="%d/%b/%Y %H:%M",
         required=True,
         sortable=True,
-        filterable=True,
+        filterable=False,
         show_in_list=True,
         show_in_detail=True,
         show_in_form=True,
@@ -127,6 +130,8 @@ PURCHASE_ORDER_FIELDS = [
         show_in_detail=True,
         show_in_form=True,
         filterable=True,
+        filter_operator=FilterOperator.DATE_ON_OR_BEFORE,  # ✅ ADD THIS
+        placeholder="On or before this date",  # ✅ ADD/UPDATE THIS
         tab_group="order_details",  # Changed from "header"
         section="dates",
         view_order=21
@@ -136,8 +141,10 @@ PURCHASE_ORDER_FIELDS = [
     FieldDefinition(
         name="status",
         label="Status",
-        field_type=FieldType.SELECT,
+        field_type=FieldType.STATUS_BADGE,
+        db_column="po_status",  # ✅ Maps to actual DB column
         options=[
+            {"value": "draft", "label": "Draft", "color": "secondary"},
             {"value": "pending", "label": "Pending", "color": "warning"},
             {"value": "approved", "label": "Approved", "color": "info"},
             {"value": "partially_received", "label": "Partially Received", "color": "primary"},
@@ -163,7 +170,7 @@ PURCHASE_ORDER_FIELDS = [
         field_type=FieldType.CURRENCY,
         virtual=False, 
         sortable=True,
-        filterable=True,
+        filterable=False,
         show_in_list=True,
         show_in_detail=True,
         show_in_form=False,
@@ -229,7 +236,7 @@ PURCHASE_ORDER_FIELDS = [
         show_in_list=False,
         show_in_detail=True,
         show_in_form=True,
-        filterable=True,
+        filterable=False,
         required=False,
         autocomplete_enabled=True,
         autocomplete_source="backend",
@@ -566,7 +573,7 @@ PURCHASE_ORDER_VIEW_LAYOUT = ViewLayoutConfiguration(
         "primary_label": "PO Number",
         "title_field": "supplier_name",  # This will show supplier name prominently
         "title_label": "Supplier",
-        "status_field": "status",
+        "status_field": "po_status",
         "secondary_fields": [
             {"field": "po_date", "label": "Order Date", "icon": "fas fa-calendar", "type": "date"},
             {"field": "total_amount", "label": "Total Amount", "icon": "fas fa-rupee-sign", "type": "currency", "css_classes": "text-xl font-bold text-primary"},
@@ -724,7 +731,7 @@ PURCHASE_ORDER_SUMMARY_CARDS = [
         "icon_css": "stat-card-icon primary",
         "color": "primary",
         "type": "number",
-        "filterable": False,
+        "filterable": True,
         "visible": True,
         "order": 1
     },
@@ -740,14 +747,15 @@ PURCHASE_ORDER_SUMMARY_CARDS = [
         "order": 2
     },
     {
-        "title": "Pending Orders",
+        "title": "Draft Orders",  # ✅ Changed from "Pending Orders"
         "field": "draft_count",
         "icon": "fas fa-clock",
         "icon_css": "stat-card-icon warning",
         "color": "warning",
         "type": "number",
         "filterable": True,
-        "filter_value": "draft",
+        "filter_value": "draft",  # ✅ This matches the actual status value
+        "filter_field": "status",  # ✅ Add this to specify which field to filter
         "visible": True,
         "order": 3
     },
@@ -786,7 +794,8 @@ PURCHASE_ORDER_FILTER_CATEGORY_MAPPING = {
     'quotation_id': FilterCategory.SEARCH,
     
     # Selection filters
-    'status': FilterCategory.SELECTION,
+    'status': FilterCategory.SELECTION,  # ✅ Standardized
+    'po_status': FilterCategory.SELECTION,
     'currency_code': FilterCategory.SELECTION,
     
     # Relationship filters (using RELATIONSHIP category like financial_transactions.py)
@@ -909,7 +918,7 @@ PURCHASE_ORDER_CONFIG = EntityConfiguration(
     name="Purchase Order",
     plural_name="Purchase Orders",
     service_name="purchase_orders",
-    table_name="purchase_order_header",
+    table_name="purchase_orders_view",
     primary_key="po_id",
     title_field="po_number",
     subtitle_field="supplier_name",
@@ -919,14 +928,14 @@ PURCHASE_ORDER_CONFIG = EntityConfiguration(
     entity_category=EntityCategory.TRANSACTION,
     
     # === MODEL CLASS ===
-    model_class="app.models.transaction.PurchaseOrderHeader",
+    model_class="app.models.views.PurchaseOrderView",
     
     # === LIST VIEW CONFIGURATION ===
     enable_saved_filter_suggestions=True,
     enable_auto_submit=False,
     page_title="Purchase Orders",
     description="View and manage purchase orders",
-    searchable_fields=["po_number", "supplier_name", "quotation_id"],
+    searchable_fields=["po_number", "quotation_id"],
     default_sort_field="po_date",
     default_sort_direction="desc",
     
@@ -989,10 +998,11 @@ PURCHASE_ORDER_CONFIG = EntityConfiguration(
 PURCHASE_ORDER_ENTITY_FILTER_CONFIG = EntityFilterConfiguration(
     entity_type='purchase_orders',
     filter_mappings={
-        'status': {
-            'field': 'status',  
+        'po_status': {
+            'field': 'po_status',  
             'type': 'select',   
             'options': [
+                {'value': 'draft', 'label': 'Draft'},
                 {'value': 'pending', 'label': 'Pending'},
                 {'value': 'approved', 'label': 'Approved'},
                 {'value': 'partially_received', 'label': 'Partially Received'},
@@ -1045,9 +1055,9 @@ def get_dynamic_filter_options(field_name: str) -> List[Dict]:
 
 PURCHASE_ORDER_SEARCH_CONFIG = EntitySearchConfiguration(
     target_entity='purchase_orders',
-    search_fields=['po_number', 'quotation_id'],
+    search_fields=['po_number', 'supplier_name', 'quotation_id'], 
     display_template='{po_number} - {supplier_name}',
-    model_path='app.models.transaction.PurchaseOrderHeader',
+    model_path='app.models.views.PurchaseOrderView',
     min_chars=1,
     max_results=10,
     sort_field='po_date'

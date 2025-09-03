@@ -1,578 +1,280 @@
-# Enhanced Supplier Master Service - Transaction History Implementation
 # File: app/services/supplier_master_service.py
-
 """
-Enhanced implementation that reuses existing payment history functionality
-from supplier_payment_service.py
+Supplier Master Service - Fixed version with complete data structures
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Optional
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal
-from sqlalchemy import func, desc, and_
-from sqlalchemy.orm import Session
+from sqlalchemy import desc
 
 from app.models.master import Supplier
 from app.models.transaction import SupplierInvoice, SupplierPayment, SupplierInvoiceLine
 from app.engine.universal_entity_service import UniversalEntityService
 from app.engine.universal_service_cache import cache_service_method
-from app.services.database_service import get_entity_dict, get_db_session
-
+from app.services.database_service import get_db_session
 from app.utils.unicode_logging import get_unicode_safe_logger
 
 logger = get_unicode_safe_logger(__name__)
 
 class SupplierMasterService(UniversalEntityService):
     """
-    Enhanced Supplier service that reuses existing payment service methods
+    Supplier service - extends Universal Engine base
+    Only custom renderer methods, no overrides
     """
     
     def __init__(self):
         super().__init__('suppliers', Supplier)
+        logger.info("Initialized SupplierMasterService")
     
-    @cache_service_method('suppliers', 'get_detail_data') 
-    def get_detail_data(self, item_id: str, hospital_id: uuid.UUID, 
-       branch_id: Optional[uuid.UUID] = None,
-       include_calculations: bool = True) -> Optional[Dict]:
+    def _add_virtual_calculations(self, result: Dict, item_id: str, **kwargs) -> Dict:
         """
-        Override to add transaction history data using existing service methods
-        """        
-        # Get base data from parent
-        data = super().get_detail_data(item_id, hospital_id, branch_id, include_calculations)
+        Add supplier-specific virtual calculated fields
+        This is called automatically by parent's get_by_id
+        """
+        hospital_id = kwargs.get('hospital_id')
+        if not hospital_id:
+            return result
         
-        if not data:
-            return data
-        
-        # ALWAYS calculate balance for detail view, regardless of include_calculations
         try:
             supplier_id = uuid.UUID(item_id) if isinstance(item_id, str) else item_id
             
-            # Calculate balance summary
             with get_db_session() as session:
-                balance_summary = self._calculate_balance_summary(session, supplier_id, hospital_id)
+                # Calculate balance summary fields
+                from sqlalchemy import func
+                from app.models.transaction import SupplierInvoice, SupplierPayment
                 
-                # Add supplier_id for custom renderers
-                balance_summary['supplier_id'] = str(supplier_id)
+                # Total invoiced
+                total_invoiced = session.query(
+                    func.coalesce(func.sum(SupplierInvoice.total_amount), 0)
+                ).filter(
+                    SupplierInvoice.supplier_id == supplier_id,
+                    SupplierInvoice.hospital_id == hospital_id
+                ).scalar() or Decimal('0')
                 
-                # Update top-level data
-                data.update(balance_summary)
+                # Total paid
+                total_paid = session.query(
+                    func.coalesce(func.sum(SupplierPayment.amount), 0)
+                ).filter(
+                    SupplierPayment.supplier_id == supplier_id,
+                    SupplierPayment.hospital_id == hospital_id,
+                    SupplierPayment.workflow_status.in_(['approved', 'completed'])
+                ).scalar() or Decimal('0')
                 
-                # Update item dict if it exists
-                if 'item' in data:
-                    if isinstance(data['item'], dict):
-                        data['item'].update(balance_summary)
-                    else:
-                        # Convert item to dict from object
-                        item_dict = get_entity_dict(data['item'])
-                        item_dict.update(balance_summary)
-                        data['item'] = item_dict
+                # Add calculated fields
+                result['total_invoiced'] = float(total_invoiced)
+                result['total_paid'] = float(total_paid)
+                result['current_balance'] = float(total_invoiced - total_paid)
                 
-                # Also add statistics for the Business Information tab
+                # Get last payment date
+                last_payment = session.query(SupplierPayment).filter(
+                    SupplierPayment.supplier_id == supplier_id,
+                    SupplierPayment.hospital_id == hospital_id,
+                    SupplierPayment.workflow_status.in_(['approved', 'completed'])
+                ).order_by(desc(SupplierPayment.payment_date)).first()
+                
+                if last_payment and last_payment.payment_date:
+                    result['last_payment_date'] = last_payment.payment_date.strftime('%Y-%m-%d')
+                
+                # Add business statistics
                 from app.services.supplier_service import get_supplier_statistics
                 stats = get_supplier_statistics(
                     supplier_id=supplier_id,
                     hospital_id=hospital_id,
-                    branch_id=branch_id,
+                    branch_id=kwargs.get('branch_id'),
                     session=session
                 )
                 
-                # Add statistics to data
                 if stats:
-                    # Map statistics to the expected field names
-                    data['total_purchases'] = stats.get('total_business_volume', 0.0)
-                    data['outstanding_balance'] = stats.get('outstanding_balance', 0.0)
-                    
-                    # Update item dict with statistics
-                    if 'item' in data and isinstance(data['item'], dict):
-                        data['item']['total_purchases'] = stats.get('total_business_volume', 0.0)
-                        data['item']['outstanding_balance'] = stats.get('outstanding_balance', 0.0)
-                    
-                logger.info(f"Successfully calculated balance summary and statistics for supplier {supplier_id}")
-                logger.debug(f"Balance Summary: {balance_summary}")
-                logger.debug(f"Statistics: {stats}")
+                    result['total_purchases'] = stats.get('total_business_volume', 0.0)
+                    result['outstanding_balance'] = stats.get('outstanding_balance', 0.0)
                 
+                logger.info(f"Added virtual calculations for supplier {supplier_id}")
+                    
         except Exception as e:
             logger.error(f"Error calculating supplier virtual fields: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-            
-            # Return data with zero values rather than failing completely
-            zero_balance = {
-                'current_balance': 0.0,
-                'total_invoiced': 0.0,
-                'total_paid': 0.0,
-                'last_payment_date': None,
-                'total_purchases': 0.0,
-                'outstanding_balance': 0.0
-            }
-            
-            data.update(zero_balance)
-            if 'item' in data and isinstance(data['item'], dict):
-                data['item'].update(zero_balance)
-        
-        return data
-    
-    def get_by_id(self, item_id: str, **kwargs) -> Optional[Dict]:
-        """
-        Override get_by_id to add balance calculations
-        Backward compatible - preserves all existing behavior
-        """
-        logger.info(f"🔍 SupplierMasterService.get_by_id - kwargs keys: {list(kwargs.keys())}")
-        
-        # Call parent to get basic data with all existing virtual fields
-        result = super().get_by_id(item_id, **kwargs)
-        
-        if result:
-        # Ensure boolean fields are properly converted
-
-            if 'black_listed' in result:
-                value = result['black_listed']
-                if value is None:
-                    result['black_listed'] = False
-                elif isinstance(value, str):
-                    result['black_listed'] = value.lower() in ('true', '1', 'yes', 'on')
-                elif isinstance(value, int):
-                    result['black_listed'] = bool(value)
-
-        if not result:
-            return result
-        
-        # Only add calculations if we have the required context
-        hospital_id = kwargs.get('hospital_id')
-        
-        if not hospital_id:
-            logger.warning("❌ No hospital_id - skipping balance calculations")
-            return result
-        
-        try:
-            supplier_id = uuid.UUID(item_id) if isinstance(item_id, str) else item_id
-            
-            # Calculate balance summary using existing method
-            with get_db_session() as session:
-                balance_summary = self._calculate_balance_summary(session, supplier_id, hospital_id)
-                
-                # ADD THIS LOG TO SEE THE ACTUAL VALUES
-                logger.info(f"✅ Balance calculated: {balance_summary}")
-                
-                # Add supplier_id for custom renderers (same as in get_detail_data)
-                balance_summary['supplier_id'] = str(supplier_id)
-                
-                # Merge balance data into result
-                result.update(balance_summary)
-                
-                # Also try to get statistics if not already present
-                if 'total_purchases' not in result or 'outstanding_balance' not in result:
-                    from app.services.supplier_service import get_supplier_statistics
-                    stats = get_supplier_statistics(
-                        supplier_id=supplier_id,
-                        hospital_id=hospital_id,
-                        branch_id=kwargs.get('branch_id'),
-                        session=session
-                    )
-                    
-                    if stats:
-                        result['total_purchases'] = stats.get('total_business_volume', 0.0)
-                        result['outstanding_balance'] = stats.get('outstanding_balance', 0.0)
-                
-        except Exception as e:
-            logger.error(f"❌ Error in balance calculation: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
+            # Set defaults on error
+            result.setdefault('total_invoiced', 0.0)
+            result.setdefault('total_paid', 0.0)
+            result.setdefault('current_balance', 0.0)
+            result.setdefault('total_purchases', 0.0)
+            result.setdefault('outstanding_balance', 0.0)
         
         return result
 
-
-    def get_supplier_payment_history_6months(self, item_id: str = None, item: dict = None, **kwargs) -> Dict:
+    @cache_service_method('suppliers', 'payment_history')
+    def get_supplier_payment_history_6months(self, item_id: str = None, 
+                                            item: dict = None, **kwargs) -> Dict:
         """
-        Get last 6 months payment history for a supplier
-        This method signature matches what the payment_history_table.html template expects
-        Returns the same structure as supplier_payment_service.py
+        Payment history for custom renderer
+        Returns complete structure expected by payment_history_table.html
         """
         try:
-            # PARAMETER RESOLUTION
-            if item_id:
-                # Template calls: item_id IS the supplier_id for supplier master
-                supplier_id = item_id
-            elif item and isinstance(item, dict) and 'supplier_id' in item:
-                # Template calls from payment context
-                supplier_id = item['supplier_id']  
-            else:
-                return {'payments': [], 'has_history': False, 'error': 'No supplier ID provided'}
+            # Get supplier ID
+            supplier_id = item_id if item_id else (item.get('supplier_id') if item else None)
+            if not supplier_id:
+                return self._empty_payment_history()
+            
+            if isinstance(supplier_id, str):
+                supplier_id = uuid.UUID(supplier_id)
             
             with get_db_session() as session:
-                # FIXED: Extend date range to 12 months for better data availability
-                twelve_months_ago = datetime.now() - timedelta(days=365)
+                # Get supplier for name
+                supplier = session.query(Supplier).filter_by(supplier_id=supplier_id).first()
+                supplier_name = supplier.supplier_name if supplier else "Unknown"
                 
-                # FIXED: Convert supplier_id to UUID if it's a string
-                if isinstance(supplier_id, str):
-                    supplier_uuid = uuid.UUID(supplier_id)
-                else:
-                    supplier_uuid = supplier_id
+                # Get payments
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=365)
                 
-                # Build query with proper hospital filtering
-                query = session.query(SupplierPayment).filter(
-                    SupplierPayment.supplier_id == supplier_uuid,
-                    SupplierPayment.payment_date >= twelve_months_ago
-                )
-
-                # Add hospital filter from kwargs
-                hospital_id = kwargs.get('hospital_id')
-                if not hospital_id and 'current_hospital_id' in kwargs:
-                    hospital_id = kwargs.get('current_hospital_id')
-                    
-                if hospital_id:
-                    query = query.filter(SupplierPayment.hospital_id == hospital_id)
+                payments = session.query(SupplierPayment).filter(
+                    SupplierPayment.supplier_id == supplier_id,
+                    SupplierPayment.payment_date >= start_date,
+                    SupplierPayment.payment_date <= end_date
+                ).order_by(desc(SupplierPayment.payment_date)).all()
                 
-                # FIXED: Expand workflow status filter to include more statuses
-                query = query.filter(
-                    SupplierPayment.workflow_status.in_(['approved', 'completed', 'pending'])
-                )
-                
-                payments = query.order_by(desc(SupplierPayment.payment_date)).limit(50).all()
-                
+                # Format payments
                 payment_history = []
-                total_paid = Decimal('0')
+                total_amount = Decimal(0)
                 
                 for payment in payments:
-                    # FIXED: Add better error handling for invoice lookup
-                    invoice_no = 'N/A'
-                    try:
-                        if payment.invoice_id:
-                            invoice = session.query(SupplierInvoice).filter(
-                                SupplierInvoice.invoice_id == payment.invoice_id
-                            ).first()
-                            if invoice and invoice.supplier_invoice_number:
-                                invoice_no = invoice.supplier_invoice_number
-                    except Exception as inv_error:
-                        logger.warning(f"Error getting invoice for payment {payment.payment_id}: {inv_error}")
+                    # Convert datetime to string safely
+                    if payment.payment_date:
+                        if hasattr(payment.payment_date, 'isoformat'):
+                            payment_date_str = payment.payment_date.isoformat()
+                        else:
+                            payment_date_str = str(payment.payment_date)
+                    else:
+                        payment_date_str = ""
                     
-                    payment_data = {
+                    payment_history.append({
                         'payment_id': str(payment.payment_id),
-                        'reference_no': payment.reference_no or 'N/A',
-                        'payment_date': payment.payment_date.isoformat() if payment.payment_date else None,
-                        'payment_method': payment.payment_method or 'Unknown',
+                        'reference_no': payment.reference_no or '',
+                        'payment_date': payment_date_str,
                         'amount': float(payment.amount or 0),
-                        'workflow_status': payment.workflow_status or 'Unknown',
-                        'invoice_no': invoice_no
-                    }
-                    payment_history.append(payment_data)
-                    total_paid += payment.amount or Decimal('0')
+                        'payment_method': payment.payment_method or 'Unknown',
+                        'workflow_status': payment.workflow_status or 'completed',
+                        'invoice_number': getattr(payment, 'supplier_invoice_number', '-')
+                    })
+                    total_amount += Decimal(str(payment.amount or 0))
                 
-                # Get supplier details for summary
-                supplier = session.query(Supplier).filter(
-                    Supplier.supplier_id == supplier_uuid
-                ).first()
-                
-                result = {
+                # Return with complete summary
+                return {
                     'payments': payment_history,
-                    'summary': {
-                        'total_payments': len(payment_history),
-                        'total_amount': float(total_paid),
-                        'supplier_name': supplier.supplier_name if supplier else 'Unknown',
-                        'period': '12 Months'  # Updated to reflect actual period
-                    },
                     'has_history': bool(payment_history),
+                    'summary': {
+                        'supplier_name': supplier_name,
+                        'total_payments': len(payment_history),
+                        'total_amount': float(total_amount),
+                        'period': '12 Months'
+                    },
                     'currency_symbol': '₹'
                 }
                 
-                return result
-                
         except Exception as e:
-            logger.error(f"Error getting payment history for supplier {supplier_id}: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-            return {
-                'payments': [], 
-                'has_history': False, 
-                'error': str(e),
-                'summary': {
-                    'total_payments': 0,
-                    'total_amount': 0,
-                    'supplier_name': 'Error',
-                    'period': '12 Months'
-                },
-                'currency_symbol': '₹'
-            }
+            logger.error(f"Error in payment history: {str(e)}")
+            return self._empty_payment_history()
     
-    def get_supplier_invoice_history(self, item_id: str = None, item: dict = None, **kwargs) -> Dict:
+    @cache_service_method('suppliers', 'invoice_history')
+    def get_supplier_invoice_history(self, item_id: str = None, 
+                                    item: dict = None, **kwargs) -> Dict:
         """
-        Get invoice history for a supplier
-        Returns structure compatible with invoice_items_table.html template
+        Invoice history for custom renderer
+        Returns complete structure expected by invoice_items_table.html
         """
         try:
-            # PARAMETER RESOLUTION
-            if item_id:
-                # Template calls: item_id IS the supplier_id for supplier master
-                supplier_id = item_id
-            elif item and isinstance(item, dict) and 'supplier_id' in item:
-                # Template calls from payment context
-                supplier_id = item['supplier_id']  
-            else:
-                return {'items': [], 'has_invoices': False, 'error': 'No supplier ID provided'}
+            # Get supplier ID
+            supplier_id = item_id if item_id else (item.get('supplier_id') if item else None)
+            if not supplier_id:
+                return self._empty_invoice_history()
+            
+            if isinstance(supplier_id, str):
+                supplier_id = uuid.UUID(supplier_id)
+            
             with get_db_session() as session:
-                # Get last 10 invoices for this supplier
+                # Get invoices
                 invoices = session.query(SupplierInvoice).filter(
                     SupplierInvoice.supplier_id == supplier_id
-                ).order_by(
-                    desc(SupplierInvoice.invoice_date)
-                ).limit(10).all()
+                ).order_by(desc(SupplierInvoice.invoice_date)).limit(10).all()
                 
+                # Format invoice items
                 all_items = []
-                invoice_summary = {
-                    'total_amount': Decimal('0'),
-                    'total_gst': Decimal('0'),
-                    'total_items': 0
-                }
+                total_amount = Decimal(0)
+                total_gst = Decimal(0)
                 
                 for invoice in invoices:
-                    # Get invoice line items
-                    invoice_lines = session.query(SupplierInvoiceLine).filter(
+                    # Get line items
+                    lines = session.query(SupplierInvoiceLine).filter(
                         SupplierInvoiceLine.invoice_id == invoice.invoice_id
                     ).all()
                     
-                    for line in invoice_lines:
+                    for line in lines:
+                        # Convert dates to strings
+                        if invoice.invoice_date:
+                            if hasattr(invoice.invoice_date, 'isoformat'):
+                                invoice_date_str = invoice.invoice_date.isoformat()
+                            else:
+                                invoice_date_str = str(invoice.invoice_date)
+                        else:
+                            invoice_date_str = ""
+                        
                         all_items.append({
-                            'invoice_no': invoice.supplier_invoice_number,
-                            'invoice_date': invoice.invoice_date.strftime('%Y-%m-%d') if invoice.invoice_date else '',
-                            'item_name': line.medicine_name or 'Unknown Item',
-                            'batch_no': line.batch_number or '',  # Correct field name
-                            'quantity': float(line.units or 0),  # Use line.units
-                            'unit_price': float(line.pack_purchase_price or 0),  # Correct field
-                            'discount_percent': float(line.discount_percent or 0),  # Correct field
-                            'discount_amount': float(line.discount_amount or 0),
-                            'gst_rate': float(line.gst_rate or 0),
-                            'gst_amount': float(line.total_gst or 0),  # Correct field
-                            'total_amount': float(line.line_total or 0),  # For template
-                            'expiry_date': line.expiry_date.strftime('%Y-%m-%d') if line.expiry_date else None
+                            'invoice_number': invoice.supplier_invoice_number or '',
+                            'invoice_date': invoice_date_str,
+                            'medicine_name': line.medicine_name or '',
+                            'batch': getattr(line, 'batch_number', '-') or '-',
+                            'quantity': float(line.units or 0),
+                            'unit_price': float(line.pack_purchase_price or 0),
+                            'line_total': float(line.line_total or 0),
+                            'gst_amount': float(getattr(line, 'total_gst', 0))
                         })
                         
-                        invoice_summary['total_amount'] += line.line_total or Decimal('0')
-                        invoice_summary['total_gst'] += line.total_gst or Decimal('0')
-                        invoice_summary['total_items'] += 1
-
-                    return {
-                        'items': all_items,
-                        'summary': {  # MUST be 'summary' not 'invoice_summary'
-                            'total_amount': float(invoice_summary['total_amount']),
-                            'total_gst': float(invoice_summary['total_gst']),
-                            'total_items': invoice_summary['total_items']
-                        },
-                        'has_invoices': bool(all_items),
-                        'currency_symbol': '₹'
-                    }
+                        total_amount += Decimal(str(line.line_total or 0))
+                        total_gst += Decimal(str(getattr(line, 'total_gst', 0)))
+                
+                # Return with complete summary
+                return {
+                    'items': all_items,  # This must be a list
+                    'has_invoices': bool(all_items),
+                    'summary': {
+                        'total_amount': float(total_amount),
+                        'total_gst': float(total_gst),
+                        'total_items': len(all_items),
+                        'invoice_count': len(invoices)
+                    },
+                    'currency_symbol': '₹'
+                }
                 
         except Exception as e:
-            logger.error(f"Error getting invoice history: {str(e)}")
-            return {'items': [], 'has_invoices': False, 'error': str(e)}
+            logger.error(f"Error in invoice history: {str(e)}")
+            return self._empty_invoice_history()
     
-    def _calculate_balance_summary(self, session: Session, supplier_id: uuid.UUID, hospital_id: uuid.UUID = None) -> Dict:
-        try:
-            # Use grand_total field (not total_amount)
-            total_invoiced = session.query(
-                func.coalesce(func.sum(SupplierInvoice.total_amount), 0)  # ← CORRECT FIELD!
-            ).filter(
-                SupplierInvoice.supplier_id == supplier_id,
-                SupplierInvoice.hospital_id == hospital_id,
-                SupplierInvoice.payment_status.in_(['approved', 'completed', 'paid'])
-            ).scalar() or Decimal('0')
-            
-            # Total paid with workflow status filter
-            total_paid = session.query(
-                func.coalesce(func.sum(SupplierPayment.amount), 0)
-            ).filter(
-                SupplierPayment.supplier_id == supplier_id,
-                SupplierPayment.hospital_id == hospital_id,
-                SupplierPayment.workflow_status.in_(['approved', 'completed'])
-            ).scalar() or Decimal('0')
-            
-            current_balance = total_invoiced - total_paid
-            
-            # Last payment date
-            last_payment = session.query(SupplierPayment).filter(
-                SupplierPayment.supplier_id == supplier_id,
-                SupplierPayment.hospital_id == hospital_id,
-                SupplierPayment.workflow_status.in_(['approved', 'completed'])
-            ).order_by(desc(SupplierPayment.payment_date)).first()
-            
-            last_payment_date = None
-            if last_payment and last_payment.payment_date:
-                last_payment_date = last_payment.payment_date.strftime('%Y-%m-%d')
-            
-            # Return ALL field names for compatibility
-            result = {
-                # Transaction history tab fields
-                'current_balance': float(current_balance),
-                'total_invoiced': float(total_invoiced),
-                'total_paid': float(total_paid),
-                'last_payment_date': last_payment_date,
-                
-                # Business info tab fields (statistics section)
-                'total_purchases': float(total_invoiced),
-                'outstanding_balance': float(current_balance)
-            }
-            
-            logger.info(f"Balance summary calculated: {result}")
-            return result
-            
-        except Exception as e:
-            logger.error(f"Error calculating balance: {str(e)}")
-            return {
-                'current_balance': 0.0,
-                'total_invoiced': 0.0,
-                'total_paid': 0.0,
-                'last_payment_date': None,
-                'total_purchases': 0.0,
-                'outstanding_balance': 0.0
-            }
+    def _empty_payment_history(self) -> Dict:
+        """Return complete empty payment history structure"""
+        return {
+            'payments': [],
+            'has_history': False,
+            'summary': {
+                'supplier_name': '',
+                'total_payments': 0,
+                'total_amount': 0,
+                'period': '12 Months'
+            },
+            'currency_symbol': '₹'
+        }
     
-    def _calculate_summary(self, session: Session, hospital_id: uuid.UUID,
-                          branch_id: Optional[uuid.UUID], filters: Dict,
-                          total_count: int, applied_filters: set = None) -> Dict:
-        """
-        Override to add transaction-related summary statistics
-        """
-        # Get base summary from parent
-        summary = super()._calculate_summary(
-            session, hospital_id, branch_id, filters, total_count, applied_filters
-        )
-        
-        # Add transaction statistics
-        base_query = self._get_base_query(session, hospital_id, branch_id)
-        
-        # Suppliers with pending payments
-        suppliers_with_pending = session.query(
-            func.count(func.distinct(SupplierInvoice.supplier_id))
-        ).join(
-            Supplier, Supplier.supplier_id == SupplierInvoice.supplier_id
-        ).filter(
-            Supplier.hospital_id == hospital_id,
-            SupplierInvoice.payment_status != 'paid'
-        )
-        
-        if branch_id:
-            suppliers_with_pending = suppliers_with_pending.filter(
-                Supplier.branch_id == branch_id
-            )
-        
-        summary['suppliers_with_pending_invoices'] = suppliers_with_pending.scalar() or 0
-        
-        # Total outstanding amount across all suppliers
-        total_outstanding = session.query(
-            func.sum(SupplierInvoice.total_amount) - func.coalesce(
-                func.sum(SupplierPayment.amount), 0
-            )
-        ).select_from(SupplierInvoice).outerjoin(
-            SupplierPayment,
-            and_(
-                SupplierPayment.invoice_id == SupplierInvoice.invoice_id,
-                SupplierPayment.workflow_status.in_(['approved', 'completed'])
-            )
-        ).join(
-            Supplier, Supplier.supplier_id == SupplierInvoice.supplier_id
-        ).filter(
-            Supplier.hospital_id == hospital_id
-        )
-        
-        if branch_id:
-            total_outstanding = total_outstanding.filter(
-                Supplier.branch_id == branch_id
-            )
-        
-        summary['total_outstanding_amount'] = float(total_outstanding.scalar() or 0)
-        
-        return summary
+    def _empty_invoice_history(self) -> Dict:
+        """Return complete empty invoice history structure"""
+        return {
+            'items': [],  # Must be a list
+            'has_invoices': False,
+            'summary': {
+                'total_amount': 0,
+                'total_gst': 0,
+                'total_items': 0,
+                'invoice_count': 0
+            },
+            'currency_symbol': '₹'
+        }
     
-    def _convert_items_to_dict(self, items: List, session: Session) -> List[Dict]:
-        """Override to extract phone from contact_info JSONB and ensure all fields"""
-        items_dict = []
-        
-        for item in items:
-            # Get base dictionary
-            item_dict = get_entity_dict(item)
-            
-            # ✅ FIXED: Ensure deleted_flag is properly included in dict
-            if hasattr(item, 'deleted_flag'):
-                item_dict['deleted_flag'] = item.deleted_flag
-                logger.debug(f"[DELETED_FLAG_FIX] Added deleted_flag={item.deleted_flag} to item_dict for {item.supplier_id}")
-            
-            # ✅ FIXED: Also check for is_deleted field (universal compatibility)
-            if hasattr(item, 'is_deleted'):
-                item_dict['is_deleted'] = item.is_deleted
-                item_dict['deleted_flag'] = item.is_deleted  # Ensure compatibility
-
-            # ✅ Extract phone from contact_info JSONB
-            if hasattr(item, 'contact_info') and item.contact_info:
-                contact_info = item.contact_info
-                if isinstance(contact_info, dict):
-                    # Try to get phone in order of preference
-                    phone = contact_info.get('phone') or contact_info.get('mobile') or contact_info.get('telephone', '')
-                    item_dict['phone'] = phone
-                else:
-                    item_dict['phone'] = ''
-            else:
-                item_dict['phone'] = ''
-            
-            # ✅ Ensure all required fields are present
-            # Some fields might be None, but we need them as empty strings for display
-            if item_dict.get('supplier_category') is None:
-                item_dict['supplier_category'] = ''
-            if item_dict.get('contact_person_name') is None:
-                item_dict['contact_person_name'] = ''
-            if item_dict.get('email') is None:
-                item_dict['email'] = ''
-            if item_dict.get('gst_registration_number') is None:
-                item_dict['gst_registration_number'] = ''
-            
-            # Add any relationships if needed
-            self._add_relationships(item_dict, item, session)
-            
-            items_dict.append(item_dict)
-            
-        logger.info(f"✅ Converted {len(items_dict)} supplier items with phone extraction")
-        return items_dict
-        
-    def _add_relationships(self, item_dict: Dict, item: Supplier, session: Session):
-        """Add supplier-specific relationships if needed"""
-        # For now, suppliers don't need additional relationships
-        # But this is where you'd add branch name, etc. if needed
-        pass
-
-    def get_po_items_for_payment(self, item_id: str = None, item: dict = None, **kwargs) -> Dict:
-        """
-        Placeholder for PO items - not applicable for supplier master
-        """
-        return {
-            'items': [], 
-            'has_po': False, 
-            'error': 'PO items not applicable for supplier master'
-        }
-
-    def get_invoice_items_for_payment(self, item_id: str = None, item: dict = None, **kwargs) -> Dict:
-        """
-        Placeholder for invoice items - not applicable for supplier master  
-        """
-        return {
-            'items': [], 
-            'has_invoices': False, 
-            'error': 'Invoice items not applicable for supplier master'
-        }
-
-    def get_payment_workflow_timeline(self, item_id: str = None, item: dict = None, **kwargs) -> Dict:
-        """
-        Placeholder for payment workflow - not applicable for supplier master
-        """
-        return {
-            'steps': [], 
-            'has_timeline': False, 
-            'error': 'Payment workflow not applicable for supplier master'
-        }
-
-    def get_supplier_payment_summary(self, item_id: str = None, item: dict = None, **kwargs) -> Dict:
-        """
-        Placeholder for payment summary - not applicable for supplier master
-        """
-        return {
-            'summary': {}, 
-            'error': 'Payment summary not applicable for supplier master'
-        }

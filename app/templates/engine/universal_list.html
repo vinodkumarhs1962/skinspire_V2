@@ -239,80 +239,140 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                     </div>
                 </div>
 
-                <!-- ✅ SECTION 2: Additional Filter Fields (Always Visible) -->
+                <!-- ✅ SECTION 2: Filter Fields -->
                 <div class="universal-other-filters-container">
                     <div class="universal-other-filters-section">
                         <div class="universal-filter-grid">
-                            <!-- Universal Search Field (Always Available) -->
-                            <div class="universal-form-group">
-                                <label class="universal-form-label">Supplier Search</label>
-                                <input type="text" name="search" 
-                                    value="{{ request.args.get('search', '') }}" 
-                                    placeholder="Search records..."
-                                    class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
-                            </div>
                             
-                            <!-- Reference No Filter (for supplier_payments) -->
+                            <!-- ✅ BACKWARD COMPATIBILITY: Keep hardcoded filters for supplier_payments -->
                             {% if assembled_data and assembled_data.entity_config and assembled_data.entity_config.entity_type == 'supplier_payments' %}
-                            <div class="universal-form-group">
-                                <label class="universal-form-label">Reference No.</label>
-                                <input type="text" name="reference_no" 
-                                    value="{{ request.args.get('reference_no', '') }}" 
-                                    placeholder="Search by reference number..."
-                                    class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
-                            </div>
-                                                        
-                            <!-- Status Filter -->
-                            <div class="universal-form-group">
-                                <label class="universal-form-label">Status</label>
-                                <select name="status" class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
-                                    <option value="">All Status</option>
-                                    <option value="pending" {{ 'selected' if request.args.get('status') == 'pending' else '' }}>Pending</option>
-                                    <option value="approved" {{ 'selected' if request.args.get('status') == 'approved' else '' }}>Approved</option>
-                                    <option value="completed" {{ 'selected' if request.args.get('status') == 'completed' else '' }}>Completed</option>
-                                </select>
-                            </div>
-                            
-                            <!-- Payment Method Filter -->
-                            <div class="universal-form-group">
-                                <label class="universal-form-label">Payment Method</label>
-                                <select name="payment_method" class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
-                                    <option value="">All Methods</option>
-                                    <option value="cash" {{ 'selected' if request.args.get('payment_method') == 'cash' else '' }}>Cash</option>
-                                    <option value="cheque" {{ 'selected' if request.args.get('payment_method') == 'cheque' else '' }}>Cheque</option>
-                                    <option value="bank_transfer" {{ 'selected' if request.args.get('payment_method') == 'bank_transfer' else '' }}>Bank Transfer</option>
-                                    <option value="upi" {{ 'selected' if request.args.get('payment_method') == 'upi' else '' }}>UPI</option>
-                                </select>
-                            </div>
-                            
-                            <!-- Amount Filter -->
-                            <div class="universal-form-group">
-                                <label class="universal-form-label">Min Amount</label>
-                                <input type="number" name="amount_min" 
-                                    value="{{ request.args.get('amount_min', '') }}"
-                                    placeholder="Minimum amount..."
-                                    class="universal-form-input{{ ' universal-filter-auto-submit' if assembled_data.entity_config.get('enable_auto_submit', True) else '' }}">
-                            </div>
-                            
-                            <div class="universal-form-group">
-                                <label class="universal-form-label">Max Amount</label>
-                                <input type="number" name="amount_max" 
-                                    value="{{ request.args.get('amount_max', '') }}"
-                                    placeholder="Maximum amount..."
-                                    class="universal-form-input{{ ' universal-filter-auto-submit' if assembled_data.entity_config.get('enable_auto_submit', True) else '' }}">
-                            </div>
+                                <!-- BYPASS: Keep existing supplier_payments filters until migrated to view -->
+                                <div class="universal-form-group">
+                                    <label class="universal-form-label">Text Search</label>
+                                    <input type="text" name="search" 
+                                        value="{{ request.args.get('search', '') }}" 
+                                        placeholder="Search records..."
+                                        class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
+                                </div>
+                                
+                                <div class="universal-form-group">
+                                    <label class="universal-form-label">Reference No.</label>
+                                    <input type="text" name="reference_no" 
+                                        value="{{ request.args.get('reference_no', '') }}" 
+                                        placeholder="Search by reference number..."
+                                        class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
+                                </div>
+                                
+                                <div class="universal-form-group">
+                                    <label class="universal-form-label">Status</label>
+                                    <select name="workflow_status" class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
+                                        <option value="">All Status</option>
+                                        <option value="pending" {{ 'selected' if request.args.get('workflow_status') == 'pending' else '' }}>Pending</option>
+                                        <option value="pending_approval" {{ 'selected' if request.args.get('workflow_status') == 'pending_approval' else '' }}>Pending Approval</option>
+                                        <option value="approved" {{ 'selected' if request.args.get('workflow_status') == 'approved' else '' }}>Approved</option>
+                                        <option value="rejected" {{ 'selected' if request.args.get('workflow_status') == 'rejected' else '' }}>Rejected</option>
+                                        <option value="completed" {{ 'selected' if request.args.get('workflow_status') == 'completed' else '' }}>Completed</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="universal-form-group">
+                                    <label class="universal-form-label">Payment Method</label>
+                                    <select name="payment_method" class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
+                                        <option value="">All Methods</option>
+                                        <option value="cash" {{ 'selected' if request.args.get('payment_method') == 'cash' else '' }}>Cash</option>
+                                        <option value="cheque" {{ 'selected' if request.args.get('payment_method') == 'cheque' else '' }}>Cheque</option>
+                                        <option value="bank_transfer" {{ 'selected' if request.args.get('payment_method') == 'bank_transfer' else '' }}>Bank Transfer</option>
+                                        <option value="upi" {{ 'selected' if request.args.get('payment_method') == 'upi' else '' }}>UPI</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="universal-form-group">
+                                    <label class="universal-form-label">Min Amount</label>
+                                    <input type="number" name="amount_min" 
+                                        value="{{ request.args.get('amount_min', '') }}"
+                                        placeholder="Minimum amount..."
+                                        class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
+                                </div>
+                                
+                                <div class="universal-form-group">
+                                    <label class="universal-form-label">Max Amount</label>
+                                    <input type="number" name="amount_max" 
+                                        value="{{ request.args.get('amount_max', '') }}"
+                                        placeholder="Maximum amount..."
+                                        class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
+                                </div>
+                                
+                            {% elif assembled_data.filter_fields %}
+                                <!-- ✅ CONFIGURATION-DRIVEN: Dynamic filters with operator-enhanced labels -->
+                                {% for field in assembled_data.filter_fields %}
+                                    {% if field.type == 'select' and field.options|length > 0 %}
+                                        <div class="universal-form-group">
+                                            <label class="universal-form-label">{{ field.label }}</label>
+                                            <select name="{{ field.name }}" class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
+                                                {% for option in field.options %}
+                                                    <option value="{{ option.value }}" 
+                                                        {{ 'selected' if request.args.get(field.name) == option.value else '' }}>
+                                                        {{ option.label }}
+                                                    </option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        
+                                    {% elif field.type == 'date' %}
+                                        <!-- ✅ NOW HANDLES SINGLE DATE FIELDS -->
+                                        <div class="universal-form-group">
+                                            <label class="universal-form-label">{{ field.label }}</label>
+                                            <input type="date" name="{{ field.name }}" 
+                                                value="{{ field.value }}"
+                                                placeholder="{{ field.placeholder }}"
+                                                title="{{ field.placeholder }}"
+                                                class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
+                                        </div>
+                                        
+                                    {% elif field.type == 'number' %}
+                                        <div class="universal-form-group">
+                                            <label class="universal-form-label">{{ field.label }}</label>
+                                            <input type="number" name="{{ field.name }}" 
+                                                value="{{ field.value }}"
+                                                placeholder="{{ field.placeholder }}"
+                                                title="{{ field.placeholder }}"
+                                                class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
+                                        </div>
+                                        
+                                    {% elif field.type == 'email' %}
+                                        <div class="universal-form-group">
+                                            <label class="universal-form-label">{{ field.label }}</label>
+                                            <input type="email" name="{{ field.name }}" 
+                                                value="{{ field.value }}"
+                                                placeholder="{{ field.placeholder }}"
+                                                class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
+                                        </div>
+                                        
+                                    {% elif field.type == 'text' %}
+                                        <!-- Regular text input -->
+                                        <div class="universal-form-group">
+                                            <label class="universal-form-label">{{ field.label }}</label>
+                                            <input type="text" name="{{ field.name }}" 
+                                                value="{{ field.value }}"
+                                                placeholder="{{ field.placeholder }}"
+                                                title="{{ field.placeholder }}"
+                                                class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
+                                        </div>
+                                    {% endif %}
+                                    <!-- Note: date_range fields are handled in Section 1 (Date Filter) -->
+                                {% endfor %}
+                                
                             {% else %}
-                            <!-- Generic filters for other entities -->
-                            <div class="universal-form-group">
-                                <label class="universal-form-label">Status</label>
-                                <select name="status" class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
-                                    <option value="">All Status</option>
-                                    <option value="active" {{ 'selected' if request.args.get('status') == 'active' else '' }}>Active</option>
-                                    <option value="pending" {{ 'selected' if request.args.get('status') == 'pending' else '' }}>Pending</option>
-                                    <option value="completed" {{ 'selected' if request.args.get('status') == 'completed' else '' }}>Completed</option>
-                                </select>
-                            </div>
+                                <!-- FALLBACK: Basic search if no filter fields configured -->
+                                <div class="universal-form-group">
+                                    <label class="universal-form-label">Text Search</label>
+                                    <input type="text" name="search" 
+                                        value="{{ request.args.get('search', '') }}" 
+                                        placeholder="Search records..."
+                                        class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
+                                </div>
                             {% endif %}
+                            
                         </div>
                     </div>
                 </div>

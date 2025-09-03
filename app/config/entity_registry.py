@@ -96,7 +96,7 @@ ENTITY_REGISTRY: Dict[str, EntityRegistration] = {
         category=EntityCategory.TRANSACTION,
         module="app.config.modules.purchase_orders_config",  # New module
         service_class="app.services.purchase_order_service.PurchaseOrderService",  # New service
-        model_class="app.models.transaction.PurchaseOrderHeader"
+        model_class="app.models.views.PurchaseOrderView"
     ),
     
     "billing_transactions": EntityRegistration(

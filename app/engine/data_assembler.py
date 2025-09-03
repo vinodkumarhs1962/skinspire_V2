@@ -50,27 +50,19 @@ class EnhancedUniversalDataAssembler:
     # =============================================================================
 
     def assemble_complex_list_data(self, config: EntityConfiguration, raw_data: Dict, 
-                                  form_instance: Optional[FlaskForm] = None,
-                                  filters: Optional[Dict] = None,
-                                  branch_context: Optional[Dict] = None) -> Dict:
+                              form_instance: Optional[FlaskForm] = None,
+                              filters: Optional[Dict] = None,
+                              branch_context: Optional[Dict] = None) -> Dict:
         """
-        🎯 MAIN ASSEMBLY METHOD - Now uses UniversalFilterService
-        BACKWARD COMPATIBLE: Same signature, enhanced functionality
+        MODIFIED: Now uses filter processor's template method
         """
-        
-        if raw_data.get('items') and len(raw_data['items']) > 0:
-            first_item = raw_data['items'][0]
-        
         try:
-            
-            # ✅ FIX: Use the same filters that the main query used
+            # Get current filters
             if raw_data.get('request_args'):
-                # Use the exact same filters that the main entity service used
                 current_filters = raw_data['request_args']
             elif filters:
                 current_filters = filters  
             else:
-                # Fallback to request.args as last resort
                 current_filters = request.args.to_dict() if request else {}
             
             # Get branch context
@@ -82,45 +74,31 @@ class EnhancedUniversalDataAssembler:
                 except Exception as e:
                     logger.warning(f"Could not get branch context: {str(e)}")
                     branch_context = {}
-
+            
             # Clean branch context for template
             branch_context = self._clean_branch_context_for_template(branch_context)
             
-            # ✅ USE UNIFIED FILTER SERVICE - New approach
-            try:
-                filter_data = self.filter_service.get_complete_filter_data(
-                    entity_type=config.entity_type,
-                    hospital_id=current_user.hospital_id if current_user else None,
-                    branch_id=branch_context.get('branch_id') if branch_context else None,
-                    current_filters=current_filters
-                )
-            except Exception as e:
-                logger.error(f"Filter service failed, using fallback: {str(e)}")
-                # ✅ FALLBACK: Use old method if new service fails
-                filter_data = self._assemble_enhanced_filter_form_fallback(config, current_filters)
+            # ✅ NEW: Get filter fields from processor
+            hospital_id = current_user.hospital_id if current_user else None
+            branch_id = branch_context.get('branch_id') if branch_context else None
             
-            # ✅ CRITICAL FIX: Merge summary data from filter service with raw data
-            if filter_data.get('summary_data') and raw_data.get('summary'):
-                existing_summary = raw_data.get('summary', {})
-                filter_summary = filter_data.get('summary_data', {})
-                
-                # Preserve all existing fields and add missing ones from filter service
-                merged_summary = existing_summary.copy()
-                for key, value in filter_summary.items():
-                    if key not in merged_summary or merged_summary[key] == 0:
-                        merged_summary[key] = value
-                
-                raw_data['summary'] = merged_summary
-
+            # Initialize filter processor if not already done
+            if not hasattr(self, 'filter_processor'):
+                from app.engine.categorized_filter_processor import get_categorized_filter_processor
+                self.filter_processor = get_categorized_filter_processor()
+            
+            # Get template-ready filter fields
+            filter_fields = self.filter_processor.get_template_filter_fields(
+                entity_type=config.entity_type,
+                hospital_id=hospital_id,
+                branch_id=branch_id
+            )
+            
+            # Prepare template-safe config
             template_safe_config = self._make_template_safe_config(config)
-            # Assemble other data components
             
-            # ✅ FIX: Use filtered count from summary for total_count
-            summary = raw_data.get('summary', {})
-            if summary and 'total_count' in summary:
-                total_count = summary['total_count']  # Use filtered count
-            else:
-                total_count = raw_data.get('total', len(raw_data.get('items', [])))
+            # Get total count
+            total_count = raw_data.get('total', len(raw_data.get('items', [])))
             
             assembled_data = {
                 # Core data
@@ -128,21 +106,29 @@ class EnhancedUniversalDataAssembler:
                 'total_count': total_count,
                 
                 # Configuration
-                'entity_config': template_safe_config,  # ✅ Template-safe dict
+                'entity_config': template_safe_config,
                 'entity_type': config.entity_type,
                 
-                # ✅ FILTER DATA - From unified service or fallback
-                'filter_data': filter_data,
-                # ✅ FIXED: Merge processed filter data with current filters for template compatibility
-               'filters': current_filters,  # This only contains request args 
+                # ✅ NEW: Filter fields from processor
+                'filter_fields': filter_fields,
+                'filters': current_filters,
+                
+                # Keep existing filter_data for backward compatibility
+                'filter_data': {
+                    'groups': [],
+                    'backend_data': {},
+                    'active_filters_count': len([k for k, v in current_filters.items() 
+                                                if v and k not in ['page', 'per_page']]),
+                    'has_filters': len(filter_fields) > 0
+                },
                 
                 # Table structure
                 'table_columns': self._assemble_table_columns(config),
                 'table_data': self._assemble_table_data(config, raw_data.get('items', [])),
                 
-                # ✅ Summary cards from configuration using existing backend method
+                # Summary cards
                 'summary_cards': self._assemble_summary_cards(config, raw_data),
-
+                
                 # Summary and pagination
                 'summary': self._assemble_summary_data(config, raw_data),
                 'pagination': self._assemble_pagination_data(raw_data, current_filters),
@@ -157,18 +143,14 @@ class EnhancedUniversalDataAssembler:
                 
                 # Status
                 'has_data': len(raw_data.get('items', [])) > 0,
-                'has_errors': filter_data.get('has_errors', False),
-                'error_messages': filter_data.get('error_messages', [])
+                'has_errors': False,
+                'error_messages': []
             }
-            
-            # logger.info(f"✅ Assembled data for {config.entity_type}: "
-            #            f"{assembled_data['total_count']} items, "
-            #            f"{filter_data.get('active_filters_count', 0)} active filters")
             
             return assembled_data
             
         except Exception as e:
-            logger.error(f"❌ Error assembling data for {config.entity_type}: {str(e)}")
+            logger.error(f"Error assembling list data: {str(e)}")
             return self._get_error_fallback_data(config, str(e))
 
     def _clean_branch_context_for_template(self, raw_branch_context) -> Dict:
@@ -1360,11 +1342,24 @@ class EnhancedUniversalDataAssembler:
                             'fields': []
                         }
         
+        # PHASE 1: Process all non-custom-renderer fields first
+        logger.info(f"[PHASE1] Processing standard fields for {config.entity_type}")
+        standard_count = 0
+        custom_fields = []  # Store custom renderer fields for phase 2
+
         # Process fields into their assigned tabs/sections
         for field in fields:
             if not self._should_display_field(field, item):
                 continue
             
+            # Check if it's a custom renderer field
+            if self._field_has_custom_renderer(field):
+                # Save for phase 2
+                custom_fields.append(field)
+                continue
+            
+            standard_count += 1
+
             # Get tab and section from field definition
             tab_key = getattr(field, 'tab_group', 'details')
             section_key = getattr(field, 'section', 'general')
@@ -1391,10 +1386,47 @@ class EnhancedUniversalDataAssembler:
                     'fields': []
                 }
             
-            # Add formatted field to section
-            formatted_field = self._format_field_for_view(field, item)
+            # Add formatted field to section (skip custom renderer processing)
+            formatted_field = self._format_field_for_view(field, item, skip_custom_renderer=True)
             tabs[tab_key]['sections'][section_key]['fields'].append(formatted_field)
         
+        logger.info(f"[PHASE1] Processed {standard_count} standard fields")
+
+        # PHASE 2: Now process custom renderer fields
+        if custom_fields:
+            logger.info(f"[PHASE2] Processing {len(custom_fields)} custom renderer fields")
+            
+            for field in custom_fields:
+                # Get tab and section from field definition
+                tab_key = getattr(field, 'tab_group', 'details')
+                section_key = getattr(field, 'section', 'general')
+                
+                # Create tab if not exists (same logic as phase 1)
+                if tab_key not in tabs:
+                    tabs[tab_key] = {
+                        'key': tab_key,
+                        'label': tab_key.replace('_', ' ').title(),
+                        'icon': 'fas fa-info-circle',
+                        'order': 999,
+                        'sections': {}
+                    }
+                
+                # Create section if not exists
+                if section_key not in tabs[tab_key]['sections']:
+                    tabs[tab_key]['sections'][section_key] = {
+                        'key': section_key,
+                        'title': section_key.replace('_', ' ').title(),
+                        'icon': None,
+                        'columns': 2,
+                        'order': 0,
+                        'collapsible': False,
+                        'fields': []
+                    }
+                
+                # Add formatted field with custom renderer
+                formatted_field = self._format_field_for_view(field, item, skip_custom_renderer=False)
+                tabs[tab_key]['sections'][section_key]['fields'].append(formatted_field)
+
         # Convert to list and sort
         result = []
         for tab_key, tab_data in tabs.items():
@@ -1570,17 +1602,16 @@ class EnhancedUniversalDataAssembler:
             'sections': sorted(sections.values(), key=lambda x: x['order'])
         }]
 
-    def _format_field_for_view(self, field: FieldDefinition, item: Any) -> Dict:
+    def _format_field_for_view(self, field: FieldDefinition, item: Any, skip_custom_renderer: bool = False) -> Dict:
         """
         Format ANY field for view display - purely configuration-driven.
         No entity-specific checks or hardcoded field names!
+        
+        NEW PARAMETER: skip_custom_renderer - if True, skip custom renderer processing
         """
         try:
             # Get field name from configuration
             field_name = getattr(field, 'name', 'unknown')
-            
-            # REMOVED: Entity-specific debug logging
-            # No more checking for specific field names!
             
             # Determine field characteristics from configuration
             has_custom_renderer = self._field_has_custom_renderer(field)
@@ -1600,7 +1631,8 @@ class EnhancedUniversalDataAssembler:
             }
             
             # Handle value based on field configuration
-            if has_custom_renderer:
+            # NEW: Check skip_custom_renderer flag
+            if has_custom_renderer and not skip_custom_renderer:
                 # Custom renderer fields - value comes from context function
                 field_data['value'] = None  # Will be populated by renderer
                 field_data['is_empty'] = False  # Custom renderers handle their own emptiness
@@ -1610,7 +1642,7 @@ class EnhancedUniversalDataAssembler:
                 raw_value = self._get_field_value(item, field_name)
                 field_data['value'] = self._format_field_value(field, raw_value)
                 field_data['is_empty'] = self._is_value_empty(raw_value)
-                field_data['custom_renderer'] = None
+                field_data['custom_renderer'] = None if skip_custom_renderer else self._extract_renderer_config(field) if has_custom_renderer else None
             
             # Add display conditions if configured
             if hasattr(field, 'conditional_display'):

@@ -980,6 +980,12 @@ def universal_detail_view(entity_type: str, item_id: str):
             current_user=current_user
         )
 
+        # Check if raw_item_data is None first
+        if raw_item_data is None:
+            logger.error(f"No data returned for {entity_type}/{item_id}")
+            flash('Record not found', 'error')
+            return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+
         if raw_item_data.get('has_error'):
             flash(raw_item_data.get('error', 'Record not found'), 'error')
             return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))

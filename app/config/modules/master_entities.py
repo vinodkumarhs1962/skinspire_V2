@@ -18,7 +18,7 @@ from app.config.core_definitions import (
     ComplexDisplayType, ActionDisplayType, INDIAN_STATES,
     DocumentConfiguration, PrintLayoutType, DocumentType,
     PageSize, Orientation, DocumentSectionType, ExportFormat,
-    EntityCategory, CRUDOperation, CustomRenderer  # Added for transaction history custom rendering
+    EntityCategory, CRUDOperation, FilterOperator, CustomRenderer  # Added for transaction history custom rendering
 )
 from app.config.filter_categories import FilterCategory
 
@@ -61,7 +61,7 @@ SUPPLIER_FIELDS = [
         show_in_list=False,
         show_in_detail=True,
         show_in_form=True,
-        filterable=True,
+        filterable=False,
         required=True,
         autocomplete_enabled=True,
         autocomplete_source="backend",
@@ -78,11 +78,12 @@ SUPPLIER_FIELDS = [
         show_in_list=True,
         show_in_detail=True,
         show_in_form=True,
-        searchable=True,
         sortable=True,
         filterable=True,
+        filter_operator=FilterOperator.CONTAINS,  # ✅ ADD THIS
+        searchable=False,  # Remove from generic search
+        placeholder="Search supplier name...",
         required=True,
-        placeholder="Enter supplier name",
         tab_group="profile",
         section="basic_info",  # For form grouping
         view_order=1
@@ -115,6 +116,7 @@ SUPPLIER_FIELDS = [
         show_in_detail=True,
         show_in_form=True,
         searchable=True,
+        filterable=False,
         sortable=True,
         required=True,
         placeholder="Enter contact person name",
@@ -423,7 +425,7 @@ SUPPLIER_FIELDS = [
         show_in_detail=True,
         show_in_form=True,
         searchable=True,
-        filterable=True,
+        filterable=False,
         placeholder="Enter GST registration number",
         validation_pattern=r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$',  # Issue #8
         help_text="Format: 2 digits, 5 letters, 4 digits, 1 letter, 1 char, Z, 1 char",
@@ -452,7 +454,7 @@ SUPPLIER_FIELDS = [
         show_in_list=False,
         show_in_detail=True,
         show_in_form=True,
-        filterable=True,
+        filterable=False,
         options=[
             {"value": "regular", "label": "Regular"},
             {"value": "composition", "label": "Composition"},
@@ -507,7 +509,7 @@ SUPPLIER_FIELDS = [
         show_in_list=False,
         show_in_detail=True,
         show_in_form=True,
-        filterable=True,
+        filterable=False,
         options=[
             {"value": "1", "label": "1 - Poor"},
             {"value": "2", "label": "2 - Below Average"},
@@ -527,7 +529,7 @@ SUPPLIER_FIELDS = [
         show_in_list=False,
         show_in_detail=True,
         show_in_form=True,
-        filterable=True,
+        filterable=False,
         default_value=False,
         help_text="Check if supplier is blacklisted",
         section="business_rules",
@@ -1585,7 +1587,7 @@ SUPPLIER_CONFIG = EntityConfiguration(
     icon="fas fa-truck",
     page_title="Supplier Management",
     description="Manage suppliers and vendors",
-    searchable_fields=["supplier_name", "contact_person_name", "email"],
+    searchable_fields=["contact_person_name", "email", "gst_registration_number"], 
     default_sort_field="supplier_name",
     default_sort_direction="asc",
     

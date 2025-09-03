@@ -394,16 +394,24 @@ SUPPLIER_PAYMENT_FIELDS = [
 
     # Workflow Fields
     FieldDefinition(
-        name="workflow_status",
-        label="Workflow Status",
-        field_type=FieldType.STATUS,
+        name="status",  # ✅ Standardized name
+        label="Payment Status",
+        field_type=FieldType.STATUS_BADGE,
+        db_column="workflow_status",  # ✅ Maps to actual DB column
+        filter_aliases=["workflow_status", "statuses", "payment_status"],  # Backward compatibility
+        options=[
+            {"value": "pending", "label": "Pending"},
+            {"value": "pending_approval", "label": "Pending Approval"},
+            {"value": "approved", "label": "Approved"},
+            {"value": "rejected", "label": "Rejected"},
+            {"value": "completed", "label": "Completed"}
+        ],
         show_in_list=True,
         show_in_detail=True,
         show_in_form=False,
         searchable=False,
         sortable=True,
         filterable=True,
-        filter_aliases=["statuses", "status"],
         readonly=True,
         tab_group="workflow",
         section="workflow_status",  # Correct section
@@ -1816,7 +1824,7 @@ SUPPLIER_PAYMENT_FILTER_CATEGORY_MAPPING = {
     # Selection filters
     'workflow_status': FilterCategory.SELECTION,
     'statuses': FilterCategory.SELECTION,
-    'status': FilterCategory.SELECTION,
+    'status': FilterCategory.SELECTION,  # ✅ Standardized
     'payment_method': FilterCategory.SELECTION,
     'payment_methods': FilterCategory.SELECTION,
     
