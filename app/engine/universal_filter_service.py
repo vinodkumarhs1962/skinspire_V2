@@ -64,6 +64,26 @@ class UniversalFilterService:
             'medicines': 'app.services.medicine_service'
         }
 
+    def _get_amount_field_name(self, config, model_class) -> str:
+        """
+        Get the amount field name from config
+        Raises error if not properly configured
+        """
+        # Config must have primary_amount_field
+        if not config or not hasattr(config, 'primary_amount_field'):
+            raise ValueError(f"Entity configuration must define 'primary_amount_field'")
+        
+        field_name = config.primary_amount_field
+        
+        # Verify the field exists in the model
+        if not hasattr(model_class, field_name):
+            raise ValueError(
+                f"Configured primary_amount_field '{field_name}' does not exist in {model_class.__name__}. "
+                f"Please update the configuration to use the correct field name."
+            )
+        
+        return field_name
+
     # =============================================================================
     # MAIN PUBLIC API - SINGLE ENTRY POINT
     # =============================================================================
@@ -121,256 +141,6 @@ class UniversalFilterService:
         except Exception as e:
             logger.error(f"❌ Error getting filter data for {entity_type}: {str(e)}")
             return self._get_error_filter_data(str(e))
-
-    # =============================================================================
-    # UNIFIED SUMMARY DATA - USES CATEGORIZED FILTERING
-    # =============================================================================
-
-    def _get_unified_summary_data(self, entity_type: str, filters: Dict, 
-                                 hospital_id: uuid.UUID, branch_id: Optional[uuid.UUID], 
-                                 config) -> Dict:
-        """
-        NEW: Get summary data using the same categorized filtering as the main list
-        
-        This replaces separate summary card filtering logic and ensures:
-        ✅ Summary card counts match pagination totals exactly
-        ✅ No conflicts between summary and list filtering  
-        ✅ Single source of truth for all filtering
-        """
-        try:          
-            if entity_type == 'supplier_payments':
-                return self._get_supplier_payment_unified_summary(
-                    filters, hospital_id, branch_id, config
-                )
-            elif entity_type == 'suppliers':
-                return self._get_supplier_unified_summary(
-                    filters, hospital_id, branch_id, config
-                )
-            else:
-                # Generic implementation for other entities
-                return self._get_generic_unified_summary(
-                    entity_type, filters, hospital_id, branch_id, config
-                )
-                
-        except Exception as e:
-            logger.error(f"❌ Error getting unified summary for {entity_type}: {str(e)}")
-            return {}
-
-    def _get_supplier_payment_unified_summary(self, filters: Dict, hospital_id: uuid.UUID, 
-                                            branch_id: Optional[uuid.UUID], config) -> Dict:
-        """
-        ENHANCED: Supplier payment summary using SAME categorized filtering logic as main list
-        
-        This is the KEY INTEGRATION - uses the same filter processor as the main search
-        to ensure summary cards show accurate counts for the filtered data
-        """
-        try:
-            from app.models.transaction import SupplierPayment
-            from sqlalchemy import or_, and_, func
-            
-            # ✅ CONFIGURATION-DRIVEN: Get model class from config
-            model_class = self.categorized_processor._get_model_class('supplier_payments')
-            if not model_class:
-                from app.models.transaction import SupplierPayment  # Fallback
-                model_class = SupplierPayment
-
-            # ✅ FIX: Use the same filter extraction as main service
-            from app.engine.universal_services import get_universal_service
-            service = get_universal_service('supplier_payments')
-            
-            # Get the processed filters using the same logic as main query
-            if hasattr(service, '_extract_filters'):
-                processed_filters = service._extract_filters()
-            else:
-                processed_filters = filters
-
-            with get_db_session() as session:
-                # Start with base query (same as main search)
-                base_query = session.query(model_class).filter_by(hospital_id=hospital_id)
-                
-                # Apply branch filter (same as main search)
-                if branch_id:
-                    base_query = base_query.filter(model_class.branch_id == branch_id)
-                
-                # Apply categorized filters - SAME LOGIC AS MAIN SEARCH
-                filtered_query, applied_filters, filter_count = self.categorized_processor.process_entity_filters(
-                    entity_type='supplier_payments',
-                    filters=filters,
-                    query=base_query,
-                    model_class=model_class,      # ✅ FIXED: Add model_class parameter
-                    session=session,
-                    config=config
-                )
-                
-                # Calculate summary statistics from the SAME filtered query
-                total_count = filtered_query.count()
-                
-                # ✅ CONFIGURATION-DRIVEN: Using existing helper methods
-                # Extract status field and values from config using existing pattern
-                status_field_name = 'workflow_status'  # Default
-                status_mappings = {}
-
-                # Use existing pattern to extract from config 
-                if hasattr(config, 'summary_cards') and config.summary_cards:
-                    for card in config.summary_cards:
-                        card_field = card.get('field')
-                        filter_field = card.get('filter_field') 
-                        filter_value = card.get('filter_value')
-                        
-                        # Extract status mappings same way as existing code
-                        if (filter_field == 'workflow_status' and 
-                            card_field and filter_value and 
-                            card_field.endswith('_count')):
-                            status_mappings[card_field] = filter_value
-
-                # Use extracted values or fallback to hardcoded (same as existing error handling pattern)
-                approved_status = status_mappings.get('approved_count', 'approved')
-                pending_status = status_mappings.get('pending_count', 'pending')  
-                completed_status = status_mappings.get('completed_count', 'completed')
-
-                # Same calculation logic, just using config values
-                approved_count = filtered_query.filter(
-                    getattr(model_class, status_field_name) == approved_status
-                ).count()
-
-                completed_count = filtered_query.filter(
-                    getattr(model_class, status_field_name) == completed_status
-                ).count()
-
-                pending_count = filtered_query.filter(
-                    getattr(model_class, status_field_name) == pending_status
-                ).count()
-
-                # ✅ KEEP EXISTING: Bank transfer logic unchanged for now (can be Step 2)
-                bank_transfer_count = filtered_query.filter(
-                    or_(
-                        SupplierPayment.payment_method == 'bank_transfer',
-                        and_(
-                            SupplierPayment.payment_method == 'mixed',
-                            SupplierPayment.bank_transfer_amount > 0
-                        )
-                    )
-                ).count()
-                
-                # Calculate total amount from filtered results
-                total_amount_result = filtered_query.with_entities(
-                    func.sum(getattr(model_class, 'amount'))
-                ).scalar()
-                total_amount = float(total_amount_result or 0)
-                
-                # ✅ FINAL FIX: Calculate this month data separately (truly unfiltered for non-filterable cards)
-                current_month = date.today().month
-                current_year = date.today().year
-
-                # For non-filterable cards, use PURE base query with ONLY date filter
-                this_month_query = base_query.filter(
-                    func.extract('month', getattr(model_class, 'payment_date')) == current_month,
-                    func.extract('year', getattr(model_class, 'payment_date')) == current_year
-                )
-
-                # ✅ NO OTHER FILTERS: Since these cards are configured as filterable=False
-                # They should show ALL this month data regardless of status, supplier, reference, etc.
-
-                this_month_count = this_month_query.count()
-                this_month_amount_result = this_month_query.with_entities(func.sum(SupplierPayment.amount)).scalar()
-                this_month_amount = float(this_month_amount_result or 0)
-
-                summary = {
-                    'total_count': total_count,
-                    'total_amount': total_amount,
-                    'pending_count': pending_count,
-                    'approved_count': approved_count,
-                    'completed_count': completed_count,
-                    'bank_transfer_count': bank_transfer_count,
-                    'this_month_count': this_month_count,     
-                    'this_month_amount': this_month_amount,    
-                    'applied_filters': list(applied_filters),
-                    'filter_count': filter_count,
-                    'filtering_method': 'categorized_unified'
-                }
-                
-                return summary
-                
-        except Exception as e:
-            logger.error(f"❌ Error calculating unified supplier payment summary: {str(e)}")
-            # ✅ CONFIGURATION-DRIVEN: Use same config extraction for error case
-            error_defaults = {'approved_count': 0, 'completed_count': 0, 'pending_count': 0}
-
-            # Extract from config for consistency (reuse same pattern)
-            if hasattr(config, 'summary_cards') and config.summary_cards:
-                for card in config.summary_cards:
-                    card_field = card.get('field')
-                    if card_field and card_field.endswith('_count'):
-                        error_defaults[card_field] = 0
-
-            # Build error response using config
-            error_response = {
-                'total_count': 0,
-                'total_amount': 0,
-                'bank_transfer_count': 0
-            }
-            error_response.update(error_defaults)
-
-            return error_response
-
-    def _get_supplier_unified_summary(self, filters: Dict, hospital_id: uuid.UUID, 
-                                    branch_id: Optional[uuid.UUID], config) -> Dict:
-        """
-        TEMPLATE: Unified summary for suppliers (extensible pattern)
-        """
-        try:
-            from app.models.master import Supplier
-            
-            with get_db_session() as session:
-                base_query = session.query(Supplier).filter_by(hospital_id=hospital_id)
-                
-                # ✅ FIX: Apply branch filter if provided (same as main query)
-                if branch_id:
-                    base_query = base_query.filter(Supplier.branch_id == branch_id)
-
-                # Apply categorized filters
-                filtered_query, applied_filters, filter_count = self.categorized_processor.process_entity_filters(
-                    entity_type='suppliers',
-                    filters=filters,
-                    query=base_query,
-                    model_class=Supplier,         # ✅ FIXED: Add model_class parameter
-                    session=session,
-                    config=config
-                )
-                
-                total_count = filtered_query.count()
-                active_count = filtered_query.filter(Supplier.status == 'active').count()
-                
-                return {
-                    'total_count': total_count,
-                    'active_count': active_count,
-                    'applied_filters': list(applied_filters),
-                    'filter_count': filter_count
-                }
-                
-        except Exception as e:
-            logger.error(f"❌ Error calculating supplier summary: {str(e)}")
-            return {'total_count': 0, 'active_count': 0}
-
-    def _get_generic_unified_summary(self, entity_type: str, filters: Dict, 
-                                   hospital_id: uuid.UUID, branch_id: Optional[uuid.UUID], 
-                                   config) -> Dict:
-        """
-        GENERIC: Unified summary for any entity type (extensible pattern)
-        """
-        try:
-            # This would use the categorized processor for any entity
-            # For now, return basic count
-            return {
-                'total_count': 0,
-                'applied_filters': [],
-                'filter_count': 0,
-                'message': f'Generic summary for {entity_type} - implement specific logic'
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Error calculating generic summary for {entity_type}: {str(e)}")
-            return {'total_count': 0}
 
     
     def _get_filter_metadata(self, entity_type: str, current_filters: Dict, config) -> Dict:

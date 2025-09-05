@@ -82,11 +82,17 @@ class EntityConfigManager:
         enhanced_configs = []
         
         try:
+            # Import ENTITY_REGISTRY to get all entity types
+            from app.config.entity_registry import ENTITY_REGISTRY
+            
             # Enhance all registered configurations
-            for entity_type, config in ENTITY_CONFIGS.items():
+            for entity_type in ENTITY_REGISTRY.keys():
                 try:
-                    EntityConfigManager.enhance_entity_config_with_categories(config)
-                    enhanced_configs.append(entity_type)
+                    # Get the config using the get_entity_config function
+                    config = get_entity_config(entity_type)
+                    if config:
+                        EntityConfigManager.enhance_entity_config_with_categories(config)
+                        enhanced_configs.append(entity_type)
                 except Exception as e:
                     logger.warning(f"Could not enhance {entity_type} config: {str(e)}")
             

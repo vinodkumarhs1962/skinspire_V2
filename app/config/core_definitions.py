@@ -659,7 +659,7 @@ class EntitySearchConfiguration:
     display_template: str                     # Display format (e.g., "{name} ({code})")
     min_chars: int = 2                        # Minimum characters to trigger search
     max_results: int = 10                     # Maximum results to return
-    model_path: Optional[str] = None          # Model import path
+    # model_path: Optional[str] = None          # Model import path
     relationship_joins: Dict[str, str] = field(default_factory=dict)  # Join config
     service_method: str = "search_entities"   # Backend method to call
     additional_filters: Optional[Dict[str, Any]] = None  # Extra filters
@@ -714,10 +714,10 @@ class EntityConfiguration:
     form_section_definitions: Optional[Dict[str, SectionDefinition]] = field(default=None)
 
     # ========== ENHANCED FEATURES (v2.0) ==========
-    model_class: Optional[str] = None
+    # model_class: Optional[str] = None
 
     # Database
-    model_class: Optional[str] = None
+    # model_class: Optional[str] = None
     
     # Sort aliases
     default_sort_order: str = "desc"
@@ -812,7 +812,7 @@ class EntityConfiguration:
     )
     
     # Model Discovery (optional - works without these)
-    model_class_path: Optional[str] = field(default=None)
+    # model_class_path: Optional[str] = field(default=None)
     primary_key_field: str = field(default="id")
     soft_delete_field: Optional[str] = field(default="is_deleted")  # Changed from None
     

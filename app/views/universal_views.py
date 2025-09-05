@@ -986,7 +986,7 @@ def universal_detail_view(entity_type: str, item_id: str):
             flash('Record not found', 'error')
             return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
 
-        if raw_item_data.get('has_error'):
+        if raw_item_data and raw_item_data.get('has_error'):
             flash(raw_item_data.get('error', 'Record not found'), 'error')
             return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
         

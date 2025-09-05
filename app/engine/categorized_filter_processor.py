@@ -1393,33 +1393,30 @@ class CategorizedFilterProcessor:
     # UTILITY METHODS
     # ==========================================================================
     
-    def _get_model_class(self, entity_type: str):
-        """Get model class for entity type - configuration driven with fallback"""
-        # First, try configuration (new way)
-        config = get_entity_config(entity_type)
-        if config and hasattr(config, 'model_class') and config.model_class:
-            try:
-                module_path, class_name = config.model_class.rsplit('.', 1)
-                module = __import__(module_path, fromlist=[class_name])
-                model = getattr(module, class_name)
-                return model
-            except Exception as e:
-                logger.warning(f"Config model import failed: {str(e)}")
-        
-        # Second, try self.entity_models mapping (backward compatible)
-        if entity_type in self.entity_models:
-            try:
-                module_path = self.entity_models[entity_type]
-                module_path, class_name = module_path.rsplit('.', 1)
-                module = __import__(module_path, fromlist=[class_name])
-                model = getattr(module, class_name)
-                return model
-            except Exception as e:
-                logger.warning(f"Entity models import failed: {str(e)}")
-        
-        logger.warning(f"No model class found for {entity_type}")
-        return None
-
+    def _get_model_class(self, entity_type: str) -> Optional[Type]:
+        """
+        Get model class from entity registry - single source of truth
+        """
+        try:
+            from app.config.entity_registry import get_entity_registration
+            
+            registration = get_entity_registration(entity_type)
+            if not registration or not registration.model_class:
+                logger.warning(f"No model class in registry for {entity_type}")
+                return None
+            
+            # Import the model class from string path
+            model_path = registration.model_class
+            module_path, class_name = model_path.rsplit('.', 1)
+            module = __import__(module_path, fromlist=[class_name])
+            model = getattr(module, class_name)
+            
+            logger.debug(f"Loaded model {class_name} for {entity_type}")
+            return model
+            
+        except Exception as e:
+            logger.error(f"Failed to get model class for {entity_type}: {str(e)}")
+            return None
 
     def _is_using_view_model(self, config) -> bool:
         """

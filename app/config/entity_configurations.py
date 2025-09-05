@@ -16,30 +16,10 @@ from app.config.core_definitions import (
 )
 from app.config.filter_categories import FilterCategory
 from app.engine.universal_config_cache import get_cached_configuration_loader
+from app.config.entity_registry import ENTITY_REGISTRY
 
 
 logger = logging.getLogger(__name__)
-
-# =============================================================================
-# MODULE REGISTRY
-# =============================================================================
-
-MODULE_MAPPING = {
-    # Financial entities
-    "supplier_payments": "app.config.modules.financial_transactions",
-    "billing": "app.config.modules.financial_transactions",
-    "customer_receipts": "app.config.modules.financial_transactions",
-    
-    # Master entities
-    "suppliers": "app.config.modules.master_entities",
-    "patients": "app.config.modules.master_entities", 
-    "users": "app.config.modules.master_entities",
-    
-    # Inventory entities (when implemented)
-    # "medicines": "app.config.modules.inventory",
-    # "stock_movements": "app.config.modules.inventory",
-    "purchase_orders": "app.config.modules.purchase_orders_config",
-}
 
 # =============================================================================
 # CONFIGURATION LOADER
@@ -47,73 +27,58 @@ MODULE_MAPPING = {
 
 class ConfigurationLoader:
     """Loads configurations from modules on demand"""
-    
+
     def __init__(self):
         self._cache = {}
-        self._module_cache = {}
-        self._filter_configs = {}
-        self._search_configs = {}
+        self._filter_cache = {}
+        self._search_cache = {}
     
     def get_config(self, entity_type: str) -> Optional[EntityConfiguration]:
-        """Get configuration for entity type"""
+        """Get configuration for entity type - simplified"""
         if entity_type in self._cache:
             return self._cache[entity_type]
         
-        module_path = MODULE_MAPPING.get(entity_type)
-        if not module_path:
-            logger.warning(f"No module mapping found for entity type: {entity_type}")
+        # Get module path from entity registry
+        from app.config.entity_registry import get_entity_registration
+        registration = get_entity_registration(entity_type)
+        
+        if not registration:
+            logger.warning(f"No registration found for entity: {entity_type}")
             return None
         
         try:
-            if module_path not in self._module_cache:
-                module = importlib.import_module(module_path)
-                self._module_cache[module_path] = module
-                
-                # Load all configs from module
-                if hasattr(module, 'get_module_configs'):
-                    configs = module.get_module_configs()
-                    self._cache.update(configs)
-                
-                # Load filter configs if available
-                if hasattr(module, 'get_module_filter_configs'):
-                    filter_configs = module.get_module_filter_configs()
-                    self._filter_configs.update(filter_configs)
-                
-                # Load search configs if available
-                if hasattr(module, 'get_module_search_configs'):
-                    search_configs = module.get_module_search_configs()
-                    self._search_configs.update(search_configs)
+            # Direct import - no need for get_module_configs()
+            module = importlib.import_module(registration.module)
+            
+            # Direct attribute access - cleaner!
+            if hasattr(module, 'config'):
+                self._cache[entity_type] = module.config
+            
+            if hasattr(module, 'filter_config'):
+                self._filter_cache[entity_type] = module.filter_config
+            
+            if hasattr(module, 'search_config'):
+                self._search_cache[entity_type] = module.search_config
             
             return self._cache.get(entity_type)
             
         except ImportError as e:
-            logger.error(f"Failed to import module {module_path}: {str(e)}")
-            return None
-        except Exception as e:
-            logger.error(f"Error loading config for {entity_type}: {str(e)}")
+            logger.error(f"Failed to import module {registration.module}: {str(e)}")
             return None
     
     def get_filter_config(self, entity_type: str) -> Optional[EntityFilterConfiguration]:
-        """Get filter configuration for entity type"""
-        # Try cache first
-        if entity_type in self._filter_configs:
-            return self._filter_configs[entity_type]
-        
-        # Load entity config (which loads module)
-        self.get_config(entity_type)
-        
-        return self._filter_configs.get(entity_type)
+        """Get filter configuration - simplified"""
+        if entity_type not in self._filter_cache:
+            self.get_config(entity_type)  # This loads everything
+        return self._filter_cache.get(entity_type)
     
     def get_search_config(self, entity_type: str) -> Optional[EntitySearchConfiguration]:
-        """Get search configuration for entity type"""
-        # Try cache first
-        if entity_type in self._search_configs:
-            return self._search_configs[entity_type]
-        
-        # Load entity config (which loads module)
-        self.get_config(entity_type)
-        
-        return self._search_configs.get(entity_type)
+        """Get search configuration - simplified"""
+        if entity_type not in self._search_cache:
+            self.get_config(entity_type)  # This loads everything
+        return self._search_cache.get(entity_type)
+
+
 
 # Global loader instance
 _loader = None  # Will be initialized with cached loader
@@ -211,11 +176,15 @@ def get_entity_config(entity_type: str) -> Optional[EntityConfiguration]:
 
 def is_valid_entity_type(entity_type: str) -> bool:
     """Check if entity type is valid and registered"""
-    return entity_type in MODULE_MAPPING
+    # Check entity registry instead of MODULE_MAPPING
+    from app.config.entity_registry import get_entity_registration
+    return get_entity_registration(entity_type) is not None
 
 def list_entity_types() -> List[str]:
     """Get list of all registered entity types"""
-    return list(MODULE_MAPPING.keys())
+    # Get from entity registry instead of MODULE_MAPPING
+    from app.config.entity_registry import ENTITY_REGISTRY
+    return list(ENTITY_REGISTRY.keys())
 
 def get_entity_permissions(entity_type: str) -> Dict[str, str]:
     """Get permission mapping for entity type"""
@@ -344,7 +313,7 @@ def validate_all_configs() -> bool:
     
     print("\n🔍 Validating all entity configurations...")
     
-    for entity_type in MODULE_MAPPING.keys():
+    for entity_type in ENTITY_REGISTRY.keys():
         config = get_entity_config(entity_type)
         if not config:
             print(f"❌ {entity_type}: Configuration not found")
@@ -435,7 +404,7 @@ def check_configuration_health():
     print("🔍 Checking configuration health...")
     
     healthy = True
-    for entity_type in MODULE_MAPPING.keys():
+    for entity_type in ENTITY_REGISTRY.keys():
         try:
             config = get_entity_config(entity_type)
             if config:
@@ -460,9 +429,10 @@ def check_configuration_health():
 
 def initialize_configurations():
     """Initialize all configurations (useful for preloading)"""
-    for entity_type in MODULE_MAPPING.keys():
+
+    for entity_type in ENTITY_REGISTRY.keys():
         get_entity_config(entity_type)
-    logger.info(f"Initialized {len(MODULE_MAPPING)} entity configurations")
+    logger.info(f"Initialized {len(ENTITY_REGISTRY)} entity configurations")
 
 # Log initialization
-logger.info(f"Entity configuration registry initialized with {len(MODULE_MAPPING)} entity mappings")
+logger.info(f"Entity configuration registry initialized with {len(ENTITY_REGISTRY)} entity mappings")

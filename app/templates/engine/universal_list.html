@@ -117,7 +117,7 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                 
                 <!-- ✅ GENERIC: Detail card rendering for breakdowns -->
                 <div class="stat-card-value" style="font-size: 0.7rem; line-height: 1.1; padding: 2px 0;">
-                    {% set breakdown_data = current_summary %}
+                    {% set breakdown_data = card.get('breakdown_data', {}) %}
                     {% set breakdown_fields = card.get('breakdown_fields', {}) %}
                     {% if breakdown_fields %}
                         {% for field_key, field_config in breakdown_fields.items() %}

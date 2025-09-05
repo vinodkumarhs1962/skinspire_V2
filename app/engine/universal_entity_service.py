@@ -32,12 +32,53 @@ class UniversalEntityService(ABC):
     Entity-specific services override only what they need
     """
     
-    def __init__(self, entity_type: str, model_class: Type):
+    def __init__(self, entity_type: str, model_class: Type = None):
+        """
+        Initialize service
+        Args:
+            entity_type: Entity type identifier
+            model_class: Optional model class (if not provided, gets from registry)
+        """
         self.entity_type = entity_type
+        
+        # Get model from registry if not provided
+        if model_class is None:
+            model_class = self._get_model_from_registry(entity_type)
+            
+        if model_class is None:
+            raise ValueError(f"No model class found for entity type: {entity_type}")
+            
         self.model_class = model_class
         self.config = get_entity_config(entity_type)
         self.filter_processor = get_categorized_filter_processor()
+        
+        logger.info(f"Initialized {self.__class__.__name__} for {entity_type} with model {model_class.__name__}")
     
+    def _get_model_from_registry(self, entity_type: str) -> Optional[Type]:
+        """
+        Get model class from entity registry
+        Returns actual class, not string path
+        """
+        try:
+            from app.config.entity_registry import get_entity_registration
+            
+            registration = get_entity_registration(entity_type)
+            if not registration or not registration.model_class:
+                logger.warning(f"No model class in registry for {entity_type}")
+                return None
+            
+            # Import the model class from string path
+            model_path = registration.model_class
+            module_path, class_name = model_path.rsplit('.', 1)
+            module = __import__(module_path, fromlist=[class_name])
+            model_class = getattr(module, class_name)
+            
+            return model_class
+            
+        except Exception as e:
+            logger.error(f"Error loading model from registry for {entity_type}: {str(e)}")
+            return None
+
     @cache_service_method() 
     def search_data(self, filters: dict, **kwargs) -> dict:
         """
@@ -363,6 +404,11 @@ class UniversalEntityService(ABC):
                 logger.error(f"Error calculating {field_name} for {self.entity_type}: {str(e)}")
                 summary[field_name] = 0
         
+        # NEW: Call the optional hook for complex calculations
+        summary = self._call_summary_hook_if_exists(
+            session, hospital_id, branch_id, filters, summary, applied_filters, filtered_query
+        )
+
         return summary
 
     def _get_db_column_name(self, field_name: str) -> str:
@@ -1133,3 +1179,63 @@ class UniversalEntityService(ABC):
         Purpose: Public wrapper for relationship addition
         """
         return self._add_relationships(entity_dict, entity, session)
+    
+    # ============================================================================
+    # NEW HELPER METHOD: Call Summary Hook
+    # ============================================================================
+
+    def _call_summary_hook_if_exists(self, session: Session, hospital_id: uuid.UUID,
+                                    branch_id: Optional[uuid.UUID], filters: Dict,
+                                    summary: Dict, applied_filters: set = None,
+                                    filtered_query=None) -> Dict:
+        """
+        Call the optional calculate_summary_fields hook if it exists
+        This allows services to add complex calculations that can't be expressed in configuration
+        
+        Args:
+            session: Database session
+            hospital_id: Current hospital ID
+            branch_id: Current branch ID (optional)
+            filters: Applied filters
+            summary: Current summary dict with configuration-based calculations
+            applied_filters: Set of filter names that were applied
+            filtered_query: The filtered query (if available) for complex calculations
+            
+        Returns:
+            Enhanced summary dict
+        """
+        if hasattr(self, 'calculate_summary_fields'):
+            try:
+                # If we don't have filtered_query, create it
+                if filtered_query is None:
+                    base_query = self._get_base_query(session, hospital_id, branch_id)
+                    filtered_query, _, _ = self.filter_processor.process_entity_filters(
+                        self.entity_type,
+                        filters,
+                        base_query,
+                        self.model_class,
+                        session,
+                        hospital_id,
+                        branch_id,
+                        self.config
+                    )
+                
+                # Call the service's custom summary calculation method
+                summary = self.calculate_summary_fields(
+                    session=session,
+                    filtered_query=filtered_query,
+                    summary=summary,
+                    config=self.config,
+                    filters=filters,
+                    hospital_id=hospital_id,
+                    branch_id=branch_id,
+                    applied_filters=applied_filters
+                )
+                
+                logger.debug(f"Called calculate_summary_fields hook for {self.entity_type}")
+                
+            except Exception as e:
+                logger.error(f"Error in calculate_summary_fields hook for {self.entity_type}: {str(e)}")
+                # Don't fail - just log and continue with existing summary
+                
+        return summary

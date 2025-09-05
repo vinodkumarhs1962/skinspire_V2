@@ -33,7 +33,7 @@ ENTITY_REGISTRY: Dict[str, EntityRegistration] = {
     # ========== MASTER ENTITIES (Full CRUD Support) ==========
     "suppliers": EntityRegistration(
         category=EntityCategory.MASTER,
-        module="app.config.modules.master_entities",
+        module="app.config.modules.supplier_config",
         service_class="app.services.supplier_master_service.SupplierMasterService",
         model_class="app.models.master.Supplier"
     ),
@@ -80,14 +80,14 @@ ENTITY_REGISTRY: Dict[str, EntityRegistration] = {
     # ========== TRANSACTION ENTITIES (Read-Only in Universal Engine) ==========
     "supplier_payments": EntityRegistration(
         category=EntityCategory.TRANSACTION,
-        module="app.config.modules.financial_transactions",
+        module="app.config.modules.supplier_payment_config",  # Updated module path
         service_class="app.services.supplier_payment_service.SupplierPaymentService",
-        model_class="app.models.transaction.SupplierPayment"
+        model_class="app.models.views.SupplierPaymentView"  # ← Use VIEW like PurchaseOrders
     ),
     
     "supplier_invoices": EntityRegistration(
         category=EntityCategory.TRANSACTION,
-        module="app.config.modules.financial_transactions",
+        module="app.config.modules.supplier_invoice_config",  # Future module
         service_class="app.services.supplier_invoice_service.SupplierInvoiceService",
         model_class="app.models.transaction.SupplierInvoice"
     ),

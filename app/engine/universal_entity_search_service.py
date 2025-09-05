@@ -21,7 +21,6 @@ class UniversalEntitySearchService:
     """
     
     def __init__(self):
-        self.model_mappings = {...}  # Model mappings
         self.entity_type = 'entity_search'  # ✅ ADD: For cache identification
     
     @cache_service_method('entity_search', 'search_entities')  # ✅ ADD: Cache entity searches
@@ -166,23 +165,25 @@ class UniversalEntitySearchService:
             return str(getattr(result, 'name', result))
     
     def _get_model_class(self, entity_type: str):
-        """Get SQLAlchemy model class for entity type"""
-        model_mapping = {
-            'suppliers': 'app.models.master.Supplier',
-            'patients': 'app.models.master.Patient', 
-            'medicines': 'app.models.master.Medicine',
-            'users': 'app.models.transaction.User'
-        }
-        
-        if entity_type not in model_mapping:
-            return None
-        
+        """
+        Get SQLAlchemy model class from entity registry - single source of truth
+        """
         try:
-            module_path, class_name = model_mapping[entity_type].rsplit('.', 1)
-            module = __import__(module_path, fromlist=[class_name])
+            from app.config.entity_registry import get_entity_registration
+            
+            registration = get_entity_registration(entity_type)
+            if not registration or not registration.model_class:
+                logger.warning(f"No model class in registry for {entity_type}")
+                return None
+            
+            # Import the model class from string path
+            model_path = registration.model_class
+            module_path, class_name = model_path.rsplit('.', 1)
+            module = importlib.import_module(module_path)
             return getattr(module, class_name)
+            
         except Exception as e:
-            logger.error(f"Error importing model for {entity_type}: {str(e)}")
+            logger.error(f"Error getting model class for {entity_type}: {str(e)}")
             return None
 
     @cache_service_method('entity_search', 'get_filter_backend_data')    
@@ -271,17 +272,32 @@ class UniversalEntitySearchService:
     # ========================================================================
     
     def _get_model_class_from_config(self, config: EntitySearchConfiguration):
-        """Get model class from configuration"""
-        if config.model_path:
-            try:
-                module_path, class_name = config.model_path.rsplit('.', 1)
-                module = importlib.import_module(module_path)
-                return getattr(module, class_name)
-            except Exception as e:
-                logger.error(f"Error importing model {config.model_path}: {str(e)}")
-        
-        # Fallback to existing mapping
-        return self._get_model_class(config.target_entity)
+        """
+        Get model class from entity registry via target entity
+        No more model_path in config - use entity registry as single source of truth
+        """
+        try:
+            from app.config.entity_registry import get_entity_registration
+            
+            # Get target entity from config
+            if not config.target_entity:
+                logger.error("No target_entity in EntitySearchConfiguration")
+                return None
+            
+            registration = get_entity_registration(config.target_entity)
+            if not registration or not registration.model_class:
+                logger.warning(f"No model class in registry for {config.target_entity}")
+                return None
+            
+            # Import the model class from string path
+            model_path = registration.model_class
+            module_path, class_name = model_path.rsplit('.', 1)
+            module = importlib.import_module(module_path)
+            return getattr(module, class_name)
+            
+        except Exception as e:
+            logger.error(f"Error getting model class for {config.target_entity}: {str(e)}")
+            return None
     
     def _get_entity_search_filter_data(self, field: FieldDefinition, entity_type: str,
                                      hospital_id: uuid.UUID, branch_id: uuid.UUID) -> List[Dict]:

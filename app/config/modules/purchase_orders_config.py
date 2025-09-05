@@ -928,7 +928,7 @@ PURCHASE_ORDER_CONFIG = EntityConfiguration(
     entity_category=EntityCategory.TRANSACTION,
     
     # === MODEL CLASS ===
-    model_class="app.models.views.PurchaseOrderView",
+    # model_class="app.models.views.PurchaseOrderView",
     
     # === LIST VIEW CONFIGURATION ===
     enable_saved_filter_suggestions=True,
@@ -1057,30 +1057,17 @@ PURCHASE_ORDER_SEARCH_CONFIG = EntitySearchConfiguration(
     target_entity='purchase_orders',
     search_fields=['po_number', 'supplier_name', 'quotation_id'], 
     display_template='{po_number} - {supplier_name}',
-    model_path='app.models.views.PurchaseOrderView',
+    # model_path='app.models.views.PurchaseOrderView',
     min_chars=1,
     max_results=10,
     sort_field='po_date'
 )
 
 # =============================================================================
-# MODULE REGISTRY FUNCTIONS
+# SIMPLIFIED EXPORTS - Direct pattern like supplier_config.py
 # =============================================================================
 
-def get_module_configs():
-    """Return all configurations from this module"""
-    return {
-        "purchase_orders": PURCHASE_ORDER_CONFIG
-    }
-
-def get_module_filter_configs():
-    """Return all filter configurations from this module"""
-    return {
-        "purchase_orders": PURCHASE_ORDER_ENTITY_FILTER_CONFIG
-    }
-
-def get_module_search_configs():
-    """Return all search configurations from this module"""
-    return {
-        "purchase_orders": PURCHASE_ORDER_SEARCH_CONFIG
-    }
+# Direct exports - no functions needed!
+config = PURCHASE_ORDER_CONFIG
+filter_config = PURCHASE_ORDER_ENTITY_FILTER_CONFIG
+search_config = PURCHASE_ORDER_SEARCH_CONFIG
