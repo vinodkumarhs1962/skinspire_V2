@@ -37,13 +37,8 @@ class UniversalServiceRegistry:
     """
     
     def __init__(self):
-        self.service_registry = {
-            'supplier_payments': 'app.services.supplier_payment_service.SupplierPaymentService',  # NEW
-            'suppliers': 'app.services.supplier_master_service.SupplierMasterService',
-            'purchase_orders': 'app.services.purchase_order_service.PurchaseOrderService',
-            'patients': 'app.services.patient_service.PatientService',  # Future
-            'medicines': 'app.services.medicine_service.MedicineService'  # Future
-        }
+        # Service registry now comes from entity_registry.py only
+        # No hardcoded registry needed
         
         # ⭐ Service instance cache to prevent multiple initializations
         self._service_instance_cache = {}
@@ -56,12 +51,11 @@ class UniversalServiceRegistry:
 
     def get_service(self, entity_type: str):
         """
-        COMPLETE get_service method with all fixes
+        Get service for entity type - ONLY from entity_registry.py
         Priority:
         1. Check instance cache
         2. Check entity_registry.py 
-        3. Check legacy hardcoded registry
-        4. Fall back to generic
+        3. Fall back to generic service
         """
         try:
             # ⭐ STEP 1: Check if service instance already cached
@@ -69,7 +63,7 @@ class UniversalServiceRegistry:
                 logger.debug(f"✅ Using cached service instance for {entity_type}")
                 return self._service_instance_cache[entity_type]
             
-            # ⭐ STEP 2: Try to load from entity_registry.py FIRST
+            # ⭐ STEP 2: Try to load from entity_registry.py
             service_instance = self._load_from_entity_registry(entity_type)
             if service_instance:
                 logger.info(f"[SUCCESS] Loaded from entity_registry: {service_instance.__class__.__name__}")
@@ -77,15 +71,7 @@ class UniversalServiceRegistry:
                 self._service_instance_cache[entity_type] = service_instance
                 return service_instance
             
-            # ⭐ STEP 3: Try legacy hardcoded registry (backward compatibility)
-            service_instance = self._load_from_legacy_registry(entity_type)
-            if service_instance:
-                logger.info(f"⚠️ Loaded from legacy registry for {entity_type}")
-                # Cache it!
-                self._service_instance_cache[entity_type] = service_instance
-                return service_instance
-            
-            # ⭐ STEP 4: Fall back to generic service
+            # ⭐ STEP 3: Fall back to generic service (was STEP 4)
             logger.info(f"ℹ️ No custom service found for {entity_type}, using generic service")
             from app.engine.universal_entity_service import GenericUniversalService
             generic_service = GenericUniversalService(entity_type)
@@ -147,35 +133,6 @@ class UniversalServiceRegistry:
             logger.error(traceback.format_exc())
             return None
     
-    def _load_from_legacy_registry(self, entity_type: str):
-        """
-        Helper method to load from legacy hardcoded registry
-        For backward compatibility only
-        """
-        try:
-            service_path = self.service_registry.get(entity_type)
-            
-            if not service_path:
-                return None
-            
-            logger.debug(f"Found in legacy registry: {entity_type} -> {service_path}")
-            
-            # Parse and load the service
-            module_path, class_name = service_path.rsplit('.', 1)
-            module = importlib.import_module(module_path)
-            service_class = getattr(module, class_name)
-            
-            if callable(service_class):
-                service_instance = service_class()
-                logger.debug(f"✅ Instantiated {class_name} from legacy registry")
-                return service_instance
-            else:
-                # Already an instance
-                return service_class
-                
-        except Exception as e:
-            logger.error(f"Failed to load from legacy registry for {entity_type}: {str(e)}")
-            return None
     
     def clear_service_cache(self, entity_type: str = None):
         """
@@ -414,51 +371,6 @@ def get_universal_item_data(entity_type: str, item_id: str, **kwargs) -> Dict:
     """
     return _service_registry.get_item_data(entity_type, item_id, **kwargs)
 
-# ============================================================================
-# Testing function
-# ============================================================================
-
-def test_service_loading(entity_type: str = 'purchase_orders'):
-    """
-    Test function to verify service is loading correctly
-    """
-    print(f"\n{'='*60}")
-    print(f"Testing service loading for: {entity_type}")
-    print('='*60)
-    
-    # Clear cache first
-    _service_registry.clear_service_cache(entity_type)
-    print("✅ Cache cleared")
-    
-    # Load service
-    service = _service_registry.get_service(entity_type)
-    print(f"✅ Service loaded: {service.__class__.__name__}")
-    
-    # Check if it's cached
-    service2 = _service_registry.get_service(entity_type)
-    if service is service2:
-        print("✅ Service is properly cached (same instance)")
-    else:
-        print("❌ Service not cached (different instances)")
-    
-    # Check methods
-    methods = {
-        '_calculate_summary': hasattr(service, '_calculate_summary'),
-        '_add_relationships_to_item': hasattr(service, '_add_relationships_to_item'),
-        'get_summary_stats': hasattr(service, 'get_summary_stats'),
-        'search_entity_data': hasattr(service, 'search_entity_data'),
-        'search_data': hasattr(service, 'search_data')
-    }
-    
-    print("\nMethods available:")
-    for method, exists in methods.items():
-        status = "✅" if exists else "❌"
-        print(f"  {status} {method}")
-    
-    return service
-
-# Log that the module loaded successfully
-logger.info("✅ Universal Services module loaded with enhanced registry")
 
 # ============================================================================
 # USAGE EXAMPLE

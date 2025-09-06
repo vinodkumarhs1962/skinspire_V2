@@ -223,131 +223,7 @@ class EnhancedUniversalDataAssembler:
             logger.error(f"Error looking up branch name using service: {str(e)}")
             return None
         
-    # =============================================================================
-    # BACKWARD COMPATIBILITY WRAPPERS - DEPRECATED BUT FUNCTIONAL
-    # =============================================================================
-
-    def _assemble_enhanced_filter_form(self, config: EntityConfiguration, current_filters: Dict) -> Dict:
-        """
-        🔄 COMPATIBILITY WRAPPER: Old method signature maintained
-        DEPRECATED: Use filter_service.get_complete_filter_data() instead
-        """
-        logger.warning(f"DEPRECATED: _assemble_enhanced_filter_form called for {config.entity_type}. "
-                      f"Use UniversalFilterService.get_complete_filter_data() instead.")
-        
-        try:
-            # Try new method first
-            filter_data = self.filter_service.get_complete_filter_data(
-                entity_type=config.entity_type,
-                hospital_id=current_user.hospital_id if current_user else None,
-                branch_id=None,
-                current_filters=current_filters
-            )
-            
-            # Convert to old format for backward compatibility
-            return {
-                'groups': filter_data.get('groups', []),
-                'backend_data': filter_data.get('backend_data', {}),
-                'active_filters_count': filter_data.get('active_filters_count', 0),
-                'has_filters': len(filter_data.get('groups', [])) > 0
-            }
-            
-        except Exception as e:
-            logger.error(f"New filter service failed, using fallback: {str(e)}")
-            return self._assemble_enhanced_filter_form_fallback(config, current_filters)
-
-    def _assemble_enhanced_filter_data(self, config: EntityConfiguration, form_instance: FlaskForm = None) -> Dict:
-        """
-        🔄 COMPATIBILITY WRAPPER: Old method signature maintained  
-        DEPRECATED: Use filter_service.get_complete_filter_data() instead
-        """
-        logger.warning(f"DEPRECATED: _assemble_enhanced_filter_data called for {config.entity_type}")
-        
-        current_filters = request.args.to_dict() if request else {}
-        return self._assemble_enhanced_filter_form(config, current_filters)
-
-    def _build_filter_field_data(self, field, current_filters: Dict, backend_data: Dict) -> Dict:
-        """
-        🔄 COMPATIBILITY WRAPPER: Old method signature maintained
-        DEPRECATED: Logic moved to UniversalFilterService
-        """
-        logger.warning(f"DEPRECATED: _build_filter_field_data called for {field.name}")
-        
-        try:
-            # Try to use new service
-            filter_data = self.filter_service.get_complete_filter_data(
-                entity_type='unknown',  # We don't have entity context here
-                hospital_id=current_user.hospital_id if current_user else None,
-                current_filters=current_filters
-            )
-            
-            # Find matching field in new format
-            for group in filter_data.get('groups', []):
-                for field_data in group.get('fields', []):
-                    if field_data.get('name') == field.name:
-                        return field_data
-            
-            # Fallback to basic field data
-            return self._get_fallback_field_data(field)
-            
-        except Exception as e:
-            logger.error(f"Error in _build_filter_field_data: {str(e)}")
-            return self._get_fallback_field_data(field)
-
-    def _get_filter_backend_data(self, config: EntityConfiguration, current_filters: Dict) -> Dict:
-        """
-        🔄 COMPATIBILITY WRAPPER: Old method signature maintained
-        DEPRECATED: Use filter_service._get_unified_backend_data() instead
-        """
-        logger.warning(f"DEPRECATED: _get_filter_backend_data called for {config.entity_type}")
-        
-        try:
-            filter_data = self.filter_service.get_complete_filter_data(
-                entity_type=config.entity_type,
-                hospital_id=current_user.hospital_id if current_user else None,
-                current_filters=current_filters
-            )
-            
-            return filter_data.get('backend_data', {})
-            
-        except Exception as e:
-            logger.error(f"Error getting backend data: {str(e)}")
-            return {}
-
-    @cache_service_method('entity_search', 'get_filter_backend_data')
-    def get_filter_backend_data(self, entity_type: str, config: EntityConfiguration) -> Dict:
-        """
-        🔄 COMPATIBILITY WRAPPER: Old standalone function signature
-        DEPRECATED: Use filter_service._get_unified_backend_data() instead
-        """
-        logger.warning(f"DEPRECATED: get_filter_backend_data standalone function called for {entity_type}")
-        
-        return self._get_filter_backend_data(config, {})
-
-    def _detect_active_date_preset(self, field, current_filters: Dict) -> str:
-        """
-        🔄 COMPATIBILITY WRAPPER: Old method signature maintained
-        DEPRECATED: Use filter_service._analyze_date_presets() instead
-        """
-        logger.warning(f"DEPRECATED: _detect_active_date_preset called for {field.name}")
-        
-        try:
-            preset_data = self.filter_service._analyze_date_presets(current_filters)
-            return preset_data.get('active_preset', 'none')
-            
-        except Exception as e:
-            logger.error(f"Error detecting date preset: {str(e)}")
-            return 'none'
-
-    def _get_enhanced_filter_type(self, field) -> str:
-        """
-        🔄 COMPATIBILITY WRAPPER: Old method signature maintained
-        DEPRECATED: Use filter_service._get_field_type_safe() instead
-        """
-        logger.warning(f"DEPRECATED: _get_enhanced_filter_type called for {field.name}")
-        
-        return self._get_field_type_safe(field)
-
+    
     # =============================================================================
     # FALLBACK METHODS - BASIC IMPLEMENTATIONS FOR EMERGENCIES
     # =============================================================================
@@ -1220,19 +1096,8 @@ class EnhancedUniversalDataAssembler:
             return True  # Default to showing action on error
 
     def _enhance_header_config(self, config: EntityConfiguration) -> Dict:
-        """Enhance header config with field metadata for better template handling"""
-        header_config = config.view_layout.header_config.copy() if config.view_layout.header_config else {}
-        
-        # Find the title field configuration
-        if header_config.get('title_field') == 'supplier_name':
-            for field in config.fields:
-                if field.name == 'supplier_name' and hasattr(field, 'related_field'):
-                    # Use the related field for entity references
-                    header_config['title_field'] = field.related_field  # 'supplier'
-                    header_config['title_field_name'] = 'supplier_name'
-                    break
-        
-        return header_config
+        """Return header config without modification - views have all needed fields"""
+        return config.view_layout.header_config if config.view_layout and config.view_layout.header_config else {}
 
 
     def _clean_view_data(self, data: Any) -> Any:

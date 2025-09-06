@@ -245,27 +245,6 @@ class UniversalEntitySearchService:
             logger.error(f"Error getting entity search filter data: {str(e)}")
             return []
 
-    def _get_entity_specific_filter_data(self, 
-                                       entity_type: str, 
-                                       hospital_id: uuid.UUID, 
-                                       branch_id: uuid.UUID = None) -> Dict:
-        """
-        Get entity-specific filter data (e.g., suppliers for supplier_payments)
-        
-        DELEGATES: To entity-specific methods when available
-        """
-        try:
-            if entity_type == 'supplier_payments':
-                return self._get_supplier_payment_filter_data(hospital_id, branch_id)
-            elif entity_type == 'suppliers':
-                return self._get_supplier_filter_data(hospital_id, branch_id)
-            # Add other entities as needed
-            
-            return {}
-            
-        except Exception as e:
-            logger.error(f"Error getting entity-specific filter data for {entity_type}: {str(e)}")
-            return {}
 
     # ========================================================================
     # UNIVERSAL HELPER METHODS (Entity-Agnostic)

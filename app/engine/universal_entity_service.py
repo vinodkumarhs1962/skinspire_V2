@@ -12,6 +12,7 @@ from datetime import datetime, date
 from decimal import Decimal
 from sqlalchemy import desc, asc, func, and_, or_
 from sqlalchemy.orm import Session
+from flask_login import current_user
 from abc import ABC, abstractmethod
 
 from app.config.core_definitions import FieldType
