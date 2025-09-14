@@ -1474,6 +1474,34 @@ class EnhancedUniversalDataAssembler:
             # Default to showing field if condition fails
             return True
 
+    def _evaluate_condition(self, condition: str, context: Dict) -> bool:
+        """
+        Safely evaluate a condition string.
+        Simple implementation for conditional display.
+        """
+        try:
+            # Handle item.field conditions
+            if 'item.' in condition:
+                # Extract field name after 'item.'
+                field_name = condition.replace('item.', '')
+                item = context.get('item', {})
+                
+                # Check if item is dict or object
+                if isinstance(item, dict):
+                    value = item.get(field_name)
+                else:
+                    value = getattr(item, field_name, None)
+                
+                # Return True if field has a value
+                return bool(value)
+            
+            # For other conditions, just check if the field exists
+            return bool(context.get(condition))
+            
+        except Exception as e:
+            logger.debug(f"Condition evaluation for '{condition}' failed: {str(e)}")
+            return True  # Default to showing field if evaluation fails
+
     def _get_layout_type(self, config: EntityConfiguration) -> str:
         """Get layout type from configuration - FIXED VERSION"""
         try:

@@ -134,6 +134,8 @@ class SupplierInvoiceView(Base):
     
     # Financial information
     invoice_total_amount = Column(Numeric(12, 2))
+    paid_amount = Column(Numeric(12, 2))
+    balance_amount = Column(Numeric(12, 2))
     cgst_amount = Column(Numeric(12, 2))
     sgst_amount = Column(Numeric(12, 2))
     igst_amount = Column(Numeric(12, 2))
@@ -274,6 +276,7 @@ class SupplierPaymentView(Base):
     exchange_rate = Column(Numeric(10, 6))
     
     # Status and workflow
+    workflow_status = Column(String(20))  # Standardized field name
     payment_status = Column(String(20))  # workflow_status renamed
     approved_by = Column(String(15))
     approval_date = Column(DateTime(timezone=True))

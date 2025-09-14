@@ -1,0 +1,66 @@
+<!-- templates/components/business/invoice_items_table.html -->
+{% if data and data['items'] %}
+<div class="invoice-items-container">
+    <!-- ✅ REMOVED: Summary Card (now in invoice_summary section as virtual fields) -->
+    
+    <!-- Invoice Items Table -->
+    <div class="table-responsive">
+        <table class="invoice-items-table financial-table w-full">
+            <thead>
+                <tr>
+                    <th class="text-left">Item</th>
+                    <th class="text-left">Batch</th>
+                    <th class="text-right">Qty</th>
+                    <th class="text-right">Unit Price</th>
+                    <th class="text-right">Disc%</th>
+                    <th class="text-right">GST</th>
+                    <th class="text-right">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in data['items'] %}
+                <tr>
+                    <td class="text-left">
+                        <span class="font-medium">{{ item.item_name or '-' }}</span>
+                    </td>
+                    <td class="text-left">{{ item.batch_no or '-' }}</td>
+                    <td class="text-right">{{ item.quantity|default(0) }}</td>
+                    <td class="text-right">
+                        {{ data.currency_symbol }}{{ "{:,.2f}".format(item.unit_price|default(0)) }}
+                    </td>
+                    <td class="text-right">
+                        {% if item.discount_percent %}
+                            {{ "{:.1f}".format(item.discount_percent) }}%
+                        {% else %}
+                            0%
+                        {% endif %}
+                    </td>
+                    <td class="text-right">
+                        {{ data.currency_symbol }}{{ "{:,.2f}".format(item.gst_amount|default(0)) }}
+                    </td>
+                    <td class="text-right font-semibold">
+                        {{ data.currency_symbol }}{{ "{:,.2f}".format(item.total_amount|default(0)) }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="total-row">
+                    <td colspan="5" class="text-right font-bold">TOTAL</td>
+                    <td class="text-right font-bold">
+                        {{ data.currency_symbol }}{{ "{:,.2f}".format(data.summary.total_gst|default(0)) }}
+                    </td>
+                    <td class="text-right font-bold">
+                        {{ data.currency_symbol }}{{ "{:,.2f}".format(data.summary.total_amount|default(0)) }}
+                    </td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-8 text-center">
+    <i class="fas fa-file-invoice text-4xl text-gray-400 dark:text-gray-600 mb-4"></i>
+    <p class="text-gray-600 dark:text-gray-400">No invoice items available</p>
+</div>
+{% endif %}

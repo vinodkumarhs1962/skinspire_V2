@@ -1,5 +1,5 @@
-# app/utils/menu_utils.py - FIXED VERSION
-# Corrects all URLs to match actual registered blueprints
+# app/utils/menu_utils.py - CORRECTED VERSION
+# Three-level menu structure with Universal Engine URLs
 
 from flask import url_for
 from app.services.database_service import get_detached_copy
@@ -21,15 +21,17 @@ def safe_url_for(endpoint, **values):
 def universal_url(entity_type, action, item_id=None, **kwargs):
     """Generate universal engine URLs - ONLY for configured entities"""
     
-    # MANUAL CHECK: Only these entities are configured in Universal Engine
+    # UPDATED: Entities configured in Universal Engine
     CONFIGURED_ENTITIES = [
         'suppliers',
-        'supplier_payments', 
+        'supplier_payments',
+        'supplier_invoices',  # Added
+        'purchase_orders',    # Added
         'patients',
         'medicines',
         'users',
         'branches',
-        'inventory'  # If you have this configured
+        'inventory'
     ]
     
     if entity_type not in CONFIGURED_ENTITIES:
@@ -54,7 +56,7 @@ def universal_url(entity_type, action, item_id=None, **kwargs):
         return '#'
 
 def generate_menu_for_role(role):
-    """Generate menu items based on user role - FIXED VERSION"""
+    """Generate menu items based on user role - CORRECTED THREE-LEVEL VERSION"""
     
     # Basic menu items available to all users
     menu = [
@@ -116,82 +118,7 @@ def generate_menu_for_role(role):
         })
         
         # =========================================================================
-        # 2. FINANCIAL MANAGEMENT (FIXED URLS)
-        # =========================================================================
-        menu.append({
-            'name': 'Financial Management',
-            'url': '#',
-            'icon': 'money-check-alt',
-            'icon_path': '12 8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z',
-            'children': [
-                {
-                    'name': 'Supplier Payments',
-                    'url': universal_url('supplier_payments', 'list'),
-                    'icon': 'hand-holding-usd',
-                    'badge': 'Universal',
-                    'badge_color': 'primary',
-                    'children': [
-                        {
-                            'name': 'Payment List',
-                            'url': universal_url('supplier_payments', 'list'),
-                            'icon': 'list',
-                            'description': 'View and print payments'
-                        },
-                        {
-                            'name': 'Create Payment',
-                            'url': safe_url_for('supplier_views.create_payment'),
-                            'icon': 'plus-circle',
-                            'description': 'Create new payment'
-                        }
-                    ]
-                },
-                {
-                    'name': 'Supplier Invoices',
-                    'url': safe_url_for('supplier_views.supplier_invoice_list'),  # FIXED
-                    'icon': 'file-invoice',
-                    'badge': 'Standard',
-                    'badge_color': 'secondary',
-                    'children': [
-                        {
-                            'name': 'Invoice List',
-                            'url': safe_url_for('supplier_views.supplier_invoice_list'),  # FIXED
-                            'icon': 'list',
-                            'description': 'View and print invoices'
-                        },
-                        {
-                            'name': 'Pending Invoices',
-                            'url': safe_url_for('supplier_views.pending_invoices'),  # FIXED
-                            'icon': 'clock',
-                            'description': 'View pending invoices'
-                        }
-                    ]
-                },
-                {
-                    'name': 'Patient Billing',
-                    'url': safe_url_for('billing_views.invoice_list'),  # FIXED: Uses correct endpoint
-                    'icon': 'receipt',
-                    'badge': 'Standard',
-                    'badge_color': 'secondary',
-                    'children': [
-                        {
-                            'name': 'Billing History',
-                            'url': safe_url_for('billing_views.invoice_list'),  # FIXED
-                            'icon': 'history',
-                            'description': 'View and print bills'
-                        },
-                        {
-                            'name': 'New Invoice',
-                            'url': safe_url_for('billing_views.create_invoice_view'),  # FIXED
-                            'icon': 'plus-circle',
-                            'description': 'Create patient bill'
-                        }
-                    ]
-                }
-            ]
-        })
-        
-        # =========================================================================
-        # 3. PROCUREMENT & INVENTORY (FIXED URLS)
+        # 2. PROCUREMENT & INVENTORY (THREE-LEVEL STRUCTURE)
         # =========================================================================
         menu.append({
             'name': 'Procurement & Inventory',
@@ -201,37 +128,257 @@ def generate_menu_for_role(role):
             'children': [
                 {
                     'name': 'Purchase Orders',
-                    'url': safe_url_for('supplier_views.purchase_order_list'),  # FIXED
+                    'url': '#',  # No URL for second level
                     'icon': 'shopping-cart',
+                    'badge': 'Universal',
+                    'badge_color': 'primary',
+                    'children': [  # Third level with actual URLs
+                        {
+                            'name': 'View All POs',
+                            'url': universal_url('purchase_orders', 'list'),
+                            'icon': 'list',
+                            'description': 'List all purchase orders'
+                        },
+                        {
+                            'name': 'Create PO',
+                            'url': safe_url_for('supplier_views.add_purchase_order'),  # Still standard
+                            'icon': 'plus-circle',
+                            'description': 'Create new purchase order',
+                            'badge': 'Standard',
+                            'badge_color': 'secondary'
+                        },
+                        {
+                            'name': 'Pending Approval',
+                            'url': universal_url('purchase_orders', 'list') + '?status=pending',
+                            'icon': 'clock',
+                            'description': 'POs awaiting approval'
+                        },
+                        {
+                            'name': 'Recent POs',
+                            'url': universal_url('purchase_orders', 'list') + '?days=7',
+                            'icon': 'calendar',
+                            'description': 'Last 7 days'
+                        }
+                    ]
+                },
+                {
+                    'name': 'Supplier Invoices',
+                    'url': '#',  # No URL for second level
+                    'icon': 'file-invoice',
+                    'badge': 'Universal',
+                    'badge_color': 'primary',
+                    'children': [  # Third level with actual URLs
+                        {
+                            'name': 'View All Invoices',
+                            'url': universal_url('supplier_invoices', 'list'),
+                            'icon': 'list',
+                            'description': 'List all supplier invoices'
+                        },
+                        {
+                            'name': 'Create Invoice',
+                            'url': safe_url_for('supplier_views.add_supplier_invoice'),  # Still standard
+                            'icon': 'plus-circle',
+                            'description': 'Create new invoice',
+                            'badge': 'Standard',
+                            'badge_color': 'secondary'
+                        },
+                        {
+                            'name': 'Pending Invoices',
+                            'url': universal_url('supplier_invoices', 'list') + '?payment_status=pending',
+                            'icon': 'hourglass-half',
+                            'description': 'Unpaid invoices'
+                        },
+                        {
+                            'name': 'Overdue Invoices',
+                            'url': universal_url('supplier_invoices', 'list') + '?payment_status=overdue',
+                            'icon': 'exclamation-triangle',
+                            'description': 'Past due date'
+                        }
+                    ]
+                },
+                {
+                    'name': 'Inventory',
+                    'url': '#',  # No URL for second level
+                    'icon': 'archive',
+                    'badge': 'Coming Soon',
+                    'badge_color': 'warning',
+                    'children': [
+                        {
+                            'name': 'Stock Overview',
+                            'url': '#',
+                            'icon': 'chart-bar',
+                            'description': 'View stock levels'
+                        },
+                        {
+                            'name': 'Stock Movement',
+                            'url': '#',
+                            'icon': 'exchange-alt',
+                            'description': 'Track inventory flow'
+                        }
+                    ]
+                }
+            ]
+        })
+        
+        # =========================================================================
+        # 3. FINANCIAL MANAGEMENT (THREE-LEVEL STRUCTURE)
+        # =========================================================================
+        menu.append({
+            'name': 'Financial Management',
+            'url': '#',
+            'icon': 'money-check-alt',
+            'icon_path': '12 8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z',
+            'children': [
+                {
+                    'name': 'Supplier Payments',
+                    'url': '#',  # No URL for second level
+                    'icon': 'hand-holding-usd',
+                    'badge': 'Universal',
+                    'badge_color': 'primary',
+                    'children': [  # Third level with actual URLs
+                        {
+                            'name': 'View All Payments',
+                            'url': universal_url('supplier_payments', 'list'),
+                            'icon': 'list',
+                            'description': 'List all payments'
+                        },
+                        {
+                            'name': 'Create Payment',
+                            'url': safe_url_for('supplier_views.create_payment'),  # Still standard
+                            'icon': 'plus-circle',
+                            'description': 'Record new payment',
+                            'badge': 'Standard',
+                            'badge_color': 'secondary'
+                        },
+                        {
+                            'name': 'Pending Approval',
+                            'url': universal_url('supplier_payments', 'list') + '?payment_status=pending_approval',
+                            'icon': 'user-check',
+                            'description': 'Awaiting approval'
+                        },
+                        {
+                            'name': 'Today\'s Payments',
+                            'url': universal_url('supplier_payments', 'list') + '?date=today',
+                            'icon': 'calendar-day',
+                            'description': 'Payments made today'
+                        }
+                    ]
+                },
+                {
+                    'name': 'Patient Billing',
+                    'url': '#',  # No URL for second level
+                    'icon': 'receipt',
                     'badge': 'Standard',
                     'badge_color': 'secondary',
                     'children': [
                         {
-                            'name': 'PO List',
-                            'url': safe_url_for('supplier_views.purchase_order_list'),  # FIXED
+                            'name': 'Billing List',
+                            'url': safe_url_for('billing_views.invoice_list'),
                             'icon': 'list',
-                            'description': 'View and print POs'
+                            'description': 'View all bills'
                         },
                         {
-                            'name': 'Create PO',
-                            'url': safe_url_for('supplier_views.add_purchase_order'),  # FIXED
+                            'name': 'Create Bill',
+                            'url': safe_url_for('billing_views.create_invoice_view'),
                             'icon': 'plus-circle',
-                            'description': 'Create purchase order'
+                            'description': 'New patient bill'
+                        },
+                        {
+                            'name': 'Pending Bills',
+                            'url': safe_url_for('billing_views.pending_bills'),
+                            'icon': 'clock',
+                            'description': 'Unpaid bills'
                         }
                     ]
                 },
                 {
-                    'name': 'Inventory Management',
-                    'url': universal_url('inventory', 'list'),
-                    'icon': 'archive',
+                    'name': 'Financial Reports',
+                    'url': '#',  # No URL for second level
+                    'icon': 'chart-line',
+                    'children': [
+                        {
+                            'name': 'Payment Summary',
+                            'url': universal_url('supplier_payments', 'list') + '?view=summary',
+                            'icon': 'chart-pie',
+                            'description': 'Payment analytics'
+                        },
+                        {
+                            'name': 'Outstanding Report',
+                            'url': universal_url('supplier_invoices', 'list') + '?view=outstanding',
+                            'icon': 'file-invoice-dollar',
+                            'description': 'Pending dues'
+                        },
+                        {
+                            'name': 'Supplier Statement',
+                            'url': universal_url('suppliers', 'list') + '?view=statement',
+                            'icon': 'file-alt',
+                            'description': 'Supplier-wise summary'
+                        }
+                    ]
+                }
+            ]
+        })
+        
+        # =========================================================================
+        # 4. CLINICAL OPERATIONS
+        # =========================================================================
+        menu.append({
+            'name': 'Clinical Operations',
+            'url': '#',
+            'icon': 'stethoscope',
+            'icon_path': 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z',
+            'children': [
+                {
+                    'name': 'Patient Management',
+                    'url': '#',
+                    'icon': 'user-injured',
                     'badge': 'Universal',
                     'badge_color': 'primary',
                     'children': [
                         {
-                            'name': 'Stock Overview',
-                            'url': universal_url('inventory', 'list'),
-                            'icon': 'chart-bar',
-                            'description': 'View stock reports'
+                            'name': 'All Patients',
+                            'url': universal_url('patients', 'list'),
+                            'icon': 'list',
+                            'description': 'View all patients'
+                        },
+                        {
+                            'name': 'Register Patient',
+                            'url': universal_url('patients', 'create'),
+                            'icon': 'user-plus',
+                            'description': 'New patient registration'
+                        },
+                        {
+                            'name': 'Today\'s Patients',
+                            'url': universal_url('patients', 'list') + '?date=today',
+                            'icon': 'calendar-check',
+                            'description': 'Today\'s appointments'
+                        }
+                    ]
+                },
+                {
+                    'name': 'Medicine Store',
+                    'url': '#',
+                    'icon': 'pills',
+                    'badge': 'Universal',
+                    'badge_color': 'primary',
+                    'children': [
+                        {
+                            'name': 'Medicine List',
+                            'url': universal_url('medicines', 'list'),
+                            'icon': 'list',
+                            'description': 'All medicines'
+                        },
+                        {
+                            'name': 'Add Medicine',
+                            'url': universal_url('medicines', 'create'),
+                            'icon': 'plus',
+                            'description': 'Register new medicine'
+                        },
+                        {
+                            'name': 'Low Stock',
+                            'url': universal_url('medicines', 'list') + '?stock=low',
+                            'icon': 'exclamation-circle',
+                            'description': 'Below reorder level'
                         }
                     ]
                 }
@@ -239,55 +386,65 @@ def generate_menu_for_role(role):
         })
         
         # =========================================================================
-        # 4. ADMIN FUNCTIONS
+        # 5. REPORTS & ANALYTICS (Optional - for admin roles)
         # =========================================================================
-        # if role in ['system_admin', 'hospital_admin']:
-        menu.append({
-            'name': 'Administration',
-            'url': '#',
-            'icon': 'cog',
-            'icon_path': '10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37',
-            'children': [
-                {
-                    'name': 'Hospital Settings',
-                    'url': safe_url_for('admin_views.hospital_settings'),
-                    'icon': 'hospital',
-                    'badge': 'Admin',
-                    'badge_color': 'warning'
-                },
-                {
-                    'name': 'Staff Management',
-                    'url': safe_url_for('admin_views.staff_management'),
-                    'icon': 'user-tie',
-                    'badge': 'Admin',
-                    'badge_color': 'warning'
-                },
-                {
-                    'name': 'User Management',
-                    'url': safe_url_for('admin_views.user_list'),
-                    'icon': 'users-cog',
-                    'badge': 'Admin',
-                    'badge_color': 'warning'
-                },
-                {
-                    'name': 'Cache Dashboard',
-                    'url': safe_url_for('cache_dashboard.cache_dashboard'),
-                    'icon': 'chart-line',
-                    'badge': 'System',
-                    'badge_color': 'info',
-                    'target': '_blank',
-                    'description': 'Real-time cache performance monitoring'
-                }
-            ]
-        })
+        if role in ['system_admin', 'hospital_admin']:
+            menu.append({
+                'name': 'Reports & Analytics',
+                'url': '#',
+                'icon': 'chart-bar',
+                'icon_path': 'M3 13h2v7H3zm4-8h2v12H7zm4 4h2v8h-2zm4-2h2v10h-2z',
+                'children': [
+                    {
+                        'name': 'Dashboard Reports',
+                        'url': safe_url_for('reports.dashboard'),
+                        'icon': 'tachometer-alt',
+                        'badge': 'Pro',
+                        'badge_color': 'success'
+                    },
+                    {
+                        'name': 'Custom Reports',
+                        'url': safe_url_for('reports.custom'),
+                        'icon': 'file-excel',
+                        'badge': 'Pro',
+                        'badge_color': 'success'
+                    }
+                ]
+            })
         
-        # Always have settings as the last item
-        menu.append({
-            'name': 'Settings',
-            'url': safe_url_for('auth_views.settings'),
-            'icon': 'settings',
-            'icon_path': '10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z'
-        })
+        # =========================================================================
+        # 6. SYSTEM SETTINGS (Admin only)
+        # =========================================================================
+        if role == 'system_admin':
+            menu.append({
+                'name': 'System Settings',
+                'url': '#',
+                'icon': 'cogs',
+                'icon_path': 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z',
+                'children': [
+                    {
+                        'name': 'User Management',
+                        'url': universal_url('users', 'list'),
+                        'icon': 'users-cog',
+                        'badge': 'Universal',
+                        'badge_color': 'primary'
+                    },
+                    {
+                        'name': 'Branch Setup',
+                        'url': universal_url('branches', 'list'),
+                        'icon': 'sitemap',
+                        'badge': 'Universal',
+                        'badge_color': 'primary'
+                    },
+                    {
+                        'name': 'System Config',
+                        'url': safe_url_for('settings.system'),
+                        'icon': 'sliders-h',
+                        'badge': 'Standard',
+                        'badge_color': 'secondary'
+                    }
+                ]
+            })
     
     return menu
 

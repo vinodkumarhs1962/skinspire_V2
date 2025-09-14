@@ -102,23 +102,52 @@
                         <!-- Children container - initially hidden -->
                         <div class="menu-children hidden pl-8 mt-1 border-l border-blue-600 ml-4">
                             {% for child in item.children %}
-                                <a href="{{ child.url }}" 
-                                class="menu-item block py-1 px-2 text-sm text-blue-200 hover:bg-blue-700 hover:text-white transition-all duration-200"
-                                data-menu-name="{{ child.name }}">
-                                    <div class="flex items-center">
-                                        <span class="w-6 flex justify-center items-center">
-                                            {% if child.icon %}
-                                                <i class="fas fa-{{ child.icon }} w-4 h-4"></i>
-                                            {% else %}
-                                                <i class="fas fa-dot-circle w-3 h-3"></i>
-                                            {% endif %}
-                                        </span>
-                                        <span class="ml-2 text-sm menu-text">{{ child.name }}</span>
-                                        {% if child.badge %}
-                                            <span class="badge badge-{{ child.badge_color or 'info' }} ml-2 text-xs">{{ child.badge }}</span>
-                                        {% endif %}
+                                {% if child.children %}
+                                    <!-- First-level child with second-level children -->
+                                    <div class="submenu-wrapper">
+                                        <div class="submenu-header block py-1 px-2 text-sm text-blue-200 hover:bg-blue-700 hover:text-white transition-all duration-200 cursor-pointer"
+                                            data-submenu-name="{{ child.name }}">
+                                            <div class="flex items-center">
+                                                <span class="w-6 flex justify-center items-center">
+                                                    {% if child.icon %}
+                                                        <i class="fas fa-{{ child.icon }} w-4 h-4"></i>
+                                                    {% else %}
+                                                        <i class="fas fa-dot-circle w-3 h-3"></i>
+                                                    {% endif %}
+                                                </span>
+                                                <span class="ml-2 text-sm menu-text flex-1">{{ child.name }}</span>
+                                                <span class="submenu-expand text-xs ml-1">▶</span>
+                                            </div>
+                                        </div>
+                                        <div class="submenu-children hidden pl-6 ml-2">
+                                            {% for grandchild in child.children %}
+                                                <a href="{{ grandchild.url }}" 
+                                                class="block py-1 px-2 text-xs text-blue-300 hover:bg-blue-700 hover:text-white transition-all duration-200">
+                                                    <span class="ml-2">• {{ grandchild.name }}</span>
+                                                </a>
+                                            {% endfor %}
+                                        </div>
                                     </div>
-                                </a>
+                                {% else %}
+                                    <!-- Original first-level child without children -->
+                                    <a href="{{ child.url }}" 
+                                    class="menu-item block py-1 px-2 text-sm text-blue-200 hover:bg-blue-700 hover:text-white transition-all duration-200"
+                                    data-menu-name="{{ child.name }}">
+                                        <div class="flex items-center">
+                                            <span class="w-6 flex justify-center items-center">
+                                                {% if child.icon %}
+                                                    <i class="fas fa-{{ child.icon }} w-4 h-4"></i>
+                                                {% else %}
+                                                    <i class="fas fa-dot-circle w-3 h-3"></i>
+                                                {% endif %}
+                                            </span>
+                                            <span class="ml-2 text-sm menu-text">{{ child.name }}</span>
+                                            {% if child.badge %}
+                                                <span class="badge badge-{{ child.badge_color or 'info' }} ml-2 text-xs">{{ child.badge }}</span>
+                                            {% endif %}
+                                        </div>
+                                    </a>
+                                {% endif %}
                             {% endfor %}
                         </div>
                     {% else %}
@@ -623,6 +652,33 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
+
+    // Add submenu toggle functionality
+    function setupSubmenuHandlers() {
+        const submenuHeaders = document.querySelectorAll('.submenu-header');
+        
+        submenuHeaders.forEach(header => {
+            header.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const submenuChildren = header.nextElementSibling;
+                const expandIcon = header.querySelector('.submenu-expand');
+                
+                if (submenuChildren) {
+                    const isHidden = submenuChildren.classList.contains('hidden');
+                    
+                    if (isHidden) {
+                        submenuChildren.classList.remove('hidden');
+                        if (expandIcon) expandIcon.style.transform = 'rotate(90deg)';
+                    } else {
+                        submenuChildren.classList.add('hidden');
+                        if (expandIcon) expandIcon.style.transform = '';
+                    }
+                }
+            });
+        });
+    }
     
     // =========================================================================
     // TOOLTIP FUNCTIONALITY
@@ -665,6 +721,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 2. Setup all event handlers
     setupMenuClickHandlers();
+    setupSubmenuHandlers();
     setupTooltips();
     
     // 3. Restore menu state after a brief delay to ensure DOM is ready
@@ -848,6 +905,28 @@ document.addEventListener('DOMContentLoaded', function() {
         transform: translateY(0);
         opacity: 1;
     }
+}
+/* Submenu styles */
+.submenu-wrapper {
+    position: relative;
+}
+
+.submenu-header {
+    cursor: pointer;
+}
+
+.submenu-expand {
+    transition: transform 0.2s ease-in-out;
+    display: inline-block;
+}
+
+.submenu-children {
+    border-left: 1px solid rgba(96, 165, 250, 0.2);
+    transition: all 0.2s ease-in-out;
+}
+
+.submenu-children a {
+    font-size: 0.75rem;
 }
 </style>
 {% endblock %}

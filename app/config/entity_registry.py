@@ -40,42 +40,11 @@ ENTITY_REGISTRY: Dict[str, EntityRegistration] = {
     
     "patients": EntityRegistration(
         category=EntityCategory.MASTER,
-        module="app.config.modules.master_entities",
+        module="app.config.modules.supplier_config",
         service_class="app.services.patient_service.PatientService",
         model_class="app.models.master.Patient"
     ),
     
-    "users": EntityRegistration(
-        category=EntityCategory.MASTER,
-        module="app.config.modules.master_entities",
-        service_class="app.services.user_service.UserService",
-        model_class="app.models.master.User"
-    ),
-    
-    "medicines": EntityRegistration(
-        category=EntityCategory.MASTER,
-        module="app.config.modules.inventory",
-        service_class="app.services.medicine_service.MedicineService",
-        model_class="app.models.master.Medicine"
-    ),
-    
-    "categories": EntityRegistration(
-        category=EntityCategory.MASTER,
-        module="app.config.modules.master_entities",
-        model_class="app.models.master.Category"
-    ),
-    
-    "branches": EntityRegistration(
-        category=EntityCategory.MASTER,
-        module="app.config.modules.master_entities",
-        model_class="app.models.master.Branch"
-    ),
-    
-    "departments": EntityRegistration(
-        category=EntityCategory.MASTER,
-        module="app.config.modules.master_entities",
-        model_class="app.models.master.Department"
-    ),
     
     # ========== TRANSACTION ENTITIES (Read-Only in Universal Engine) ==========
     "supplier_payments": EntityRegistration(
@@ -87,9 +56,9 @@ ENTITY_REGISTRY: Dict[str, EntityRegistration] = {
     
     "supplier_invoices": EntityRegistration(
         category=EntityCategory.TRANSACTION,
-        module="app.config.modules.supplier_invoice_config",  # Future module
+        module="app.config.modules.supplier_invoice_config",
         service_class="app.services.supplier_invoice_service.SupplierInvoiceService",
-        model_class="app.models.transaction.SupplierInvoice"
+        model_class="app.models.views.SupplierInvoiceView"  # Changed to use view model
     ),
     
     "purchase_orders": EntityRegistration(
@@ -99,19 +68,6 @@ ENTITY_REGISTRY: Dict[str, EntityRegistration] = {
         model_class="app.models.views.PurchaseOrderView"
     ),
     
-    "billing_transactions": EntityRegistration(
-        category=EntityCategory.TRANSACTION,
-        module="app.config.modules.billing",
-        service_class="app.services.billing_service.BillingService",
-        model_class="app.models.transaction.BillingTransaction"
-    ),
-    
-    "inventory_movements": EntityRegistration(
-        category=EntityCategory.TRANSACTION,
-        module="app.config.modules.inventory",
-        service_class="app.services.inventory_service.InventoryMovementService",
-        model_class="app.models.transaction.InventoryMovement"
-    ),
 }
 
 # =============================================================================

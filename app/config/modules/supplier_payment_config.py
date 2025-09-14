@@ -18,7 +18,7 @@ from app.config.core_definitions import (
     EntitySearchConfiguration, FilterConfiguration,
     EntityFilterConfiguration, ButtonType, ActionDisplayType, ComplexDisplayType, DocumentType,
     PageSize, Orientation, DocumentSectionType, ExportFormat, DocumentFieldMapping, TableColumnConfig,
-    DocumentSection, DocumentConfiguration, PrintLayoutType, FilterOperator
+    DocumentSection, DocumentConfiguration, PrintLayoutType, FilterOperator, FilterType
 )
 
 from app.config.filter_categories import FilterCategory
@@ -104,51 +104,49 @@ SUPPLIER_PAYMENT_FIELDS = [
         section="header",
         view_order=2
     ),
-    FieldDefinition(
-        name="supplier_id",
-        label="Supplier",
-        field_type=FieldType.ENTITY_SEARCH,
-        show_in_list=False,
-        show_in_detail=False,
-        show_in_form=True,
-        searchable=False,
-        sortable=False,
-        filterable=True,
-        required=True,
-        tab_group="supplier",
-        section="supplier_details",
-        view_order=1,
-        autocomplete_enabled=True,
-        autocomplete_source="suppliers",
-        entity_search_config=EntitySearchConfiguration(
-            target_entity="suppliers",
-            search_fields=["supplier_name", "contact_person_name"],
-            display_template="{supplier_name}",
-            min_chars=2,
-            max_results=10,
-            additional_filters={"status": "active"}
-        )
-    ),
+    
     FieldDefinition(
         name="supplier_name",
         label="Supplier",
         field_type=FieldType.TEXT,
+        
+        # === DISPLAY PROPERTIES ===
         show_in_list=True,
-        show_in_detail=False,
+        show_in_detail=True,
         show_in_form=False,
-        searchable=True,
         sortable=True,
-        filterable=True,
         readonly=True,
-        filter_aliases=["supplier_name_search", "search", "supplier_search"],
-        filter_type="search",
-        related_field="supplier",
+        
+        # === SEARCH PROPERTIES ===
+        searchable=True,
+        
+        # === FILTER PROPERTIES (FIXED) ===
+        filterable=True,
+        filter_type=FilterType.ENTITY_DROPDOWN,
+        filter_operator=FilterOperator.EQUALS,  # Add explicit operator
+        
+        # === ENTITY SEARCH CONFIGURATION (FIXED) ===
+        entity_search_config=EntitySearchConfiguration(
+            target_entity='suppliers',
+            search_fields=['supplier_name', 'contact_person_name'],
+            display_template='{supplier_name}',
+            value_field='supplier_name',      # Use name as value
+            filter_field='supplier_name',     # Filter by name field
+            placeholder="Type to search suppliers...",
+            preload_common=True,
+            cache_results=True,
+            min_chars=1,  # Allow search from 1 character
+            max_results=20
+        ),
+        
+        # === LAYOUT PROPERTIES ===
         tab_group="payment_details",
-        section="payment_info",
-        view_order=1,
-        css_classes="supplier-column",  # ✅ ADD THIS for proper styling
-        complex_display_type=ComplexDisplayType.ENTITY_REFERENCE  # FIX: Add this to enable entity display
+        section="supplier_info",
+        view_order=5,
+        css_classes="font-semibold text-primary",
+        complex_display_type=ComplexDisplayType.ENTITY_REFERENCE
     ),
+
     FieldDefinition(
         name="supplier_invoice_no",
         label="Invoice Number",
@@ -193,19 +191,17 @@ SUPPLIER_PAYMENT_FIELDS = [
         name="payment_amount",
         label="Total Amount",
         field_type=FieldType.CURRENCY,
-        db_column="payment_amount",  # Explicit column mapping
-        filter_operator=FilterOperator.EQUALS,  # Add operator
+        db_column="payment_amount",
+        filter_operator=FilterOperator.BETWEEN,
         show_in_list=True,
         show_in_detail=True,
         show_in_form=True,
         searchable=False,
         sortable=True,
-        filterable=True,
-        filter_aliases=["min_amount", "max_amount", "amount_min", "amount_max"],
-        filter_type="range",
+        filterable=False,  # Don't show as direct filter
         required=True,
-        tab_group="payment_details",  # Change from "payment"
-        section="payment_summary",  # Create new section for amount summary
+        tab_group="payment_details",
+        section="payment_summary",
         view_order=5,
         format_pattern="mixed_payment_breakdown",
         css_classes="text-xl font-bold text-primary"
@@ -223,15 +219,17 @@ SUPPLIER_PAYMENT_FIELDS = [
         filterable=True,
         required=True,
         options=[
+            {"value": "", "label": "All Methods"},  # FIX: Add empty option first
             {"value": "cash", "label": "Cash"},
             {"value": "cheque", "label": "Cheque"},
             {"value": "bank_transfer", "label": "Bank Transfer"},
             {"value": "upi", "label": "UPI"},
             {"value": "mixed", "label": "Mixed"}
         ],
+        default_value="", 
         tab_group="payment_details",
-        section="payment_summary",
-        view_order=1
+        section="payment_method",
+        view_order=6
     ),
     
     # Payment Method Details
@@ -364,6 +362,33 @@ SUPPLIER_PAYMENT_FIELDS = [
         help_text="Total amount from all linked invoices",
         css_classes="text-lg font-bold text-primary"
     ),
+    FieldDefinition(
+        name="amount_min",
+        label="Min Amount",
+        field_type=FieldType.NUMBER,
+        virtual=True,  # Not a database field
+        filterable=True,  # Show in filters
+        filter_type=FilterType.TEXT,  # Use text input
+        filter_operator=FilterOperator.GREATER_THAN_OR_EQUAL,
+        placeholder="Minimum amount...",
+        show_in_list=False,
+        show_in_detail=False,
+        show_in_form=False
+    ),
+    
+    FieldDefinition(
+        name="amount_max",
+        label="Max Amount",
+        field_type=FieldType.NUMBER,
+        virtual=True,  # Not a database field
+        filterable=True,  # Show in filters
+        filter_type=FilterType.TEXT,  # Use text input
+        filter_operator=FilterOperator.LESS_THAN_OR_EQUAL,
+        placeholder="Maximum amount...",
+        show_in_list=False,
+        show_in_detail=False,
+        show_in_form=False
+    ),
 
     # Submitted by field for workflow tracking
     FieldDefinition(
@@ -398,12 +423,14 @@ SUPPLIER_PAYMENT_FIELDS = [
 
     # Workflow Fields
     FieldDefinition(
-        name="status",  # ✅ Standardized name
-        label="Payment Status",
+        name="payment_status",
+        label="Status",
         field_type=FieldType.STATUS_BADGE,
-        db_column="payment_status",  # ✅ Maps to actual DB column
-        filter_aliases=["workflow_status", "statuses", "payment_status"],  # Backward compatibility
+        db_column="payment_status",  # Explicitly map to database column
+        filter_aliases=["workflow_status","status", "payment_status"],  # Support multiple filter names
+        filter_operator=FilterOperator.EQUALS,
         options=[
+            {"value": "", "label": "All Status"},
             {"value": "pending", "label": "Pending"},
             {"value": "pending_approval", "label": "Pending Approval"},
             {"value": "approved", "label": "Approved"},
@@ -415,11 +442,12 @@ SUPPLIER_PAYMENT_FIELDS = [
         show_in_form=False,
         searchable=False,
         sortable=True,
-        filterable=True,
+        filterable=True,  # CRITICAL: Must be True for filter to show
+        filter_type=FilterType.SELECT,  # ADDED: Explicit filter type
         readonly=True,
         tab_group="workflow",
-        section="workflow_status",  # Correct section
-        view_order=0  # First in status section
+        section="workflow_status",
+        view_order=0
     ),
     FieldDefinition(
         name="requires_approval",
@@ -844,9 +872,9 @@ SUPPLIER_PAYMENT_FIELDS = [
         section="invoice_items",
         view_order=10,
         custom_renderer=CustomRenderer(
-            template="components/business/invoice_items_table.html",
+            template="components/business/universal_line_items_table.html",  # Universal template
             context_function="get_invoice_items_for_payment",
-            css_classes="table-responsive invoice-items-table"
+            css_classes="w-100"
         )
     ),
     
@@ -1619,94 +1647,115 @@ SUPPLIER_PAYMENT_ACTIONS = [
 # =============================================================================
 
 SUPPLIER_PAYMENT_SUMMARY_CARDS = [
+    # ==========================================================================
+    # VISIBLE CARDS
+    # ==========================================================================
+    
     {
         "id": "total_count",
-        "field": "total_count",
+        "field": "total_count",  # Special field handled by Universal Engine
         "label": "Total Transactions",
         "icon": "fas fa-receipt",
         "icon_css": "stat-card-icon primary",
         "type": "number",
-        "filterable": False,  # Total should not be filterable
-        "visible": True
+        "visible": True,
+        "order": 1
     },
+    
     {
         "id": "total_amount",
-        "field": "payment_amount",
+        "field": "payment_amount",  # Direct column - Engine will SUM it
         "label": "Total Amount",
         "icon": "fas fa-rupee-sign",
         "icon_css": "stat-card-icon success",
-        "type": "currency",
-        "filterable": False,  # Total should not be filterable
-        "visible": True
+        "type": "currency",  # Triggers SUM aggregation
+        "visible": True,
+        "order": 2
     },
+    
+    # ==========================================================================
+    # STATUS COUNTS - Using filter_field and filter_value
+    # ==========================================================================
+    
     {
-        "id": "pending_count",
-        "field": "pending_count",
-        "label": "Pending Appproval",
+        "id": "pending_approval_count",
+        "field": "pending_approval_count",  # Must end with _count
+        "label": "Pending Approval",
         "icon": "fas fa-clock",
         "icon_css": "stat-card-icon warning",
         "type": "number",
-        "filterable": True,
-        "filter_field": "status",  # USE STANDARDIZED FIELD NAME
-        "filter_value": "pending",  # Match actual status value in DB
-        "visible": True
+        "filter_field": "workflow_status",
+        "filter_value": "pending",
+        "visible": True,
+        "order": 3
     },
-    {
-        "id": "pending_approval_count",
-        "field": "pending_approval_count",
-        "label": "Pending Approval",
-        "icon": "fas fa-hourglass-half",
-        "icon_css": "stat-card-icon warning",
-        "type": "number",
-        "filterable": True,
-        "filter_field": "status",  # USE STANDARDIZED FIELD NAME
-        "filter_value": "pending_approval",  # Match actual status value
-        "visible": False
-    },
+    
     {
         "id": "approved_count",
-        "field": "approved_count",
+        "field": "approved_count",  # Must end with _count
         "label": "Approved",
         "icon": "fas fa-check-circle",
-        "icon_css": "stat-card-icon info",
-        "type": "number",
-        "filterable": True,
-        "filter_field": "status",  # USE STANDARDIZED FIELD NAME
-        "filter_value": "approved",
-        "visible": True
-    },
-    {
-        "id": "completed_count",
-        "field": "completed_count",
-        "label": "Completed",
-        "icon": "fas fa-check-double",
         "icon_css": "stat-card-icon success",
         "type": "number",
-        "filterable": True,
-        "filter_field": "status",  # USE STANDARDIZED FIELD NAME
-        "filter_value": "completed",
-        "visible": True
+        "filter_field": "workflow_status",
+        "filter_value": "approved",
+        "visible": True,
+        "order": 4
     },
+    
     {
-        "id": "this_month_count",
-        "field": "this_month_count",
+        "id": "completed_count",
+        "field": "completed_count",  # Must end with _count
+        "label": "Completed",
+        "icon": "fas fa-flag-checkered",
+        "icon_css": "stat-card-icon info",
+        "type": "number",
+        "filter_field": "workflow_status",
+        "filter_value": "completed",
+        "visible": True,
+        "order": 5
+    },
+    
+    # ==========================================================================
+    # THIS MONTH - Using Engine's built-in logic (like purchase_orders_config)
+    # ==========================================================================
+    
+    {
+        "id": "current_month_count",  # Use 'current_month' which engine recognizes
+        "field": "current_month_count",  # Engine handles this automatically
         "label": "This Month",
         "icon": "fas fa-calendar-check",
         "icon_css": "stat-card-icon info",
         "type": "number",
-        "filterable": False,  # Special calculation
-        "visible": True
+        "visible": True,
+        "order": 6
     },
+    
+    # For amount, we need a hidden card first to calculate the sum
     {
-        "id": "this_month_amount",
-        "field": "this_month_amount",
+        "id": "current_month_amount_calc",
+        "field": "payment_amount",  # Column to SUM
+        "type": "currency",  # SUM aggregation
+        "visible": False,  # Hidden calculation
+        # The engine should handle the date filtering when it sees 'current_month' in the ID
+    },
+    
+    # Then reference it in a visible card
+    {
+        "id": "current_month_amount",
+        "field": "current_month_amount_calc",  # Reference the calculation
         "label": "This Month Amount",
         "icon": "fas fa-calendar-alt",
         "icon_css": "stat-card-icon success",
         "type": "currency",
-        "filterable": False,  # Special calculation
-        "visible": True
+        "visible": True,
+        "order": 7
     },
+
+    # ==========================================================================
+    # PAYMENT METHOD BREAKDOWN - Hidden cards for SUMs
+    # ==========================================================================
+    
     {
         "id": "payment_breakdown",
         "field": "payment_method_breakdown",
@@ -1785,13 +1834,14 @@ SUPPLIER_PAYMENT_FILTER_CATEGORY_MAPPING = {
     'date_from': FilterCategory.DATE,
     'date_to': FilterCategory.DATE,
     'financial_year': FilterCategory.DATE,
+    'date_range': FilterCategory.DATE,
     
     # Amount filters
-    'min_amount': FilterCategory.AMOUNT,
-    'max_amount': FilterCategory.AMOUNT,
     'amount_min': FilterCategory.AMOUNT,
     'amount_max': FilterCategory.AMOUNT,
-    'amount': FilterCategory.AMOUNT,
+    'min_amount': FilterCategory.AMOUNT,  # Alias support
+    'max_amount': FilterCategory.AMOUNT,  # Alias support
+    'payment_amount': FilterCategory.AMOUNT,
     
     # Search filters
     'supplier_name_search': FilterCategory.SEARCH,
@@ -1803,6 +1853,7 @@ SUPPLIER_PAYMENT_FILTER_CATEGORY_MAPPING = {
     'notes': FilterCategory.SEARCH,
     
     # Selection filters
+    'payment_status': FilterCategory.SELECTION,  # Use actual column
     'workflow_status': FilterCategory.SELECTION,
     'statuses': FilterCategory.SELECTION,
     'status': FilterCategory.SELECTION,  # ✅ Standardized
@@ -1811,12 +1862,14 @@ SUPPLIER_PAYMENT_FILTER_CATEGORY_MAPPING = {
     
     # Relationship filters
     'supplier_id': FilterCategory.RELATIONSHIP,
+    'supplier_name': FilterCategory.SEARCH,
     'branch_id': FilterCategory.RELATIONSHIP,
 }
 
 SUPPLIER_PAYMENT_DEFAULT_FILTERS = {
     'financial_year': 'current',
-    'workflow_status': None,
+    'payment_status': '',
+    'payment_method': ''    # Default to "All" (empty string)
 }
 
 SUPPLIER_PAYMENT_CATEGORY_CONFIGS = {
@@ -1826,15 +1879,21 @@ SUPPLIER_PAYMENT_CATEGORY_CONFIGS = {
     },
     FilterCategory.AMOUNT: {
         'currency_symbol': '₹',
-        'decimal_places': 2
+        'decimal_places': 2,
+        'allow_range': True,  # ADDED: Enable range filtering for amounts
+        'range_operators': ['between', 'less_than', 'greater_than']  # ADDED
     },
     FilterCategory.SEARCH: {
-        'min_search_length': 2,
-        'auto_submit': False
+        'min_search_length': 1,  # CHANGED: Allow search from 1 character
+        'auto_submit': False,
+        # ADDED: Specify exact fields that exist in the view for search
+        'search_fields': ['reference_no', 'supplier_name', 'supplier_invoice_number', 'notes']
     },
     FilterCategory.SELECTION: {
-        'auto_submit': True,
-        'include_empty_options': True
+        'auto_submit': True,  # CHANGED: Don't auto-submit to allow "All" selection
+        'include_empty_options': True,
+        'empty_option_label': 'All',  # ADDED: Label for empty options
+        'process_empty_as_all': True  # ADDED: Treat empty as "show all"
     },
     FilterCategory.RELATIONSHIP: {
         'lazy_load': True,
@@ -2144,7 +2203,7 @@ SUPPLIER_PAYMENT_CONFIG = EntityConfiguration(
     enable_auto_submit=False,
     page_title="Supplier Payments",
     description="Manage payments to suppliers and vendors",
-    searchable_fields=["reference_no", "supplier_name", "notes", "supplier_invoice_no"],  # ✅ Restored original field name  
+    searchable_fields=["reference_no", "supplier_name", "supplier_invoice_number", "notes"],  # ✅ Restored original field name  
     default_sort_field="payment_date",
     default_sort_direction="desc",
     
@@ -2190,9 +2249,9 @@ SUPPLIER_PAYMENT_CONFIG = EntityConfiguration(
 
 # Apply additional configurations (if needed for backward compatibility)
 # These are already included in the configuration above, but kept for compatibility
-if not hasattr(SUPPLIER_PAYMENT_CONFIG, 'filter_category_mapping') or not SUPPLIER_PAYMENT_CONFIG.filter_category_mapping:
-    SUPPLIER_PAYMENT_CONFIG.filter_category_mapping = {}
-SUPPLIER_PAYMENT_CONFIG.filter_category_mapping.update(SUPPLIER_PAYMENT_FILTER_CATEGORY_MAPPING)
+# if not hasattr(SUPPLIER_PAYMENT_CONFIG, 'filter_category_mapping') or not SUPPLIER_PAYMENT_CONFIG.filter_category_mapping:
+#     SUPPLIER_PAYMENT_CONFIG.filter_category_mapping = {}
+# SUPPLIER_PAYMENT_CONFIG.filter_category_mapping.update(SUPPLIER_PAYMENT_FILTER_CATEGORY_MAPPING)
 
 # =============================================================================
 # ENTITY FILTER CONFIGURATION
@@ -2202,8 +2261,9 @@ SUPPLIER_PAYMENT_ENTITY_FILTER_CONFIG = EntityFilterConfiguration(
     entity_type='supplier_payments',
     filter_mappings={
     
-        'workflow_status': {
+        'payment_status': {
             'options': [
+                {'value': '', 'label': 'All Status'},  # Add empty option
                 {'value': 'pending', 'label': 'Pending'},
                 {'value': 'pending_approval', 'label': 'Pending Approval'},  # Keep both for compatibility
                 {'value': 'approved', 'label': 'Approved'},
@@ -2213,12 +2273,22 @@ SUPPLIER_PAYMENT_ENTITY_FILTER_CONFIG = EntityFilterConfiguration(
         },
         'payment_method': {
             'options': [
+                {'value': '', 'label': 'All Methods'},  # Add empty option
                 {'value': 'cash', 'label': 'Cash'},
                 {'value': 'cheque', 'label': 'Cheque'},
                 {'value': 'bank_transfer', 'label': 'Bank Transfer'},
                 {'value': 'upi', 'label': 'UPI'},
                 {'value': 'mixed', 'label': 'Mixed'}
             ]
+        },
+        'supplier_name': {
+            'field': 'supplier_name',
+            'type': 'entity_dropdown',
+            'label': 'Supplier',
+            'entity_type': 'suppliers',
+            'search_fields': ['supplier_name', 'contact_person_name'],
+            'display_template': '{supplier_name}',
+            'placeholder': 'Type to search suppliers...'
         }
     }
 )

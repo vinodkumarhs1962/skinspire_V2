@@ -1008,7 +1008,7 @@ class UniversalEntityService(ABC):
                         continue
                     
                     # Generate filter options based on field type
-                    if field.field_type == FieldType.SELECT and field.options:
+                    if field.field_type in [FieldType.SELECT, FieldType.STATUS_BADGE] and field.options:
                         # Use configured options (existing property)
                         filter_data[field.name] = field.options
                     

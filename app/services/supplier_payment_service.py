@@ -16,6 +16,7 @@ from decimal import Decimal
 from app.models.transaction import SupplierPayment, SupplierInvoice
 from app.models.master import Supplier
 from app.engine.universal_entity_service import UniversalEntityService
+from app.engine.business.line_items_handler import line_items_handler
 from app.models.views import SupplierPaymentView
 from app.services.database_service import get_db_session, get_entity_dict
 from app.engine.universal_service_cache import cache_service_method
@@ -30,13 +31,15 @@ class SupplierPaymentService(UniversalEntityService):
     """
     
     def __init__(self):
-        # Use the view model that has breakdown columns
-        super().__init__('supplier_payments')
-
-        # Ensure config is loaded
-        if not self.config:
-            from app.config.modules.supplier_payment_config import SUPPLIER_PAYMENT_CONFIG
-            self.config = SUPPLIER_PAYMENT_CONFIG
+        """Initialize with proper model class like PurchaseOrderService"""
+        # Import the view model at the top if not already imported
+        from app.models.views import SupplierPaymentView
+        
+        # Pass BOTH entity_type AND model_class to parent (matching PurchaseOrderService pattern)
+        super().__init__('supplier_payments', SupplierPaymentView)
+        
+        # Log initialization for debugging
+        logger.info("✅ Initialized SupplierPaymentService with SupplierPaymentView")
     
     
     def get_po_items_for_payment(self, item_id: str = None, item: dict = None, **kwargs) -> Dict:
@@ -142,81 +145,44 @@ class SupplierPaymentService(UniversalEntityService):
 
     def get_invoice_items_for_payment(self, item_id: str = None, item: dict = None, **kwargs) -> Dict:
         """
-        Get invoice line items for this payment
-        FIXED: Removed incorrect iteration over single invoice
+        Get invoice items being paid - delegates to centralized handler
         """
-        # Extract payment_id from universal engine pattern
-        payment_id = item_id
-        try:
+        # Get invoice ID from payment
+        invoice_id = None
+        if item and isinstance(item, dict):
+            invoice_id = item.get('invoice_id')
+        elif item_id:
+            # Fetch payment to get invoice_id
             with get_db_session() as session:
                 payment = session.query(SupplierPayment).filter(
-                    SupplierPayment.payment_id == payment_id,
-                    SupplierPayment.hospital_id == kwargs.get('hospital_id')
+                    SupplierPayment.payment_id == item_id
                 ).first()
-                
-                if not payment:
-                    return {'items': [], 'has_invoices': False}
-                
-                invoice_items = []
-                invoice_summary = {
-                    'total_amount': 0,
-                    'total_discount': 0,
-                    'total_gst': 0
-                }
-                
-                # ✅ FIXED: Access invoice directly (no loop needed)
-                if payment.invoice_id:
-                    invoice = session.query(SupplierInvoice).filter(
-                        SupplierInvoice.invoice_id == payment.invoice_id
-                    ).first()
-                    
-                    if invoice:
-                        from app.models.transaction import SupplierInvoiceLine
-                        invoice_lines = session.query(SupplierInvoiceLine).filter(
-                            SupplierInvoiceLine.invoice_id == invoice.invoice_id
-                        ).all()
-                        
-                        for item in invoice_lines:
-                            invoice_items.append({
-                                # 'invoice_no' REMOVED - not needed for line items
-                                'item_name': item.medicine_name,  # This is correct field
-                                'batch_no': item.batch_number,
-                                'quantity': float(item.units or 0),
-                                'unit_price': float(item.pack_purchase_price or 0),
-                                'discount_percent': float(item.discount_percent or 0),  # Add percentage
-                                'discount_amount': float(item.discount_amount or 0),
-                                'gst_rate': float(item.gst_rate or 0),
-                                'gst_amount': float(item.total_gst or 0),
-                                'total_amount': float(item.line_total or 0)  # Renamed for consistency
-                            })
-                            
-                            invoice_summary['total_amount'] += float(item.line_total or 0)
-                            invoice_summary['total_discount'] += float(item.discount_amount or 0)
-                            invoice_summary['total_gst'] += float(item.total_gst or 0)
-                
-                # CRITICAL FIX: Ensure 'items' is always a list, never None
-                result = {
-                    'items': invoice_items if invoice_items is not None else [],  # <-- FIX: Ensure list
-                    'summary': invoice_summary if invoice_summary is not None else {},  # <-- FIX: Ensure dict
-                    'has_invoices': bool(invoice_items),
-                    'currency_symbol': '₹'
-                }
-                
-                # Debug log to verify structure
-                logger.debug(f"Invoice items data: type={type(result)}, has items key={('items' in result)}, items type={type(result.get('items'))}")
-                
-                return result
-                
-        except Exception as e:
-            logger.error(f"Error getting invoice items for payment: {str(e)}")
-            # CRITICAL: Always return proper structure with 'items' as a list
-            return {
-                'items': [],  # <-- Must be a list, not None
-                'summary': {},  # <-- Must be a dict, not None
-                'has_invoices': False,
-                'currency_symbol': '₹',
-                'error': str(e)
-            }
+                if payment:
+                    invoice_id = payment.invoice_id
+        
+        if not invoice_id:
+            return line_items_handler._empty_result('invoice', 'No invoice linked to this payment')
+        
+        # Call centralized function
+        return line_items_handler.get_invoice_line_items(
+            invoice_id=invoice_id,
+            context='payment_invoice',
+            **kwargs
+        )
+
+    def get_payment_items_display(self, item_id: str = None, item: dict = None, **kwargs) -> Dict:
+        """
+        Get payment items - delegates to centralized handler
+        """
+        payment_id = item_id or (item.get('payment_id') if item else None)
+        
+        # Call centralized function
+        return line_items_handler.get_payment_items(
+            payment_id=payment_id,
+            context='payment_detail',
+            **kwargs
+        )
+
 
     def get_payment_workflow_timeline(self, item_id: str = None, item: dict = None, **kwargs) -> Dict:
         """

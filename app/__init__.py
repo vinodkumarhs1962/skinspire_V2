@@ -481,6 +481,13 @@ def register_api_blueprints(app: Flask) -> None:
     except ImportError as e:
         app.logger.warning(f"cache dashboard blueprint could not be loaded: {str(e)}")
 
+    # Register universal API blueprint
+    try:
+        from app.api.routes.universal_api import universal_api_bp
+        blueprints.append(universal_api_bp)
+    except ImportError as e:
+        app.logger.warning(f"Universal API blueprint could not be loaded: {str(e)}")
+
     # Register each blueprint
     for blueprint in blueprints:
         if blueprint is None:

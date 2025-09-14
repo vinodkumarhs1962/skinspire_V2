@@ -13,6 +13,24 @@ Complete backward compatibility with existing configurations
 
 """
 
+"""
+TEMPLATE PATH CONVENTIONS:
+- Component templates: "components/[type]/[name].html"
+  Example: "components/widgets/chart.html"
+  
+- Engine templates: "engine/[module]/[name].html"  
+  Example: "engine/business/universal_line_items_table.html"
+  
+- Custom templates: "custom/[entity]/[name].html"
+  Example: "custom/invoices/special_layout.html"
+
+CONTEXT FUNCTION CONVENTIONS:
+- Must exist in the entity's service class
+- Should return Dict with standard structure
+- Can delegate to engine handlers for reusability
+- Example: get_invoice_lines() -> calls line_items_handler.get_invoice_line_items()
+"""
+
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Callable, Type, Union
@@ -186,6 +204,16 @@ class FilterOperator(Enum):
     IN = "in"                            # Multiple values
     NOT_IN = "not_in"                   # Exclude multiple values
 
+class FilterType(Enum):
+    """Filter input types for Universal Engine filters"""
+    DEFAULT = "default"              # Auto-detect based on field_type
+    TEXT = "text"                   # Standard text input
+    SELECT = "select"               # Standard dropdown
+    DATE_RANGE = "date_range"       # Date range picker
+    ENTITY_DROPDOWN = "entity_dropdown"  # Searchable entity dropdown
+    MULTI_SELECT = "multi_select"   # Multiple selection dropdown
+    NUMERIC_RANGE = "numeric_range" # Min/max numeric inputs
+
 # =============================================================================
 # VIEW SECTION DEFINITIONS - Eliminates Hardcoded Values
 # =============================================================================
@@ -338,7 +366,7 @@ class FieldDefinition:
 
     # ========== FILTER CONFIGURATION ==========
     filter_aliases: List[str] = field(default_factory=list)  # Alternative parameter names
-    filter_type: str = "exact"        # Filter match type: exact, range, contains, etc.
+    filter_type: Optional[FilterType] = None  # NEW: Explicit filter type: exact, range, contains, entity_dropdown etc.
     filter_config: Optional['FilterConfiguration'] = None
     filter_operator: Optional[FilterOperator] = None
     
@@ -666,6 +694,13 @@ class EntitySearchConfiguration:
     sort_field: str = "name"                  # Default sort field
     cache_timeout: int = 300                  # Cache duration in seconds
     placeholder_template: str = "Search {entity}..."  # Search box placeholder
+
+    # Entity dropdown specific fields (all optional)
+    value_field: Optional[str] = None         # Field to use as value (default: primary_key)
+    filter_field: Optional[str] = None        # Field to filter on (default: value_field)
+    placeholder: Optional[str] = None         # Override placeholder for dropdown
+    preload_common: bool = False              # Load common values on focus
+    cache_results: bool = True                # Cache search results in browser
     
     def get(self, key: str, default=None):
         """Dictionary-like interface for backward compatibility"""

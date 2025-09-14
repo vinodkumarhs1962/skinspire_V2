@@ -31,7 +31,9 @@ from app.config.filter_categories import (
     FILTER_CATEGORY_CONFIG
 )
 from app.config.entity_configurations import get_entity_config, get_entity_filter_config
-from app.config.core_definitions import FieldType, FieldDefinition, FilterOperator
+from app.config.core_definitions import FieldType, FieldDefinition, FilterOperator, FilterType
+from app.engine.universal_entity_search_service import UniversalEntitySearchService
+
 from app.utils.unicode_logging import get_unicode_safe_logger
 
 logger = get_unicode_safe_logger(__name__)
@@ -66,8 +68,6 @@ class CategorizedFilterProcessor:
         - But the core pipeline should remain
         """
         try:
-            from app.config.core_definitions import FilterOperator
-            
             config = get_entity_config(entity_type)
             if not config:
                 logger.warning(f"No configuration found for entity: {entity_type}")
@@ -78,11 +78,11 @@ class CategorizedFilterProcessor:
             current_filters = request.args.to_dict() if request else {}
             filter_fields = []
             
-            # Add search field with simple label
+            # Add search field if entity has searchable fields
             if config.searchable_fields:
                 filter_fields.append({
                     'name': 'search',
-                    'label': 'Text Search',  # Simple, consistent
+                    'label': 'Text Search',
                     'type': 'text',
                     'value': current_filters.get('search', ''),
                     'placeholder': f"Search in {', '.join(config.searchable_fields[:2])}...",
@@ -90,7 +90,7 @@ class CategorizedFilterProcessor:
                     'options': []
                 })
             
-            # Process filterable fields
+            # Process each filterable field
             for field in config.fields:
                 if not getattr(field, 'filterable', False):
                     continue
@@ -98,48 +98,166 @@ class CategorizedFilterProcessor:
                 field_name = field.name
                 base_label = getattr(field, 'label', field_name.replace('_', ' ').title())
                 
-                # Get filter operator (default to EQUALS if not specified)
-                filter_operator = getattr(field, 'filter_operator', FilterOperator.EQUALS)
+                # ⭐ CRITICAL FIX: Direct enum comparison with proper import
+                # Check if this field should be an entity dropdown
+                if (hasattr(field, 'filter_type') and 
+                    field.filter_type == FilterType.ENTITY_DROPDOWN and
+                    hasattr(field, 'entity_search_config')):
+                    
+                    # Process as entity dropdown
+                    entity_config = field.entity_search_config
+                    
+                    # Determine the actual filter field name
+                    filter_field = field_name  # Default to field name
+                    if hasattr(entity_config, 'filter_field') and entity_config.filter_field:
+                        filter_field = entity_config.filter_field
+                    elif hasattr(entity_config, 'value_field') and entity_config.value_field:
+                        filter_field = entity_config.value_field
+                    
+                    # Get current value and display text
+                    current_value = current_filters.get(filter_field, '')
+                    current_display = ''
+                    
+                    # Get display value if there's a current value
+                    if current_value:
+                        current_display = self._get_entity_dropdown_display(
+                            field, entity_config, current_value, 
+                            hospital_id, branch_id, backend_data
+                        )
+                    
+                    # Build entity dropdown field configuration
+                    filter_fields.append({
+                        'name': filter_field,
+                        'label': base_label,
+                        'type': 'entity_dropdown',  # ⭐ This tells template to render dropdown
+                        'value': current_value,
+                        'display_value': current_display,
+                        'placeholder': getattr(entity_config, 'placeholder', f"Search {base_label}..."),
+                        'required': False,
+                        'options': [],  # Entity dropdowns load options dynamically
+                        'entity_config': {
+                            'target_entity': entity_config.target_entity,
+                            'search_endpoint': f"/api/universal/{entity_config.target_entity}/search",
+                            'min_chars': getattr(entity_config, 'min_chars', 2),
+                            'value_field': getattr(entity_config, 'value_field', 'id'),
+                            'display_template': getattr(entity_config, 'display_template', '{name}'),
+                            'search_fields': getattr(entity_config, 'search_fields', ['name']),
+                            'preload_common': getattr(entity_config, 'preload_common', False),
+                            'cache_results': getattr(entity_config, 'cache_results', True)
+                        }
+                    })
+                    
+                    # ⭐ IMPORTANT: Skip normal field processing for entity dropdowns
+                    continue
                 
-                # Enhance label based on operator
+                # Process as normal field (not entity dropdown)
+                filter_operator = getattr(field, 'filter_operator', FilterOperator.EQUALS)
                 enhanced_label = self._enhance_label_with_operator(base_label, filter_operator, field.field_type)
                 
-                # Get the field type
+                # Map field to appropriate input type
                 field_type = self._map_field_to_input_type(field)
                 field_options = []
                 
                 # Get options for select fields
-                if field_type == 'select':
-                    # Use universal method for options
-                    field_options = self.get_field_options_universal(
-                        entity_type,
-                        field_name,
-                        context='filter',
-                        hospital_id=hospital_id,
-                        branch_id=branch_id
-                    )
+                if field_type == 'select' and backend_data:
+                    if field_name in backend_data:
+                        field_options = backend_data[field_name]
                 
-                # Get placeholder based on operator
-                placeholder = self._get_operator_placeholder(field, filter_operator)
-                
-                field_data = {
+                if field_options and field_type == 'select':
+                    # Add "All" option if not present
+                    if not any(isinstance(opt, dict) and opt.get('value') == '' for opt in field_options):
+                        field_options = [{'value': '', 'label': f'All {field.label}'}] + field_options
+
+                # Build normal filter field
+                filter_fields.append({
                     'name': field_name,
                     'label': enhanced_label,
                     'type': field_type,
                     'value': current_filters.get(field_name, ''),
-                    'placeholder': placeholder,
+                    'placeholder': self._get_placeholder_for_field(field, enhanced_label),
                     'required': False,
-                    'options': self._normalize_options(field_options, base_label) if field_options else [],
-                    'operator': filter_operator.value if isinstance(filter_operator, FilterOperator) else 'equals'
-                }
-                
-                filter_fields.append(field_data)
+                    'options': field_options
+                })
             
             return filter_fields
             
         except Exception as e:
-            logger.error(f"Error getting template filter fields for {entity_type}: {str(e)}")
+            logger.error(f"Error getting template filter fields: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return []
+
+    def _get_entity_dropdown_display(self, field, entity_config, value_id, 
+                                 hospital_id, branch_id, backend_data):
+        """
+        Get display value for entity dropdown using existing services
+        Reuses universal_filter_service and universal_entity_search_service
+        For backward compatibility, handles both UUID and name values
+        
+        Args:
+            field: Field definition object
+            entity_config: EntitySearchConfiguration
+            value_id: Current selected value (ID)
+            hospital_id: Hospital UUID
+            branch_id: Branch UUID
+            backend_data: Already loaded backend data
+        
+        Returns:
+            Display string for the selected value
+        """
+        if not value_id:
+            return ''
+        
+        try:
+            # Check if value_id is already a name (not UUID)
+            if value_id and not ('-' in str(value_id) and len(str(value_id)) == 36):
+                # It's already a name, return it
+                return str(value_id)
+            
+            # It's a UUID, need to look it up
+            # Try backend data first
+            if backend_data:
+                # Check if we have supplier data in backend
+                field_data = backend_data.get(field.name, [])
+                if not field_data and field.name == 'supplier_name':
+                    field_data = backend_data.get('supplier_id', [])
+                
+                for item in field_data:
+                    if isinstance(item, dict):
+                        if str(item.get('value', '')) == str(value_id):
+                            return item.get('label', value_id)
+            
+            # If not found in backend data and it's a UUID, lookup the name
+            if '-' in str(value_id) and len(str(value_id)) == 36:
+                # Use the search service to get the name
+                from app.engine.universal_entity_search_service import UniversalEntitySearchService
+                search_service = UniversalEntitySearchService()
+                
+                # Get the entity type from config
+                target_entity = entity_config.target_entity if entity_config else 'suppliers'
+                
+                # Special handling for known entities
+                if target_entity == 'suppliers':
+                    from app.models.master import Supplier
+                    from app.services.database_service import get_db_session
+                    
+                    with get_db_session() as session:
+                        item = session.query(Supplier).filter(
+                            Supplier.supplier_id == value_id
+                        ).first()
+                        if item:
+                            return item.supplier_name
+                
+                # Generic fallback - return the value as is
+                return str(value_id)
+            
+            # Default: return the value
+            return str(value_id)
+            
+        except Exception as e:
+            logger.error(f"Error getting entity dropdown display: {str(e)}")
+            # Safe fallback - return the value as is
+            return str(value_id) if value_id else ''
 
 
     def _normalize_options(self, options: Any, field_label: str) -> List[Dict]:
@@ -168,14 +286,29 @@ class CategorizedFilterProcessor:
     def _map_field_to_input_type(self, field) -> str:
         """
         Map field type to HTML input type
+        Now properly handles FilterType enum
         """
-        from app.config.core_definitions import FieldType
+        # Check for explicit filter_type FIRST (highest priority)
+        if hasattr(field, 'filter_type'):
+            # Direct enum comparison - no string conversion needed
+            if field.filter_type == FilterType.ENTITY_DROPDOWN:
+                return 'entity_dropdown'
+            elif field.filter_type == FilterType.DATE_RANGE:
+                return 'date_range'
+            elif field.filter_type == FilterType.SELECT:
+                return 'select'
+            elif field.filter_type == FilterType.TEXT:
+                return 'text'
+            elif field.filter_type == FilterType.NUMERIC_RANGE:
+                return 'number'
+            elif field.filter_type == FilterType.MULTI_SELECT:
+                return 'multi_select'
         
-        # ✅ FIX: Handle STATUS_BADGE and STATUS as select
+        # Fall back to field_type mapping if no explicit filter_type
         if field.field_type in [FieldType.SELECT, FieldType.STATUS_BADGE, FieldType.STATUS]:
             return 'select'
         elif field.field_type in [FieldType.DATE, FieldType.DATETIME]:
-            # Check for date range
+            # Check for date range indicators
             if hasattr(field, 'filter_aliases'):
                 for alias in field.filter_aliases:
                     if 'start' in alias or 'end' in alias:
@@ -191,6 +324,77 @@ class CategorizedFilterProcessor:
             return 'text'
 
     
+    def _get_placeholder_for_field(self, field, label: str) -> str:
+        """
+        Generate appropriate placeholder text for a field
+        """
+        from app.config.core_definitions import FilterOperator
+        
+        # Get filter operator if available
+        operator = getattr(field, 'filter_operator', FilterOperator.EQUALS)
+        
+        # Check for explicit placeholder
+        if hasattr(field, 'placeholder') and field.placeholder:
+            return field.placeholder
+        
+        # Generate based on operator
+        if operator == FilterOperator.CONTAINS:
+            return f"Search {label.lower()}..."
+        elif operator == FilterOperator.LESS_THAN:
+            return f"Less than..."
+        elif operator == FilterOperator.LESS_THAN_OR_EQUAL:
+            return f"Maximum {label.lower()}..."
+        elif operator == FilterOperator.GREATER_THAN:
+            return f"Greater than..."
+        elif operator == FilterOperator.GREATER_THAN_OR_EQUAL:
+            return f"Minimum {label.lower()}..."
+        elif operator == FilterOperator.DATE_ON_OR_BEFORE:
+            return f"On or before..."
+        elif operator == FilterOperator.DATE_ON_OR_AFTER:
+            return f"On or after..."
+        elif operator == FilterOperator.BETWEEN:
+            return f"{label} range..."
+        elif operator == FilterOperator.IN:
+            return f"Select {label.lower()}..."
+        elif operator == FilterOperator.EQUALS:
+            return f"Exact {label.lower()}..."
+        else:
+            # Default placeholder
+            return f"Filter by {label.lower()}..."
+
+    def _enhance_label_with_operator(self, label: str, operator, field_type) -> str:
+        """
+        Enhance label with operator information for clarity
+        """
+        from app.config.core_definitions import FilterOperator, FieldType
+        
+        # Don't enhance for certain field types
+        if field_type in [FieldType.SELECT, FieldType.BOOLEAN, FieldType.STATUS_BADGE]:
+            return label
+        
+        # Add operator hints to label
+        if operator == FilterOperator.CONTAINS:
+            return f"{label} (contains)"
+        elif operator == FilterOperator.LESS_THAN:
+            return f"{label} (less than)"
+        elif operator == FilterOperator.LESS_THAN_OR_EQUAL:
+            return f"{label} (max)"
+        elif operator == FilterOperator.GREATER_THAN:
+            return f"{label} (greater than)"
+        elif operator == FilterOperator.GREATER_THAN_OR_EQUAL:
+            return f"{label} (min)"
+        elif operator == FilterOperator.DATE_ON_OR_BEFORE:
+            return f"{label} (on/before)"
+        elif operator == FilterOperator.DATE_ON_OR_AFTER:
+            return f"{label} (on/after)"
+        elif operator == FilterOperator.BETWEEN:
+            return f"{label} (range)"
+        elif operator == FilterOperator.NOT_IN:
+            return f"{label} (exclude)"
+        else:
+            # No enhancement needed for EQUALS, IN, etc.
+            return label
+
     def _apply_mixed_payment_logic(self, model_class, model_attr, filter_value, config):
         """
         ✅ UNIVERSAL: Apply mixed payment logic using configuration
@@ -983,6 +1187,10 @@ class CategorizedFilterProcessor:
                             # Handle array format (existing logic)
                             if isinstance(filter_value, list) and len(filter_value) > 0:
                                 filter_value = filter_value[0]
+
+                            # Skip empty values (means "All")
+                            if filter_value == '':
+                                continue
                             
                             # ✅ FIX: Use db_column if specified
                             actual_column = field.name
@@ -1019,13 +1227,6 @@ class CategorizedFilterProcessor:
             
             # ✅ FIX: Use configuration-driven logic instead of hardcoded fallback
             if entity_type == 'supplier_payments':
-                # Handle workflow_status using mixed logic
-                if 'workflow_status' in filters and filters['workflow_status']:
-                    if hasattr(model_class, 'workflow_status'):
-                        model_attr = getattr(model_class, 'workflow_status')
-                        query = query.filter(model_attr == filters['workflow_status'])
-                        applied_filters.add('workflow_status')
-                        filter_count += 1
                 
                 # ✅ FIX: Handle payment_method using configuration-driven mixed payment logic
                 if 'payment_method' in filters and filters['payment_method']:
@@ -1300,7 +1501,18 @@ class CategorizedFilterProcessor:
                     field_name = field.name
                     
                     # Handle SELECT fields
-                    if field.field_type == FieldType.SELECT:
+                    # Import from core_definitions and support all types
+                    from app.config.core_definitions import FieldType
+
+                    DROPDOWN_FIELD_TYPES = [
+                        FieldType.SELECT,
+                        FieldType.STATUS_BADGE,
+                        FieldType.STATUS,
+                        FieldType.MULTI_SELECT,
+                        FieldType.BOOLEAN
+                    ]
+
+                    if field.field_type in DROPDOWN_FIELD_TYPES:
                         if hasattr(field, 'options') and field.options:
                             # ✅ Use existing static options from configuration
                             dropdown_data[field_name] = field.options
@@ -1310,12 +1522,12 @@ class CategorizedFilterProcessor:
                             if choices:
                                 dropdown_data[field_name] = choices
                     
-                    # Handle ENTITY_SEARCH fields
-                    elif field.field_type == FieldType.ENTITY_SEARCH:
+                    # Handle ENTITY_SEARCH fields and ENTITY_DROPDOWN filter type
+                    elif field.field_type == FieldType.ENTITY_SEARCH or \
+                        (hasattr(field, 'filter_type') and str(field.filter_type) == 'entity_dropdown'):
                         if hasattr(field, 'entity_search_config') and field.entity_search_config:
-                            # ✅ Use existing entity_search_config
+                            # âœ… Use existing entity_search_config
                             try:
-                                from app.engine.universal_entity_search_service import UniversalEntitySearchService
                                 search_service = UniversalEntitySearchService()
                                 search_data = search_service.search_entities(
                                     config=field.entity_search_config,
@@ -1323,7 +1535,9 @@ class CategorizedFilterProcessor:
                                     hospital_id=hospital_id,
                                     branch_id=branch_id
                                 )
-                                dropdown_data[f"{field_name}_search"] = search_data[:5]  # Limit for dropdown
+                                # Store data for both search and display purposes
+                                dropdown_data[field_name] = search_data[:10]  # More results for dropdowns
+                                dropdown_data[f"{field_name}_search"] = search_data[:5]  # Backward compat
                             except Exception as e:
                                 logger.error(f"Error getting entity search data for {field_name}: {str(e)}")
             

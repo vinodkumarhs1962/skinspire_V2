@@ -1084,5 +1084,47 @@ Field Definition: Complete specification of a data field
 Filter Category: Grouping of filters by behavior
 db_column: Mapping between standardized name and database column
 
+# =============================================================================
+# COMPLETE LIST OF VALID FIELDDEFINITION PARAMETERS
+# =============================================================================
+"""
+Valid FieldDefinition parameters (for reference):
+- name: str
+- label: str
+- field_type: FieldType
+- db_column: str (optional - maps to database column if different from name)
+- filter_aliases: List[str] (optional - alternative names for filtering)
+- filter_operator: FilterOperator (optional - how to filter)
+- filter_type: str (optional - type of filter widget)
+- options: List[Dict] (optional - for SELECT/STATUS_BADGE types)
+- show_in_list: bool
+- show_in_detail: bool
+- show_in_form: bool
+- searchable: bool
+- sortable: bool
+- filterable: bool
+- readonly: bool
+- required: bool
+- virtual: bool (optional - for calculated fields)
+- related_field: str (optional - for relationships)
+- tab_group: str (optional - for tabbed layouts)
+- section: str (optional - for grouping)
+- view_order: int (optional - order in detail view)
+- placeholder: str (optional)
+- help_text: str (optional)
+- css_classes: str (optional)
+- complex_display_type: ComplexDisplayType (optional)
+- custom_renderer: CustomRenderer (optional)
+- conditional_display: str (optional)
+- autocomplete_enabled: bool (optional)
+- autocomplete_source: str (optional)
+- entity_search_config: EntitySearchConfiguration (optional)
+- format_pattern: str (optional)
+- rows: int (optional - for TEXTAREA)
+- min_value: Any (optional)
+- max_value: Any (optional)
+- default_value: Any (optional)
+
+
 
 This comprehensive guide represents the complete Universal Engine v5.0 documentation, merging all features from v4.0 and v5.0. For implementation support, consult the codebase examples and development team.

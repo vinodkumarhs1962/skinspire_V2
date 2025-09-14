@@ -1,0 +1,278 @@
+<!-- Universal Line Items Table Template - FULL WIDTH -->
+<!-- File: app/templates/engine/business/universal_line_items_table.html -->
+
+{% if data.header_info %}
+<div class="alert alert-info mb-3">
+    <i class="fas fa-info-circle"></i>
+    {% if data.entity_type == 'po' %}
+        <strong>Purchase Order:</strong> {{ data.header_info.number }}
+        | <strong>Date:</strong> {{ data.header_info.date }}
+        | <strong>Status:</strong> <span class="badge bg-secondary">{{ data.header_info.status|upper }}</span>
+    {% elif data.entity_type == 'invoice' %}
+        <strong>Invoice:</strong> {{ data.header_info.number }}
+        | <strong>Date:</strong> {{ data.header_info.date }}
+        | <strong>Status:</strong> <span class="badge bg-warning">{{ data.header_info.status|upper }}</span>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if data.has_items %}
+<!-- FULL WIDTH FIXES: Added style="width: 100%" to container and removed invoice-items-container class -->
+<div class="line-items-container" style="width: 100%;">
+    <!-- Line Items Table -->
+    <div class="table-responsive" style="width: 100%;">
+        <table class="table table-bordered table-hover invoice-items-table table-sm" style="width: 100%; table-layout: fixed;">
+            <thead class="table-light">
+                <tr>
+                    <!-- Compact column widths for both PO and Invoice -->
+                    <th width="4%" style="text-align: left !important;">#</th>
+                    <th width="22%" style="text-align: left !important;">Item Name</th>
+                    
+                    {% if data.entity_type == 'po' %}
+                        <th width="8%" style="text-align: center !important;">HSN</th>
+                        <th width="8%">Delivery</th>
+                    {% elif data.entity_type == 'invoice' %}
+                        <th width="8%" style="text-align: left !important;">Batch</th>
+                        <th width="8%">Expiry</th>
+                    {% endif %}
+                    
+                    <th width="7%" class="text-end">Qty</th>
+                    <th width="9%" class="text-end">Rate</th>
+                    <th width="8%" class="text-end">Disc</th>
+                    <th width="7%" class="text-end">GST%</th>
+                    <th width="9%" class="text-end">GST</th>
+                    <th width="10%" class="text-end">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in data['items'] %}
+                <tr class="{% if item.is_free %}table-info{% endif %}">
+                    <td style="text-align: left !important;">{{ loop.index }}</td>
+                    <td class="text-left item-name-cell">
+                        <div class="truncate-text" title="{{ item.item_name }}{% if item.is_free %} (FREE){% endif %}">
+                            <strong>{{ item.item_name }}</strong>
+                            {% if item.is_free %}
+                                <span class="badge bg-info ms-1" style="font-size: 0.7rem; padding: 0.2rem 0.3rem;">FREE</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    
+                    {% if data.entity_type == 'po' %}
+                        <td style="text-align: center !important;">
+                            <div class="truncate-text" title="{{ item.hsn_code|default('-', true) }}">
+                                {{ item.hsn_code|default('-', true) }}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="truncate-text" title="{{ item.expected_delivery|default('-', true) }}">
+                                {{ item.expected_delivery|default('-', true) }}
+                            </div>
+                        </td>
+                    {% elif data.entity_type == 'invoice' %}
+                        <td>
+                            <div class="truncate-text" title="{{ item.batch_number|default('-', true) }}">
+                                {{ item.batch_number|default('-', true) }}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="truncate-text" title="{{ item.expiry_date|default('-', true) }}">
+                                {{ item.expiry_date|default('-', true) }}
+                            </div>
+                        </td>
+                    {% endif %}
+                    
+                    <td class="text-end">{{ "{:,.2f}".format(item.quantity) }}</td>
+                    <td class="text-end">₹{{ "{:,.2f}".format(item.unit_price) }}</td>
+                    <td class="text-end">
+                        {% if item.discount_amount > 0 %}
+                            <div title="Discount: ₹{{ "{:,.2f}".format(item.discount_amount) }}{% if item.discount_percent > 0 %} ({{ item.discount_percent }}%){% endif %}">
+                                ₹{{ "{:,.2f}".format(item.discount_amount) }}
+                                {% if item.discount_percent > 0 %}
+                                    <small class="d-block" style="font-size: 0.7rem;">({{ item.discount_percent }}%)</small>
+                                {% endif %}
+                            </div>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td class="text-end">{{ item.gst_rate }}%</td>
+                    <td class="text-end">₹{{ "{:,.2f}".format(item.gst_amount) }}</td>
+                    <td class="text-end fw-bold">₹{{ "{:,.2f}".format(item.line_total) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot class="table-light">
+                <!-- Subtotal Row -->
+                <tr>
+                    <td colspan="9" class="text-end"><strong>Subtotal:</strong></td>
+                    <td class="text-end"><strong>₹{{ "{:,.2f}".format(data.summary.subtotal|default(data.summary.total_amount, true)) }}</strong></td>
+                </tr>
+                
+                <!-- Discount Row (if applicable) -->
+                {% if data.summary.total_discount > 0 %}
+                <tr>
+                    <td colspan="9" class="text-end">Total Discount:</td>
+                    <td class="text-end text-danger">-₹{{ "{:,.2f}".format(data.summary.total_discount) }}</td>
+                </tr>
+                {% endif %}
+                
+                <!-- GST Row -->
+                <tr>
+                    <td colspan="9" class="text-end">Total GST:</td>
+                    <td class="text-end">₹{{ "{:,.2f}".format(data.summary.total_gst) }}</td>
+                </tr>
+                
+                <!-- Grand Total Row -->
+                <tr class="table-primary">
+                    <td colspan="9" class="text-end"><strong>Grand Total:</strong></td>
+                    <td class="text-end"><strong class="text-primary">₹{{ "{:,.2f}".format(data.summary.grand_total) }}</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+{% else %}
+<!-- No Items Message -->
+<div class="alert alert-info">
+    <i class="fas fa-info-circle"></i> 
+    {{ data.message|default('No items found.', true) }}
+</div>
+{% endif %}
+
+<!-- Error Message (if any) -->
+{% if data.has_error %}
+<div class="alert alert-danger">
+    <i class="fas fa-exclamation-triangle"></i> 
+    <strong>Error:</strong> {{ data.error }}
+</div>
+{% endif %}
+
+<style>
+/* Invoice Items Table Styling - EXACT COPY FROM invoice_items_table.html */
+.invoice-items-table {
+    font-size: 0.9rem;
+    width: 100% !important;  /* Force full width */
+}
+
+.invoice-items-table thead th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    border-bottom: 2px solid #dee2e6;
+}
+
+/* Compact table styling for both PO and Invoice */
+.invoice-items-table th,
+.invoice-items-table td {
+    padding: 0.4rem 0.5rem !important; /* Reduced padding for compact display */
+    vertical-align: middle;
+}
+
+/* Truncate text with ellipsis */
+.truncate-text {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+/* Item name column - special handling */
+.item-name-cell {
+    position: relative;
+}
+
+.item-name-cell .truncate-text {
+    max-width: 100%;
+}
+
+/* Show full text on hover for item name */
+.item-name-cell:hover .truncate-text {
+    overflow: visible;
+    white-space: normal;
+    word-wrap: break-word;
+    background-color: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    z-index: 100;
+    position: absolute;
+    left: 0;
+    padding: 0.4rem;
+    min-width: 250px;
+    max-width: 400px;
+}
+
+/* Compact number columns */
+.invoice-items-table td.text-end {
+    padding-right: 0.4rem !important;
+}
+
+/* Hover tooltip for all truncated cells */
+.truncate-text[title] {
+    cursor: help;
+}
+
+.invoice-items-table tfoot td {
+    font-weight: 500;
+}
+
+.invoice-items-table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+.table-primary td {
+    background-color: #cfe2ff !important;
+}
+
+/* Full width container fixes */
+.line-items-container {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.table-responsive {
+    width: 100% !important;
+    overflow-x: auto;
+}
+
+/* Override any Bootstrap constraints */
+.table {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.fw-bold {
+    font-weight: bold !important;
+}
+
+/* Alignment classes */
+.text-end {
+    text-align: right !important;
+}
+
+.text-left {
+    text-align: left !important;
+}
+
+/* For PO table - slight color variation */
+.po-items-table thead th {
+    background-color: #e7f3ff;  /* Slightly blue tint for PO */
+    font-weight: 600;
+    border-bottom: 2px solid #b3d9ff;
+}
+
+/* Compact badges */
+.badge {
+    font-size: 0.7rem !important;
+    padding: 0.2rem 0.4rem !important;
+}
+
+/* Ensure rupee symbol doesn't wrap */
+.text-end {
+    white-space: nowrap;
+}
+
+/* Small text in discount column */
+.d-block {
+    display: block !important;
+}
+</style>

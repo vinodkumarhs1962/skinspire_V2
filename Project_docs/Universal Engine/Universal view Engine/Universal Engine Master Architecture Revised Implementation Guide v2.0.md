@@ -1250,6 +1250,21 @@ The Universal Engine uses a **single template** that adapts to ANY entity throug
                             {{ render_universal_entity_field(field) }}
                         
                         <!-- ✅ Enhanced Select Field -->
+                        {% elif field.type == 'entity_dropdown' %}
+                            <!-- Entity Dropdown with minimal structure -->
+                            <div class="universal-form-group">
+                                <label class="universal-form-label">{{ field.label }}</label>
+                                <input type="text" 
+                                    name="{{ field.name }}_display" 
+                                    class="universal-form-input entity-dropdown-search"
+                                    placeholder="{{ field.placeholder }}"
+                                    value="{{ field.display_value }}"
+                                    data-entity-config='{{ field.entity_config | tojson }}'
+                                    autocomplete="off">
+                                <input type="hidden" 
+                                    name="{{ field.name }}" 
+                                    value="{{ field.value }}">
+                            </div>
                         {% elif field.type == 'select' %}
                             {{ render_universal_select_field(field) }}
                         

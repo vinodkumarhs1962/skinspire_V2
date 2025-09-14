@@ -14,7 +14,7 @@ Integrated with Your Complete Architecture:
 - Hospital and Branch Context (app.utils.context_helpers)
 """
 
-from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, current_app, g, make_response
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, current_app, g, make_response, session
 from flask_login import login_required, current_user
 from datetime import datetime
 import uuid
@@ -2671,6 +2671,141 @@ def entity_search_api():
     except Exception as e:
         logger.error(f"Error in entity search API: {str(e)}")
         return jsonify({'error': 'Search failed'}), 500
+
+@universal_bp.route('/api/universal/<entity_type>/search', methods=['GET'])
+@login_required
+def universal_entity_search_api(entity_type: str):
+    """
+    API endpoint for entity dropdown search
+    Provides searchable dropdown data for Universal Engine v5.1
+    
+    Query Parameters:
+        q: Search query string
+        limit: Maximum results to return (default 10)
+        fields: JSON array of fields to search
+        exact: Whether to search by exact ID (for display value lookup)
+    
+    Returns:
+        JSON response with search results
+    """
+    try:
+        from app.engine.universal_entity_search_service import UniversalEntitySearchService
+        from app.config.entity_configurations import get_entity_config
+        import json
+        
+        # Validate entity type
+        if not is_valid_entity_type(entity_type):
+            return jsonify({
+                'error': f"Invalid entity type: {entity_type}",
+                'results': []
+            }), 400
+        
+        # Check permissions
+        if not has_entity_permission(current_user, entity_type, 'read'):
+            return jsonify({
+                'error': 'Access denied',
+                'results': []
+            }), 403
+        
+        # Get query parameters
+        search_term = request.args.get('q', '').strip()
+        limit = min(int(request.args.get('limit', 10)), 50)  # Max 50 results
+        search_fields = request.args.get('fields', '[]')
+        exact_match = request.args.get('exact', 'false').lower() == 'true'
+        
+        # Parse search fields
+        try:
+            search_fields = json.loads(search_fields) if search_fields else []
+        except:
+            search_fields = []
+        
+        # Get entity configuration
+        config = get_entity_config(entity_type)
+        if not config:
+            return jsonify({
+                'error': f"No configuration for entity: {entity_type}",
+                'results': []
+            }), 404
+        
+        # Build search configuration
+        from app.config.core_definitions import EntitySearchConfiguration
+        
+        # Use provided fields or default to searchable fields from config
+        if not search_fields:
+            search_fields = config.searchable_fields or ['name']
+        
+        search_config = EntitySearchConfiguration(
+            target_entity=entity_type,
+            search_fields=search_fields,
+            display_template=getattr(config, 'display_template', '{name}'),
+            min_search_length=0 if exact_match else 2
+        )
+        
+        # Get current context
+        hospital_id = current_user.get_default_hospital_id()
+        branch_id = session.get('branch_id')
+        
+        # Perform search
+        search_service = UniversalEntitySearchService()
+        results = []
+        
+        if exact_match:
+            # Exact ID search for getting display value
+            try:
+                service = get_universal_service(entity_type)
+                entity = service.get_by_id(search_term, hospital_id=hospital_id)
+                if entity:
+                    # Convert to dict for response
+                    result_dict = {}
+                    for field in search_fields + [config.primary_key, 'name']:
+                        if hasattr(entity, field):
+                            result_dict[field] = getattr(entity, field)
+                    results = [result_dict]
+            except:
+                results = []
+        else:
+            # Regular search
+            results = search_service.search_entities(
+                config=search_config,
+                search_term=search_term,
+                hospital_id=hospital_id,
+                branch_id=branch_id,
+                limit=limit
+            )
+        
+        # Format results for response
+        formatted_results = []
+        for result in results:
+            if isinstance(result, dict):
+                formatted_results.append(result)
+            else:
+                # Convert SQLAlchemy object to dict
+                result_dict = {}
+                for field in search_fields + [config.primary_key]:
+                    if hasattr(result, field):
+                        value = getattr(result, field)
+                        # Handle UUID and datetime serialization
+                        if hasattr(value, 'hex'):  # UUID
+                            value = str(value)
+                        elif hasattr(value, 'isoformat'):  # datetime
+                            value = value.isoformat()
+                        result_dict[field] = value
+                formatted_results.append(result_dict)
+        
+        return jsonify({
+            'success': True,
+            'results': formatted_results,
+            'count': len(formatted_results),
+            'query': search_term
+        })
+        
+    except Exception as e:
+        logger.error(f"Entity search API error for {entity_type}: {str(e)}")
+        return jsonify({
+            'error': f"Search failed: {str(e)}",
+            'results': []
+        }), 500
+
 
 def _make_template_safe_config(config):
     """Helper to create template-safe config"""

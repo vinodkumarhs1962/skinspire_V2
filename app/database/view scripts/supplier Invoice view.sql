@@ -52,6 +52,24 @@ SELECT
     si.igst_amount,
     si.total_gst_amount,
     
+    -- NEW: Paid amount calculation - sum of all approved/completed/paid payments
+    COALESCE(
+        (SELECT SUM(sp.amount) 
+         FROM supplier_payment sp 
+         WHERE sp.invoice_id = si.invoice_id 
+         AND sp.workflow_status IN ('approved', 'completed', 'paid')), 
+        0
+    )::NUMERIC(12,2) AS paid_amount,
+    
+    -- NEW: Balance amount calculation (invoice total - paid amount)
+    (si.total_amount - COALESCE(
+        (SELECT SUM(sp.amount) 
+         FROM supplier_payment sp 
+         WHERE sp.invoice_id = si.invoice_id 
+         AND sp.workflow_status IN ('approved', 'completed', 'paid')), 
+        0
+    ))::NUMERIC(12,2) AS balance_amount,
+    
     -- GST Information
     si.supplier_gstin,
     si.place_of_supply,
@@ -140,5 +158,38 @@ CREATE INDEX IF NOT EXISTS idx_si_view_invoice_date ON supplier_invoice(invoice_
 CREATE INDEX IF NOT EXISTS idx_si_view_due_date ON supplier_invoice(due_date);
 CREATE INDEX IF NOT EXISTS idx_si_view_payment_status ON supplier_invoice(payment_status);
 
+-- NEW: Index for payment lookups (CORRECTED TABLE NAME)
+CREATE INDEX IF NOT EXISTS idx_supplier_payment_invoice_workflow 
+ON supplier_payment(invoice_id, workflow_status);
+
 -- Grant permissions
 GRANT SELECT ON supplier_invoices_view TO PUBLIC;
+
+-- Verify the new columns were added
+SELECT 
+    column_name, 
+    data_type,
+    numeric_precision,
+    numeric_scale
+FROM information_schema.columns 
+WHERE table_name = 'supplier_invoices_view' 
+AND column_name IN ('balance_amount', 'paid_amount')
+ORDER BY column_name;
+
+-- Test query to verify calculations
+SELECT 
+    supplier_invoice_number,
+    supplier_name,
+    invoice_total_amount,
+    paid_amount,
+    balance_amount,
+    payment_status,
+    CASE 
+        WHEN balance_amount = 0 THEN 'Fully Paid'
+        WHEN paid_amount > 0 AND balance_amount > 0 THEN 'Partially Paid'
+        WHEN paid_amount = 0 THEN 'Unpaid'
+        ELSE 'Check'
+    END AS calculated_status
+FROM supplier_invoices_view 
+ORDER BY invoice_date DESC
+LIMIT 10;

@@ -317,7 +317,7 @@ def register_api_blueprints(app: Flask) -> None:
     except ImportError as e:
         app.logger.warning(f"Security blueprints could not be loaded: {str(e)}")
     
-    # Register new API blueprints for GL, inventory, and supplier
+    # Register business entities blueprints
     try:
         # GL API
         from .api.routes.gl import gl_api_bp
@@ -349,6 +349,13 @@ def register_api_blueprints(app: Flask) -> None:
         app.logger.info("Added billing API blueprint to registration list")
     except ImportError as e:
         app.logger.warning(f"Billing API blueprint could not be loaded: {str(e)}")
+
+    # universal API blueprint
+    try:
+        from app.api.routes.universal_api import universal_api_bp
+        blueprints.append(universal_api_bp)
+    except ImportError as e:
+        app.logger.warning(f"Universal API blueprint could not be loaded: {str(e)}")
 
     # Register each blueprint
     for blueprint in blueprints:

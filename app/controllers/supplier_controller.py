@@ -25,7 +25,7 @@ from app.services.supplier_service import (
     approve_supplier_payment,
     reject_supplier_payment
 )
-
+from app.engine.universal_service_cache import cache_service_method, cache_universal
 from app.utils.unicode_logging import get_unicode_safe_logger
 logger = get_unicode_safe_logger(__name__)
 
@@ -2078,8 +2078,19 @@ class PurchaseOrderFormController(FormController):
         )
     
     def _get_success_url(self, result):
+        """FIXED: Redirect to Universal Engine view instead of old view"""
         from flask import url_for
-        return url_for('supplier_views.view_purchase_order', po_id=result['po_id'])
+        
+        # Check if Universal Engine is available
+        try:
+            # Try to use Universal Engine view
+            return url_for('universal_views.universal_detail_view', 
+                        entity_type='purchase_orders', 
+                        item_id=result['po_id'])
+        except:
+            # Fallback to old view if Universal Engine not available
+            return url_for('supplier_views.view_purchase_order', 
+                        po_id=result['po_id'])
     
     def get_additional_context(self, *args, **kwargs):
         """Get suppliers, medicines, and purchase orders for dropdowns - ENHANCED with branch filtering"""

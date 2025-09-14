@@ -13,7 +13,7 @@ from app.config.core_definitions import (
     TabDefinition, ViewLayoutConfiguration, LayoutType,
     EntityConfiguration, ActionDefinition,
     EntitySearchConfiguration, EntityFilterConfiguration, ButtonType,
-    ComplexDisplayType, ActionDisplayType, INDIAN_STATES,
+    ComplexDisplayType, ActionDisplayType, INDIAN_STATES, FilterType,
     DocumentConfiguration, PrintLayoutType, DocumentType,
     PageSize, Orientation, DocumentSectionType, ExportFormat,
     EntityCategory, CRUDOperation, FilterOperator, CustomRenderer  # Added for transaction history custom rendering
@@ -73,17 +73,39 @@ SUPPLIER_FIELDS = [
         name="supplier_name",
         label="Supplier Name",
         field_type=FieldType.TEXT,
+        
+        # Keep existing display properties
         show_in_list=True,
         show_in_detail=True,
         show_in_form=True,
         sortable=True,
-        filterable=True,
-        filter_operator=FilterOperator.CONTAINS,  # ✅ ADD THIS
-        searchable=False,  # Remove from generic search
-        placeholder="Search supplier name...",
         required=True,
+        searchable=False,
+        placeholder="Search supplier name...",
+        
+        # Enhanced filter properties
+        filterable=True,
+        filter_type=FilterType.ENTITY_DROPDOWN,  # ⭐ ADD THIS
+        filter_operator=FilterOperator.CONTAINS,
+        
+        # ⭐ ADD THIS ENTIRE BLOCK
+        entity_search_config=EntitySearchConfiguration(
+            target_entity='suppliers',  # Self-reference
+            search_fields=['supplier_name', 'contact_person_name'],
+            display_template='{supplier_name}',
+            value_field='supplier_name',
+            filter_field='supplier_name',
+            placeholder="Type to search suppliers...",
+            min_chars=2,
+            max_results=20,
+            preload_common=True,
+            cache_results=True,
+            additional_filters={'status': 'active'}
+        ),
+        
+        # Keep existing layout properties
         tab_group="profile",
-        section="basic_info",  # For form grouping
+        section="basic_info",
         view_order=1
     ),
     FieldDefinition(
@@ -469,7 +491,7 @@ SUPPLIER_FIELDS = [
         show_in_list=False,
         show_in_detail=True,
         show_in_form=True,
-        filterable=True,
+        filterable=False,
         virtual=False,
         required=True,  
         options=INDIAN_STATES,  # Use state list
@@ -1244,6 +1266,14 @@ SUPPLIER_ENTITY_FILTER_CONFIG = EntityFilterConfiguration(
                 {'value': 'consumable', 'label': 'Consumable Supplier'}
             ]
         },
+        'supplier_name': {
+            'field': 'supplier_name',
+            'type': 'text',  # Simple text search in filter panel
+            'label': 'Supplier Name',
+            'placeholder': 'Search supplier name...',
+            'search_in_table': True  # Direct table search
+        },
+
         'status': {
             'options': [
                 {'value': 'active', 'label': 'Active'},

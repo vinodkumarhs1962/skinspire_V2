@@ -256,7 +256,11 @@
                                 {% if field.type == 'currency' %}
                                     ₹ {{ item[field.field]|default(0)|round(2)|format_number }}
                                 {% elif field.type == 'date' %}
-                                    {{ item[field.field]|format_date if item[field.field] else '—' }}
+                                    {% if field.format %}
+                                        {{ item[field.field]|format_date(field.format) if item[field.field] else '—' }}
+                                    {% else %}
+                                        {{ item[field.field]|format_date('%d-%b-%Y') if item[field.field] else '—' }}
+                                    {% endif %}
                                 {% else %}
                                     {{ item[field.field] or '—' }}
                                 {% endif %}

@@ -14,7 +14,7 @@ from app.config.core_definitions import (
     CRUDOperation, SectionDefinition, ViewLayoutConfiguration, LayoutType,
     TabDefinition, ActionDefinition, ButtonType, ActionDisplayType,
     DocumentConfiguration, EntityFilterConfiguration, EntitySearchConfiguration, 
-    ComplexDisplayType, CustomRenderer, FilterOperator
+    ComplexDisplayType, CustomRenderer, FilterOperator, FilterType
 )
 from app.config.filter_categories import FilterCategory
 
@@ -82,24 +82,45 @@ PURCHASE_ORDER_FIELDS = [
     # Virtual field for supplier name display (Following financial_transactions.py pattern)
     FieldDefinition(
         name="supplier_name",
-        label="Supplier Name",
+        label="Supplier Name",  # Can be just "Supplier" as in payment config
         field_type=FieldType.TEXT,
         virtual=False,
-        filterable=True,  # ✅ ADD THIS
-        filter_operator=FilterOperator.CONTAINS,  # ✅ ADD THIS
-        searchable=False,  # Remove from generic search
-        placeholder="Search supplier name...",
-        sortable=True,
+        
+        # === DISPLAY PROPERTIES (unchanged) ===
         show_in_list=True,
         show_in_detail=True,
         show_in_form=False,
+        sortable=True,
         readonly=True,
-        related_field=None,
-        related_display_field=None,
-        tab_group="order_details",  # Changed from "header"
+        
+        # === SEARCH PROPERTIES ===
+        searchable=True,  # VERIFIED: Both configs have this as True
+        
+        # === FILTER PROPERTIES (VERIFIED PATTERN) ===
+        filterable=True,
+        filter_type=FilterType.ENTITY_DROPDOWN,  # ⭐ VERIFIED: Both configs use this
+        filter_operator=FilterOperator.CONTAINS,  # VERIFIED: Invoice uses CONTAINS, Payment uses EQUALS
+        
+        # === ENTITY SEARCH CONFIGURATION (VERIFIED) ===
+        entity_search_config=EntitySearchConfiguration(
+            target_entity='suppliers',
+            search_fields=['supplier_name', 'contact_person_name'],  # VERIFIED: Both configs use these fields
+            display_template='{supplier_name}',  # VERIFIED: Both configs use this template
+            value_field='supplier_name',      # VERIFIED: Both use name as value (NOT UUID)
+            filter_field='supplier_name',     # VERIFIED: Both filter by name field
+            placeholder="Type to search suppliers...",  # VERIFIED: Same in both configs
+            preload_common=True,              # VERIFIED: Both configs use True
+            cache_results=True,               # VERIFIED: Both configs use True
+            min_chars=2,                      # Invoice: 2, Payment: 1 (using Invoice pattern)
+            max_results=20                    # Payment config value (Invoice doesn't specify)
+        ),
+        
+        # === LAYOUT PROPERTIES (keep existing) ===
+        placeholder="Search supplier name...",  # Additional placeholder for list view
+        tab_group="order_details",
         section="supplier_info",
         view_order=11,
-        complex_display_type=ComplexDisplayType.ENTITY_REFERENCE
+        complex_display_type=ComplexDisplayType.ENTITY_REFERENCE  # VERIFIED: Both configs use this
     ),
     
     # === DATE FIELDS ===
@@ -394,9 +415,9 @@ PURCHASE_ORDER_FIELDS = [
         section="items_display",
         view_order=0,
         custom_renderer=CustomRenderer(
-            template="components/business/po_items_table.html",  # Reuse existing template
+            template="engine/business/universal_line_items_table.html",  # Universal template
             context_function="get_po_line_items_display",
-            css_classes="table-responsive po-items-table"
+            css_classes="w-100"
         )
     ),
     
@@ -1009,6 +1030,14 @@ PURCHASE_ORDER_ENTITY_FILTER_CONFIG = EntityFilterConfiguration(
                 {'value': 'received', 'label': 'Received'},
                 {'value': 'cancelled', 'label': 'Cancelled'}
             ]
+        },
+        # The filter panel uses simple text search, not entity_dropdown
+        'supplier_name': {
+            'field': 'supplier_name',
+            'type': 'text',  # ⭐ IMPORTANT: Use 'text' type for filter panel
+            'label': 'Supplier Name',
+            'placeholder': 'Search supplier name...',
+            'search_in_view': True  # ⭐ Search in view column
         },
         'supplier_id': {
             'field': 'supplier_id',

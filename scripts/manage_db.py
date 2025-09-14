@@ -8,6 +8,7 @@
 # python scripts/manage_db.py apply-db-triggers
 # python scripts/manage_db.py check-database
 # python scripts/manage_db.py copy-db
+# python scripts/manage_db.py copy-db dev test
 # python scripts/manage_db.py create-backup
 # python scripts/manage_db.py create-backup --env dev
 # python scripts/manage_db.py create-db-migration

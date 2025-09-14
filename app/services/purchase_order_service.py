@@ -14,6 +14,7 @@ from app.models.transaction import (
     SupplierInvoice, SupplierPayment
 )
 from app.engine.universal_entity_service import UniversalEntityService
+from app.engine.business.line_items_handler import line_items_handler
 from app.services.database_service import get_db_session
 from app.engine.universal_service_cache import cache_service_method
 from app.utils.unicode_logging import get_unicode_safe_logger
@@ -37,74 +38,17 @@ class PurchaseOrderService(UniversalEntityService):
     # =========================================================================
     
     def get_po_line_items_display(self, item_id: str = None, item: dict = None, **kwargs) -> Dict:
-        """Get PO line items for display in detail view"""
-        try:
-            # Get PO ID from parameters
-            po_id = None
-            if item and isinstance(item, dict):
-                po_id = item.get('po_id')
-            elif item_id:
-                po_id = item_id
-                
-            if not po_id:
-                return {'items': [], 'has_po': False, 'po_info': {}}
-            
-            # Convert to UUID if string
-            if isinstance(po_id, str):
-                po_id = uuid.UUID(po_id)
-            
-            with get_db_session() as session:
-                po = session.query(PurchaseOrderHeader).filter_by(
-                    po_id=po_id
-                ).first()
-                
-                if not po:
-                    return {'items': [], 'has_po': False, 'po_info': {}}
-                
-                # Get line items
-                lines = session.query(PurchaseOrderLine).filter_by(
-                    po_id=po_id
-                ).all()
-                
-                items = []
-                total_amount = 0
-                total_gst = 0
-                
-                for line in lines:
-                    item_dict = {
-                        'item_name': line.medicine_name,
-                        'medicine_name': line.medicine_name,
-                        'hsn_code': getattr(line, 'hsn_code', '-'),
-                        'quantity': float(line.units or 0),
-                        'unit_price': float(line.pack_purchase_price or 0),
-                        'gst_amount': float(line.total_gst or 0),
-                        'total_amount': float(line.line_total or 0)
-                    }
-                    items.append(item_dict)
-                    total_amount += float(line.line_total or 0)
-                    total_gst += float(line.total_gst or 0)
-                
-                po_info = {
-                    'po_number': po.po_number,
-                    'po_date': po.po_date,
-                    'total_amount': float(po.total_amount or 0),
-                    'status': po.status or 'pending'
-                }
-                
-                return {
-                    'items': items,
-                    'summary': {
-                        'total_amount': total_amount,
-                        'total_gst': total_gst
-                    },
-                    'has_po': True,
-                    'currency_symbol': '₹',
-                    'po_info': po_info
-                }
-                
-        except Exception as e:
-            logger.error(f"Error getting PO line items: {str(e)}")
-            return {'items': [], 'has_po': False, 'po_info': {}}
+        """
+        Get PO line items - delegates to centralized handler
+        """
+        po_id = item_id or (item.get('po_id') if item else None)
+        
+        # Call centralized function
+        return line_items_handler.get_po_line_items(
+            po_id=po_id,
+            context='po_detail',
+            **kwargs
+        )
 
     # =========================================================================
     # INVOICES DISPLAY - Required for financials tab

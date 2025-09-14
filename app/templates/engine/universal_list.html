@@ -131,7 +131,11 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                                     <span class="breakdown-label-text">{{ field_config.get('label', field_key) }}</span>
                                 </span>
                                 <span class="breakdown-amount-value">
-                                    {% if card.get('type') == 'currency' %}₹{{ "{:,.0f}".format(amount|float) }}{% else %}{{ amount }}{% endif %}
+                                    {% if card.get('type') == 'currency' %}
+                                        ₹{{ (amount|float|round|int)|format_number(decimals=0, use_indian_format=True) }}
+                                    {% else %}
+                                        {{ amount }}
+                                    {% endif %}
                                 </span>
                             </div>
                             {% endif %}
@@ -242,76 +246,41 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                 <!-- ✅ SECTION 2: Filter Fields -->
                 <div class="universal-other-filters-container">
                     <div class="universal-other-filters-section">
-                        <div class="universal-filter-grid">
-                            
-                            <!-- ✅ BACKWARD COMPATIBILITY: Keep hardcoded filters for supplier_payments -->
-                            {% if assembled_data and assembled_data.entity_config and assembled_data.entity_config.entity_type == 'supplier_payments' %}
-                                <!-- BYPASS: Keep existing supplier_payments filters until migrated to view -->
-                                <div class="universal-form-group">
-                                    <label class="universal-form-label">Text Search</label>
-                                    <input type="text" name="search" 
-                                        value="{{ request.args.get('search', '') }}" 
-                                        placeholder="Search records..."
-                                        class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
-                                </div>
-                                
-                                <div class="universal-form-group">
-                                    <label class="universal-form-label">Reference No.</label>
-                                    <input type="text" name="reference_no" 
-                                        value="{{ request.args.get('reference_no', '') }}" 
-                                        placeholder="Search by reference number..."
-                                        class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
-                                </div>
-                                
-                                <div class="universal-form-group">
-                                    <label class="universal-form-label">Status</label>
-                                    <select name="workflow_status" class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
-                                        <option value="">All Status</option>
-                                        <option value="pending" {{ 'selected' if request.args.get('workflow_status') == 'pending' else '' }}>Pending</option>
-                                        <option value="pending_approval" {{ 'selected' if request.args.get('workflow_status') == 'pending_approval' else '' }}>Pending Approval</option>
-                                        <option value="approved" {{ 'selected' if request.args.get('workflow_status') == 'approved' else '' }}>Approved</option>
-                                        <option value="rejected" {{ 'selected' if request.args.get('workflow_status') == 'rejected' else '' }}>Rejected</option>
-                                        <option value="completed" {{ 'selected' if request.args.get('workflow_status') == 'completed' else '' }}>Completed</option>
-                                    </select>
-                                </div>
-                                
-                                <div class="universal-form-group">
-                                    <label class="universal-form-label">Payment Method</label>
-                                    <select name="payment_method" class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
-                                        <option value="">All Methods</option>
-                                        <option value="cash" {{ 'selected' if request.args.get('payment_method') == 'cash' else '' }}>Cash</option>
-                                        <option value="cheque" {{ 'selected' if request.args.get('payment_method') == 'cheque' else '' }}>Cheque</option>
-                                        <option value="bank_transfer" {{ 'selected' if request.args.get('payment_method') == 'bank_transfer' else '' }}>Bank Transfer</option>
-                                        <option value="upi" {{ 'selected' if request.args.get('payment_method') == 'upi' else '' }}>UPI</option>
-                                    </select>
-                                </div>
-                                
-                                <div class="universal-form-group">
-                                    <label class="universal-form-label">Min Amount</label>
-                                    <input type="number" name="amount_min" 
-                                        value="{{ request.args.get('amount_min', '') }}"
-                                        placeholder="Minimum amount..."
-                                        class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
-                                </div>
-                                
-                                <div class="universal-form-group">
-                                    <label class="universal-form-label">Max Amount</label>
-                                    <input type="number" name="amount_max" 
-                                        value="{{ request.args.get('amount_max', '') }}"
-                                        placeholder="Maximum amount..."
-                                        class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
-                                </div>
-                                
-                            {% elif assembled_data.filter_fields %}
+                        <div class="universal-filter-grid">      
+                            {% if assembled_data.filter_fields %}
                                 <!-- ✅ CONFIGURATION-DRIVEN: Dynamic filters with operator-enhanced labels -->
                                 {% for field in assembled_data.filter_fields %}
-                                    {% if field.type == 'select' and field.options|length > 0 %}
+                                    <!-- ✅ NEW: Entity Dropdown Filter (v5.1) -->
+                                    {% if field.type == 'entity_dropdown' %}
+                                        <div class="universal-form-group">
+                                            <label class="universal-form-label">{{ field.label }}</label>
+                                            <div class="entity-dropdown-container"
+                                                 data-filter-type="entity_dropdown"
+                                                 data-name="{{ field.name }}"
+                                                 data-value="{{ field.value }}"
+                                                 data-display-value="{{ field.display_value }}"
+                                                 data-placeholder="{{ field.placeholder }}"
+                                                 data-entity-config='{{ field.entity_config | tojson }}'>
+                                                <!-- Dropdown will be initialized by JavaScript -->
+                                                <input type="hidden" 
+                                                       name="{{ field.name }}" 
+                                                       value="{{ field.value }}"
+                                                       class="entity-dropdown-hidden-input">
+                                                <input type="text" 
+                                                       class="universal-form-input entity-dropdown-search"
+                                                       placeholder="{{ field.placeholder }}"
+                                                       value="{{ field.display_value }}">
+                                                <div class="entity-dropdown-results" style="display: none;"></div>
+                                            </div>
+                                        </div>
+                                    
+                                    {% elif field.type == 'select' and field.options|length > 0 %}
                                         <div class="universal-form-group">
                                             <label class="universal-form-label">{{ field.label }}</label>
                                             <select name="{{ field.name }}" class="universal-form-input{% if auto_submit_enabled %} universal-filter-auto-submit{% endif %}">
                                                 {% for option in field.options %}
                                                     <option value="{{ option.value }}" 
-                                                        {{ 'selected' if request.args.get(field.name) == option.value else '' }}>
+                                                        {{ 'selected' if request.args.get(field.name, '') == option.value else '' }}>
                                                         {{ option.label }}
                                                     </option>
                                                 {% endfor %}
@@ -858,7 +827,53 @@ console.log('📋 Universal List template loaded');
 console.log('🔧 Entity config:', window.assembledData.entity_config);
 console.log('🔧 Entity type:', window.assembledData.entity_config.entity_type);
 </script>
-
+<!-- ============================================
+     ENTITY DROPDOWN ENHANCEMENT (v5.1)
+     Progressive Enhancement for Searchable Entity Dropdowns
+     ============================================ -->
+{% if assembled_data.filter_fields|selectattr('type', 'equalto', 'entity_dropdown')|list %}
+    <!-- Entity Dropdown Resources -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/components/universal_entity_dropdown.css') }}">
+    
+    <!-- ADD: Prevent duplicate script loading -->
+    <script>
+    (function() {
+        // Prevent multiple script loads
+        if (!window.EntityDropdownScriptLoaded) {
+            window.EntityDropdownScriptLoaded = true;
+            
+            var script = document.createElement('script');
+            script.src = "{{ url_for('static', filename='js/components/universal_entity_dropdown.js') }}";
+            script.async = false;
+            
+            script.onload = function() {
+                console.log('✅ Entity dropdown script loaded successfully');
+                
+                // Initialize dropdowns after script loads
+                setTimeout(function() {
+                    if (window.initializeEntityDropdowns && !window.entityDropdownInitializing) {
+                        window.initializeEntityDropdowns();
+                    }
+                }, 200);
+            };
+            
+            script.onerror = function() {
+                console.error('❌ Failed to load entity dropdown script');
+            };
+            
+            document.head.appendChild(script);
+        } else {
+            console.log('Entity dropdown script already loaded');
+            // Re-initialize if needed
+            setTimeout(function() {
+                if (window.initializeEntityDropdowns && !window.entityDropdownInitializing) {
+                    window.initializeEntityDropdowns();
+                }
+            }, 200);
+        }
+    })();
+    </script>
+{% endif %}
 <!-- Utility Functions -->
 <script>
 /**

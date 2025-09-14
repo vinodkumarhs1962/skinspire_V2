@@ -2,328 +2,550 @@
 
 {% block title %}Create Purchase Order{% endblock %}
 
-{% block head %}
+{% block styles %}
 {{ super() }}
-<!-- Include supplier-specific CSS -->
-<link rel="stylesheet" href="{{ url_for('static', filename='css/components/supplier.css') }}">
+<!-- Purchase Order Enhanced Styles -->
+<style>
+    /* Force two-column layout */
+    .po-two-column-grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 1rem !important;
+        width: 100% !important;
+    }
+    
+    @media (max-width: 768px) {
+        .po-two-column-grid {
+            grid-template-columns: 1fr !important;
+        }
+    }
+    
+    /* Single row for compact fields */
+    .po-compact-row {
+        display: grid !important;
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        gap: 1rem !important;
+        padding: 1rem !important;
+        background: #e5e7eb !important; /* Darker background for non-editable fields */
+        border-radius: 0.5rem !important;
+        margin-bottom: 1rem !important;
+        width: 100% !important;
+    }
+    
+    @media (max-width: 768px) {
+        .po-compact-row {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        }
+    }
+    
+    .dark .po-compact-row {
+        background: rgb(31 41 55) !important; /* Darker in dark mode */
+    }
+    
+    /* Compact field display */
+    .compact-field {
+        background: white !important;
+        border: 1px solid #d1d5db !important;
+        border-radius: 0.375rem !important;
+        padding: 0.5rem 0.75rem !important;
+        font-size: 0.875rem !important;
+        color: #6b7280 !important;
+        width: 100% !important;
+    }
+    
+    .dark .compact-field {
+        background: rgb(55 65 81) !important;
+        border-color: rgb(75 85 99) !important;
+        color: #9ca3af !important;
+    }
+    
+    /* Container styles */
+    .po-enhanced-container {
+        background: #f3f4f6;
+        min-height: 100vh;
+        padding: 0;
+        margin: -1.5rem;
+    }
+    
+    .dark .po-enhanced-container {
+        background: #0f172a;
+    }
+    
+    /* Header styling following Universal View pattern */
+    .po-header {
+        background: white;
+        padding: 1.5rem;
+        margin-bottom: 0;
+        position: relative;
+    }
+    
+    .dark .po-header {
+        background: rgb(31 41 55);
+    }
+    
+    /* Badge styling to match Universal View */
+    .badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.75rem;
+        border-radius: 0.375rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+    }
+    
+    .badge-info {
+        background-color: rgb(219 234 254);
+        color: rgb(30 64 175);
+        border: 1px solid rgb(147 197 253);
+    }
+    
+    .dark .badge-info {
+        background-color: rgba(59, 130, 246, 0.2);
+        color: rgb(147 197 253);
+        border-color: rgb(59 130 246);
+    }
+    
+    /* Quick actions bar */
+    .quick-actions-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 1rem 1.5rem;
+        background: white;
+        border-bottom: 1px solid #e5e7eb;
+        margin-bottom: 1rem;
+    }
+    
+    .dark .quick-actions-bar {
+        background: rgb(31 41 55);
+        border-bottom-color: rgb(55 65 81);
+    }
+    
+    .quick-actions-left {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    /* Line Items Table */
+    .line-items-section {
+        background: white;
+        border-radius: 0.5rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        padding: 0;
+        overflow: hidden;
+        margin-bottom: 1.5rem;
+    }
+    
+    .dark .line-items-section {
+        background: rgb(31 41 55);
+    }
+    
+    /* Table footer totals */
+    .table-footer-totals {
+        background: #f9fafb;
+        border-top: 2px solid #e5e7eb;
+    }
+    
+    .dark .table-footer-totals {
+        background: rgb(55 65 81);
+        border-top-color: rgb(75 85 99);
+    }
+    
+    .grand-total-row {
+        background: linear-gradient(135deg, rgb(239 246 255) 0%, rgb(219 234 254) 100%);
+        font-size: 1.125rem;
+    }
+    
+    .dark .grand-total-row {
+        background: linear-gradient(135deg, rgba(30, 58, 138, 0.3) 0%, rgba(59, 130, 246, 0.2) 100%);
+    }
+    
+    /* Bottom action buttons */
+    .bottom-actions {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        padding: 1.5rem;
+        background: white;
+        border-radius: 0.5rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        margin-bottom: 1.5rem;
+        gap: 0.75rem;
+    }
+    
+    .dark .bottom-actions {
+        background: rgb(31 41 55);
+    }
+    
+    /* Override form styles */
+    .universal-form-group {
+        margin-bottom: 1rem !important;
+    }
+    
+    .universal-form-label {
+        display: block !important;
+        margin-bottom: 0.25rem !important;
+        font-size: 0.875rem !important;
+        font-weight: 500 !important;
+        color: rgb(55 65 81) !important;
+    }
+    
+    .dark .universal-form-label {
+        color: rgb(209 213 219) !important;
+    }
+    .po-header-right {
+        position: absolute;
+        top: 1.5rem;
+        right: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.5rem;
+    }
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-4">
-    
-    <!-- Flash messages section -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-        {% for category, message in messages %}
-        <div class="bg-{{ 'green' if category == 'success' else 'red' if category == 'error' else 'blue' }}-100 border-l-4 border-{{ 'green' if category == 'success' else 'red' if category == 'error' else 'blue' }}-500 text-{{ 'green' if category == 'success' else 'red' if category == 'error' else 'blue' }}-700 p-4 mb-6" role="alert">
-            <p>{{ message }}</p>
-        </div>
-        {% endfor %}
-    {% endif %}
-    {% if messages %}
-        <div class="mb-6">
-            {% for category, message in messages %}
-                {% if category == 'error' %}
-                    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-3" role="alert">
-                        <div class="flex">
-                            <div class="py-1">
-                                <svg class="fill-current h-6 w-6 text-red-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                                    <path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zm12.73-1.41A8 8 0 1 0 4.34 4.34a8 8 0 0 0 11.32 11.32zM9 11V9h2v6H9v-4zm0-6h2v2H9V5z"/>
-                                </svg>
+<div class="po-enhanced-container">
+    <!-- Page Header following Universal View pattern -->
+    <div class="po-header">
+        <!-- Info card style header matching Universal View -->
+        <div class="info-card" style="box-shadow: none; border: none; margin: 0;">
+            <div class="card-body" style="padding: 0; background: transparent;">
+                <!-- Row 1: Title and Date/Status -->
+                <div class="flex justify-between items-start mb-3">
+                    <div style="max-width: 60%;">
+                        <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                            <i class="fas fa-file-invoice text-blue-500"></i>
+                            <span class="ml-2">{{ page_title }}</span>
+                        </h1>
+                        <p class="text-gray-600 dark:text-gray-400 mt-1" style="font-style: italic; font-size: 1.125rem; padding-left: 2.5rem;">
+                            Create draft purchase order for a supplier
+                        </p>
+                    </div>
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; padding-right: 1rem;">
+                        <span class="badge badge-info">Draft</span>
+                        <div style="text-align: right;">
+                            <div class="text-sm text-gray-600 dark:text-gray-400">
+                                <i class="fas fa-calendar text-gray-500"></i>
+                                <span class="ml-1">{{ current_date|default(today, true)|default('14 Sep 2025', true) }}</span>
                             </div>
-                            <div>
-                                <p class="font-bold">Validation Error</p>
-                                <p class="text-sm">{{ message }}</p>
+                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                {{ current_date|default(today, true)|date('l') if current_date else 'Sunday' }}
                             </div>
                         </div>
                     </div>
-                {% elif category == 'warning' %}
-                    <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-2" role="alert">
-                        <div class="flex">
-                            <div class="py-1">
-                                <svg class="fill-current h-4 w-4 text-yellow-500 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                                    <path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zm1.41-1.41A8 8 0 1 0 15.66 4.34 8 8 0 0 0 4.34 15.66zm9.9-8.49L11.41 10l2.83 2.83-1.41 1.41L10 11.41l-2.83 2.83-1.41-1.41L8.59 10 5.76 7.17l1.41-1.41L10 8.59l2.83-2.83z"/>
-                                </svg>
-                            </div>
-                            <div>
-                                <p class="text-sm">{{ message }}</p>
-                            </div>
-                        </div>
-                    </div>
-                {% elif category == 'success' %}
-                    <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-3" role="alert">
-                        <div class="flex">
-                            <div class="py-1">
-                                <svg class="fill-current h-6 w-6 text-green-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                                    <path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zm12.73-1.41A8 8 0 1 0 4.34 4.34a8 8 0 0 0 11.32 11.32zM6.7 9.29L9 11.6l4.3-4.3 1.4 1.42L9 14.4l-3.7-3.7 1.4-1.41z"/>
-                                </svg>
-                            </div>
-                            <div>
-                                <p class="font-bold">Success</p>
-                                <p class="text-sm">{{ message }}</p>
-                            </div>
-                        </div>
-                    </div>
-                {% else %}
-                    <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-3" role="alert">
-                        <p class="text-sm">{{ message }}</p>
-                    </div>
-                {% endif %}
-            {% endfor %}
-        </div>
-    {% endif %}
-    {% endwith %}
+                </div>
 
-    <div class="flex justify-between items-center mb-6">
-        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">{{ page_title or "Create Purchase Order" }}</h1>
-        <a href="{{ url_for('supplier_views.purchase_order_list') }}" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-white font-semibold py-2 px-4 rounded inline-flex items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
-            </svg>
-            Back to Purchase Orders
-        </a>
+                <!-- Row 2: Breadcrumb only -->
+                <div class="mb-3">
+                    <nav class="flex items-center space-x-1 text-sm text-gray-500">
+                        <a href="{{ url_for('auth_views.dashboard') }}" class="hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
+                            Dashboard
+                        </a>
+                        <span class="text-gray-400 mx-2">/</span>
+                        <a href="{{ url_for('universal_views.universal_list_view', entity_type='purchase_orders') }}" class="hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
+                            Purchase Orders
+                        </a>
+                        <span class="text-gray-400 mx-2">/</span>
+                        <span class="text-gray-700 dark:text-gray-300 font-medium">Create New</span>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Actions Bar with all buttons in one row -->
+    <div class="quick-actions-bar">
+        <div class="quick-actions-left">
+            <a href="{{ url_for('universal_views.universal_list_view', entity_type='purchase_orders') }}" class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i>
+                Back
+            </a>
+            <a href="{{ url_for('universal_views.universal_list_view', entity_type='purchase_orders') }}" class="btn-outline">
+                <i class="fas fa-list mr-2"></i>
+                Purchase Orders
+            </a>
+            <a href="{{ url_for('universal_views.universal_list_view', entity_type='suppliers') }}" class="btn-outline">
+                <i class="fas fa-users mr-2"></i>
+                Suppliers
+            </a>
+            <a href="{{ url_for('universal_views.universal_list_view', entity_type='supplier_invoices') }}" class="btn-outline">
+                <i class="fas fa-file-invoice mr-2"></i>
+                Invoices
+            </a>
+            <a href="{{ url_for('universal_views.universal_list_view', entity_type='supplier_payments') }}" class="btn-outline">
+                <i class="fas fa-money-bill mr-2"></i>
+                Payments
+            </a>
+        </div>
+        <button type="button" onclick="document.getElementById('purchase-order-form').reset()" class="btn-outline">
+            <i class="fas fa-undo mr-2"></i>
+            Reset Form
+        </button>
     </div>
 
-    <form id="purchase-order-form" method="POST" class="invoice-container">
-        {{ form.csrf_token }}
-        
-        <!-- Compact PO Header -->
-        <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 mb-6">
-            <!-- Row 1: Supplier and PO Date -->
-            <div class="flex gap-4 mb-4">
-                <!-- Supplier Selection -->
-                <div class="flex-grow">
-                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">
-                        Supplier <span class="text-red-500">*</span>
-                    </label>
-                    <select id="supplier_id" name="supplier_id" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
-                        <option value="">Select Supplier</option>
-                        {% for supplier in suppliers %}
-                        <option value="{{ supplier.supplier_id }}" 
-                                data-gst="{{ supplier.gst_registration_number }}"
-                                data-state="{{ supplier.state_code }}"
-                                data-payment-terms="{{ supplier.payment_terms }}">
-                            {{ supplier.supplier_name }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                    {% if form.supplier_id.errors %}
-                        <p class="text-red-500 text-xs italic">{{ form.supplier_id.errors[0] }}</p>
-                    {% endif %}
-                </div>
-                
-                <!-- ADD: Branch Selector Component -->
-                {% include 'components/branch/branch_selector.html' %}
-
-                <!-- PO Date -->
-                <div class="w-48">
-                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1" for="{{ form.po_date.id }}">
-                        PO Date <span class="text-red-500">*</span>
-                    </label>
-                    {{ form.po_date(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", required=true) }}
-                    {% if form.po_date.errors %}
-                        <p class="text-red-500 text-xs italic">{{ form.po_date.errors[0] }}</p>
-                    {% endif %}
-                </div>
-            </div>
+    <div class="px-6">
+        <form id="purchase-order-form" method="POST" action="{{ url_for('supplier_views.add_purchase_order') }}" class="space-y-6">
+            {{ form.csrf_token }}
             
             <!-- Hidden PO Number field -->
-            {{ form.po_number(type="hidden") }}
+            <input type="hidden" name="po_number" id="po_number" value="{{ form.po_number.data }}">
             
-            <!-- Row 2: Combined all other fields with justify -->
-            <div class="flex justify-between gap-4 mb-4">
-                <!-- Expected Delivery Date -->
-                <div class="w-40">
-                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1" for="{{ form.expected_delivery_date.id }}">
-                        Expected Delivery
-                    </label>
-                    {{ form.expected_delivery_date(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+            <!-- Section 1: Basic Information -->
+            <div class="universal-filter-card">
+                <div class="universal-filter-card-header">
+                    <h3 class="universal-filter-card-title">
+                        <i class="fas fa-info-circle"></i>
+                        Basic Information
+                    </h3>
                 </div>
                 
-                <!-- Currency -->
-                <div class="w-28">
-                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1" for="{{ form.currency_code.id }}">
-                        Currency
-                    </label>
-                    {{ form.currency_code(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
-                </div>
-                
-                <!-- Exchange Rate (conditional) -->
-                <div id="exchange-rate-container" class="w-32" style="display: none;">
-                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1" for="{{ form.exchange_rate.id }}">
-                        Exchange Rate
-                    </label>
-                    {{ form.exchange_rate(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", step="0.000001") }}
-                </div>
-                
-                <!-- Quotation Ref -->
-                <div class="w-56">
-                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1" for="{{ form.quotation_id.id }}">
-                        Quotation Reference
-                    </label>
-                    {{ form.quotation_id(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", placeholder="Enter quotation reference") }}
-                </div>
-                
-                <!-- Quotation Date -->
-                <div class="w-40">
-                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1" for="{{ form.quotation_date.id }}">
-                        Quotation Date
-                    </label>
-                    {{ form.quotation_date(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
-                </div>
-            </div>
-            
-            <!-- Selected supplier info (compact) -->
-            <div id="supplier-info-display" class="hidden bg-blue-50 dark:bg-blue-900 p-3 rounded">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
-                    <div>
-                        <span class="font-medium text-gray-700 dark:text-gray-300">GSTIN:</span>
-                        <span id="supplier-gst-display" class="text-gray-600 dark:text-gray-400"></span>
-                    </div>
-                    <div>
-                        <span class="font-medium text-gray-700 dark:text-gray-300">State Code:</span>
-                        <span id="supplier-state-display" class="text-gray-600 dark:text-gray-400"></span>
-                    </div>
-                    <div>
-                        <span class="font-medium text-gray-700 dark:text-gray-300">Payment Terms:</span>
-                        <span id="supplier-terms-display" class="text-gray-600 dark:text-gray-400"></span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Line Items with better padded Add button -->
-        <div class="line-items-section">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-semibold text-gray-800 dark:text-white">Items</h2>
-                <button type="button" id="add-line-item" class="bg-blue-500 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded text-sm whitespace-nowrap inline-flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                    </svg>
-                    Add Item
-                </button>
-            </div>
-            
-            <div class="invoice-table-wrapper">
-                <table class="invoice-table w-full">
-                    <thead>
-                        <tr class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs">
-                            <th class="px-2 py-2 text-center font-medium uppercase">#</th>
-                            <th class="px-2 py-2 text-left font-medium uppercase">Medicine</th>
-                            <th class="px-2 py-2 text-right font-medium uppercase">Qty</th>
-                            <th class="px-2 py-2 text-right font-medium uppercase">Rate</th>
-                            <th class="px-2 py-2 text-right font-medium uppercase">MRP</th>
-                            <th class="px-2 py-2 text-right font-medium uppercase">Disc%</th>
-                            <th class="px-2 py-2 text-center font-medium uppercase">Free</th>
-                            <th class="px-2 py-2 text-right font-medium uppercase">GST</th>
-                            <th class="px-2 py-2 text-right font-medium uppercase">Total</th>
-                            <th class="px-2 py-2 text-center font-medium uppercase">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="line-items-container" class="text-xs">
-                        <tr id="no-items-row">
-                            <td colspan="10" class="px-3 py-4 text-center text-gray-500 dark:text-gray-400">
-                                No items added. Click "Add Item" to add line items.
-                            </td>
-                        </tr>
-                    </tbody>
-                    <tfoot class="bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm">
-                        <tr class="border-t-2 border-gray-300 dark:border-gray-600">
-                            <td colspan="8" class="px-2 py-2 text-right font-medium">Subtotal:</td>
-                            <td class="px-2 py-2 text-right font-medium" id="subtotal">0.00</td>
-                            <td></td>
-                        </tr>
-                        <tr>
-                            <td colspan="8" class="px-2 py-2 text-right font-medium">Total GST:</td>
-                            <td class="px-2 py-2 text-right font-medium" id="total-gst">0.00</td>
-                            <td></td>
-                        </tr>
-                        <tr class="border-t border-gray-400 dark:border-gray-500">
-                            <td colspan="8" class="px-2 py-2 text-right font-bold">Grand Total:</td>
-                            <td class="px-2 py-2 text-right font-bold text-lg" id="grand-total">0.00</td>
-                            <td></td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-        </div>
-
-        <!-- Additional Information section (collapsible) -->
-        <div class="mb-6">
-            <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4 cursor-pointer" 
-                    onclick="document.getElementById('additional-info').classList.toggle('hidden')">
-                    Additional Information 
-                    <span class="text-sm text-gray-500">(Click to expand/collapse)</span>
-                </h3>
-                
-                <div id="additional-info" class="hidden">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="universal-filter-card-body">
+                    <div class="po-two-column-grid">
+                        <!-- Left Column -->
                         <div>
-                            <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ form.delivery_instructions.id }}">
-                                Delivery Instructions
-                            </label>
-                            {{ form.delivery_instructions(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline h-24") }}
+                            <!-- Supplier Selection -->
+                            <div class="universal-form-group">
+                                <label class="universal-form-label" for="{{ form.supplier_id.id }}">
+                                    Supplier <span class="text-red-500">*</span>
+                                </label>
+                                <select id="supplier_id" name="supplier_id" 
+                                        class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                                        required>
+                                    <option value="">Select Supplier</option>
+                                    {% for supplier in suppliers %}
+                                    <option value="{{ supplier.supplier_id }}" 
+                                            data-gst="{{ supplier.gst_registration_number }}"
+                                            data-state="{{ supplier.state_code }}"
+                                            data-payment-terms="{{ supplier.payment_terms }}">
+                                        {{ supplier.supplier_name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- PO Date -->
+                            <div class="universal-form-group">
+                                <label class="universal-form-label" for="{{ form.po_date.id }}">
+                                    PO Date <span class="text-red-500">*</span>
+                                </label>
+                                {{ form.po_date(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                            </div>
                         </div>
                         
+                        <!-- Right Column -->
                         <div>
-                            <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ form.terms_conditions.id }}">
-                                Terms and Conditions
-                            </label>
-                            {{ form.terms_conditions(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline h-24") }}
+                            <!-- Hidden branch field -->
+                            <input type="hidden" name="branch_id" value="{{ current_user.branch_id if current_user.branch_id else '' }}">
+                            
+                            <!-- Expected Delivery Date -->
+                            <div class="universal-form-group">
+                                <label class="universal-form-label" for="{{ form.expected_delivery_date.id }}">
+                                    Expected Delivery
+                                </label>
+                                {{ form.expected_delivery_date(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                            </div>
                         </div>
                     </div>
                     
-                    <div class="mt-4">
-                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ form.notes.id }}">
-                            Internal Notes
-                        </label>
-                        {{ form.notes(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline h-24") }}
+                    <!-- Hidden Supplier Info -->
+                    <div class="hidden">
+                        <input type="hidden" id="supplier-gst-value" value="">
+                        <input type="hidden" id="supplier-state-value" value="">
+                        <input type="hidden" id="supplier-terms-value" value="">
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Hidden fields for line items data -->
-        <div class="hidden">
-            {{ form.medicine_ids }}
-            {{ form.medicine_names }}
-            {{ form.quantities }}
-            {{ form.pack_purchase_prices }}
-            {{ form.pack_mrps }}
-            {{ form.units_per_packs }}
-            {{ form.hsn_codes }}
-            {{ form.gst_rates }}
-            {{ form.cgst_rates }}
-            {{ form.sgst_rates }}
-            {{ form.igst_rates }}
-            {{ form.discount_percents }}
-            {{ form.is_free_items }}
-        </div>
+            <!-- Section 2: Reference Information -->
+            <div class="universal-filter-card">
+                <div class="universal-filter-card-header">
+                    <h3 class="universal-filter-card-title">
+                        <i class="fas fa-file-alt"></i>
+                        Reference Information
+                    </h3>
+                    <span class="text-sm text-gray-500">Optional</span>
+                </div>
+                
+                <div class="universal-filter-card-body">
+                    <!-- Non-editing fields in single row with darker background -->
+                    <div class="po-compact-row">
+                        <div>
+                            <label class="text-xs text-gray-600 dark:text-gray-400 block mb-1">Currency</label>
+                            <div class="compact-field">INR</div>
+                            <input type="hidden" name="currency_code" value="INR">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-600 dark:text-gray-400 block mb-1">Exchange Rate</label>
+                            <div class="compact-field">1.000000</div>
+                            <input type="hidden" name="exchange_rate" value="1.000000">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-600 dark:text-gray-400 block mb-1">Status</label>
+                            <div class="compact-field">Draft</div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-600 dark:text-gray-400 block mb-1">Created By</label>
+                            <div class="compact-field">{{ current_user.username if current_user else 'System' }}</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Editable fields -->
+                    <div class="po-two-column-grid">
+                        <div class="universal-form-group">
+                            <label class="universal-form-label" for="{{ form.quotation_id.id }}">
+                                Quotation Reference
+                            </label>
+                            {{ form.quotation_id(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", placeholder="Enter reference") }}
+                        </div>
+                        
+                        <div class="universal-form-group">
+                            <label class="universal-form-label" for="{{ form.quotation_date.id }}">
+                                Quotation Date
+                            </label>
+                            {{ form.quotation_date(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-        <!-- Submit Button -->
-        <div class="text-right">
-            <p class="text-sm text-gray-600 dark:text-gray-400 italic mb-3">
-                Note: All purchase orders are created in draft status and must be approved before activation.
-            </p>
-            <button type="submit" name="save_draft" value="1" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded focus:outline-none focus:shadow-outline">
+            <!-- Section 3: Line Items -->
+            <div class="line-items-section">
+                <div class="universal-filter-card-header">
+                    <h3 class="universal-filter-card-title">
+                        <i class="fas fa-list"></i>
+                        Line Items
+                    </h3>
+                    <button type="button" id="add-line-item" class="btn-primary btn-primary">
+                        <i class="fas fa-plus mr-2"></i>Add Item
+                    </button>
+                </div>
+                
+                <div class="p-0">
+                    <table class="universal-table w-full">
+                        <thead class="universal-table-header">
+                            <tr>
+                                <th class="text-center w-12">#</th>
+                                <th class="w-2/5">Medicine</th>
+                                <th class="text-right w-20">Qty</th>
+                                <th class="text-right w-24">Rate</th>
+                                <th class="text-right w-24">MRP</th>
+                                <th class="text-center w-20">GST%</th>
+                                <th class="text-center w-16">Free</th>
+                                <th class="text-right w-24">Amount</th>
+                                <th class="text-center w-16">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="line-items-container" class="universal-table-body"></tbody>
+                        <tfoot class="table-footer-totals">
+                            <tr>
+                                <td colspan="7" class="text-right font-semibold px-4 py-2">Subtotal:</td>
+                                <td class="text-right font-semibold px-4 py-2">
+                                    <span class="currency-symbol">₹</span>
+                                    <span id="subtotal-display">0.00</span>
+                                </td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td colspan="7" class="text-right font-semibold px-4 py-2">Total GST:</td>
+                                <td class="text-right font-semibold px-4 py-2">
+                                    <span class="currency-symbol">₹</span>
+                                    <span id="total-gst-display">0.00</span>
+                                </td>
+                                <td></td>
+                            </tr>
+                            <tr class="grand-total-row">
+                                <td colspan="7" class="text-right font-bold text-lg px-4 py-3">Grand Total:</td>
+                                <td class="text-right font-bold text-lg text-blue-600 dark:text-blue-400 px-4 py-3">
+                                    <span class="currency-symbol">₹</span>
+                                    <span id="grand-total-display">0.00</span>
+                                </td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Section 4: Additional Information -->
+            <div class="universal-filter-card">
+                <div class="universal-filter-card-header">
+                    <h3 class="universal-filter-card-title">
+                        <i class="fas fa-file-alt"></i>
+                        Additional Information
+                    </h3>
+                </div>
+                
+                <div id="additional-info-content" class="universal-filter-card-body">
+                    <div class="po-two-column-grid">
+                        <div class="universal-form-group">
+                            <label class="universal-form-label" for="{{ form.delivery_instructions.id }}">
+                                Delivery Instructions
+                            </label>
+                            {{ form.delivery_instructions(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", rows=4) }}
+                        </div>
+                        
+                        <div class="universal-form-group">
+                            <label class="universal-form-label" for="{{ form.terms_conditions.id }}">
+                                Terms and Conditions
+                            </label>
+                            {{ form.terms_conditions(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", rows=4) }}
+                        </div>
+                    </div>
+                    
+                    <div class="universal-form-group mt-4">
+                        <label class="universal-form-label" for="{{ form.notes.id }}">
+                            Internal Notes
+                        </label>
+                        {{ form.notes(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", rows=3) }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hidden fields for line items data -->
+            <div class="hidden">
+                {{ form.medicine_ids }}
+                {{ form.medicine_names }}
+                {{ form.quantities }}
+                {{ form.pack_purchase_prices }}
+                {{ form.pack_mrps }}
+                {{ form.units_per_packs }}
+                {{ form.hsn_codes }}
+                {{ form.gst_rates }}
+                {{ form.cgst_rates }}
+                {{ form.sgst_rates }}
+                {{ form.igst_rates }}
+                {{ form.discount_percents }}
+                {{ form.is_free_items }}
+            </div>
+        </form>
+
+        <!-- Bottom Action Buttons (only Create button) -->
+        <div class="bottom-actions">
+            <a href="{{ url_for('universal_views.universal_list_view', entity_type='purchase_orders') }}" class="btn-secondary">
+                <i class="fas fa-times mr-2"></i>
+                Cancel
+            </a>
+            <button type="submit" form="purchase-order-form" name="save_draft" value="1" class="btn-primary">
+                <i class="fas fa-check mr-2"></i>
                 Create Purchase Order
             </button>
         </div>
-    </form>
+    </div>
 </div>
 
-<!-- Line item template for JavaScript -->
+<!-- Line Item Template -->
 <template id="line-item-template">
-    <tr class="line-item-row border-b dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700">
-        <!-- # Column -->
-        <td class="px-2 py-2 text-center">
-            <span class="line-number text-sm text-gray-600 font-medium">1</span>
+    <tr class="line-item-row universal-table-row hover:bg-gray-50 dark:hover:bg-gray-700">
+        <td class="text-center px-2 py-2">
+            <span class="line-number text-sm font-medium">1</span>
         </td>
-        
-        <!-- Medicine Column (Wider) -->
         <td class="px-2 py-2">
-            <select class="medicine-select form-select text-xs w-full border rounded px-2 py-1" required>
+            <select class="medicine-select form-select text-sm w-full border rounded px-2 py-1" required>
                 <option value="">Select Medicine</option>
                 {% for medicine in medicines %}
                 <option value="{{ medicine.medicine_id }}" 
@@ -336,580 +558,258 @@
                 {% endfor %}
             </select>
         </td>
-        
-        <!-- Quantity Column (Narrower) -->
         <td class="px-2 py-2">
-            <input type="number" class="quantity form-input text-xs w-full text-right border rounded px-2 py-1" 
+            <input type="number" class="quantity form-input text-sm w-full text-right border rounded px-2 py-1" 
                    min="0" step="1" placeholder="0" required>
         </td>
-        
-        <!-- Rate Column (Narrower) -->
         <td class="px-2 py-2">
-            <input type="number" class="pack-price form-input text-xs w-full text-right border rounded px-2 py-1" 
+            <input type="number" class="rate form-input text-sm w-full text-right border rounded px-2 py-1" 
                    min="0" step="0.01" placeholder="0.00" required>
         </td>
-        
-        <!-- MRP Column (Narrower) -->
         <td class="px-2 py-2">
-            <input type="number" class="mrp form-input text-xs w-full text-right border rounded px-2 py-1" 
-                   min="0" step="0.01" placeholder="0.00" required>
+            <input type="number" class="mrp form-input text-sm w-full text-right border rounded px-2 py-1" 
+                   min="0" step="0.01" placeholder="0.00">
         </td>
-        
-        <!-- Discount Column -->
-        <td class="px-2 py-2">
-            <input type="number" class="discount-percent form-input text-xs w-full text-right border rounded px-2 py-1" 
-                   min="0" max="100" step="0.1" placeholder="0" value="0">
+        <td class="text-center px-2 py-2">
+            <span class="gst-rate text-sm">0%</span>
         </td>
-        
-        <!-- Free Item Column -->
-        <td class="px-2 py-2 text-center">
-            <label class="inline-flex items-center justify-center">
-                <input type="checkbox" class="is-free-item form-checkbox text-xs rounded">
-                <span class="ml-1 text-xs hidden sm:inline">Free</span>
-            </label>
+        <td class="text-center px-2 py-2">
+            <input type="checkbox" class="is-free-item">
         </td>
-        
-        <!-- GST Column (Wider) -->
-        <td class="px-2 py-2">
-            <input type="number" class="gst-rate form-input text-xs w-full text-right border rounded px-2 py-1" 
-                   min="0" max="100" step="0.1" placeholder="0" readonly>
-            <div class="text-xs text-gray-500 mt-1 leading-tight">
-                <div class="gst-breakdown"></div>
-            </div>
+        <td class="text-right px-2 py-2">
+            <div class="line-total font-semibold text-sm">0.00</div>
+            <div class="text-xs text-gray-500 gst-details mt-1"></div>
         </td>
-        
-        <!-- Total Column (Wider) -->
-        <td class="px-2 py-2 text-right">
-            <div class="line-total font-medium text-sm">0.00</div>
-            <div class="text-xs text-gray-500 gst-details mt-1 leading-tight"></div>
-        </td>
-        
-        <!-- Action Column with Proper Delete Icon -->
-        <td class="px-2 py-2 text-center">
-            <button type="button" class="remove-line-item text-red-600 hover:text-red-800 hover:bg-red-100 rounded p-1 transition-colors" 
-                    title="Remove this item">
-                <!-- SVG Trash Icon -->
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
+        <td class="text-center px-2 py-2">
+            <button type="button" class="remove-line-item btn-danger btn-sm btn-icon-only" title="Remove item">
+                <i class="fas fa-trash"></i>
             </button>
         </td>
-        
-        <!-- Hidden fields for this line -->
         <input type="hidden" class="units-per-pack" value="1">
         <input type="hidden" class="hsn-code" value="">
     </tr>
 </template>
-
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
 <script src="{{ url_for('static', filename='js/components/form_handler.js') }}"></script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     let lineItemIndex = 0;
     let currentSupplierId = '';
     let currentSupplierStateCode = '';
     
-    // Initialize form handler with minimal validation (let server handle complex validation)
+    // Initialize form handler - Remove redirect override since controller is fixed
     const formHandler = new FormHandler({
         formSelector: '#purchase-order-form',
         validations: [
             {
                 field: '#supplier_id',
-                rules: [function(fieldEls) { return !!fieldEls[0].value; }],
-                message: 'Please select a supplier'
+                rules: [function(fieldEl) { 
+                    return !fieldEl.value ? 'Supplier is required' : null; 
+                }]
             }
-        ],
-        onBeforeSubmit: function() {
-            return collectAndValidateLineItems();
+        ]
+    });
+    
+    // Supplier selection handler
+    document.getElementById('supplier_id').addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        
+        if (selectedOption.value) {
+            currentSupplierId = selectedOption.value;
+            currentSupplierStateCode = selectedOption.dataset.state || '';
+            
+            // Store in hidden fields
+            document.getElementById('supplier-gst-value').value = selectedOption.dataset.gst || '';
+            document.getElementById('supplier-state-value').value = selectedOption.dataset.state || '';
+            document.getElementById('supplier-terms-value').value = selectedOption.dataset.paymentTerms || '';
         }
     });
-
-    // =============================================================================
-    // SUPPLIER HANDLING
-    // =============================================================================
     
-    const supplierSelect = document.getElementById('supplier_id');
-    const supplierInfoDisplay = document.getElementById('supplier-info-display');
+    // Add line item handler
+    document.getElementById('add-line-item').addEventListener('click', function() {
+        const template = document.getElementById('line-item-template');
+        const clone = template.content.cloneNode(true);
+        
+        lineItemIndex++;
+        const row = clone.querySelector('tr');
+        row.dataset.index = lineItemIndex;
+        
+        clone.querySelector('.line-number').textContent = lineItemIndex;
+        
+        document.getElementById('line-items-container').appendChild(clone);
+        
+        const newRow = document.querySelector(`tr[data-index="${lineItemIndex}"]`);
+        attachLineItemHandlers(newRow);
+        
+        updateTotals();
+    });
     
-    if (supplierSelect) {
-        supplierSelect.addEventListener('change', function() {
-            const selectedOption = this.options[this.selectedIndex];
-            
-            if (this.value) {
-                // Display supplier info
-                document.getElementById('supplier-gst-display').textContent = selectedOption.getAttribute('data-gst') || 'N/A';
-                document.getElementById('supplier-state-display').textContent = selectedOption.getAttribute('data-state') || 'N/A';
-                document.getElementById('supplier-terms-display').textContent = selectedOption.getAttribute('data-payment-terms') || 'N/A';
-                supplierInfoDisplay.classList.remove('hidden');
-                
-                // Store supplier info for calculations
-                currentSupplierId = this.value;
-                currentSupplierStateCode = selectedOption.getAttribute('data-state') || '';
-                
-                // Recalculate all line items
-                recalculateAllLines();
-            } else {
-                supplierInfoDisplay.classList.add('hidden');
-                currentSupplierId = '';
-                currentSupplierStateCode = '';
-            }
-        });
-    }
-    
-    // =============================================================================
-    // CURRENCY HANDLING
-    // =============================================================================
-    
-    const currencySelect = document.getElementById('currency_code');
-    const exchangeRateContainer = document.getElementById('exchange-rate-container');
-    
-    if (currencySelect) {
-        currencySelect.addEventListener('change', function() {
-            if (this.value === 'INR') {
-                exchangeRateContainer.style.display = 'none';
-                document.getElementById('exchange_rate').value = '1';
-            } else {
-                exchangeRateContainer.style.display = '';
-            }
-        });
-    }
-    
-    // =============================================================================
-    // LINE ITEMS MANAGEMENT
-    // =============================================================================
-    
-    const addLineItemButton = document.getElementById('add-line-item');
-    const lineItemsContainer = document.getElementById('line-items-container');
-    const noItemsRow = document.getElementById('no-items-row');
-    const lineItemTemplate = document.getElementById('line-item-template');
-    
-    if (addLineItemButton) {
-        addLineItemButton.addEventListener('click', function() {
-            noItemsRow.style.display = 'none';
-            
-            const content = lineItemTemplate.content.cloneNode(true);
-            const row = content.querySelector('.line-item-row');
-            lineItemsContainer.appendChild(row);
-            
-            initializeLineItem(row);
-            updateLineNumbers();
-            lineItemIndex++;
-        });
-    }
-    
-    // =============================================================================
-    // LINE ITEM INITIALIZATION
-    // =============================================================================
-    
-    function initializeLineItem(row) {
+    // Attach handlers to line item
+    function attachLineItemHandlers(row) {
         const medicineSelect = row.querySelector('.medicine-select');
-        const quantity = row.querySelector('.quantity');
-        const packPrice = row.querySelector('.pack-price');
-        const mrp = row.querySelector('.mrp');
-        const discountPercent = row.querySelector('.discount-percent');
-        const isFreeItem = row.querySelector('.is-free-item');
-        const gstRate = row.querySelector('.gst-rate');
-        const removeButton = row.querySelector('.remove-line-item');
-        
-        // Medicine selection
-        if (medicineSelect) {
-            medicineSelect.addEventListener('change', function() {
-                const selectedOption = this.options[this.selectedIndex];
-                if (selectedOption.value) {
-                    gstRate.value = selectedOption.getAttribute('data-gst') || '0';
-                    row.querySelector('.hsn-code').value = selectedOption.getAttribute('data-hsn') || '';
-                    row.querySelector('.units-per-pack').value = selectedOption.getAttribute('data-pack-size') || '1';
-                    calculateLineGST(row);
-                }
-            });
-        }
-        
-        // Input change handlers
-        [quantity, packPrice, mrp, discountPercent, gstRate].forEach(input => {
-            if (input) {
-                input.addEventListener('input', debounce(() => calculateLineGST(row), 300));
+        medicineSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            if (selectedOption.value) {
+                row.querySelector('.gst-rate').textContent = (selectedOption.dataset.gst || 0) + '%';
+                row.querySelector('.units-per-pack').value = selectedOption.dataset.packSize || 1;
+                row.querySelector('.hsn-code').value = selectedOption.dataset.hsn || '';
+                calculateLineTotal(row);
             }
         });
         
-        // Free item checkbox handling
-        if (isFreeItem) {
-            isFreeItem.addEventListener('change', function() {
-                const isChecked = this.checked;
-                
-                if (isChecked) {
-                    // ONLY reset price and discount, NEVER touch quantity
-                    if (packPrice) {
-                        packPrice.value = '0';
-                        packPrice.readOnly = true;
-                        packPrice.classList.add('bg-gray-100', 'dark:bg-gray-600');
-                    }
-                    if (discountPercent) {
-                        discountPercent.value = '0';
-                        discountPercent.readOnly = true;
-                        discountPercent.classList.add('bg-gray-100', 'dark:bg-gray-600');
-                    }
-                    
-                    // Add visual styling
-                    row.classList.add('bg-green-50', 'dark:bg-green-900');
-                    
-                    // Add free badge if not already present
-                    const medicineCell = row.querySelector('.medicine-select').parentNode;
-                    if (medicineCell && !medicineCell.querySelector('.free-badge')) {
-                        const badge = document.createElement('span');
-                        badge.className = 'free-badge ml-2 px-2 py-1 text-xs bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200 rounded';
-                        badge.textContent = 'Free';
-                        medicineCell.appendChild(badge);
-                    }
-                } else {
-                    // When unchecked, allow editing price and discount again
-                    if (packPrice) {
-                        packPrice.readOnly = false;
-                        packPrice.classList.remove('bg-gray-100', 'dark:bg-gray-600');
-                    }
-                    if (discountPercent) {
-                        discountPercent.readOnly = false;
-                        discountPercent.classList.remove('bg-gray-100', 'dark:bg-gray-600');
-                    }
-                    
-                    // Remove visual styling
-                    row.classList.remove('bg-green-50', 'dark:bg-green-900');
-                    
-                    // Remove free badge
-                    const freeBadge = row.querySelector('.free-badge');
-                    if (freeBadge) {
-                        freeBadge.remove();
-                    }
-                }
-                calculateLineGST(row);
-            });
-        }
+        ['quantity', 'rate', 'mrp'].forEach(field => {
+            const input = row.querySelector(`.${field}`);
+            input.addEventListener('input', () => calculateLineTotal(row));
+        });
         
-        // Remove button
-        if (removeButton) {
-            removeButton.addEventListener('click', function() {
+        row.querySelector('.is-free-item').addEventListener('change', function() {
+            calculateLineTotal(row);
+        });
+        
+        row.querySelector('.remove-line-item').addEventListener('click', function() {
+            if (confirm('Remove this item?')) {
                 row.remove();
                 updateLineNumbers();
-                updateTotalsDisplay();
-                
-                if (lineItemsContainer.querySelectorAll('.line-item-row').length === 0) {
-                    noItemsRow.style.display = '';
-                }
-            });
-        }
+                updateTotals();
+            }
+        });
     }
     
-    // =============================================================================
-    // GST CALCULATIONS (Server-side)
-    // =============================================================================
-    
-    async function calculateLineGST(row) {
-        try {
-            const quantity = parseFloat(row.querySelector('.quantity')?.value) || 0;
-            const unitRate = parseFloat(row.querySelector('.pack-price')?.value) || 0;
-            const gstRate = parseFloat(row.querySelector('.gst-rate')?.value) || 0;
-            const discountPercent = parseFloat(row.querySelector('.discount-percent')?.value) || 0;
-            const isFreeItem = row.querySelector('.is-free-item')?.checked || false;
-            
-            if (quantity === 0 || (unitRate === 0 && !isFreeItem)) {
-                clearLineDisplay(row);
-                updateTotalsDisplay();
-                return;
-            }
-            
-            const response = await fetch('/supplier/api/po/preview-gst', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCSRFToken()
-                },
-                body: JSON.stringify({
-                    quantity: quantity,
-                    unit_rate: unitRate,
-                    gst_rate: gstRate,
-                    discount_percent: discountPercent,
-                    is_free_item: isFreeItem,
-                    conversion_factor: 1,
-                    supplier_state_code: currentSupplierStateCode
-                })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                updateLineDisplay(row, data.calculations);
-            } else {
-                clearLineDisplay(row);
-            }
-            
-            updateTotalsDisplay();
-            
-        } catch (error) {
-            console.error('GST calculation error:', error);
-            clearLineDisplay(row);
-        }
-    }
-    
-    function updateLineDisplay(row, calculations) {
-        row.querySelector('.line-total').textContent = calculations.line_total.toFixed(2);
+    // Calculate line total
+    function calculateLineTotal(row) {
+        const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
+        const rate = parseFloat(row.querySelector('.rate').value) || 0;
+        const isFree = row.querySelector('.is-free-item').checked;
+        const gstRate = parseFloat(row.querySelector('.gst-rate').textContent) || 0;
         
-        const gstBreakdown = row.querySelector('.gst-breakdown');
-        if (calculations.is_interstate) {
-            gstBreakdown.textContent = `IGST:  Rs.${calculations.igst_amount.toFixed(2)}`;
+        let lineTotal = 0;
+        let gstAmount = 0;
+        
+        if (!isFree && quantity > 0 && rate > 0) {
+            const baseAmount = quantity * rate;
+            gstAmount = (baseAmount * gstRate) / 100;
+            lineTotal = baseAmount + gstAmount;
+        }
+        
+        row.querySelector('.line-total').textContent = lineTotal.toFixed(2);
+        
+        if (gstAmount > 0) {
+            const gstDetails = currentSupplierStateCode === '29' 
+                ? `CGST: ₹${(gstAmount/2).toFixed(2)}, SGST: ₹${(gstAmount/2).toFixed(2)}`
+                : `IGST: ₹${gstAmount.toFixed(2)}`;
+            row.querySelector('.gst-details').textContent = gstDetails;
         } else {
-            gstBreakdown.textContent = `C: Rs.${calculations.cgst_amount.toFixed(2)} S: Rs.${calculations.sgst_amount.toFixed(2)}`;
+            row.querySelector('.gst-details').textContent = '';
         }
         
-        const gstDetails = row.querySelector('.gst-details');
-        gstDetails.textContent = `Base:  Rs.${calculations.base_amount.toFixed(2)} | GST:  Rs.${calculations.total_gst_amount.toFixed(2)}`;
+        updateTotals();
     }
     
-    function clearLineDisplay(row) {
-        row.querySelector('.line-total').textContent = '0.00';
-        row.querySelector('.gst-breakdown').textContent = '';
-        row.querySelector('.gst-details').textContent = '';
-    }
-    
-    async function updateTotalsDisplay() {
-        try {
-            const lineItems = collectLineItemsForAPI();
-            
-            if (lineItems.length === 0) {
-                updateTotalElements(0, 0, 0);
-                return;
-            }
-            
-            const response = await fetch('/supplier/api/po/preview-totals', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCSRFToken()
-                },
-                body: JSON.stringify({
-                    line_items: lineItems,
-                    supplier_state_code: currentSupplierStateCode
-                })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                const totals = data.totals;
-                updateTotalElements(totals.total_taxable_amount, totals.total_gst_amount, totals.grand_total);
-            }
-            
-        } catch (error) {
-            console.error('Totals calculation error:', error);
-        }
-    }
-    
-    function updateTotalElements(subtotal, totalGst, grandTotal) {
-        document.getElementById('subtotal').textContent = subtotal.toFixed(2);
-        document.getElementById('total-gst').textContent = totalGst.toFixed(2);
-        document.getElementById('grand-total').textContent = grandTotal.toFixed(2);
-    }
-    
-    function collectLineItemsForAPI() {
-        const rows = document.querySelectorAll('.line-item-row');
-        return Array.from(rows).map(row => ({
-            quantity: parseFloat(row.querySelector('.quantity')?.value) || 0,
-            unit_rate: parseFloat(row.querySelector('.pack-price')?.value) || 0,
-            gst_rate: parseFloat(row.querySelector('.gst-rate')?.value) || 0,
-            discount_percent: parseFloat(row.querySelector('.discount-percent')?.value) || 0,
-            is_free_item: row.querySelector('.is-free-item')?.checked || false,
-            conversion_factor: 1
-        })).filter(item => item.quantity > 0);
-    }
-    
-    function recalculateAllLines() {
-        document.querySelectorAll('.line-item-row').forEach(row => calculateLineGST(row));
-    }
-    
+    // Update line numbers
     function updateLineNumbers() {
-        document.querySelectorAll('.line-item-row').forEach((row, index) => {
+        const rows = document.querySelectorAll('.line-item-row');
+        rows.forEach((row, index) => {
             row.querySelector('.line-number').textContent = index + 1;
+            row.dataset.index = index + 1;
         });
+        lineItemIndex = rows.length;
     }
-
-    // =============================================================================
-    // FORM SUBMISSION - CLEAN CREATE-ONLY VERSION
-    // =============================================================================
     
-    function collectAndValidateLineItems() {
-        const rows = document.querySelectorAll('.line-item-row');
+    // Update totals
+    function updateTotals() {
+        let subtotal = 0;
+        let totalGst = 0;
         
-        if (rows.length === 0) {
-            alert('Please add at least one item to the purchase order');
-            return false;
-        }
-
-        // Enhanced validation with free item support
-        let hasValidItems = false;
-        let validationErrors = [];
+        document.querySelectorAll('.line-item-row').forEach(row => {
+            const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
+            const rate = parseFloat(row.querySelector('.rate').value) || 0;
+            const isFree = row.querySelector('.is-free-item').checked;
+            const gstRate = parseFloat(row.querySelector('.gst-rate').textContent) || 0;
+            
+            if (!isFree && quantity > 0 && rate > 0) {
+                const baseAmount = quantity * rate;
+                const gstAmount = (baseAmount * gstRate) / 100;
+                
+                subtotal += baseAmount;
+                totalGst += gstAmount;
+            }
+        });
         
-        rows.forEach((row, index) => {
+        const grandTotal = subtotal + totalGst;
+        
+        document.getElementById('subtotal-display').textContent = subtotal.toFixed(2);
+        document.getElementById('total-gst-display').textContent = totalGst.toFixed(2);
+        document.getElementById('grand-total-display').textContent = grandTotal.toFixed(2);
+    }
+    
+    // Form submission handler
+    document.getElementById('purchase-order-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const lineItems = [];
+        document.querySelectorAll('.line-item-row').forEach(row => {
             const medicineSelect = row.querySelector('.medicine-select');
-            const quantity = row.querySelector('.quantity');
-            const isFreeItem = row.querySelector('.is-free-item')?.checked || false;
-            const packPrice = row.querySelector('.pack-price');
-            const mrp = row.querySelector('.mrp');
-            
-            const lineNumber = index + 1;
-            
-            // Medicine validation
-            if (!medicineSelect?.value) {
-                validationErrors.push(`Line ${lineNumber}: Please select a medicine`);
-                return;
+            if (medicineSelect.value) {
+                lineItems.push({
+                    medicine_id: medicineSelect.value,
+                    medicine_name: medicineSelect.options[medicineSelect.selectedIndex].text,
+                    quantity: row.querySelector('.quantity').value,
+                    rate: row.querySelector('.rate').value,
+                    mrp: row.querySelector('.mrp').value,
+                    gst_rate: parseFloat(row.querySelector('.gst-rate').textContent),
+                    is_free: row.querySelector('.is-free-item').checked,
+                    units_per_pack: row.querySelector('.units-per-pack').value,
+                    hsn_code: row.querySelector('.hsn-code').value
+                });
             }
-            
-            // Quantity validation (required for all items)
-            const qtyValue = parseFloat(quantity?.value) || 0;
-            if (qtyValue <= 0) {
-                validationErrors.push(`Line ${lineNumber}: Quantity must be greater than 0`);
-                return;
-            }
-            
-            // Free item specific validation
-            if (isFreeItem) {
-                // Free items: zero rate is expected
-                const priceValue = parseFloat(packPrice?.value) || 0;
-                if (priceValue > 0) {
-                    validationErrors.push(`Line ${lineNumber}: Free items should have zero rate`);
-                    return;
-                }
+        });
+        
+        updateHiddenFields(lineItems);
+        this.submit();
+    });
+    
+    // Update hidden fields
+    function updateHiddenFields(lineItems) {
+        const form = document.getElementById('purchase-order-form');
+        
+        form.medicine_ids.value = lineItems.map(item => item.medicine_id).join(',');
+        form.medicine_names.value = lineItems.map(item => item.medicine_name).join(',');
+        form.quantities.value = lineItems.map(item => item.quantity).join(',');
+        form.pack_purchase_prices.value = lineItems.map(item => item.rate).join(',');
+        form.pack_mrps.value = lineItems.map(item => item.mrp || 0).join(',');
+        form.units_per_packs.value = lineItems.map(item => item.units_per_pack).join(',');
+        form.hsn_codes.value = lineItems.map(item => item.hsn_code).join(',');
+        form.gst_rates.value = lineItems.map(item => item.gst_rate).join(',');
+        
+        const cgstRates = [];
+        const sgstRates = [];
+        const igstRates = [];
+        
+        lineItems.forEach(item => {
+            if (currentSupplierStateCode === '29') {
+                cgstRates.push(item.gst_rate / 2);
+                sgstRates.push(item.gst_rate / 2);
+                igstRates.push(0);
             } else {
-                // Non-free items: must have positive rate and MRP
-                const priceValue = parseFloat(packPrice?.value) || 0;
-                const mrpValue = parseFloat(mrp?.value) || 0;
-                
-                if (priceValue <= 0) {
-                    validationErrors.push(`Line ${lineNumber}: Rate must be greater than 0 for non-free items`);
-                    return;
-                }
-                
-                if (mrpValue <= 0) {
-                    validationErrors.push(`Line ${lineNumber}: MRP must be greater than 0`);
-                    return;
-                }
-            }
-            
-            hasValidItems = true;
-        });
-        
-        // Show validation errors
-        if (validationErrors.length > 0) {
-            alert('Please fix the following validation errors:\n\n' + validationErrors.join('\n'));
-            return false;
-        }
-        
-        if (!hasValidItems) {
-            alert('Please add at least one valid item with medicine and quantity');
-            return false;
-        }
-        
-        // If all validations pass, collect form data
-        return collectFormData();
-    }
-    
-    function collectFormData() {
-        const rows = document.querySelectorAll('.line-item-row');
-        
-        const medicineIds = [];
-        const medicineNames = [];
-        const quantities = [];
-        const packPurchasePrices = [];
-        const packMrps = [];
-        const unitsPerPacks = [];
-        const hsnCodes = [];
-        const gstRates = [];
-        const discountPercents = [];
-        const isFreeItems = [];
-
-        rows.forEach((row, index) => {
-            const medicineSelect = row.querySelector('.medicine-select');
-            if (medicineSelect?.value) {
-                const selectedOption = medicineSelect.options[medicineSelect.selectedIndex];
-                const isFreeItem = row.querySelector('.is-free-item')?.checked || false;
-                
-                // Get current values from form fields
-                const quantityInput = row.querySelector('.quantity');
-                const priceInput = row.querySelector('.pack-price');
-                const mrpInput = row.querySelector('.mrp');
-                const discountInput = row.querySelector('.discount-percent');
-                
-                const currentQuantity = quantityInput?.value || '0';
-                const currentPrice = priceInput?.value || '0';
-                const currentMrp = mrpInput?.value || '0';
-                const currentDiscount = discountInput?.value || '0';
-                
-                medicineIds.push(medicineSelect.value);
-                medicineNames.push(selectedOption.text || '');
-                quantities.push(currentQuantity);
-                
-                // Handle free vs regular items
-                if (isFreeItem) {
-                    packPurchasePrices.push('0');      // Rate = 0 for free items
-                    discountPercents.push('0');        // Discount = 0 for free items
-                } else {
-                    packPurchasePrices.push(currentPrice);    // Use current price
-                    discountPercents.push(currentDiscount);   // Use current discount
-                }
-                
-                packMrps.push(currentMrp);
-                unitsPerPacks.push(row.querySelector('.units-per-pack')?.value || '1');
-                hsnCodes.push(row.querySelector('.hsn-code')?.value || '');
-                gstRates.push(row.querySelector('.gst-rate')?.value || '0');
-                isFreeItems.push(isFreeItem ? 'true' : 'false');
+                cgstRates.push(0);
+                sgstRates.push(0);
+                igstRates.push(item.gst_rate);
             }
         });
         
-        // Update hidden form fields
-        const hiddenFields = {
-            'medicine_ids': medicineIds.join(','),
-            'medicine_names': medicineNames.join(','),
-            'quantities': quantities.join(','),
-            'pack_purchase_prices': packPurchasePrices.join(','),
-            'pack_mrps': packMrps.join(','),
-            'units_per_packs': unitsPerPacks.join(','),
-            'hsn_codes': hsnCodes.join(','),
-            'gst_rates': gstRates.join(','),
-            'discount_percents': discountPercents.join(','),
-            'is_free_items': isFreeItems.join(',')
-        };
-        
-        // Set hidden fields
-        Object.keys(hiddenFields).forEach(fieldId => {
-            const field = document.getElementById(fieldId);
-            if (field) {
-                field.value = hiddenFields[fieldId];
-            }
-        });
-        
-        return true;
+        form.cgst_rates.value = cgstRates.join(',');
+        form.sgst_rates.value = sgstRates.join(',');
+        form.igst_rates.value = igstRates.join(',');
+        form.discount_percents.value = lineItems.map(() => 0).join(',');
+        form.is_free_items.value = lineItems.map(item => item.is_free ? '1' : '0').join(',');
     }
     
-    // =============================================================================
-    // UTILITY FUNCTIONS
-    // =============================================================================
-    
-    function debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    }
-    
-    function getCSRFToken() {
-        return document.querySelector('input[name="csrf_token"]')?.value || '';
-    }
+    // Add first line item on load
+    document.getElementById('add-line-item').click();
 });
 </script>
 {% endblock %}
