@@ -229,11 +229,11 @@
                     <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; padding-right: 1rem;">
                         <span class="badge badge-info">Draft</span>
                         <div style="text-align: right;">
-                            <div class="text-sm text-gray-600 dark:text-gray-400">
+                            <div class="text-gray-600 dark:text-gray-400">
                                 <i class="fas fa-calendar text-gray-500"></i>
-                                <span class="ml-1">{{ current_date|default(today, true)|default('14 Sep 2025', true) }}</span>
+                                <span class="ml-1 font-bold text-base">{{ current_date|default(today, true)|default('14 Sep 2025', true) }}</span>
                             </div>
-                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            <div class="text-gray-500 dark:text-gray-400 mt-1 font-bold text-sm">
                                 {{ current_date|default(today, true)|date('l') if current_date else 'Sunday' }}
                             </div>
                         </div>
@@ -600,8 +600,9 @@ document.addEventListener('DOMContentLoaded', function() {
     let lineItemIndex = 0;
     let currentSupplierId = '';
     let currentSupplierStateCode = '';
+    let hospitalStateCode = '{{ hospital_state_code|default("29") }}';
     
-    // Initialize form handler - Remove redirect override since controller is fixed
+    // Initialize form handler
     const formHandler = new FormHandler({
         formSelector: '#purchase-order-form',
         validations: [
@@ -648,68 +649,138 @@ document.addEventListener('DOMContentLoaded', function() {
         updateTotals();
     });
     
-    // Attach handlers to line item
+    // Attach event handlers to line item row
     function attachLineItemHandlers(row) {
         const medicineSelect = row.querySelector('.medicine-select');
-        medicineSelect.addEventListener('change', function() {
+        
+        // Medicine selection handler with GST display
+        medicineSelect.addEventListener('change', async function() {
             const selectedOption = this.options[this.selectedIndex];
             if (selectedOption.value) {
-                row.querySelector('.gst-rate').textContent = (selectedOption.dataset.gst || 0) + '%';
+                // Get GST from data attribute
+                let gstRate = parseFloat(selectedOption.dataset.gst) || 0;
+                
+                // If GST is 0, try to fetch from backend
+                if (gstRate === 0) {
+                    try {
+                        const response = await fetch(`/api/medicine/${selectedOption.value}/gst-info`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            gstRate = data.gst_rate || 12.0; // Default to 12% if not found
+                        } else {
+                            gstRate = 12.0; // Default GST rate
+                        }
+                    } catch (error) {
+                        console.error('Error fetching GST:', error);
+                        gstRate = 12.0; // Default GST rate on error
+                    }
+                }
+                
+                // Update GST display - FIXED: Set both text and data attribute
+                const gstRateElement = row.querySelector('.gst-rate');
+                gstRateElement.textContent = gstRate.toFixed(1) + '%';
+                gstRateElement.dataset.rate = gstRate;
+                
+                // Update other fields from medicine data
                 row.querySelector('.units-per-pack').value = selectedOption.dataset.packSize || 1;
                 row.querySelector('.hsn-code').value = selectedOption.dataset.hsn || '';
+                
+                // Recalculate line total
+                calculateLineTotal(row);
+            } else {
+                // Clear GST display when no medicine selected
+                const gstRateElement = row.querySelector('.gst-rate');
+                gstRateElement.textContent = '0%';
+                gstRateElement.dataset.rate = 0;
                 calculateLineTotal(row);
             }
         });
         
+        // Add input handlers for quantity, rate, mrp
         ['quantity', 'rate', 'mrp'].forEach(field => {
             const input = row.querySelector(`.${field}`);
-            input.addEventListener('input', () => calculateLineTotal(row));
-        });
-        
-        row.querySelector('.is-free-item').addEventListener('change', function() {
-            calculateLineTotal(row);
-        });
-        
-        row.querySelector('.remove-line-item').addEventListener('click', function() {
-            if (confirm('Remove this item?')) {
-                row.remove();
-                updateLineNumbers();
-                updateTotals();
+            if (input) {
+                input.addEventListener('input', () => calculateLineTotal(row));
             }
         });
+        
+        // Add handler for free item checkbox
+        const freeItemCheckbox = row.querySelector('.is-free-item');
+        if (freeItemCheckbox) {
+            freeItemCheckbox.addEventListener('change', function() {
+                calculateLineTotal(row);
+            });
+        }
+        
+        // Add remove handler
+        const removeBtn = row.querySelector('.remove-line-item');
+        if (removeBtn) {
+            removeBtn.addEventListener('click', function() {
+                if (confirm('Remove this item?')) {
+                    row.remove();
+                    updateLineNumbers();
+                    updateTotals();
+                }
+            });
+        }
     }
     
-    // Calculate line total
+    // Calculate line total with GST - FIXED calculation logic
     function calculateLineTotal(row) {
         const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
         const rate = parseFloat(row.querySelector('.rate').value) || 0;
         const isFree = row.querySelector('.is-free-item').checked;
-        const gstRate = parseFloat(row.querySelector('.gst-rate').textContent) || 0;
+        
+        // Get GST rate - FIXED: Properly retrieve GST rate
+        const gstRateElement = row.querySelector('.gst-rate');
+        let gstRate = 0;
+        
+        // Try to get from data attribute first, then parse text content
+        if (gstRateElement.dataset.rate) {
+            gstRate = parseFloat(gstRateElement.dataset.rate);
+        } else if (gstRateElement.textContent) {
+            // Parse the text content (remove % sign)
+            gstRate = parseFloat(gstRateElement.textContent.replace('%', ''));
+        }
         
         let lineTotal = 0;
         let gstAmount = 0;
+        let baseAmount = 0;
         
         if (!isFree && quantity > 0 && rate > 0) {
-            const baseAmount = quantity * rate;
+            baseAmount = quantity * rate;
             gstAmount = (baseAmount * gstRate) / 100;
             lineTotal = baseAmount + gstAmount;
         }
         
+        // Update line total display
         row.querySelector('.line-total').textContent = lineTotal.toFixed(2);
         
-        if (gstAmount > 0) {
-            const gstDetails = currentSupplierStateCode === '29' 
-                ? `CGST: ₹${(gstAmount/2).toFixed(2)}, SGST: ₹${(gstAmount/2).toFixed(2)}`
-                : `IGST: ₹${gstAmount.toFixed(2)}`;
-            row.querySelector('.gst-details').textContent = gstDetails;
-        } else {
-            row.querySelector('.gst-details').textContent = '';
+        // Determine interstate and show proper GST breakdown
+        const isInterstate = currentSupplierStateCode && hospitalStateCode && 
+                            currentSupplierStateCode !== hospitalStateCode;
+        
+        // Show GST details breakdown
+        const gstDetailsElement = row.querySelector('.gst-details');
+        if (gstDetailsElement && gstAmount > 0) {
+            const gstDetails = isInterstate
+                ? `IGST: ₹${gstAmount.toFixed(2)}`
+                : `CGST: ₹${(gstAmount/2).toFixed(2)}, SGST: ₹${(gstAmount/2).toFixed(2)}`;
+            gstDetailsElement.textContent = gstDetails;
+        } else if (gstDetailsElement) {
+            gstDetailsElement.textContent = '';
         }
         
+        // Store values for totals calculation - FIXED: Store correct values
+        row.dataset.baseAmount = baseAmount.toFixed(2);
+        row.dataset.gstAmount = gstAmount.toFixed(2);
+        row.dataset.lineTotal = lineTotal.toFixed(2);
+        
+        // Update totals immediately
         updateTotals();
     }
     
-    // Update line numbers
+    // Update line numbers after removal
     function updateLineNumbers() {
         const rows = document.querySelectorAll('.line-item-row');
         rows.forEach((row, index) => {
@@ -719,60 +790,92 @@ document.addEventListener('DOMContentLoaded', function() {
         lineItemIndex = rows.length;
     }
     
-    // Update totals
+    // Update totals - FIXED calculation
     function updateTotals() {
         let subtotal = 0;
         let totalGst = 0;
         
         document.querySelectorAll('.line-item-row').forEach(row => {
-            const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
-            const rate = parseFloat(row.querySelector('.rate').value) || 0;
-            const isFree = row.querySelector('.is-free-item').checked;
-            const gstRate = parseFloat(row.querySelector('.gst-rate').textContent) || 0;
+            const baseAmount = parseFloat(row.dataset.baseAmount || 0);
+            const gstAmount = parseFloat(row.dataset.gstAmount || 0);
             
-            if (!isFree && quantity > 0 && rate > 0) {
-                const baseAmount = quantity * rate;
-                const gstAmount = (baseAmount * gstRate) / 100;
-                
-                subtotal += baseAmount;
-                totalGst += gstAmount;
-            }
+            subtotal += baseAmount;
+            totalGst += gstAmount;
         });
         
         const grandTotal = subtotal + totalGst;
         
-        document.getElementById('subtotal-display').textContent = subtotal.toFixed(2);
-        document.getElementById('total-gst-display').textContent = totalGst.toFixed(2);
-        document.getElementById('grand-total-display').textContent = grandTotal.toFixed(2);
+        // Update display elements
+        const subtotalDisplay = document.getElementById('subtotal-display');
+        const totalGstDisplay = document.getElementById('total-gst-display');
+        const grandTotalDisplay = document.getElementById('grand-total-display');
+        
+        if (subtotalDisplay) subtotalDisplay.textContent = subtotal.toFixed(2);
+        if (totalGstDisplay) totalGstDisplay.textContent = totalGst.toFixed(2);
+        if (grandTotalDisplay) grandTotalDisplay.textContent = grandTotal.toFixed(2);
     }
     
-    // Form submission handler
+    // Form submission handler - FIXED GST rate collection
     document.getElementById('purchase-order-form').addEventListener('submit', function(e) {
         e.preventDefault();
         
+        const form = this;
         const lineItems = [];
+        
         document.querySelectorAll('.line-item-row').forEach(row => {
             const medicineSelect = row.querySelector('.medicine-select');
-            if (medicineSelect.value) {
+            if (medicineSelect && medicineSelect.value) {
                 lineItems.push({
                     medicine_id: medicineSelect.value,
                     medicine_name: medicineSelect.options[medicineSelect.selectedIndex].text,
-                    quantity: row.querySelector('.quantity').value,
-                    rate: row.querySelector('.rate').value,
-                    mrp: row.querySelector('.mrp').value,
-                    gst_rate: parseFloat(row.querySelector('.gst-rate').textContent),
+                    quantity: row.querySelector('.quantity').value || 0,
+                    rate: row.querySelector('.rate').value || 0,
+                    mrp: row.querySelector('.mrp').value || 0,
+                    gst_rate: parseFloat(medicineSelect.options[medicineSelect.selectedIndex].dataset.gst) || 0,
                     is_free: row.querySelector('.is-free-item').checked,
-                    units_per_pack: row.querySelector('.units-per-pack').value,
-                    hsn_code: row.querySelector('.hsn-code').value
+                    units_per_pack: row.querySelector('.units-per-pack').value || 1,
+                    hsn_code: row.querySelector('.hsn-code').value || ''
                 });
             }
         });
         
-        updateHiddenFields(lineItems);
-        this.submit();
+        // Validate
+        if (lineItems.length === 0) {
+            alert('Please add at least one line item before submitting.');
+            return;
+        }
+        
+        // Update hidden fields - ONLY RAW DATA
+        form.medicine_ids.value = lineItems.map(item => item.medicine_id).join(',');
+        form.medicine_names.value = lineItems.map(item => item.medicine_name).join(',');
+        form.quantities.value = lineItems.map(item => item.quantity).join(',');
+        form.pack_purchase_prices.value = lineItems.map(item => item.rate).join(',');
+        form.pack_mrps.value = lineItems.map(item => item.mrp || 0).join(',');
+        form.units_per_packs.value = lineItems.map(item => item.units_per_pack || 1).join(',');
+        form.hsn_codes.value = lineItems.map(item => item.hsn_code || '').join(',');
+        form.gst_rates.value = lineItems.map(item => item.gst_rate || 0).join(',');
+        
+        // Set CGST/SGST/IGST to empty - backend will calculate based on supplier state
+        form.cgst_rates.value = '';
+        form.sgst_rates.value = '';
+        form.igst_rates.value = '';
+        
+        // Only send these flags
+        form.discount_percents.value = lineItems.map(() => 0).join(',');
+        form.is_free_items.value = lineItems.map(item => item.is_free ? '1' : '0').join(',');
+        
+        // Use HTMLFormElement.requestSubmit() to properly submit
+        if (form.requestSubmit) {
+            // Remove the event listener to prevent recursion
+            form.removeEventListener('submit', arguments.callee);
+            form.requestSubmit();
+        } else {
+            // Fallback for older browsers
+            form.removeEventListener('submit', arguments.callee);
+            form.submit();
+        }
     });
-    
-    // Update hidden fields
+    // ALSO ENSURE updateHiddenFields includes CGST/SGST/IGST calculation:
     function updateHiddenFields(lineItems) {
         const form = document.getElementById('purchase-order-form');
         
@@ -785,19 +888,23 @@ document.addEventListener('DOMContentLoaded', function() {
         form.hsn_codes.value = lineItems.map(item => item.hsn_code).join(',');
         form.gst_rates.value = lineItems.map(item => item.gst_rate).join(',');
         
+        // CGST/SGST/IGST calculation (keep for backward compatibility even if server recalculates)
         const cgstRates = [];
         const sgstRates = [];
         const igstRates = [];
         
         lineItems.forEach(item => {
-            if (currentSupplierStateCode === '29') {
-                cgstRates.push(item.gst_rate / 2);
-                sgstRates.push(item.gst_rate / 2);
-                igstRates.push(0);
-            } else {
+            const isInterstate = currentSupplierStateCode && hospitalStateCode && 
+                                currentSupplierStateCode !== hospitalStateCode;
+            
+            if (isInterstate) {
                 cgstRates.push(0);
                 sgstRates.push(0);
                 igstRates.push(item.gst_rate);
+            } else {
+                cgstRates.push(item.gst_rate / 2);
+                sgstRates.push(item.gst_rate / 2);
+                igstRates.push(0);
             }
         });
         
@@ -808,8 +915,10 @@ document.addEventListener('DOMContentLoaded', function() {
         form.is_free_items.value = lineItems.map(item => item.is_free ? '1' : '0').join(',');
     }
     
-    // Add first line item on load
-    document.getElementById('add-line-item').click();
+    // Add first line item on page load
+    setTimeout(function() {
+        document.getElementById('add-line-item').click();
+    }, 100);
 });
 </script>
 {% endblock %}

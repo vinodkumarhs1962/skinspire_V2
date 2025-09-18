@@ -298,14 +298,9 @@ class LineItemsHandler:
         discount_percent = getattr(line, 'discount_percent', Decimal(0))
         discount_amount = getattr(line, 'discount_amount', Decimal(0))
         
-        # PO lines typically don't have discount fields, so calculate from price difference if MRP exists
-        if not discount_amount and line.pack_mrp and line.pack_purchase_price:
-            # Calculate discount from MRP vs purchase price
-            mrp_total = quantity * (line.pack_mrp or Decimal(0))
-            if mrp_total > base_amount:
-                discount_amount = mrp_total - base_amount
-                if mrp_total > 0:
-                    discount_percent = ((discount_amount / mrp_total) * 100)
+        # Only calculate discount_amount if not already present but discount_percent exists
+        if discount_percent > 0 and not discount_amount:
+            discount_amount = base_amount * (discount_percent / 100)
         
         # Use taxable_amount if it exists, otherwise calculate
         taxable_amount = getattr(line, 'taxable_amount', base_amount - discount_amount)

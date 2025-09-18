@@ -1,29 +1,22 @@
 /**
- * Universal Dropdown Search Adapter
+ * Universal Dropdown Search Adapter - Complete Self-Contained Component
  * File: app/static/js/components/universal_dropdown_search_adapter.js
  * 
- * A reusable adapter that enables Universal Engine entity search functionality
- * for any non-universal forms. Provides progressive enhancement with graceful fallback.
+ * A fully self-contained adapter that includes all styles and functionality.
+ * No external CSS needed - everything is included.
  * 
- * Features:
- * - Searchable entity dropdowns with type-ahead
- * - Client-side caching for performance
- * - Works with static and dynamically added elements
- * - Preserves all data attributes
- * - Falls back to original functionality if Universal Engine unavailable
+ * Usage in template:
+ * 1. Include this script
+ * 2. Call UniversalDropdownAdapter.init() or initialize specific elements
  * 
- * Usage:
- * UniversalDropdownAdapter.initialize('selector', 'entity_type', options);
- * 
- * Example:
- * UniversalDropdownAdapter.initialize('#supplier_id', 'suppliers');
- * UniversalDropdownAdapter.initialize('.medicine-select', 'medicines', { dynamic: true });
+ * @version 2.0
+ * @author SkinSpire HMS Team
  */
 
 (function(window, document) {
     'use strict';
     
-    // Universal Dropdown Search Adapter
+    // Universal Dropdown Search Adapter with embedded styles
     const UniversalDropdownAdapter = {
         // Configuration
         config: {
@@ -32,8 +25,16 @@
             debounceDelay: 300,
             minSearchLength: 2,
             maxResults: 20,
-            cacheTimeout: 300000, // 5 minutes in milliseconds
-            debug: false
+            cacheTimeout: 300000, // 5 minutes
+            debug: false,
+            autoInit: true, // Auto-initialize common selectors
+            selectors: {
+                // Default selectors to auto-initialize
+                supplier: '#supplier_id',
+                medicine: '.medicine-select',
+                patient: '#patient_id',
+                user: '#user_id'
+            }
         },
         
         // Cache storage
@@ -42,26 +43,314 @@
         // Active instances
         instances: new Map(),
         
+        // CSS injection flag
+        stylesInjected: false,
+        
         /**
-         * Initialize dropdown adapter for specified elements
-         * @param {string} selector - CSS selector for target elements
-         * @param {string} entityType - Entity type (suppliers, medicines, etc.)
-         * @param {Object} options - Optional configuration
+         * Initialize the adapter - main entry point
+         * Can be called without parameters to auto-initialize
+         * Or with specific selector and entity type
          */
-        initialize: function(selector, entityType, options = {}) {
-            // Merge options with defaults
-            const instanceConfig = Object.assign({}, this.config, options);
+        init: function(selector, entityType, options) {
+            // Inject styles if not already done
+            this.injectStyles();
             
-            // Log initialization if debug mode
-            if (instanceConfig.debug) {
-                console.log(`Initializing Universal Dropdown for ${entityType} on ${selector}`);
+            // If called without parameters, auto-initialize common fields
+            if (!selector) {
+                this.autoInitialize();
+                return;
             }
             
-            // Find all matching elements
-            const elements = document.querySelectorAll(selector);
+            // Initialize specific selector
+            this.initialize(selector, entityType, options);
+        },
+        
+        /**
+         * Auto-initialize common form fields
+         */
+        autoInitialize: function() {
+            const self = this;
             
+            // Wait for DOM ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => self.autoInitialize());
+                return;
+            }
+            
+            console.log('🚀 Universal Dropdown Adapter Auto-Initializing...');
+            
+            // Initialize suppliers
+            if (document.querySelector(this.config.selectors.supplier)) {
+                this.init(this.config.selectors.supplier, 'suppliers', {
+                    minSearchLength: 1,
+                    maxResults: 50
+                });
+            }
+            
+            // Initialize medicine
+            if (document.querySelectorAll(this.config.selectors.medicine).length > 0) {
+                this.init(this.config.selectors.medicine, 'medicine', {
+                    minSearchLength: 2,
+                    maxResults: 30,
+                    dynamic: true // Watch for dynamically added elements
+                });
+            }
+            
+            // Initialize patients
+            if (document.querySelector(this.config.selectors.patient)) {
+                this.init(this.config.selectors.patient, 'patient', {
+                    minSearchLength: 2,
+                    maxResults: 30
+                });
+            }
+            
+            // Initialize users
+            if (document.querySelector(this.config.selectors.user)) {
+                this.init(this.config.selectors.user, 'user', {
+                    minSearchLength: 2,
+                    maxResults: 20
+                });
+            }
+        },
+        
+        /**
+         * Inject all required styles
+         */
+        injectStyles: function() {
+            if (this.stylesInjected) return;
+            
+            const styles = `
+                /* Universal Dropdown Adapter Styles - Matching Universal Engine */
+                .universal-dropdown-wrapper {
+                    position: relative;
+                    width: 100%;
+                }
+                
+                /* Hide original select when adapter is active */
+                .universal-dropdown-wrapper select {
+                    display: none !important;
+                }
+                
+                /* Search input - matches Universal Engine form inputs */
+                .universal-dropdown-search {
+                    width: 100%;
+                    padding: 0.5rem 0.75rem;
+                    font-size: 0.875rem;
+                    line-height: 1.25rem;
+                    color: rgb(17 24 39);
+                    background-color: white;
+                    border: 1px solid rgb(209 213 219);
+                    border-radius: 0.375rem;
+                    transition: all 0.15s ease-in-out;
+                    display: block;
+                    font-family: inherit;
+                }
+                
+                .universal-dropdown-search:focus {
+                    outline: none;
+                    border-color: rgb(59 130 246);
+                    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+                }
+                
+                .universal-dropdown-search:disabled {
+                    background-color: rgb(249 250 251);
+                    cursor: not-allowed;
+                    opacity: 0.5;
+                }
+                
+                /* Results dropdown - matches Universal Engine */
+                .universal-dropdown-results {
+                    position: absolute;
+                    top: 100%;
+                    left: 0;
+                    right: 0;
+                    margin-top: 0.25rem;
+                    background: white;
+                    border: 1px solid rgb(209 213 219);
+                    border-radius: 0.375rem;
+                    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+                    max-height: 300px;
+                    overflow-y: auto;
+                    z-index: 1050;
+                    display: none;
+                }
+                
+                /* Dropdown items */
+                .universal-dropdown-item {
+                    padding: 0.5rem 0.75rem;
+                    cursor: pointer;
+                    transition: background-color 0.15s ease-in-out;
+                    border-bottom: 1px solid rgb(243 244 246);
+                    font-size: 0.875rem;
+                    line-height: 1.25rem;
+                    color: rgb(17 24 39);
+                }
+                
+                .universal-dropdown-item:last-child {
+                    border-bottom: none;
+                }
+                
+                .universal-dropdown-item:hover,
+                .universal-dropdown-item:focus {
+                    background-color: rgb(243 244 246);
+                    outline: none;
+                }
+                
+                .universal-dropdown-item:active {
+                    background-color: rgb(229 231 235);
+                }
+                
+                /* Highlight matching text */
+                .universal-dropdown-item strong {
+                    color: rgb(59 130 246);
+                    font-weight: 600;
+                }
+                
+                /* Loading state */
+                .universal-dropdown-loading {
+                    padding: 0.75rem;
+                    text-align: center;
+                    color: rgb(107 114 128);
+                    font-size: 0.875rem;
+                }
+                
+                /* No results */
+                .universal-dropdown-no-results {
+                    padding: 0.75rem;
+                    text-align: center;
+                    color: rgb(107 114 128);
+                    font-size: 0.875rem;
+                    font-style: italic;
+                }
+                
+                /* Scrollbar styling */
+                .universal-dropdown-results::-webkit-scrollbar {
+                    width: 6px;
+                }
+                
+                .universal-dropdown-results::-webkit-scrollbar-track {
+                    background: rgb(249 250 251);
+                }
+                
+                .universal-dropdown-results::-webkit-scrollbar-thumb {
+                    background: rgb(209 213 219);
+                    border-radius: 3px;
+                }
+                
+                .universal-dropdown-results::-webkit-scrollbar-thumb:hover {
+                    background: rgb(156 163 175);
+                }
+                
+                /* Clear button hover effect */
+                .universal-dropdown-clear:hover {
+                    color: rgb(239 68 68);
+                }
+                
+                /* Dropdown icon rotation when open */
+                .universal-dropdown-icon.rotated {
+                    transform: translateY(-50%) rotate(180deg);
+                }
+                
+                /* Input container for positioning icons */
+                .universal-dropdown-input-container {
+                    position: relative;
+                    width: 100%;
+                }
+                
+                /* Dark mode support */
+                @media (prefers-color-scheme: dark) {
+                    .universal-dropdown-search {
+                        color: rgb(243 244 246);
+                        background-color: rgb(31 41 55);
+                        border-color: rgb(75 85 99);
+                    }
+                    
+                    .universal-dropdown-search:focus {
+                        border-color: rgb(96 165 250);
+                        box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+                    }
+                    
+                    .universal-dropdown-results {
+                        background: rgb(31 41 55);
+                        border-color: rgb(75 85 99);
+                    }
+                    
+                    .universal-dropdown-item {
+                        color: rgb(209 213 219);
+                        border-bottom-color: rgb(55 65 81);
+                    }
+                    
+                    .universal-dropdown-item:hover,
+                    .universal-dropdown-item:focus {
+                        background-color: rgb(55 65 81);
+                        color: rgb(243 244 246);
+                    }
+                    
+                    .universal-dropdown-item:active {
+                        background-color: rgb(75 85 99);
+                    }
+                    
+                    .universal-dropdown-item strong {
+                        color: rgb(96 165 250);
+                    }
+                    
+                    .universal-dropdown-loading,
+                    .universal-dropdown-no-results {
+                        color: rgb(156 163 175);
+                    }
+                    
+                    .universal-dropdown-results::-webkit-scrollbar-track {
+                        background: rgb(55 65 81);
+                    }
+                    
+                    .universal-dropdown-results::-webkit-scrollbar-thumb {
+                        background: rgb(107 114 128);
+                    }
+                    
+                    .universal-dropdown-results::-webkit-scrollbar-thumb:hover {
+                        background: rgb(156 163 175);
+                    }
+                }
+                
+                /* Animation for dropdown appearance */
+                @keyframes slideDown {
+                    from {
+                        opacity: 0;
+                        transform: translateY(-10px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
+                }
+                
+                .universal-dropdown-results.show {
+                    display: block;
+                    animation: slideDown 0.2s ease-out;
+                }
+            `;
+            
+            // Create and inject style element
+            const styleElement = document.createElement('style');
+            styleElement.id = 'universal-dropdown-adapter-styles';
+            styleElement.textContent = styles;
+            document.head.appendChild(styleElement);
+            
+            this.stylesInjected = true;
+            console.log('✅ Universal Dropdown styles injected');
+        },
+        
+        /**
+         * Initialize dropdown for specific elements
+         */
+        initialize: function(selector, entityType, options = {}) {
+            // Merge options
+            const config = Object.assign({}, this.config, options);
+            
+            // Find elements
+            const elements = document.querySelectorAll(selector);
             if (elements.length === 0) {
-                if (instanceConfig.debug) {
+                if (config.debug) {
                     console.warn(`No elements found for selector: ${selector}`);
                 }
                 return;
@@ -70,56 +359,64 @@
             // Initialize each element
             elements.forEach(element => {
                 if (!element.hasAttribute('data-universal-initialized')) {
-                    this.initializeElement(element, entityType, instanceConfig);
+                    this.initializeElement(element, entityType, config);
                     element.setAttribute('data-universal-initialized', 'true');
                 }
             });
             
             // Handle dynamic elements if specified
             if (options.dynamic) {
-                this.observeDynamicElements(selector, entityType, instanceConfig);
+                this.observeDynamicElements(selector, entityType, config);
             }
+            
+            console.log(`✅ Universal Dropdown initialized for ${entityType} (${selector})`);
         },
         
         /**
          * Initialize a single element
          */
         initializeElement: function(selectElement, entityType, config) {
-            // Check if Universal Engine is available
-            if (!this.isUniversalEngineAvailable()) {
-                if (config.debug) {
-                    console.log('Universal Engine not available, skipping initialization');
-                }
-                return;
+            // Create wrapper
+            const wrapper = document.createElement('div');
+            wrapper.className = 'universal-dropdown-wrapper';
+            
+            // Create search input
+            const searchInput = document.createElement('input');
+            searchInput.type = 'text';
+            searchInput.className = 'universal-dropdown-search';
+            searchInput.placeholder = `Type to search ${entityType}...`;
+            searchInput.setAttribute('autocomplete', 'off');
+            
+            // Copy disabled state
+            if (selectElement.disabled) {
+                searchInput.disabled = true;
             }
             
-            // Create wrapper structure
-            const wrapper = this.createWrapper();
-            const searchInput = this.createSearchInput(entityType);
-            const resultsDiv = this.createResultsDiv();
+            // Create results container
+            const resultsDiv = document.createElement('div');
+            resultsDiv.className = 'universal-dropdown-results';
             
-            // Store original options for fallback
+            // Store original options
             const originalOptions = Array.from(selectElement.options).map(opt => ({
                 value: opt.value,
                 text: opt.text,
                 data: Object.assign({}, opt.dataset)
             }));
             
-            // Setup the DOM structure
-            selectElement.style.display = 'none';
+            // Setup DOM
             selectElement.parentNode.insertBefore(wrapper, selectElement);
             wrapper.appendChild(searchInput);
             wrapper.appendChild(resultsDiv);
             wrapper.appendChild(selectElement);
             
-            // Set initial value if one is selected
+            // Set initial value
             const selectedOption = selectElement.selectedOptions[0];
             if (selectedOption && selectedOption.value) {
                 searchInput.value = selectedOption.text;
                 searchInput.setAttribute('data-selected-value', selectedOption.value);
             }
             
-            // Create instance object
+            // Create instance
             const instance = {
                 selectElement,
                 searchInput,
@@ -133,99 +430,57 @@
             // Store instance
             this.instances.set(selectElement, instance);
             
-            // Attach event handlers
+            // Attach handlers
             this.attachEventHandlers(instance);
         },
         
         /**
-         * Create wrapper element
-         */
-        createWrapper: function() {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'universal-dropdown-wrapper';
-            wrapper.style.position = 'relative';
-            return wrapper;
-        },
-        
-        /**
-         * Create search input element
-         */
-        createSearchInput: function(entityType) {
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.className = 'form-select universal-search-input';
-            input.placeholder = `Search ${entityType}...`;
-            input.style.width = '100%';
-            input.setAttribute('autocomplete', 'off');
-            return input;
-        },
-        
-        /**
-         * Create results dropdown element
-         */
-        createResultsDiv: function() {
-            const div = document.createElement('div');
-            div.className = 'universal-dropdown-results';
-            div.style.cssText = `
-                position: absolute;
-                top: 100%;
-                left: 0;
-                right: 0;
-                max-height: 300px;
-                overflow-y: auto;
-                background: white;
-                border: 1px solid #ddd;
-                border-top: none;
-                display: none;
-                z-index: 1000;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                border-radius: 0 0 4px 4px;
-            `;
-            return div;
-        },
-        
-        /**
-         * Attach event handlers to instance
+         * Attach event handlers
          */
         attachEventHandlers: function(instance) {
+            const self = this;
             const { searchInput, resultsDiv } = instance;
             
-            // Input handler with debouncing
-            searchInput.addEventListener('input', (e) => {
+            // Input handler
+            searchInput.addEventListener('input', function(e) {
                 clearTimeout(instance.searchTimeout);
                 const query = e.target.value.trim();
                 
                 instance.searchTimeout = setTimeout(() => {
                     if (query.length === 0 || query.length >= instance.config.minSearchLength) {
-                        this.performSearch(instance, query);
+                        self.performSearch(instance, query);
                     }
                 }, instance.config.debounceDelay);
             });
             
-            // Focus handler - show initial results
-            searchInput.addEventListener('focus', () => {
-                if (searchInput.value.trim().length === 0) {
-                    this.performSearch(instance, '');
+            // Focus handler
+            searchInput.addEventListener('focus', function() {
+                if (this.value.trim().length === 0) {
+                    self.performSearch(instance, '');
+                } else {
+                    resultsDiv.classList.add('show');
                 }
             });
             
-            // Clear handler
-            searchInput.addEventListener('keydown', (e) => {
+            // Blur handler
+            searchInput.addEventListener('blur', function(e) {
+                // Delay to allow click on results
+                setTimeout(() => {
+                    resultsDiv.classList.remove('show');
+                    resultsDiv.style.display = 'none';
+                }, 200);
+            });
+            
+            // Keyboard navigation
+            searchInput.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape') {
                     searchInput.value = '';
                     instance.selectElement.value = '';
                     resultsDiv.style.display = 'none';
-                } else if (e.key === 'ArrowDown' && resultsDiv.style.display === 'block') {
-                    // Focus first result
+                } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
                     const firstItem = resultsDiv.querySelector('.universal-dropdown-item');
                     if (firstItem) firstItem.focus();
-                }
-            });
-            
-            // Click outside handler
-            document.addEventListener('click', (e) => {
-                if (!instance.searchInput.parentNode.contains(e.target)) {
-                    resultsDiv.style.display = 'none';
                 }
             });
         },
@@ -237,18 +492,17 @@
             const { entityType, config, resultsDiv } = instance;
             const cacheKey = `${entityType}:${query}`;
             
-            // Check cache first
-            const cachedData = this.getCachedData(cacheKey);
-            if (cachedData) {
-                this.displayResults(instance, cachedData);
+            // Check cache
+            const cached = this.getCachedData(cacheKey);
+            if (cached) {
+                this.displayResults(instance, cached);
                 return;
             }
             
-            // Show loading state
+            // Show loading
             this.showLoading(resultsDiv);
             
             try {
-                // Make API request
                 const url = `${config.apiBaseUrl}/${entityType}/search?q=${encodeURIComponent(query)}&limit=${config.maxResults}`;
                 
                 const response = await fetch(url, {
@@ -260,75 +514,73 @@
                     credentials: 'same-origin'
                 });
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 
                 const data = await response.json();
                 const results = data.results || data;
                 
-                // Cache the results
+                // Cache results
                 this.setCachedData(cacheKey, results);
                 
-                // Display results
+                // Display
                 this.displayResults(instance, results);
                 
             } catch (error) {
                 if (config.debug) {
                     console.error('Search error:', error);
                 }
-                // Fall back to local filtering
-                this.fallbackSearch(instance, query);
+                // COMMENT THIS LINE TO DISABLE FALLBACK:
+                // this.fallbackSearch(instance, query);
+                
+                // Optional: Show error message instead
+                resultsDiv.innerHTML = '<div class="universal-dropdown-no-results">Unable to search. Please try again.</div>';
+                resultsDiv.classList.add('show');
+                resultsDiv.style.display = 'block';
             }
         },
         
         /**
-         * Display search results
+         * Display results with Universal Engine styling
          */
         displayResults: function(instance, results) {
-            const { resultsDiv, entityType, selectElement } = instance;
+            const { resultsDiv, entityType, searchInput } = instance;
             
-            // Clear previous results
             resultsDiv.innerHTML = '';
             
             if (!results || results.length === 0) {
-                resultsDiv.innerHTML = '<div class="no-results" style="padding: 10px; color: #666;">No results found</div>';
+                resultsDiv.innerHTML = '<div class="universal-dropdown-no-results">No results found</div>';
+                resultsDiv.classList.add('show');
                 resultsDiv.style.display = 'block';
                 return;
             }
             
-            // Create result items
+            const searchTerm = searchInput.value.toLowerCase();
+            
             results.forEach(result => {
                 const item = document.createElement('div');
                 item.className = 'universal-dropdown-item';
-                item.style.cssText = 'padding: 8px 12px; cursor: pointer;';
                 item.setAttribute('tabindex', '0');
                 
-                // Get display text and value
+                // Get display text
                 const displayText = this.getDisplayText(result, entityType);
                 const value = this.getValue(result, entityType);
                 
-                item.textContent = displayText;
-                item.setAttribute('data-value', value);
+                // Highlight matching text
+                if (searchTerm) {
+                    const regex = new RegExp(`(${searchTerm})`, 'gi');
+                    item.innerHTML = displayText.replace(regex, '<strong>$1</strong>');
+                } else {
+                    item.textContent = displayText;
+                }
                 
-                // Store additional data attributes
+                item.setAttribute('data-value', value);
                 this.setDataAttributes(item, result, entityType);
                 
-                // Hover effects
-                item.addEventListener('mouseenter', function() {
-                    this.style.backgroundColor = '#f0f0f0';
-                });
-                
-                item.addEventListener('mouseleave', function() {
-                    this.style.backgroundColor = '';
-                });
-                
-                // Click handler
+                // Event handlers
                 item.addEventListener('click', () => {
                     this.selectItem(instance, item);
                 });
                 
-                // Keyboard navigation
                 item.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') {
                         this.selectItem(instance, item);
@@ -338,91 +590,66 @@
                     } else if (e.key === 'ArrowUp') {
                         const prev = item.previousElementSibling;
                         if (prev) prev.focus();
-                        else instance.searchInput.focus();
+                        else searchInput.focus();
                     }
                 });
                 
                 resultsDiv.appendChild(item);
             });
             
+            resultsDiv.classList.add('show');
             resultsDiv.style.display = 'block';
         },
         
         /**
-         * Get display text from result
+         * Helper methods
          */
+        showLoading: function(resultsDiv) {
+            resultsDiv.innerHTML = '<div class="universal-dropdown-loading">Searching...</div>';
+            resultsDiv.classList.add('show');
+            resultsDiv.style.display = 'block';
+        },
+        
         getDisplayText: function(result, entityType) {
-            return result.display || 
-                   result.label || 
-                   result.text || 
-                   result[entityType.slice(0, -1) + '_name'] || 
-                   result.name || 
-                   '';
+            return result.display || result.label || result.text || 
+                   result[entityType.slice(0, -1) + '_name'] || result.name || '';
         },
         
-        /**
-         * Get value from result
-         */
         getValue: function(result, entityType) {
-            return result.value || 
-                   result.id || 
-                   result[entityType.slice(0, -1) + '_id'] || 
-                   '';
+            return result.value || result.id || 
+                   result[entityType.slice(0, -1) + '_id'] || '';
         },
         
-        /**
-         * Set data attributes based on entity type
-         */
         setDataAttributes: function(item, result, entityType) {
-            // Common attributes
-            const commonAttrs = ['gst', 'state', 'payment_terms', 'hsn', 'pack_size'];
+            const attrs = ['gst', 'state', 'payment_terms', 'hsn', 'pack_size', 
+                          'gst_rate', 'hsn_code', 'strength', 'generic_name', 
+                          'state_code', 'supplier_gst'];
             
-            // Entity-specific mappings
-            const entityMappings = {
-                'suppliers': ['supplier_gst', 'state_code', 'payment_terms'],
-                'medicines': ['gst_rate', 'hsn_code', 'pack_size', 'strength', 'generic_name']
-            };
-            
-            // Apply common attributes
-            commonAttrs.forEach(attr => {
-                if (result[attr]) {
-                    item.setAttribute(`data-${attr}`, result[attr]);
-                }
-            });
-            
-            // Apply entity-specific attributes
-            const mappings = entityMappings[entityType] || [];
-            mappings.forEach(attr => {
-                if (result[attr]) {
-                    const dataAttr = attr.replace(/_/g, '-');
-                    item.setAttribute(`data-${dataAttr}`, result[attr]);
+            attrs.forEach(attr => {
+                if (result[attr] !== undefined) {
+                    item.setAttribute(`data-${attr.replace(/_/g, '-')}`, result[attr]);
                 }
             });
         },
         
-        /**
-         * Select an item
-         */
         selectItem: function(instance, item) {
             const { searchInput, selectElement, resultsDiv } = instance;
             
             const value = item.getAttribute('data-value');
             const text = item.textContent;
             
-            // Update search input
+            // Update input
             searchInput.value = text;
             searchInput.setAttribute('data-selected-value', value);
             
-            // Check if option exists in original select
+            // Update or create option
             let option = selectElement.querySelector(`option[value="${value}"]`);
-            
             if (!option) {
-                // Create new option from Universal Engine result
                 option = document.createElement('option');
                 option.value = value;
                 option.text = text;
                 
-                // Copy all data attributes
+                // Copy data attributes
                 Array.from(item.attributes).forEach(attr => {
                     if (attr.name.startsWith('data-') && attr.name !== 'data-value') {
                         option.setAttribute(attr.name, attr.value);
@@ -432,24 +659,17 @@
                 selectElement.appendChild(option);
             }
             
-            // Set the value
+            // Set value and trigger change
             selectElement.value = value;
-            
-            // Trigger change event
-            const event = new Event('change', { bubbles: true });
-            selectElement.dispatchEvent(event);
+            selectElement.dispatchEvent(new Event('change', { bubbles: true }));
             
             // Hide results
+            resultsDiv.classList.remove('show');
             resultsDiv.style.display = 'none';
         },
         
-        /**
-         * Fallback search using original options
-         */
         fallbackSearch: function(instance, query) {
-            const { originalOptions } = instance;
-            
-            const filtered = originalOptions.filter(opt => 
+            const filtered = instance.originalOptions.filter(opt => 
                 opt.text.toLowerCase().includes(query.toLowerCase())
             );
             
@@ -462,38 +682,14 @@
             this.displayResults(instance, results);
         },
         
-        /**
-         * Show loading state
-         */
-        showLoading: function(resultsDiv) {
-            resultsDiv.innerHTML = '<div style="padding: 10px; color: #666;">Searching...</div>';
-            resultsDiv.style.display = 'block';
-        },
-        
-        /**
-         * Check if Universal Engine is available
-         */
-        isUniversalEngineAvailable: function() {
-            return this.config.enabled && typeof fetch !== 'undefined';
-        },
-        
-        /**
-         * Get cached data
-         */
         getCachedData: function(key) {
             const cached = this.cache[key];
             if (cached && (Date.now() - cached.timestamp < this.config.cacheTimeout)) {
-                if (this.config.debug) {
-                    console.log(`Cache hit for: ${key}`);
-                }
                 return cached.data;
             }
             return null;
         },
         
-        /**
-         * Set cached data
-         */
         setCachedData: function(key, data) {
             this.cache[key] = {
                 data: data,
@@ -501,37 +697,32 @@
             };
         },
         
-        /**
-         * Observe for dynamically added elements
-         */
         observeDynamicElements: function(selector, entityType, config) {
+            const self = this;
             const observer = new MutationObserver((mutations) => {
                 mutations.forEach((mutation) => {
-                    if (mutation.type === 'childList') {
-                        mutation.addedNodes.forEach((node) => {
-                            if (node.nodeType === 1) { // Element node
-                                const elements = node.matches(selector) ? 
-                                    [node] : node.querySelectorAll(selector);
-                                
-                                elements.forEach(element => {
-                                    if (!element.hasAttribute('data-universal-initialized')) {
-                                        this.initializeElement(element, entityType, config);
+                    mutation.addedNodes.forEach((node) => {
+                        if (node.nodeType === 1 && node.matches) {
+                            const elements = node.matches(selector) ? 
+                                [node] : node.querySelectorAll(selector);
+                            
+                            elements.forEach(element => {
+                                if (!element.hasAttribute('data-universal-initialized')) {
+                                    setTimeout(() => {
+                                        self.initializeElement(element, entityType, config);
                                         element.setAttribute('data-universal-initialized', 'true');
-                                    }
-                                });
-                            }
-                        });
-                    }
+                                    }, 100);
+                                }
+                            });
+                        }
+                    });
                 });
             });
             
-            // Start observing
             observer.observe(document.body, {
                 childList: true,
                 subtree: true
             });
-            
-            return observer;
         },
         
         /**
@@ -542,9 +733,10 @@
             elements.forEach(element => {
                 const instance = this.instances.get(element);
                 if (instance) {
-                    // Restore original select
                     element.style.display = '';
-                    instance.searchInput.parentNode.remove();
+                    if (instance.searchInput.parentNode) {
+                        instance.searchInput.parentNode.remove();
+                    }
                     element.removeAttribute('data-universal-initialized');
                     this.instances.delete(element);
                 }
@@ -556,20 +748,29 @@
          */
         clearCache: function(entityType = null) {
             if (entityType) {
-                // Clear cache for specific entity type
                 Object.keys(this.cache).forEach(key => {
                     if (key.startsWith(entityType + ':')) {
                         delete this.cache[key];
                     }
                 });
             } else {
-                // Clear all cache
                 this.cache = {};
             }
         }
     };
     
-    // Expose to global scope
+    // Export to global
     window.UniversalDropdownAdapter = UniversalDropdownAdapter;
+    
+    // Auto-initialize if configured
+    if (UniversalDropdownAdapter.config.autoInit) {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                UniversalDropdownAdapter.autoInitialize();
+            });
+        } else {
+            UniversalDropdownAdapter.autoInitialize();
+        }
+    }
     
 })(window, document);

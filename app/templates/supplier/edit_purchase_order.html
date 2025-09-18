@@ -2,484 +2,671 @@
 
 {% block title %}{{ page_title }}{% endblock %}
 
-{% block head %}
+{% block styles %}
 {{ super() }}
+<!-- Purchase Order Enhanced Styles with Fixed Column Widths -->
+<style>
+    /* FIXED: Column widths with !important */
+    .invoice-table th:nth-child(1), 
+    .invoice-table td:nth-child(1) { width: 40px !important; }  /* # */
+    
+    .invoice-table th:nth-child(2), 
+    .invoice-table td:nth-child(2) { min-width: 280px !important; }  /* Medicine - EXPANDED */
+    
+    .invoice-table th:nth-child(3), 
+    .invoice-table td:nth-child(3) { width: 70px !important; }  /* Qty - REDUCED */
+    
+    .invoice-table th:nth-child(4), 
+    .invoice-table td:nth-child(4) { width: 90px !important; }  /* Rate */
+    
+    .invoice-table th:nth-child(5), 
+    .invoice-table td:nth-child(5) { width: 90px !important; }  /* MRP */
+    
+    .invoice-table th:nth-child(6), 
+    .invoice-table td:nth-child(6) { width: 70px !important; }  /* GST */
+    
+    .invoice-table th:nth-child(7), 
+    .invoice-table td:nth-child(7) { width: 60px !important; }  /* Free */
+    
+    .invoice-table th:nth-child(8), 
+    .invoice-table td:nth-child(8) { width: 100px !important; }  /* Total */
+    
+    .invoice-table th:nth-child(9), 
+    .invoice-table td:nth-child(9) { width: 60px !important; }  /* Actions */
+
+    /* Container styles */
+    .po-enhanced-container {
+        background: #f3f4f6;
+        min-height: 100vh;
+        padding: 0;
+        margin: -1.5rem;
+    }
+    
+    .dark .po-enhanced-container {
+        background: #0f172a;
+    }
+    
+    /* Header styling */
+    .po-header {
+        background: white;
+        padding: 1.5rem;
+        margin-bottom: 0;
+        position: relative;
+    }
+    
+    .dark .po-header {
+        background: rgb(31 41 55);
+    }
+    
+    /* Badge styling */
+    .badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.75rem;
+        border-radius: 0.375rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+    }
+    
+    .badge-warning {
+        background-color: rgb(254 243 199);
+        color: rgb(146 64 14);
+        border: 1px solid rgb(252 211 77);
+    }
+    
+    .dark .badge-warning {
+        background-color: rgba(251, 191, 36, 0.2);
+        color: rgb(252 211 77);
+        border-color: rgb(251 191 36);
+    }
+    
+    /* Quick actions bar */
+    .quick-actions-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 1rem 1.5rem;
+        background: white;
+        border-bottom: 1px solid #e5e7eb;
+        margin-bottom: 1rem;
+    }
+    
+    .dark .quick-actions-bar {
+        background: rgb(31 41 55);
+        border-bottom-color: rgb(55 65 81);
+    }
+    
+    .quick-actions-left {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    /* Two-column grid for form fields */
+    .po-two-column-grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 1rem !important;
+        width: 100% !important;
+    }
+    
+    @media (max-width: 768px) {
+        .po-two-column-grid {
+            grid-template-columns: 1fr !important;
+        }
+    }
+</style>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/components/supplier.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/universal_select.css') }}">
 {% endblock %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-4">
-    
-    <!-- Flash messages section - same as current -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-        {% for category, message in messages %}
-        <div class="bg-{{ 'green' if category == 'success' else 'red' if category == 'error' else 'blue' }}-100 border-l-4 border-{{ 'green' if category == 'success' else 'red' if category == 'error' else 'blue' }}-500 text-{{ 'green' if category == 'success' else 'red' if category == 'error' else 'blue' }}-700 p-4 mb-6" role="alert">
-            <p>{{ message }}</p>
-        </div>
-        {% endfor %}
-    {% endif %}
-    {% endwith %}
+<div class="po-enhanced-container">
+    <!-- RESTORED: Complete Header with Date/Day -->
+    <div class="po-header">
+        <div class="info-card" style="box-shadow: none; border: none; margin: 0;">
+            <div class="card-body" style="padding: 0; background: transparent;">
+                <!-- Row 1: Title and Date/Status -->
+                <div class="flex justify-between items-start mb-3">
+                    <div style="max-width: 60%;">
+                        <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                            <i class="fas fa-edit text-blue-500"></i>
+                            <span class="ml-2">{{ page_title }}</span>
+                        </h1>
+                        <p class="text-gray-600 dark:text-gray-400 mt-1" style="font-style: italic; font-size: 1.125rem; padding-left: 2.5rem;">
+                            Modify draft purchase order details
+                        </p>
+                    </div>
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; padding-right: 1rem;">
+                        <span class="badge badge-warning">Editing</span>
+                        <div style="text-align: right;">
+                            <div class="text-gray-600 dark:text-gray-400">
+                                <i class="fas fa-calendar text-gray-500"></i>
+                                <span class="ml-1 font-bold text-base">{{ current_date|default(today, true)|default('15 Sep 2025', true) }}</span>
+                            </div>
+                            <div class="text-gray-500 dark:text-gray-400 mt-1 font-bold text-sm">
+                                {{ current_date|default(today, true)|date('l') if current_date else 'Sunday' }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-    <div class="flex justify-between items-center mb-6">
-        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">{{ page_title }}</h1>
-        <a href="{{ url_for('supplier_views.view_purchase_order', po_id=request.view_args.po_id) }}" 
-           class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-white font-semibold py-2 px-4 rounded inline-flex items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
-            </svg>
-            Back to PO
-        </a>
+                <!-- Row 2: Breadcrumb -->
+                <div class="mb-3">
+                    <nav class="flex items-center space-x-1 text-sm text-gray-500">
+                        <a href="{{ url_for('auth_views.dashboard') }}" class="hover:text-gray-700 dark:hover:text-gray-300">
+                            Dashboard
+                        </a>
+                        <span class="text-gray-400 mx-2">/</span>
+                        <a href="{{ url_for('universal_views.universal_list_view', entity_type='purchase_orders') }}" class="hover:text-gray-700 dark:hover:text-gray-300">
+                            Purchase Orders
+                        </a>
+                        <span class="text-gray-400 mx-2">/</span>
+                        <a href="{{ url_for('supplier_views.view_purchase_order', po_id=request.view_args.po_id) }}" class="hover:text-gray-700 dark:hover:text-gray-300">
+                            View PO
+                        </a>
+                        <span class="text-gray-400 mx-2">/</span>
+                        <span class="text-gray-700 dark:text-gray-300 font-medium">Edit</span>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- RESTORED: Complete Quick Actions Bar -->
+    <div class="quick-actions-bar">
+        <div class="quick-actions-left">
+            <a href="{{ url_for('universal_views.universal_list_view', entity_type='purchase_orders') }}" class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i>
+                Back to PO List
+            </a>
+            <a href="{{ url_for('supplier_views.view_purchase_order', po_id=request.view_args.po_id) }}" class="btn-outline">
+                <i class="fas fa-eye mr-2"></i>
+                View This PO
+            </a>
+            <a href="{{ url_for('universal_views.universal_list_view', entity_type='suppliers') }}" class="btn-outline">
+                <i class="fas fa-users mr-2"></i>
+                Suppliers
+            </a>
+            <a href="{{ url_for('universal_views.universal_list_view', entity_type='supplier_invoices') }}" class="btn-outline">
+                <i class="fas fa-file-invoice mr-2"></i>
+                Invoices
+            </a>
+        </div>
+        <button type="button" onclick="window.location.reload()" class="btn-outline">
+            <i class="fas fa-undo mr-2"></i>
+            Reset Changes
+        </button>
     </div>
 
-    <form id="purchase-order-edit-form" method="POST" class="invoice-container">
+    <!-- Main Form Content -->
+    <form id="purchase-order-edit-form" method="POST" class="px-6">
         {{ form.csrf_token }}
         
-        <!-- Compact PO Header - same styling as current -->
-        <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 mb-6">
-            <!-- Row 1: PO Number, Supplier and PO Date - same layout as current -->
-            <div class="flex gap-4 mb-4">
-                <!-- PO Number (readonly) -->
-                <div class="w-48">
-                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">
-                        PO Number
-                    </label>
-                    {{ form.po_number(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline bg-gray-100", readonly=true) }}
+        <!-- ENHANCED: Complete PO Header Information with all fields -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 mb-6 shadow-sm">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">
+                <i class="fas fa-info-circle text-blue-500 mr-2"></i>
+                Purchase Order Information
+            </h2>
+            
+            <!-- Row 1: Main Fields -->
+            <div class="po-two-column-grid mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">PO Number</label>
+                    {{ form.po_number(class="w-full px-3 py-2 border rounded-md bg-gray-100", readonly=true) }}
                 </div>
-                
-                <!-- Supplier Selection - same as current -->
-                <div class="flex-grow">
-                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">
-                        Supplier <span class="text-red-500">*</span>
-                    </label>
-                    {{ form.supplier_id(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", required=true) }}
-                    {% if form.supplier_id.errors %}
-                        <p class="text-red-500 text-xs italic">{{ form.supplier_id.errors[0] }}</p>
-                    {% endif %}
-                </div>
-                
-                <!-- PO Date - same as current -->
-                <div class="w-48">
-                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">
-                        PO Date <span class="text-red-500">*</span>
-                    </label>
-                    {{ form.po_date(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", required=true) }}
-                    {% if form.po_date.errors %}
-                        <p class="text-red-500 text-xs italic">{{ form.po_date.errors[0] }}</p>
-                    {% endif %}
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">PO Date <span class="text-red-500">*</span></label>
+                    {{ form.po_date(class="w-full px-3 py-2 border rounded-md") }}
                 </div>
             </div>
-            
-            <!-- Row 2: Same additional fields layout as current -->
-            <div class="flex justify-between gap-4 mb-4">
-                <div class="w-40">
-                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">Expected Delivery</label>
-                    {{ form.expected_delivery_date(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+
+            <!-- Row 2: Supplier with Universal Select -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Supplier <span class="text-red-500">*</span>
+                    <div class="bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded-md p-3 mb-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <span class="text-sm font-medium text-blue-800 dark:text-blue-200">Supplier State:</span>
+                                <span id="supplier-state" class="ml-2 text-sm font-bold text-blue-900 dark:text-blue-100">
+                                    {% if selected_supplier %}{{ selected_supplier.state or '--' }}{% else %}--{% endif %}
+                                </span>
+                            </div>
+                            <div>
+                                <span class="text-sm font-medium text-blue-800 dark:text-blue-200">State Code:</span>
+                                <span id="supplier-state-code" class="ml-2 text-sm font-bold text-blue-900 dark:text-blue-100">
+                                    {% if selected_supplier %}{{ selected_supplier.state_code or '--' }}{% else %}--{% endif %}
+                                </span>
+                            </div>
+                            <div>
+                                <span class="text-sm font-medium text-blue-800 dark:text-blue-200">GSTIN:</span>
+                                <span id="supplier-gstin" class="ml-2 text-sm font-bold text-blue-900 dark:text-blue-100">
+                                    {% if selected_supplier %}{{ selected_supplier.gst_registration_number or '--' }}{% else %}--{% endif %}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                </label>
+                <select id="supplier_id" name="supplier_id" class="form-select w-full px-3 py-2 border rounded-md" required>
+                    {% for choice in form.supplier_id.choices %}
+                        <option value="{{ choice[0] }}" 
+                                {% if choice[0] %}
+                                    data-state="{{ suppliers_dict[choice[0]].state if suppliers_dict and choice[0] in suppliers_dict else '' }}"
+                                    data-state-code="{{ suppliers_dict[choice[0]].state_code if suppliers_dict and choice[0] in suppliers_dict else '' }}"
+                                    data-gst="{{ suppliers_dict[choice[0]].gst_registration_number if suppliers_dict and choice[0] in suppliers_dict else '' }}"
+                                {% endif %}
+                                {% if choice[0] and form.supplier_id.data and choice[0]|string == form.supplier_id.data|string %}selected{% endif %}>
+                            {{ choice[1] }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Row 3: Dates -->
+            <div class="po-two-column-grid mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expected Delivery Date</label>
+                    {{ form.expected_delivery_date(class="w-full px-3 py-2 border rounded-md") }}
                 </div>
-                <div class="w-28">
-                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">Currency</label>
-                    {{ form.currency_code(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quotation Date</label>
+                    {{ form.quotation_date(class="w-full px-3 py-2 border rounded-md") }}
                 </div>
-                <div class="w-32">
-                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">Exchange Rate</label>
-                    {{ form.exchange_rate(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", step="0.000001") }}
+            </div>
+
+            <!-- Row 4: Reference and Currency -->
+            <div class="po-two-column-grid mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quotation Reference</label>
+                    {{ form.quotation_id(class="w-full px-3 py-2 border rounded-md") }}
                 </div>
-                <div class="w-56">
-                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">Quotation Reference</label>
-                    {{ form.quotation_id(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
-                </div>
-                <div class="w-40">
-                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">Quotation Date</label>
-                    {{ form.quotation_date(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                <div class="flex gap-2">
+                    <div class="flex-1">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Currency</label>
+                        {{ form.currency_code(class="w-full px-3 py-2 border rounded-md") }}
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Exchange Rate</label>
+                        {{ form.exchange_rate(class="w-full px-3 py-2 border rounded-md", step="0.000001") }}
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Line Items section with SAME styling as current -->
-        <div class="line-items-section">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-semibold text-gray-800 dark:text-white">Items</h2>
-                <!-- Note: Add item button removed for edit mode -->
-            </div>
+        <!-- Line Items Section -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 mb-6 shadow-sm">
+            <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">
+                <i class="fas fa-list text-blue-500 mr-2"></i>Line Items
+            </h3>
             
-            <!-- SAME table styling as current -->
-            <div class="invoice-table-wrapper">
-                <table class="invoice-table w-full">
-                    <thead>
-                        <tr class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs">
-                            <th class="px-2 py-2 text-center font-medium uppercase">#</th>
-                            <th class="px-2 py-2 text-left font-medium uppercase">Medicine</th>
-                            <th class="px-2 py-2 text-right font-medium uppercase">Qty</th>
-                            <th class="px-2 py-2 text-right font-medium uppercase">Rate</th>
-                            <th class="px-2 py-2 text-right font-medium uppercase">MRP</th>
-                            <th class="px-2 py-2 text-right font-medium uppercase">Disc%</th>
-                            <th class="px-2 py-2 text-center font-medium uppercase">Free</th>
-                            <th class="px-2 py-2 text-right font-medium uppercase">GST</th>
-                            <th class="px-2 py-2 text-right font-medium uppercase">Total</th>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 invoice-table">
+                    <thead class="bg-gray-50 dark:bg-gray-900">
+                        <tr>
+                            <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">#</th>
+                            <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Medicine</th>
+                            <th class="px-2 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Qty</th>
+                            <th class="px-2 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Rate</th>
+                            <th class="px-2 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">MRP</th>
+                            <th class="px-2 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">GST</th>
+                            <th class="px-2 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Free</th>
+                            <th class="px-2 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total</th>
+                            <th class="px-2 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
                         </tr>
                     </thead>
-                    <tbody class="text-xs">
-                        {% for line_form in form.line_items %}
-                        <tr class="line-item-row border-b dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700" data-line-index="{{ loop.index0 }}">
-                            <!-- # Column -->
-                            <td class="px-2 py-2 text-center">
-                                <span class="line-number text-sm text-gray-600 font-medium">{{ loop.index }}</span>
-                            </td>
-                            
-                            <!-- Medicine Column (readonly but styled same) -->
-                            <td class="px-2 py-2">
-                                {{ line_form.medicine_id() }}
-                                {{ line_form.medicine_name(class="form-input text-xs w-full border rounded px-2 py-1 bg-gray-100", readonly=true) }}
-                                {{ line_form.hsn_code() }}
-                                {{ line_form.gst_rate() }}
-                                {{ line_form.units_per_pack() }}
-                            </td>
-                            
-                            <!-- Quantity Column (editable - SAME styling) -->
-                            <td class="px-2 py-2">
-                                {{ line_form.quantity(class="quantity form-input text-xs w-full text-right border rounded px-2 py-1", step="0.01", min="0.01") }}
-                                {% if line_form.quantity.errors %}
-                                    <div class="text-red-500 text-xs mt-1">{{ line_form.quantity.errors[0] }}</div>
-                                {% endif %}
-                            </td>
-                            
-                            <!-- Rate Column (editable - SAME styling) -->
-                            <td class="px-2 py-2">
-                                {{ line_form.pack_purchase_price(class="pack-price form-input text-xs w-full text-right border rounded px-2 py-1", step="0.01", min="0") }}
-                                {% if line_form.pack_purchase_price.errors %}
-                                    <div class="text-red-500 text-xs mt-1">{{ line_form.pack_purchase_price.errors[0] }}</div>
-                                {% endif %}
-                            </td>
-                            
-                            <!-- MRP Column (editable - SAME styling) -->
-                            <td class="px-2 py-2">
-                                {{ line_form.pack_mrp(class="mrp form-input text-xs w-full text-right border rounded px-2 py-1", step="0.01", min="0") }}
-                                {% if line_form.pack_mrp.errors %}
-                                    <div class="text-red-500 text-xs mt-1">{{ line_form.pack_mrp.errors[0] }}</div>
-                                {% endif %}
-                            </td>
-                            
-                            <!-- Discount Column (SAME styling) -->
-                            <td class="px-2 py-2">
-                                {{ line_form.discount_percent(class="discount-percent form-input text-xs w-full text-right border rounded px-2 py-1", step="0.1", min="0", max="100") }}
-                            </td>
-                            
-                            <!-- Free Item Column (SAME styling) -->
-                            <td class="px-2 py-2 text-center">
-                                <label class="inline-flex items-center justify-center">
-                                    {{ line_form.is_free_item(class="is-free-item form-checkbox text-xs rounded") }}
-                                    <span class="ml-1 text-xs hidden sm:inline">Free</span>
-                                </label>
-                            </td>
-                            
-                            <!-- GST Column (calculated display - SAME styling) -->
-                            <td class="px-2 py-2">
-                                <div class="text-xs text-gray-600 font-medium gst-display">{{ line_form.gst_rate.data or 0 }}%</div>
-                                <div class="text-xs text-gray-500 mt-1 leading-tight gst-breakdown"></div>
-                            </td>
-                            
-                            <!-- Total Column (calculated display - SAME styling) -->
-                            <td class="px-2 py-2 text-right">
-                                <div class="line-total font-medium text-sm">0.00</div>
-                                <div class="text-xs text-gray-500 gst-details mt-1 leading-tight"></div>
-                            </td>
-                        </tr>
-                        {% endfor %}
+                    <tbody id="line-items-body" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {% if form.line_items %}
+                            {% for item in form.line_items %}
+                            <tr class="line-item-row">
+                                <td class="px-2 py-2 text-center text-sm">{{ loop.index }}</td>
+                                <td class="px-2 py-2">
+                                    <select class="medicine-select" style="width: 280px;">
+                                        <option value="">Select Medicine</option>
+                                        {% for medicine in medicines %}
+                                        <option value="{{ medicine.medicine_id }}" 
+                                                data-gst="{{ medicine.gst_rate or 0 }}"
+                                                data-hsn="{{ medicine.hsn_code or '' }}"
+                                                data-pack-size="{{ medicine.pack_size or 1 }}"
+                                                {% if item.medicine_id.data and medicine.medicine_id|string == item.medicine_id.data|string %}selected{% endif %}>
+                                            {{ medicine.medicine_name }}
+                                            {% if medicine.strength %} - {{ medicine.strength }}{% endif %}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                    <input type="hidden" 
+                                        class="medicine-id-hidden" 
+                                        value="{{ item.medicine_id.data or '' }}"
+                                        name="line_items-{{ loop.index0 }}-medicine_id">
+                                </td>
+                                <td class="px-2 py-2 text-center">
+                                    <input type="number" class="quantity form-control text-right" 
+                                           style="width: 70px;" step="0.01" min="0" 
+                                           value="{{ item.quantity.data or 1 }}"
+                                           name="line_items-{{ loop.index0 }}-quantity">
+                                </td>
+                                <td class="px-2 py-2 text-center">
+                                    <input type="number" class="rate form-control text-right" 
+                                           style="width: 90px;" step="0.01" min="0" 
+                                           value="{{ item.pack_purchase_price.data or 0 }}"
+                                           name="line_items-{{ loop.index0 }}-pack_purchase_price">
+                                </td>
+                                <td class="px-2 py-2 text-center">
+                                    <input type="number" class="mrp form-control text-right" 
+                                           style="width: 90px;" step="0.01" min="0" 
+                                           value="{{ item.pack_mrp.data or 0 }}"
+                                           name="line_items-{{ loop.index0 }}-pack_mrp">
+                                </td>
+                                <td class="px-2 py-2 text-center">
+                                    <span class="gst-rate text-sm">{{ item.gst_rate.data or 0 }}%</span>
+                                    <input type="hidden" class="gst-rate-hidden" value="{{ item.gst_rate.data or 0 }}" 
+                                           name="line_items-{{ loop.index0 }}-gst_rate">
+                                    <input type="hidden" class="hsn-code-hidden" value="{{ item.hsn_code.data or '' }}" 
+                                           name="line_items-{{ loop.index0 }}-hsn_code">
+                                    <input type="hidden" class="units-per-pack-hidden" value="{{ item.units_per_pack.data or 1 }}" 
+                                           name="line_items-{{ loop.index0 }}-units_per_pack">
+                                </td>
+                                <td class="px-2 py-2 text-center">
+                                    <input type="checkbox" class="is-free-item" 
+                                           {% if item.is_free_item.data %}checked{% endif %}
+                                           name="line_items-{{ loop.index0 }}-is_free_item">
+                                    <input type="hidden" class="discount-percent-hidden" value="{{ item.discount_percent.data or 0 }}" 
+                                           name="line_items-{{ loop.index0 }}-discount_percent">
+                                </td>
+                                <td class="px-2 py-2 text-right">
+                                    <div class="line-total font-medium text-sm">0.00</div>
+                                    <div class="text-xs text-gray-500 gst-details mt-1"></div>
+                                </td>
+                                <td class="px-2 py-2 text-center">
+                                    <button type="button" class="btn btn-sm btn-danger" onclick="removeLineItem(this)">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr class="empty-row">
+                                <td colspan="9" class="text-center py-4 text-gray-500">No line items</td>
+                            </tr>
+                        {% endif %}
                     </tbody>
-                    <!-- SAME footer with totals -->
-                    <tfoot class="bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm">
-                        <tr class="border-t-2 border-gray-300 dark:border-gray-600">
-                            <td colspan="8" class="px-2 py-2 text-right font-medium">Subtotal:</td>
-                            <td class="px-2 py-2 text-right font-medium" id="subtotal">0.00</td>
+                    <tfoot class="bg-gray-50 dark:bg-gray-900">
+                        <tr>
+                            <td colspan="7" class="px-4 py-3 text-right font-medium">Subtotal:</td>
+                            <td class="px-4 py-3 text-right font-bold"><span>₹</span> <span id="subtotal">0.00</span></td>
+                            <td></td>
                         </tr>
                         <tr>
-                            <td colspan="8" class="px-2 py-2 text-right font-medium">Total GST:</td>
-                            <td class="px-2 py-2 text-right font-medium" id="total-gst">0.00</td>
+                            <td colspan="7" class="px-4 py-3 text-right font-medium">Total GST:</td>
+                            <td class="px-4 py-3 text-right font-bold"><span>₹</span> <span id="total-gst">0.00</span></td>
+                            <td></td>
                         </tr>
-                        <tr class="border-t border-gray-400 dark:border-gray-500">
-                            <td colspan="8" class="px-2 py-2 text-right font-bold">Grand Total:</td>
-                            <td class="px-2 py-2 text-right font-bold text-lg" id="grand-total">0.00</td>
+                        <tr class="border-t-2 border-gray-300 dark:border-gray-600">
+                            <td colspan="7" class="px-4 py-3 text-right font-bold text-lg">Grand Total:</td>
+                            <td class="px-4 py-3 text-right font-bold text-lg"><span>₹</span> <span id="grand-total">0.00</span></td>
+                            <td></td>
                         </tr>
                     </tfoot>
                 </table>
             </div>
+
+            <div class="mt-4">
+                <button type="button" id="add-line-item" class="btn btn-success">
+                    <i class="fas fa-plus"></i> Add Item
+                </button>
+            </div>
         </div>
 
-        <!-- Additional Information section - same as current -->
-        <div class="mb-6">
-            <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Additional Information</h3>
+        <!-- Additional Information Section -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 mb-6 shadow-sm">
+            <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">
+                <i class="fas fa-sticky-note text-blue-500 mr-2"></i>Additional Information
+            </h3>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div>
-                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2">Internal Notes</label>
-                    {{ form.notes(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline h-24") }}
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Delivery Instructions</label>
+                    {{ form.delivery_instructions(class="w-full px-3 py-2 border rounded-md", rows=4) }}
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Terms & Conditions</label>
+                    {{ form.terms_conditions(class="w-full px-3 py-2 border rounded-md", rows=4) }}
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Internal Notes</label>
+                    {{ form.notes(class="w-full px-3 py-2 border rounded-md", rows=4) }}
                 </div>
             </div>
         </div>
 
-        <!-- Submit Button - same styling as current -->
-        <div class="text-right">
-            <p class="text-sm text-gray-600 dark:text-gray-400 italic mb-3">
-                Note: Only draft purchase orders can be edited.
-            </p>
-            <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded focus:outline-none focus:shadow-outline">
-                Update Purchase Order
-            </button>
+        <!-- Hidden fields -->
+        {{ form.medicine_ids(type="hidden") }}
+        {{ form.medicine_names(type="hidden") }}
+        {{ form.quantities(type="hidden") }}
+        {{ form.pack_purchase_prices(type="hidden") }}
+        {{ form.pack_mrps(type="hidden") }}
+        {{ form.units_per_packs(type="hidden") }}
+        {{ form.hsn_codes(type="hidden") }}
+        {{ form.gst_rates(type="hidden") }}
+        {{ form.cgst_rates(type="hidden") }}
+        {{ form.sgst_rates(type="hidden") }}
+        {{ form.igst_rates(type="hidden") }}
+        {{ form.discount_percents(type="hidden") }}
+        {{ form.is_free_items(type="hidden") }}
+
+        <!-- Submit Actions -->
+        <div class="flex justify-between items-center p-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm mb-6">
+            <div class="text-gray-600 dark:text-gray-400 text-sm italic">
+                <i class="fas fa-info-circle mr-1"></i>
+                Note: Only draft purchase orders can be edited
+            </div>
+            <div class="flex gap-3">
+                <a href="{{ url_for('supplier_views.view_purchase_order', po_id=request.view_args.po_id) }}" class="btn-outline">
+                    <i class="fas fa-times mr-2"></i>Cancel
+                </a>
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-save mr-2"></i>Update Purchase Order
+                </button>
+            </div>
         </div>
     </form>
 </div>
+
+<!-- Line Item Template -->
+<template id="line-item-template">
+    <tr class="line-item-row">
+        <td class="px-2 py-2 text-center text-sm"><span class="row-number"></span></td>
+        <td class="px-2 py-2">
+            <select class="medicine-select" style="width: 280px;">
+                <option value="">Select Medicine</option>
+                {% for medicine in medicines %}
+                <option value="{{ medicine.medicine_id }}" 
+                        data-gst="{{ medicine.gst_rate or 0 }}"
+                        data-hsn="{{ medicine.hsn_code or '' }}"
+                        data-pack-size="{{ medicine.pack_size or 1 }}">
+                    {{ medicine.medicine_name }}
+                    {% if medicine.strength %} - {{ medicine.strength }}{% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </td>
+        <td class="px-2 py-2 text-center">
+            <input type="number" class="quantity form-control text-right" style="width: 70px;" step="0.01" min="0" value="1" name="">
+        </td>
+        <td class="px-2 py-2 text-center">
+            <input type="number" class="rate form-control text-right" style="width: 90px;" step="0.01" min="0" value="0" name="">
+        </td>
+        <td class="px-2 py-2 text-center">
+            <input type="number" class="mrp form-control text-right" style="width: 90px;" step="0.01" min="0" value="0" name="">
+        </td>
+        <td class="px-2 py-2 text-center">
+            <span class="gst-rate text-sm">0%</span>
+            <input type="hidden" class="gst-rate-hidden" value="0" name="">
+            <input type="hidden" class="hsn-code-hidden" value="" name="">
+            <input type="hidden" class="units-per-pack-hidden" value="1" name="">
+        </td>
+        <td class="px-2 py-2 text-center">
+            <input type="checkbox" class="is-free-item" name="">
+            <input type="hidden" class="discount-percent-hidden" value="0" name="">
+        </td>
+        <td class="px-2 py-2 text-right">
+            <div class="line-total font-medium text-sm">0.00</div>
+            <div class="text-xs text-gray-500 gst-details mt-1"></div>
+        </td>
+        <td class="px-2 py-2 text-center">
+            <button type="button" class="btn btn-sm btn-danger" onclick="removeLineItem(this)">
+                <i class="fas fa-trash"></i>
+            </button>
+        </td>
+    </tr>
+</template>
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
-<script src="{{ url_for('static', filename='js/components/form_handler.js') }}"></script>
+<script src="{{ url_for('static', filename='js/components/universal_dropdown_search_adapter.js') }}"></script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    let currentSupplierId = '';
-    let currentSupplierStateCode = '';
+    let lineItemIndex = {{ form.line_items|length or 0 }};
+    let currentSupplierState = '';
+    let currentSupplierStateCode = ''; 
     
-    // Simple FormHandler - same validation as current
-    const formHandler = new FormHandler({
-        formSelector: '#purchase-order-edit-form',
-        validations: [
-            {
-                field: '#supplier_id',
-                rules: [function(fieldEls) { return !!fieldEls[0].value; }],
-                message: 'Please select a supplier'
-            }
-        ]
-    });
+    calculateAllTotals();
     
-    // Supplier info handling (for GST calculations)
-    const supplierSelect = document.getElementById('supplier_id');
+    
+    // Supplier update - FIXED: Wait for DOM to be fully ready
+    const supplierSelect = document.querySelector('select[name="supplier_id"]');
     if (supplierSelect) {
-        supplierSelect.addEventListener('change', function() {
-            const selectedOption = this.options[this.selectedIndex];
-            if (this.value) {
-                currentSupplierId = this.value;
-                currentSupplierStateCode = selectedOption.getAttribute('data-state') || '';
-                recalculateAllLines();
+        function updateSupplierInfo() {
+            const option = supplierSelect.options[supplierSelect.selectedIndex];
+            if (option && option.value) {
+                document.getElementById('supplier-state').textContent = option.getAttribute('data-state') || '--';
+                document.getElementById('supplier-state-code').textContent = option.getAttribute('data-state-code') || '--';
+                document.getElementById('supplier-gstin').textContent = option.getAttribute('data-gst') || '--';
+                currentSupplierStateCode = option.getAttribute('data-state-code') || '';
             }
+        }
+        supplierSelect.addEventListener('change', updateSupplierInfo);
+        
+        // FIXED: Use requestAnimationFrame to ensure DOM is ready
+        requestAnimationFrame(function() {
+            setTimeout(updateSupplierInfo, 100);
         });
     }
     
-    // Free item handling - SAME as current
-    document.querySelectorAll('.is-free-item').forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            const row = this.closest('tr');
-            const packPrice = row.querySelector('.pack-price');
-            const discountPercent = row.querySelector('.discount-percent');
-            
-            if (this.checked) {
-                packPrice.value = '0';
-                packPrice.readOnly = true;
-                packPrice.classList.add('bg-gray-100', 'dark:bg-gray-600');
-                
-                discountPercent.value = '0';
-                discountPercent.readOnly = true;
-                discountPercent.classList.add('bg-gray-100', 'dark:bg-gray-600');
-                
-                row.classList.add('bg-green-50', 'dark:bg-green-900');
-                
-                // Add free badge
-                const medicineCell = row.querySelector('td:nth-child(2)');
-                if (medicineCell && !medicineCell.querySelector('.free-badge')) {
-                    const badge = document.createElement('span');
-                    badge.className = 'free-badge ml-2 px-2 py-1 text-xs bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200 rounded';
-                    badge.textContent = 'Free';
-                    medicineCell.appendChild(badge);
-                }
-            } else {
-                packPrice.readOnly = false;
-                packPrice.classList.remove('bg-gray-100', 'dark:bg-gray-600');
-                
-                discountPercent.readOnly = false;
-                discountPercent.classList.remove('bg-gray-100', 'dark:bg-gray-600');
-                
-                row.classList.remove('bg-green-50', 'dark:bg-green-900');
-                
-                // Remove free badge
-                const freeBadge = row.querySelector('.free-badge');
-                if (freeBadge) {
-                    freeBadge.remove();
-                }
-            }
-            
-            calculateRowTotal(row);
+    // Add line item
+    document.getElementById('add-line-item').addEventListener('click', function() {
+        const tbody = document.getElementById('line-items-body');
+        const emptyRow = tbody.querySelector('.empty-row');
+        if (emptyRow) emptyRow.remove();
+        
+        const template = document.getElementById('line-item-template');
+        const newRow = template.content.cloneNode(true);
+        newRow.querySelector('.row-number').textContent = tbody.querySelectorAll('.line-item-row').length + 1;
+        
+        tbody.appendChild(newRow);
+        lineItemIndex++;
+        
+    });
+    
+    window.removeLineItem = function(button) {
+        button.closest('tr').remove();
+        document.querySelectorAll('.line-item-row').forEach((row, idx) => {
+            row.querySelector('td:first-child').textContent = idx + 1;
         });
+        calculateAllTotals();
+    };
+    
+    document.getElementById('line-items-body').addEventListener('change', function(e) {
+        if (e.target.classList.contains('quantity') || e.target.classList.contains('rate') || e.target.classList.contains('is-free-item')) {
+            calculateAllTotals();
+        }
     });
     
-    // Input change handlers - SAME calculation as current
-    document.querySelectorAll('.quantity, .pack-price, .discount-percent').forEach(input => {
-        input.addEventListener('input', debounce(() => {
-            const row = input.closest('tr');
-            calculateRowTotal(row);
-        }, 300));
-    });
-    
-    // GST calculation function - SAME as current (uses existing API)
-    async function calculateRowTotal(row) {
-        try {
-            const quantity = parseFloat(row.querySelector('.quantity')?.value) || 0;
-            const unitRate = parseFloat(row.querySelector('.pack-price')?.value) || 0;
-            const gstRate = parseFloat(row.querySelector('input[name*="gst_rate"]')?.value) || 0;
-            const discountPercent = parseFloat(row.querySelector('.discount-percent')?.value) || 0;
-            const isFreeItem = row.querySelector('.is-free-item')?.checked || false;
-            
-            if (quantity === 0 || (unitRate === 0 && !isFreeItem)) {
-                clearRowDisplay(row);
-                updateTotalsDisplay();
-                return;
-            }
-            
-            // Use SAME preview API as current
-            const response = await fetch('/supplier/api/po/preview-gst', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCSRFToken()
-                },
-                body: JSON.stringify({
-                    quantity: quantity,
-                    unit_rate: unitRate,
-                    gst_rate: gstRate,
-                    discount_percent: discountPercent,
-                    is_free_item: isFreeItem,
-                    conversion_factor: 1,
-                    supplier_state_code: currentSupplierStateCode
-                })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                updateRowDisplay(row, data.calculations);
-            } else {
-                clearRowDisplay(row);
-            }
-            
-            updateTotalsDisplay();
-            
-        } catch (error) {
-            console.error('GST calculation error:', error);
-            clearRowDisplay(row);
-        }
-    }
-    
-    function updateRowDisplay(row, calculations) {
-        row.querySelector('.line-total').textContent = calculations.line_total.toFixed(2);
+    function calculateAllTotals() {
+        let subtotal = 0, totalGst = 0;
         
-        const gstBreakdown = row.querySelector('.gst-breakdown');
-        if (calculations.is_interstate) {
-            gstBreakdown.textContent = `IGST:  Rs.${calculations.igst_amount.toFixed(2)}`;
-        } else {
-            gstBreakdown.textContent = `C: Rs.${calculations.cgst_amount.toFixed(2)} S: Rs.${calculations.sgst_amount.toFixed(2)}`;
-        }
+        document.querySelectorAll('.line-item-row').forEach(row => {
+            const qty = parseFloat(row.querySelector('.quantity').value) || 0;
+            const rate = parseFloat(row.querySelector('.rate').value) || 0;
+            const gstRate = parseFloat(row.querySelector('.gst-rate-hidden').value) || 0;
+            const isFree = row.querySelector('.is-free-item').checked;
+            
+            const lineAmount = qty * rate;
+            subtotal += lineAmount;
+            
+            let gstAmount = 0;
+            if (!isFree && gstRate > 0) {
+                gstAmount = lineAmount * (gstRate / 100);
+                totalGst += gstAmount;
+            }
+            
+            row.querySelector('.line-total').textContent = (lineAmount + gstAmount).toFixed(2);
+        });
         
-        const gstDetails = row.querySelector('.gst-details');
-        gstDetails.textContent = `Base:  Rs.${calculations.base_amount.toFixed(2)} | GST:  Rs.${calculations.total_gst_amount.toFixed(2)}`;
-    }
-    
-    function clearRowDisplay(row) {
-        row.querySelector('.line-total').textContent = '0.00';
-        row.querySelector('.gst-breakdown').textContent = '';
-        row.querySelector('.gst-details').textContent = '';
-    }
-    
-    async function updateTotalsDisplay() {
-        try {
-            const lineItems = collectLineItemsForAPI();
-            
-            if (lineItems.length === 0) {
-                updateTotalElements(0, 0, 0);
-                return;
-            }
-            
-            // Use SAME totals API as current
-            const response = await fetch('/supplier/api/po/preview-totals', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCSRFToken()
-                },
-                body: JSON.stringify({
-                    line_items: lineItems,
-                    supplier_state_code: currentSupplierStateCode
-                })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                const totals = data.totals;
-                updateTotalElements(totals.total_taxable_amount, totals.total_gst_amount, totals.grand_total);
-            }
-            
-        } catch (error) {
-            console.error('Totals calculation error:', error);
-        }
-    }
-    
-    function updateTotalElements(subtotal, totalGst, grandTotal) {
         document.getElementById('subtotal').textContent = subtotal.toFixed(2);
         document.getElementById('total-gst').textContent = totalGst.toFixed(2);
-        document.getElementById('grand-total').textContent = grandTotal.toFixed(2);
+        document.getElementById('grand-total').textContent = (subtotal + totalGst).toFixed(2);
     }
     
-    function collectLineItemsForAPI() {
-        const rows = document.querySelectorAll('.line-item-row');
-        return Array.from(rows).map(row => ({
-            quantity: parseFloat(row.querySelector('.quantity')?.value) || 0,
-            unit_rate: parseFloat(row.querySelector('.pack-price')?.value) || 0,
-            gst_rate: parseFloat(row.querySelector('input[name*="gst_rate"]')?.value) || 0,
-            discount_percent: parseFloat(row.querySelector('.discount-percent')?.value) || 0,
-            is_free_item: row.querySelector('.is-free-item')?.checked || false,
-            conversion_factor: 1
-        })).filter(item => item.quantity > 0);
-    }
-    
-    function recalculateAllLines() {
-        document.querySelectorAll('.line-item-row').forEach(row => calculateRowTotal(row));
-    }
-    
-    function debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    }
-    
-    function getCSRFToken() {
-        return document.querySelector('input[name="csrf_token"]')?.value || '';
-    }
-    
-    // Initialize calculations on page load
-    setTimeout(() => {
-        recalculateAllLines();
-    }, 100);
-});
-
-// Handle optional date field validation
-document.addEventListener('DOMContentLoaded', function() {
-    const quotationDateField = document.querySelector('input[name="quotation_date"]');
-    
-    if (quotationDateField) {
-        // Remove any browser-imposed requirements
-        quotationDateField.removeAttribute('required');
+    document.getElementById('purchase-order-edit-form').addEventListener('submit', function(e) {
+        e.preventDefault();
         
-        // Handle form submission - clear invalid dates
-        quotationDateField.closest('form').addEventListener('submit', function(e) {
-            if (quotationDateField.value && !quotationDateField.validity.valid) {
-                // If there's a value but it's invalid, clear it
-                quotationDateField.value = '';
+        const lineItems = [];
+        document.querySelectorAll('.line-item-row').forEach(row => {
+            const medicineId = row.querySelector('.medicine-id-hidden').value;
+            const medicineName = row.querySelector('.medicine-select').value;
+            
+            if (medicineId && medicineName) {
+                lineItems.push({
+                    medicine_id: medicineId,
+                    medicine_name: medicineName,
+                    quantity: row.querySelector('.quantity').value,
+                    rate: row.querySelector('.rate').value,
+                    mrp: row.querySelector('.mrp').value || 0,
+                    units_per_pack: row.querySelector('.units-per-pack-hidden').value || 1,
+                    hsn_code: row.querySelector('.hsn-code-hidden').value || '',
+                    gst_rate: row.querySelector('.gst-rate-hidden').value || 0,
+                    is_free: row.querySelector('.is-free-item').checked
+                });
             }
         });
-    }
+        
+        const form = this;
+        form.medicine_ids.value = lineItems.map(item => item.medicine_id).join(',');
+        form.medicine_names.value = lineItems.map(item => item.medicine_name).join(',');
+        form.quantities.value = lineItems.map(item => item.quantity).join(',');
+        form.pack_purchase_prices.value = lineItems.map(item => item.rate).join(',');
+        form.pack_mrps.value = lineItems.map(item => item.mrp).join(',');
+        form.units_per_packs.value = lineItems.map(item => item.units_per_pack).join(',');
+        form.hsn_codes.value = lineItems.map(item => item.hsn_code).join(',');
+        form.gst_rates.value = lineItems.map(item => item.gst_rate).join(',');
+        
+        const cgstRates = [], sgstRates = [], igstRates = [];
+        lineItems.forEach(item => {
+            if (currentSupplierStateCode === '29') {
+                cgstRates.push(item.gst_rate / 2);
+                sgstRates.push(item.gst_rate / 2);
+                igstRates.push(0);
+            } else {
+                cgstRates.push(0);
+                sgstRates.push(0);
+                igstRates.push(item.gst_rate);
+            }
+        });
+        
+        form.cgst_rates.value = cgstRates.join(',');
+        form.sgst_rates.value = sgstRates.join(',');
+        form.igst_rates.value = igstRates.join(',');
+        form.discount_percents.value = lineItems.map(() => 0).join(',');
+        form.is_free_items.value = lineItems.map(item => item.is_free ? '1' : '0').join(',');
+        
+        this.submit();
+    });
 });
-
 </script>
 {% endblock %}

@@ -37,6 +37,13 @@ ENTITY_REGISTRY: Dict[str, EntityRegistration] = {
         service_class="app.services.supplier_master_service.SupplierMasterService",
         model_class="app.models.master.Supplier"
     ),
+
+    "medicine": EntityRegistration(
+        category=EntityCategory.MASTER,
+        module="app.config.modules.medicine_config",  # You need to create this config file
+        service_class="app.services.medicine_service.MedicineService",  # Optional: custom service
+        model_class="app.models.master.Medicine"
+    ),
     
     "patients": EntityRegistration(
         category=EntityCategory.MASTER,

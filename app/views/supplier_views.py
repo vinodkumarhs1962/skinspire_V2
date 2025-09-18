@@ -3428,6 +3428,38 @@ def credit_note_list():
         flash(f"Error loading credit notes: {str(e)}", 'error')
         return redirect(url_for('supplier_views.payment_list'))
 
+@supplier_views_bp.route('/api/medicine/<medicine_id>/gst-info', methods=['GET'])
+@login_required
+def get_medicine_gst_info(medicine_id):
+    """Get GST info for a medicine"""
+    try:
+        from app.models.master import Medicine
+        from app.services.database_service import get_db_session
+        from flask_login import current_user
+        import uuid
+        
+        medicine_uuid = uuid.UUID(medicine_id)
+        
+        with get_db_session(read_only=True) as session:
+            medicine = session.query(Medicine).filter_by(
+                medicine_id=medicine_uuid,
+                hospital_id=current_user.hospital_id
+            ).first()
+            
+            if medicine:
+                return jsonify({
+                    'success': True,
+                    'gst_rate': float(medicine.gst_rate) if medicine.gst_rate else 12.0,
+                    'hsn_code': str(medicine.hsn_code) if medicine.hsn_code else '30049099'
+                })
+            
+        return jsonify({'success': False, 'gst_rate': 12.0, 'hsn_code': '30049099'})
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching medicine GST: {str(e)}")
+        return jsonify({'success': False, 'gst_rate': 12.0, 'hsn_code': '30049099'})
+
+
 @supplier_views_bp.route('/payment/approve_universal/<payment_id>', methods=['POST'])
 @login_required
 @require_web_branch_permission('payment', 'approve', branch_source='entity')

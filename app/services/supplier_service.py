@@ -4906,6 +4906,290 @@ def validate_purchase_order_data(po_data: Dict) -> List[str]:
     
     return errors
 
+# ============================================================================
+# GST CALCULATION HELPER METHODS
+# ============================================================================
+
+def get_transaction_state_codes(hospital_id, supplier_id=None):
+    """
+    Get hospital and supplier state codes for GST calculation
+    
+    Args:
+        hospital_id: UUID of the hospital
+        supplier_id: UUID of the supplier (optional)
+        
+    Returns:
+        dict: {
+            'hospital_state_code': str,
+            'supplier_state_code': str,
+            'is_interstate': bool
+        }
+    """
+    from app.services.database_service import get_db_session
+    from app.models.master import Hospital, Supplier
+    import uuid
+    
+    result = {
+        'hospital_state_code': None,
+        'supplier_state_code': None,
+        'is_interstate': False
+    }
+    
+    try:
+        with get_db_session(read_only=True) as session:
+            # Get hospital state code
+            hospital = session.query(Hospital).filter_by(
+                hospital_id=hospital_id
+            ).first()
+            
+            if hospital:
+                result['hospital_state_code'] = hospital.state_code
+                logger.info(f"Hospital state code: {result['hospital_state_code']}")
+            
+            # Get supplier state code if supplier_id provided
+            if supplier_id:
+                supplier_uuid = uuid.UUID(supplier_id) if isinstance(supplier_id, str) else supplier_id
+                supplier = session.query(Supplier).filter_by(
+                    supplier_id=supplier_uuid,
+                    hospital_id=hospital_id,
+                    is_deleted=False
+                ).first()
+                
+                if supplier:
+                    result['supplier_state_code'] = supplier.state_code
+                    logger.info(f"Supplier state code: {result['supplier_state_code']}")
+            
+            # Determine if interstate
+            if result['hospital_state_code'] and result['supplier_state_code']:
+                result['is_interstate'] = (result['hospital_state_code'] != result['supplier_state_code'])
+                logger.info(f"Interstate transaction: {result['is_interstate']}")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting state codes: {str(e)}")
+        return result
+
+
+def resolve_medicine_identifier(medicine_identifier, hospital_id):
+    """
+    Resolve medicine identifier to UUID (handles both UUID string and medicine name)
+    
+    Args:
+        medicine_identifier: Medicine UUID string or medicine name
+        hospital_id: Hospital UUID for filtering
+        
+    Returns:
+        UUID: Resolved medicine UUID
+        
+    Raises:
+        ValueError: If medicine not found
+    """
+    from app.models.master import Medicine
+    from app.services.database_service import get_db_session
+    import uuid
+    
+    if not medicine_identifier or medicine_identifier in ['undefined', 'null', '']:
+        raise ValueError("Invalid medicine identifier")
+    
+    try:
+        # First try to parse as UUID
+        try:
+            return uuid.UUID(medicine_identifier)
+        except ValueError:
+            # Not a UUID - search by name
+            logger.info(f"Medicine identifier is not UUID, searching by name: {medicine_identifier}")
+            
+            with get_db_session(read_only=True) as session:
+                medicine = session.query(Medicine).filter_by(
+                    medicine_name=medicine_identifier,
+                    hospital_id=hospital_id,
+                    is_deleted=False
+                ).first()
+                
+                if medicine:
+                    logger.info(f"Found medicine by name '{medicine_identifier}', UUID: {medicine.medicine_id}")
+                    return medicine.medicine_id
+                else:
+                    raise ValueError(f"Medicine not found: {medicine_identifier}")
+    
+    except Exception as e:
+        logger.error(f"Error resolving medicine identifier: {str(e)}")
+        raise ValueError(f"Cannot resolve medicine: {medicine_identifier}")
+
+
+def calculate_line_item_with_gst(line_item_data, is_interstate=False):
+    """
+    Calculate GST for a single line item using centralized calculation
+    
+    Args:
+        line_item_data: Dictionary with line item details (units, pack_purchase_price, etc.)
+        is_interstate: Boolean indicating interstate transaction
+        
+    Returns:
+        dict: Line item with calculated GST values
+    """
+    try:
+        # Call existing centralized GST calculation
+        gst_calculations = calculate_gst_values(
+            quantity=line_item_data.get('units', 0),
+            unit_rate=line_item_data.get('pack_purchase_price', 0),
+            gst_rate=line_item_data.get('gst_rate', 0),
+            discount_percent=line_item_data.get('discount_percent', 0),
+            is_free_item=line_item_data.get('is_free_item', False),
+            is_interstate=is_interstate,
+            conversion_factor=line_item_data.get('units_per_pack', 1)
+        )
+        
+        # Create a new dict with all original data plus GST calculations
+        result = line_item_data.copy()
+        
+        # Update with calculated values
+        result.update({
+            'base_amount': gst_calculations['base_amount'],
+            'discount_amount': gst_calculations['discount_amount'],
+            'taxable_amount': gst_calculations['taxable_amount'],
+            'cgst_rate': 0 if is_interstate else line_item_data.get('gst_rate', 0) / 2,
+            'sgst_rate': 0 if is_interstate else line_item_data.get('gst_rate', 0) / 2,
+            'igst_rate': line_item_data.get('gst_rate', 0) if is_interstate else 0,
+            'cgst': gst_calculations['cgst_amount'],
+            'sgst': gst_calculations['sgst_amount'],
+            'igst': gst_calculations['igst_amount'],
+            'total_gst': gst_calculations['total_gst_amount'],
+            'line_total': gst_calculations['line_total'],
+            'unit_price': gst_calculations.get('sub_unit_price', 0)
+        })
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"GST calculation error: {str(e)}")
+        # Fallback calculation
+        return calculate_line_item_with_gst_fallback(line_item_data, is_interstate)
+
+
+def calculate_line_item_with_gst_fallback(line_item_data, is_interstate=False):
+    """
+    Fallback GST calculation if main calculation fails
+    
+    Args:
+        line_item_data: Dictionary with line item details
+        is_interstate: Boolean indicating interstate transaction
+        
+    Returns:
+        dict: Line item with calculated GST values
+    """
+    result = line_item_data.copy()
+    
+    # Basic calculations
+    units = float(line_item_data.get('units', 0))
+    pack_price = float(line_item_data.get('pack_purchase_price', 0))
+    discount_percent = float(line_item_data.get('discount_percent', 0))
+    gst_rate = float(line_item_data.get('gst_rate', 0))
+    units_per_pack = float(line_item_data.get('units_per_pack', 1)) or 1
+    
+    base_amount = units * pack_price
+    discount_amount = base_amount * (discount_percent / 100)
+    taxable_amount = base_amount - discount_amount
+    total_gst = taxable_amount * (gst_rate / 100)
+    
+    result.update({
+        'base_amount': base_amount,
+        'discount_amount': discount_amount,
+        'taxable_amount': taxable_amount,
+        'cgst_rate': 0 if is_interstate else gst_rate / 2,
+        'sgst_rate': 0 if is_interstate else gst_rate / 2,
+        'igst_rate': gst_rate if is_interstate else 0,
+        'cgst': 0 if is_interstate else total_gst / 2,
+        'sgst': 0 if is_interstate else total_gst / 2,
+        'igst': total_gst if is_interstate else 0,
+        'total_gst': total_gst,
+        'line_total': taxable_amount + total_gst,
+        'unit_price': pack_price / units_per_pack
+    })
+    
+    return result
+
+
+def process_po_line_items_with_gst(line_items_raw, hospital_id, supplier_id=None):
+    """
+    Process multiple line items with GST calculations
+    
+    Args:
+        line_items_raw: List of line item dictionaries
+        hospital_id: Hospital UUID
+        supplier_id: Supplier UUID (optional)
+        
+    Returns:
+        list: Processed line items with GST calculations
+    """
+    if not line_items_raw:
+        return []
+    
+    # Get state codes once for all line items
+    state_info = get_transaction_state_codes(hospital_id, supplier_id)
+    is_interstate = state_info['is_interstate']
+    
+    processed_items = []
+    
+    for idx, item in enumerate(line_items_raw, 1):
+        try:
+            # Calculate GST for this line item
+            processed_item = calculate_line_item_with_gst(item, is_interstate)
+            processed_items.append(processed_item)
+            
+            logger.info(f"Processed line {idx}: Total={processed_item['line_total']}, GST={processed_item['total_gst']}")
+            
+        except Exception as e:
+            logger.error(f"Error processing line item {idx}: {str(e)}")
+            raise ValueError(f"Error in line item {idx}: {str(e)}")
+    
+    return processed_items
+
+
+def calculate_po_totals(line_items):
+    """
+    Calculate total amounts for a purchase order from line items
+    
+    Args:
+        line_items: List of line items with GST calculations
+        
+    Returns:
+        dict: {
+            'subtotal': float,          # Total before discount and tax
+            'total_discount': float,    # Total discount amount
+            'total_taxable': float,     # Total taxable amount
+            'total_cgst': float,        # Total CGST
+            'total_sgst': float,        # Total SGST
+            'total_igst': float,        # Total IGST
+            'total_gst': float,         # Total GST amount
+            'grand_total': float        # Final total including GST
+        }
+    """
+    totals = {
+        'subtotal': 0,
+        'total_discount': 0,
+        'total_taxable': 0,
+        'total_cgst': 0,
+        'total_sgst': 0,
+        'total_igst': 0,
+        'total_gst': 0,
+        'grand_total': 0
+    }
+    
+    for item in line_items:
+        totals['subtotal'] += float(item.get('base_amount', 0))
+        totals['total_discount'] += float(item.get('discount_amount', 0))
+        totals['total_taxable'] += float(item.get('taxable_amount', 0))
+        totals['total_cgst'] += float(item.get('cgst', 0))
+        totals['total_sgst'] += float(item.get('sgst', 0))
+        totals['total_igst'] += float(item.get('igst', 0))
+        totals['total_gst'] += float(item.get('total_gst', 0))
+        totals['grand_total'] += float(item.get('line_total', 0))
+    
+    return totals
+
+
 # ===================================================================
 # Payment Validation Functions - COMPLETE (unchanged - already have branch support)
 # ===================================================================

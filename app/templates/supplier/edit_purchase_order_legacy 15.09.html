@@ -1,0 +1,485 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/supplier.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    
+    <!-- Flash messages section - same as current -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+        <div class="bg-{{ 'green' if category == 'success' else 'red' if category == 'error' else 'blue' }}-100 border-l-4 border-{{ 'green' if category == 'success' else 'red' if category == 'error' else 'blue' }}-500 text-{{ 'green' if category == 'success' else 'red' if category == 'error' else 'blue' }}-700 p-4 mb-6" role="alert">
+            <p>{{ message }}</p>
+        </div>
+        {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">{{ page_title }}</h1>
+        <a href="{{ url_for('supplier_views.view_purchase_order', po_id=request.view_args.po_id) }}" 
+           class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-white font-semibold py-2 px-4 rounded inline-flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+            </svg>
+            Back to PO
+        </a>
+    </div>
+
+    <form id="purchase-order-edit-form" method="POST" class="invoice-container">
+        {{ form.csrf_token }}
+        
+        <!-- Compact PO Header - same styling as current -->
+        <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 mb-6">
+            <!-- Row 1: PO Number, Supplier and PO Date - same layout as current -->
+            <div class="flex gap-4 mb-4">
+                <!-- PO Number (readonly) -->
+                <div class="w-48">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">
+                        PO Number
+                    </label>
+                    {{ form.po_number(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline bg-gray-100", readonly=true) }}
+                </div>
+                
+                <!-- Supplier Selection - same as current -->
+                <div class="flex-grow">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">
+                        Supplier <span class="text-red-500">*</span>
+                    </label>
+                    {{ form.supplier_id(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", required=true) }}
+                    {% if form.supplier_id.errors %}
+                        <p class="text-red-500 text-xs italic">{{ form.supplier_id.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                
+                <!-- PO Date - same as current -->
+                <div class="w-48">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">
+                        PO Date <span class="text-red-500">*</span>
+                    </label>
+                    {{ form.po_date(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", required=true) }}
+                    {% if form.po_date.errors %}
+                        <p class="text-red-500 text-xs italic">{{ form.po_date.errors[0] }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Row 2: Same additional fields layout as current -->
+            <div class="flex justify-between gap-4 mb-4">
+                <div class="w-40">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">Expected Delivery</label>
+                    {{ form.expected_delivery_date(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                </div>
+                <div class="w-28">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">Currency</label>
+                    {{ form.currency_code(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                </div>
+                <div class="w-32">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">Exchange Rate</label>
+                    {{ form.exchange_rate(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", step="0.000001") }}
+                </div>
+                <div class="w-56">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">Quotation Reference</label>
+                    {{ form.quotation_id(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                </div>
+                <div class="w-40">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1">Quotation Date</label>
+                    {{ form.quotation_date(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Line Items section with SAME styling as current -->
+        <div class="line-items-section">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-white">Items</h2>
+                <!-- Note: Add item button removed for edit mode -->
+            </div>
+            
+            <!-- SAME table styling as current -->
+            <div class="invoice-table-wrapper">
+                <table class="invoice-table w-full">
+                    <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs">
+                            <th class="px-2 py-2 text-center font-medium uppercase">#</th>
+                            <th class="px-2 py-2 text-left font-medium uppercase">Medicine</th>
+                            <th class="px-2 py-2 text-right font-medium uppercase">Qty</th>
+                            <th class="px-2 py-2 text-right font-medium uppercase">Rate</th>
+                            <th class="px-2 py-2 text-right font-medium uppercase">MRP</th>
+                            <th class="px-2 py-2 text-right font-medium uppercase">Disc%</th>
+                            <th class="px-2 py-2 text-center font-medium uppercase">Free</th>
+                            <th class="px-2 py-2 text-right font-medium uppercase">GST</th>
+                            <th class="px-2 py-2 text-right font-medium uppercase">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-xs">
+                        {% for line_form in form.line_items %}
+                        <tr class="line-item-row border-b dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700" data-line-index="{{ loop.index0 }}">
+                            <!-- # Column -->
+                            <td class="px-2 py-2 text-center">
+                                <span class="line-number text-sm text-gray-600 font-medium">{{ loop.index }}</span>
+                            </td>
+                            
+                            <!-- Medicine Column (readonly but styled same) -->
+                            <td class="px-2 py-2">
+                                {{ line_form.medicine_id() }}
+                                {{ line_form.medicine_name(class="form-input text-xs w-full border rounded px-2 py-1 bg-gray-100", readonly=true) }}
+                                {{ line_form.hsn_code() }}
+                                {{ line_form.gst_rate() }}
+                                {{ line_form.units_per_pack() }}
+                            </td>
+                            
+                            <!-- Quantity Column (editable - SAME styling) -->
+                            <td class="px-2 py-2">
+                                {{ line_form.quantity(class="quantity form-input text-xs w-full text-right border rounded px-2 py-1", step="0.01", min="0.01") }}
+                                {% if line_form.quantity.errors %}
+                                    <div class="text-red-500 text-xs mt-1">{{ line_form.quantity.errors[0] }}</div>
+                                {% endif %}
+                            </td>
+                            
+                            <!-- Rate Column (editable - SAME styling) -->
+                            <td class="px-2 py-2">
+                                {{ line_form.pack_purchase_price(class="pack-price form-input text-xs w-full text-right border rounded px-2 py-1", step="0.01", min="0") }}
+                                {% if line_form.pack_purchase_price.errors %}
+                                    <div class="text-red-500 text-xs mt-1">{{ line_form.pack_purchase_price.errors[0] }}</div>
+                                {% endif %}
+                            </td>
+                            
+                            <!-- MRP Column (editable - SAME styling) -->
+                            <td class="px-2 py-2">
+                                {{ line_form.pack_mrp(class="mrp form-input text-xs w-full text-right border rounded px-2 py-1", step="0.01", min="0") }}
+                                {% if line_form.pack_mrp.errors %}
+                                    <div class="text-red-500 text-xs mt-1">{{ line_form.pack_mrp.errors[0] }}</div>
+                                {% endif %}
+                            </td>
+                            
+                            <!-- Discount Column (SAME styling) -->
+                            <td class="px-2 py-2">
+                                {{ line_form.discount_percent(class="discount-percent form-input text-xs w-full text-right border rounded px-2 py-1", step="0.1", min="0", max="100") }}
+                            </td>
+                            
+                            <!-- Free Item Column (SAME styling) -->
+                            <td class="px-2 py-2 text-center">
+                                <label class="inline-flex items-center justify-center">
+                                    {{ line_form.is_free_item(class="is-free-item form-checkbox text-xs rounded") }}
+                                    <span class="ml-1 text-xs hidden sm:inline">Free</span>
+                                </label>
+                            </td>
+                            
+                            <!-- GST Column (calculated display - SAME styling) -->
+                            <td class="px-2 py-2">
+                                <div class="text-xs text-gray-600 font-medium gst-display">{{ line_form.gst_rate.data or 0 }}%</div>
+                                <div class="text-xs text-gray-500 mt-1 leading-tight gst-breakdown"></div>
+                            </td>
+                            
+                            <!-- Total Column (calculated display - SAME styling) -->
+                            <td class="px-2 py-2 text-right">
+                                <div class="line-total font-medium text-sm">0.00</div>
+                                <div class="text-xs text-gray-500 gst-details mt-1 leading-tight"></div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <!-- SAME footer with totals -->
+                    <tfoot class="bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm">
+                        <tr class="border-t-2 border-gray-300 dark:border-gray-600">
+                            <td colspan="8" class="px-2 py-2 text-right font-medium">Subtotal:</td>
+                            <td class="px-2 py-2 text-right font-medium" id="subtotal">0.00</td>
+                        </tr>
+                        <tr>
+                            <td colspan="8" class="px-2 py-2 text-right font-medium">Total GST:</td>
+                            <td class="px-2 py-2 text-right font-medium" id="total-gst">0.00</td>
+                        </tr>
+                        <tr class="border-t border-gray-400 dark:border-gray-500">
+                            <td colspan="8" class="px-2 py-2 text-right font-bold">Grand Total:</td>
+                            <td class="px-2 py-2 text-right font-bold text-lg" id="grand-total">0.00</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- Additional Information section - same as current -->
+        <div class="mb-6">
+            <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Additional Information</h3>
+                <div>
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2">Internal Notes</label>
+                    {{ form.notes(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline h-24") }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Submit Button - same styling as current -->
+        <div class="text-right">
+            <p class="text-sm text-gray-600 dark:text-gray-400 italic mb-3">
+                Note: Only draft purchase orders can be edited.
+            </p>
+            <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded focus:outline-none focus:shadow-outline">
+                Update Purchase Order
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="{{ url_for('static', filename='js/components/form_handler.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let currentSupplierId = '';
+    let currentSupplierStateCode = '';
+    
+    // Simple FormHandler - same validation as current
+    const formHandler = new FormHandler({
+        formSelector: '#purchase-order-edit-form',
+        validations: [
+            {
+                field: '#supplier_id',
+                rules: [function(fieldEls) { return !!fieldEls[0].value; }],
+                message: 'Please select a supplier'
+            }
+        ]
+    });
+    
+    // Supplier info handling (for GST calculations)
+    const supplierSelect = document.getElementById('supplier_id');
+    if (supplierSelect) {
+        supplierSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            if (this.value) {
+                currentSupplierId = this.value;
+                currentSupplierStateCode = selectedOption.getAttribute('data-state') || '';
+                recalculateAllLines();
+            }
+        });
+    }
+    
+    // Free item handling - SAME as current
+    document.querySelectorAll('.is-free-item').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const row = this.closest('tr');
+            const packPrice = row.querySelector('.pack-price');
+            const discountPercent = row.querySelector('.discount-percent');
+            
+            if (this.checked) {
+                packPrice.value = '0';
+                packPrice.readOnly = true;
+                packPrice.classList.add('bg-gray-100', 'dark:bg-gray-600');
+                
+                discountPercent.value = '0';
+                discountPercent.readOnly = true;
+                discountPercent.classList.add('bg-gray-100', 'dark:bg-gray-600');
+                
+                row.classList.add('bg-green-50', 'dark:bg-green-900');
+                
+                // Add free badge
+                const medicineCell = row.querySelector('td:nth-child(2)');
+                if (medicineCell && !medicineCell.querySelector('.free-badge')) {
+                    const badge = document.createElement('span');
+                    badge.className = 'free-badge ml-2 px-2 py-1 text-xs bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200 rounded';
+                    badge.textContent = 'Free';
+                    medicineCell.appendChild(badge);
+                }
+            } else {
+                packPrice.readOnly = false;
+                packPrice.classList.remove('bg-gray-100', 'dark:bg-gray-600');
+                
+                discountPercent.readOnly = false;
+                discountPercent.classList.remove('bg-gray-100', 'dark:bg-gray-600');
+                
+                row.classList.remove('bg-green-50', 'dark:bg-green-900');
+                
+                // Remove free badge
+                const freeBadge = row.querySelector('.free-badge');
+                if (freeBadge) {
+                    freeBadge.remove();
+                }
+            }
+            
+            calculateRowTotal(row);
+        });
+    });
+    
+    // Input change handlers - SAME calculation as current
+    document.querySelectorAll('.quantity, .pack-price, .discount-percent').forEach(input => {
+        input.addEventListener('input', debounce(() => {
+            const row = input.closest('tr');
+            calculateRowTotal(row);
+        }, 300));
+    });
+    
+    // GST calculation function - SAME as current (uses existing API)
+    async function calculateRowTotal(row) {
+        try {
+            const quantity = parseFloat(row.querySelector('.quantity')?.value) || 0;
+            const unitRate = parseFloat(row.querySelector('.pack-price')?.value) || 0;
+            const gstRate = parseFloat(row.querySelector('input[name*="gst_rate"]')?.value) || 0;
+            const discountPercent = parseFloat(row.querySelector('.discount-percent')?.value) || 0;
+            const isFreeItem = row.querySelector('.is-free-item')?.checked || false;
+            
+            if (quantity === 0 || (unitRate === 0 && !isFreeItem)) {
+                clearRowDisplay(row);
+                updateTotalsDisplay();
+                return;
+            }
+            
+            // Use SAME preview API as current
+            const response = await fetch('/supplier/api/po/preview-gst', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify({
+                    quantity: quantity,
+                    unit_rate: unitRate,
+                    gst_rate: gstRate,
+                    discount_percent: discountPercent,
+                    is_free_item: isFreeItem,
+                    conversion_factor: 1,
+                    supplier_state_code: currentSupplierStateCode
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                updateRowDisplay(row, data.calculations);
+            } else {
+                clearRowDisplay(row);
+            }
+            
+            updateTotalsDisplay();
+            
+        } catch (error) {
+            console.error('GST calculation error:', error);
+            clearRowDisplay(row);
+        }
+    }
+    
+    function updateRowDisplay(row, calculations) {
+        row.querySelector('.line-total').textContent = calculations.line_total.toFixed(2);
+        
+        const gstBreakdown = row.querySelector('.gst-breakdown');
+        if (calculations.is_interstate) {
+            gstBreakdown.textContent = `IGST:  Rs.${calculations.igst_amount.toFixed(2)}`;
+        } else {
+            gstBreakdown.textContent = `C: Rs.${calculations.cgst_amount.toFixed(2)} S: Rs.${calculations.sgst_amount.toFixed(2)}`;
+        }
+        
+        const gstDetails = row.querySelector('.gst-details');
+        gstDetails.textContent = `Base:  Rs.${calculations.base_amount.toFixed(2)} | GST:  Rs.${calculations.total_gst_amount.toFixed(2)}`;
+    }
+    
+    function clearRowDisplay(row) {
+        row.querySelector('.line-total').textContent = '0.00';
+        row.querySelector('.gst-breakdown').textContent = '';
+        row.querySelector('.gst-details').textContent = '';
+    }
+    
+    async function updateTotalsDisplay() {
+        try {
+            const lineItems = collectLineItemsForAPI();
+            
+            if (lineItems.length === 0) {
+                updateTotalElements(0, 0, 0);
+                return;
+            }
+            
+            // Use SAME totals API as current
+            const response = await fetch('/supplier/api/po/preview-totals', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify({
+                    line_items: lineItems,
+                    supplier_state_code: currentSupplierStateCode
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                const totals = data.totals;
+                updateTotalElements(totals.total_taxable_amount, totals.total_gst_amount, totals.grand_total);
+            }
+            
+        } catch (error) {
+            console.error('Totals calculation error:', error);
+        }
+    }
+    
+    function updateTotalElements(subtotal, totalGst, grandTotal) {
+        document.getElementById('subtotal').textContent = subtotal.toFixed(2);
+        document.getElementById('total-gst').textContent = totalGst.toFixed(2);
+        document.getElementById('grand-total').textContent = grandTotal.toFixed(2);
+    }
+    
+    function collectLineItemsForAPI() {
+        const rows = document.querySelectorAll('.line-item-row');
+        return Array.from(rows).map(row => ({
+            quantity: parseFloat(row.querySelector('.quantity')?.value) || 0,
+            unit_rate: parseFloat(row.querySelector('.pack-price')?.value) || 0,
+            gst_rate: parseFloat(row.querySelector('input[name*="gst_rate"]')?.value) || 0,
+            discount_percent: parseFloat(row.querySelector('.discount-percent')?.value) || 0,
+            is_free_item: row.querySelector('.is-free-item')?.checked || false,
+            conversion_factor: 1
+        })).filter(item => item.quantity > 0);
+    }
+    
+    function recalculateAllLines() {
+        document.querySelectorAll('.line-item-row').forEach(row => calculateRowTotal(row));
+    }
+    
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+    
+    function getCSRFToken() {
+        return document.querySelector('input[name="csrf_token"]')?.value || '';
+    }
+    
+    // Initialize calculations on page load
+    setTimeout(() => {
+        recalculateAllLines();
+    }, 100);
+});
+
+// Handle optional date field validation
+document.addEventListener('DOMContentLoaded', function() {
+    const quotationDateField = document.querySelector('input[name="quotation_date"]');
+    
+    if (quotationDateField) {
+        // Remove any browser-imposed requirements
+        quotationDateField.removeAttribute('required');
+        
+        // Handle form submission - clear invalid dates
+        quotationDateField.closest('form').addEventListener('submit', function(e) {
+            if (quotationDateField.value && !quotationDateField.validity.valid) {
+                // If there's a value but it's invalid, clear it
+                quotationDateField.value = '';
+            }
+        });
+    }
+});
+
+</script>
+{% endblock %}

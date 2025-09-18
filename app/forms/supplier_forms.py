@@ -243,7 +243,7 @@ class PurchaseOrderForm(FlaskForm):
     # Main fields
     branch_id = SelectField('Branch', validators=[Optional()], choices=[])
     po_number = StringField('PO Number', render_kw={'readonly': True})
-    supplier_id = SelectField('Supplier', validators=[DataRequired()])
+    supplier_id = SelectField('Supplier', validators=[DataRequired()], choices=[], coerce=str)
     po_date = DateField('PO Date', validators=[DataRequired()], default=date.today)
     expected_delivery_date = DateField('Expected Delivery Date', validators=[Optional()])
     quotation_id = StringField('Quotation Reference', validators=[Optional()])
@@ -289,13 +289,13 @@ class PurchaseOrderForm(FlaskForm):
     igst_rates = HiddenField('IGST Rates')
 
 class PurchaseOrderEditLineForm(FlaskForm):
-    """Individual line item form for editing PO - FIXED validation"""
-    medicine_id = HiddenField('Medicine ID')  # REMOVED DataRequired - template will validate
+    """Individual line item form for editing PO - with correct field names"""
+    medicine_id = HiddenField('Medicine ID')
     medicine_name = StringField('Medicine', render_kw={'readonly': True})
     
-    # FIXED: Remove validators to prevent validation errors
+    # Keep original field names as they match the database model
     quantity = DecimalField('Quantity', render_kw={'step': '0.01', 'min': '0'})
-    pack_purchase_price = DecimalField('Rate', render_kw={'step': '0.01', 'min': '0'}) 
+    pack_purchase_price = DecimalField('Rate', render_kw={'step': '0.01', 'min': '0'})
     pack_mrp = DecimalField('MRP', render_kw={'step': '0.01', 'min': '0'})
     
     units_per_pack = HiddenField('Units per Pack', default=1)
@@ -305,23 +305,67 @@ class PurchaseOrderEditLineForm(FlaskForm):
     gst_rate = HiddenField('GST Rate')
 
 class PurchaseOrderEditForm(FlaskForm):
-    """Centralized edit form for PO - FIXED optional fields"""
+    """Centralized edit form for PO - with all required fields"""
     # Header fields
     po_number = StringField('PO Number', render_kw={'readonly': True})
     supplier_id = SelectField('Supplier', validators=[DataRequired()])
     po_date = DateField('PO Date', validators=[DataRequired()])
     
-    # FIXED: All optional fields - no validators
-    expected_delivery_date = DateField('Expected Delivery')  
-    quotation_id = StringField('Quotation ID')  
-    quotation_date = DateField('Quotation Date')  # FIXED: No validators
+    # Optional date fields
+    expected_delivery_date = DateField('Expected Delivery Date', validators=[Optional()])
+    quotation_date = DateField('Quotation Date', validators=[Optional()])
     
-    currency_code = SelectField('Currency', choices=[('INR', 'INR'), ('USD', 'USD')], default='INR')
-    exchange_rate = DecimalField('Exchange Rate', default=1.0, validators=[NumberRange(min=0.000001)])
-    notes = TextAreaField('Notes')
+    # Reference fields
+    quotation_id = StringField('Quotation Reference', validators=[Optional()])
     
-    # Line items - no min_entries to avoid validation issues
+    # Currency fields
+    currency_code = SelectField('Currency', 
+                                choices=[('INR', 'INR'), ('USD', 'USD'), ('EUR', 'EUR')],
+                                default='INR',
+                                validators=[DataRequired()])
+    exchange_rate = DecimalField('Exchange Rate', 
+                                default=1.0, 
+                                validators=[
+                                    DataRequired(),
+                                    NumberRange(min=0.000001, message='Exchange rate must be greater than zero')
+                                ])
+    
+    # Additional text fields
+    delivery_instructions = TextAreaField('Delivery Instructions', validators=[Optional()])
+    terms_conditions = TextAreaField('Terms and Conditions', validators=[Optional()])
+    notes = TextAreaField('Internal Notes', validators=[Optional()])
+    
+    # Branch field (if applicable)
+    branch_id = SelectField('Branch', validators=[Optional()], choices=[])
+    
+    # Hidden total fields for calculations
+    total_amount = HiddenField('Total Amount', default=0)
+    subtotal = HiddenField('Subtotal', default=0)
+    total_gst = HiddenField('Total GST', default=0)
+    
+    # Hidden fields for line item aggregates
+    discount_percents = HiddenField('Discount Percents')
+    discount_amounts = HiddenField('Discount Amounts')
+    is_free_items = HiddenField('Is Free Items')
+    
+    # Line items - using FieldList with FormField
     line_items = FieldList(FormField(PurchaseOrderEditLineForm), min_entries=0)
+    
+    # hidden status field
+    status = HiddenField('Status', default='draft')
+
+    # Hidden fields for JavaScript population (if needed)
+    medicine_ids = HiddenField('Medicine IDs')
+    medicine_names = HiddenField('Medicine Names')
+    quantities = HiddenField('Quantities')
+    pack_purchase_prices = HiddenField('Pack Purchase Prices')
+    pack_mrps = HiddenField('Pack MRPs')
+    units_per_packs = HiddenField('Units Per Pack')
+    hsn_codes = HiddenField('HSN Codes')
+    gst_rates = HiddenField('GST Rates')
+    cgst_rates = HiddenField('CGST Rates')
+    sgst_rates = HiddenField('SGST Rates')
+    igst_rates = HiddenField('IGST Rates')
 
 class SupplierInvoiceForm(FlaskForm):
     """Form for creating supplier invoices"""

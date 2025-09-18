@@ -73,10 +73,15 @@ def entity_search(entity_type: str):
         except:
             search_fields = []
         
+        # Handle singular/plural entity names for configuration lookup
+        config_entity_type = entity_type
+        if entity_type == 'medicines':
+            config_entity_type = 'medicine'  # Map plural to singular for config
+
         # Get entity configuration
-        config = get_entity_config(entity_type)
+        config = get_entity_config(config_entity_type)
         if not config:
-            logger.error(f"No configuration found for entity: {entity_type}")
+            logger.error(f"No configuration found for entity: {config_entity_type}")
             return jsonify({
                 'error': f"No configuration for entity: {entity_type}",
                 'success': False,
@@ -109,13 +114,13 @@ def entity_search(entity_type: str):
         elif entity_type == 'patients':
             # Special handling for patients
             results = search_patients(search_term, hospital_id, branch_id, limit)
-        elif entity_type == 'medicines':
+        elif entity_type in ['medicine', 'medicines']:  # Handle both singular and plural
             # Special handling for medicines
             results = search_medicines(search_term, hospital_id, branch_id, limit)
         else:
             # Generic entity search
             results = generic_entity_search(
-                entity_type, search_term, hospital_id, branch_id, limit, config
+                config_entity_type, search_term, hospital_id, branch_id, limit, config  # Use config_entity_type
             )
         
         # Format successful response
@@ -401,7 +406,7 @@ def search_medicines(search_term: str, hospital_id: uuid.UUID,
                     # Additional fields for reference
                     'uuid': str(medicine.medicine_id),         # Actual UUID if needed
                     'generic_name': medicine.generic_name if hasattr(medicine, 'generic_name') else '',
-                    'category': medicine.category.category_name if hasattr(medicine, 'category') and medicine.category else '',
+                    'category': medicine.category.name if hasattr(medicine, 'category') and medicine.category else '',  # FIX: category_name → name
                     'manufacturer': medicine.manufacturer.manufacturer_name if hasattr(medicine, 'manufacturer') and medicine.manufacturer else '',
                     'dosage_form': medicine.dosage_form if hasattr(medicine, 'dosage_form') else '',
                     'strength': medicine.strength if hasattr(medicine, 'strength') else '',
@@ -421,10 +426,22 @@ def generic_entity_search(entity_type: str, search_term: str, hospital_id: uuid.
     Generic entity search for any entity type
     """
     try:
-        # Get model class
-        model_class = get_model_for_entity(entity_type)
-        if not model_class:
+        # Get model class from registry
+        from app.config.entity_registry import get_entity_registration
+        import importlib
+        
+        registration = get_entity_registration(entity_type)
+        if not registration or not registration.model_class:
             logger.error(f"No model found for entity type: {entity_type}")
+            return []
+        
+        # Import the model class dynamically
+        try:
+            module_path, class_name = registration.model_class.rsplit('.', 1)
+            module = importlib.import_module(module_path)
+            model_class = getattr(module, class_name)
+        except Exception as e:
+            logger.error(f"Error loading model class for {entity_type}: {str(e)}")
             return []
         
         with get_db_session() as session:

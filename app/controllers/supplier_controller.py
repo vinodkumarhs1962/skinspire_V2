@@ -8,6 +8,7 @@ from app.controllers.form_controller import FormController
 from app.services.database_service import get_db_session
 from app.models.master import Medicine, Supplier, Branch
 from app.models.transaction import PurchaseOrderHeader
+from app.config.core_definitions import INDIAN_STATES
 from app.services.permission_service import (
     get_user_branch_context,
     has_branch_permission
@@ -28,6 +29,15 @@ from app.services.supplier_service import (
 from app.engine.universal_service_cache import cache_service_method, cache_universal
 from app.utils.unicode_logging import get_unicode_safe_logger
 logger = get_unicode_safe_logger(__name__)
+
+def get_state_name_from_code(state_code):
+    """Convert state code to state name using INDIAN_STATES"""
+    if not state_code:
+        return ''
+    for state in INDIAN_STATES:
+        if state['value'] == state_code:
+            return state['label']
+    return ''
 
 class SupplierFormController(FormController):
     """Controller for supplier master form"""
@@ -73,6 +83,7 @@ class SupplierFormController(FormController):
             current_app.logger.error(f"Error setting up supplier form choices: {str(e)}")
             return False
 
+    @cache_universal(entity_type='purchase_order', operation='get_form_context')
     def get_additional_context(self, *args, **kwargs):
         """Get additional context including branch selection - UPDATED with unified branch service"""
         context = super().get_additional_context(*args, **kwargs) if hasattr(super(), 'get_additional_context') else {}
@@ -1583,8 +1594,11 @@ class SupplierInvoiceEditController(FormController):
                 
                 # EXISTING: Get medicines for line items (unchanged)
                 medicines = session.query(Medicine).filter_by(
-                    hospital_id=current_user.hospital_id
-                ).all()
+                    hospital_id=current_user.hospital_id,
+                    status='active'
+                ).order_by(Medicine.medicine_name).all()
+                
+                # Add medicines to context for template
                 context['medicines'] = medicines
                 
         except Exception as e:
@@ -2076,7 +2090,7 @@ class PurchaseOrderFormController(FormController):
             page_title="Create Purchase Order",
             additional_context=self.get_additional_context
         )
-    
+
     def _get_success_url(self, result):
         """FIXED: Redirect to Universal Engine view instead of old view"""
         from flask import url_for
@@ -2097,10 +2111,10 @@ class PurchaseOrderFormController(FormController):
         context = {}
         try:
             from app.services.database_service import get_db_session
-            from app.models.master import Supplier, Medicine, Branch
+            from app.models.master import Supplier, Medicine, Branch, Hospital
             from flask_login import current_user
             
-            # NEW: Get branch context for filtering
+            # Get branch context for filtering
             try:
                 from app.services.permission_service import get_user_branch_context
                 branch_context = get_user_branch_context(
@@ -2115,7 +2129,24 @@ class PurchaseOrderFormController(FormController):
                 context['branch_context'] = branch_context
             
             with get_db_session(read_only=True) as session:
-                # ENHANCED: Get suppliers with branch filtering
+                # Get hospital state code for GST calculation
+                try:
+                    hospital = session.query(Hospital).filter_by(
+                        hospital_id=current_user.hospital_id
+                    ).first()
+                    
+                    if hospital and hospital.state_code:
+                        context['hospital_state_code'] = hospital.state_code
+                        current_app.logger.info(f"Hospital state code: {hospital.state_code}")
+                    else:
+                        context['hospital_state_code'] = ''
+                        current_app.logger.warning("Hospital state code not found")
+                        
+                except Exception as e:
+                    current_app.logger.error(f"Error getting hospital state: {str(e)}")
+                    context['hospital_state_code'] = ''
+
+                # Get suppliers with branch filtering
                 all_suppliers = session.query(Supplier).filter_by(
                     hospital_id=current_user.hospital_id,
                     status='active'
@@ -2123,6 +2154,7 @@ class PurchaseOrderFormController(FormController):
                 
                 # Filter suppliers based on branch access
                 accessible_suppliers = []
+                suppliers_dict = {}  # ADD THIS: Store supplier details by ID
                 if current_user.user_id == '7777777777':  # PRESERVE: Testing bypass
                     accessible_suppliers = all_suppliers
                 else:
@@ -2133,15 +2165,80 @@ class PurchaseOrderFormController(FormController):
                             str(supplier.branch_id) in accessible_branch_ids):
                             accessible_suppliers.append(supplier)
                 
+                # Create supplier details dictionary
+                for supplier in accessible_suppliers:
+                    # Extract state from JSONB field
+                    supplier_state = ''
+                    supplier_city = ''
+                    supplier_pincode = ''
+                    supplier_address_str = ''
+                    
+                    if supplier.supplier_address:
+                        # supplier_address is a JSONB field
+                        if isinstance(supplier.supplier_address, dict):
+                            supplier_state = supplier.supplier_address.get('state', '')
+                            supplier_city = supplier.supplier_address.get('city', '')
+                            supplier_pincode = supplier.supplier_address.get('pincode', '')
+                            supplier_address_str = supplier.supplier_address.get('address', '')
+                    
+                    state_name = get_state_name_from_code(supplier.state_code)
+                    suppliers_dict[str(supplier.supplier_id)] = {
+                        'supplier_id': str(supplier.supplier_id),
+                        'supplier_name': supplier.supplier_name,
+                        'state': state_name,  # <-- FIXED: Derived from state_code
+                        'state_code': supplier.state_code or '',
+                        'gst_registration_number': supplier.gst_registration_number or '',
+                        'address': '',  # These fields don't exist directly
+                        'city': '',
+                        'pincode': ''
+                    }
+
                 context['suppliers'] = accessible_suppliers
+                context['suppliers_dict'] = {str(s.supplier_id): s for s in accessible_suppliers}
                 
-                # EXISTING: Get medicines (unchanged)
+                # Get current PO's selected supplier details if editing
+                if hasattr(self, 'po_id') and self.po_id:
+                    try:
+                        from app.services.supplier_service import get_purchase_order_by_id
+                        import uuid
+                        
+                        po = get_purchase_order_by_id(
+                            po_id=uuid.UUID(self.po_id),
+                            hospital_id=current_user.hospital_id
+                        )
+                        
+                        if po and po.get('supplier_id'):
+                            # Find the selected supplier
+                            selected_supplier = next(
+                                (s for s in accessible_suppliers if str(s.supplier_id) == str(po['supplier_id'])),
+                                None
+                            )
+                            if selected_supplier:
+                                # Extract state from JSONB field
+                                supplier_state = ''
+                                if selected_supplier.supplier_address:
+                                    # supplier_address is a JSONB field containing state
+                                    supplier_state = selected_supplier.supplier_address.get('state', '') if isinstance(selected_supplier.supplier_address, dict) else ''
+                                
+                                state_name = get_state_name_from_code(selected_supplier.state_code)
+    
+                                context['selected_supplier'] = {
+                                    'supplier_id': str(selected_supplier.supplier_id),
+                                    'supplier_name': selected_supplier.supplier_name,
+                                    'state': state_name,  # <-- FIXED: Derived from state_code
+                                    'state_code': selected_supplier.state_code or '',
+                                    'gst_registration_number': selected_supplier.gst_registration_number or ''
+                                }
+                    except Exception as e:
+                        current_app.logger.warning(f"Could not get selected supplier details: {str(e)}")
+
+                # Get medicines
                 medicines = session.query(Medicine).filter_by(
                     hospital_id=current_user.hospital_id
                 ).all()
                 context['medicines'] = medicines
                 
-                # ENHANCED: Get branches with filtering
+                # Get branches with filtering
                 all_branches = session.query(Branch).filter_by(
                     hospital_id=current_user.hospital_id,
                     is_active=True
@@ -2165,28 +2262,136 @@ class PurchaseOrderFormController(FormController):
             # FALLBACK: Ensure basic context
             context.update({
                 'suppliers': [],
+                'suppliers_dict': {},
                 'medicines': [],
+                'hospital_state_code': '', 
                 'branches': [],
                 'branch_context': {'accessible_branches': [], 'can_cross_branch': False}
             })
         
         return context
     
+    def handle_request(self, *args, **kwargs):
+        """Handle request with proper validation for Universal Dropdown fields"""
+        from flask import request
+        
+        try:
+            if request.method == 'POST':
+                # Get the form
+                form = self.form_class()
+                
+                # Get supplier_id from request
+                supplier_id_from_request = request.form.get('supplier_id', '').strip()
+                
+                # CRITICAL: Validate supplier_id - can be UUID or name from Universal Dropdown
+                if supplier_id_from_request:
+                    import uuid
+                    from app.services.database_service import get_db_session
+                    from app.models.master import Supplier
+                    from flask_login import current_user
+                    
+                    supplier = None
+                    actual_supplier_id = None
+                    
+                    # First try to treat as UUID
+                    try:
+                        # Try to parse as UUID
+                        supplier_uuid = uuid.UUID(supplier_id_from_request)
+                        
+                        # Validate supplier exists in database
+                        with get_db_session(read_only=True) as session:
+                            supplier = session.query(Supplier).filter_by(
+                                supplier_id=supplier_uuid,
+                                hospital_id=current_user.hospital_id,
+                                is_deleted=False
+                            ).first()
+                            
+                            if supplier:
+                                actual_supplier_id = supplier_id_from_request
+                                
+                    except ValueError:
+                        # Not a UUID - try searching by name (Universal Dropdown sends name)
+                        current_app.logger.info(f"Supplier value is not UUID, searching by name: {supplier_id_from_request}")
+                        
+                        with get_db_session(read_only=True) as session:
+                            supplier = session.query(Supplier).filter_by(
+                                supplier_name=supplier_id_from_request,
+                                hospital_id=current_user.hospital_id,
+                                is_deleted=False
+                            ).first()
+                            
+                            if supplier:
+                                # Found by name - use the actual UUID
+                                actual_supplier_id = str(supplier.supplier_id)
+                                # Update form data to use UUID instead of name
+                                form.supplier_id.data = actual_supplier_id
+                                current_app.logger.info(f"Found supplier by name '{supplier_id_from_request}', using UUID: {actual_supplier_id}")
+                    
+                    # Check if supplier was found by either method
+                    if supplier and actual_supplier_id:
+                        # Add as valid choice with actual supplier name
+                        form.supplier_id.choices = [(actual_supplier_id, supplier.supplier_name)]
+                    else:
+                        # Supplier doesn't exist or not found
+                        form.supplier_id.choices = [('', 'Select Supplier')]
+                        flash("Selected supplier not found or not accessible", "error")
+                        current_app.logger.error(f"Supplier not found: {supplier_id_from_request}")
+                        return self.render_form(form, *args, **kwargs)
+                        
+                else:
+                    # No supplier selected
+                    form.supplier_id.choices = [('', 'Select Supplier')]
+                
+                # Generate PO number if not set
+                if not form.po_number.data:
+                    form.po_number.data = self.generate_po_number()
+                
+                # Now validate form with proper choices
+                if form.validate_on_submit():
+                    try:
+                        result = self.process_form(form, *args, **kwargs)
+                        flash(self.success_message, "success")
+                        
+                        if callable(self.success_url):
+                            return redirect(self.success_url(result))
+                        return redirect(self.success_url)
+                    except Exception as e:
+                        current_app.logger.error(f"Error processing form: {str(e)}", exc_info=True)
+                        flash(f"Error: {str(e)}", "error")
+                        return self.render_form(form, *args, **kwargs)
+                else:
+                    # Form validation failed
+                    for field, errors in form.errors.items():
+                        current_app.logger.error(f"Validation error in {field}: {errors}")
+                        for error in errors:
+                            flash(f"{field}: {error}", "error")
+                    return self.render_form(form, *args, **kwargs)
+            else:
+                # GET request
+                form = self.get_form(*args, **kwargs)
+                return self.render_form(form, *args, **kwargs)
+                
+        except Exception as e:
+            current_app.logger.error(f"Error in handle_request: {str(e)}", exc_info=True)
+            flash(f"Error: {str(e)}", "error")
+            try:
+                from flask import url_for
+                return redirect(url_for('supplier_views.purchase_order_list'))
+            except:
+                return redirect('/')
+    
+    # Keep the get_form for GET requests (when displaying the form)
     def get_form(self, *args, **kwargs):
-        """Get form instance for creation only"""
+        """Get form for display"""
         form = super().get_form(*args, **kwargs)
         
-        # Set supplier choices
-        context = self.get_additional_context()
-        if 'suppliers' in context:
-            form.supplier_id.choices = [('', 'Select Supplier')] + [(str(s.supplier_id), s.supplier_name) 
-                                    for s in context['suppliers']]
-        else:
-            form.supplier_id.choices = [('', 'Select Supplier')]
+        # Set choices to empty array for Universal Dropdown
+        form.supplier_id.choices = []
         
-        # Set PO number for new POs
-        form.po_number.data = self.generate_po_number()
-        
+        # Generate PO number if new
+        if not form.po_number.data:
+            form.po_number.data = self.generate_po_number()
+            
         return form
     
     def generate_po_number(self):
@@ -2226,25 +2431,30 @@ class PurchaseOrderFormController(FormController):
         
         # Format: PO/YY-YY/00001
         return f"PO/{fin_year}/{new_seq_num:05d}"
-    
+
     def process_form(self, form, *args, **kwargs):
-        """Process the form data for creation - ENHANCED with centralized branch validation"""
+        """Process the form data for creation - ENHANCED with GST calculations"""
         try:
-            # NEW: Add permission validation using centralized functions
-            from flask_login import current_user  # [OK] Import first
-            from app.services.supplier_service import create_purchase_order_with_validation
-            from app.services.branch_service import validate_entity_branch_access
+            # Import all necessary modules
+            from flask import request, current_app
+            from flask_login import current_user
+            import uuid
+            
+            from app.services.supplier_service import (
+                create_purchase_order_with_validation,
+                resolve_medicine_identifier,
+                process_po_line_items_with_gst
+            )
+            from app.services.branch_service import validate_entity_branch_access, get_user_branch_id
             from app.services.permission_service import has_branch_permission
 
-            # PRESERVE: Testing bypass
-            if current_user.user_id != '7777777777':
+            # ===== PERMISSION VALIDATION =====
+            if current_user.user_id != '7777777777':  # Testing bypass
                 try:
-                    # Validate user can create POs
                     user_obj = {'user_id': current_user.user_id, 'hospital_id': current_user.hospital_id}
                     if not has_branch_permission(user_obj, 'purchase_order', 'add'):
                         raise PermissionError("Insufficient permissions to create purchase orders")
                     
-                    # Validate supplier access if supplier is selected
                     if form.supplier_id.data:
                         if not validate_entity_branch_access(
                             current_user.user_id,
@@ -2256,87 +2466,175 @@ class PurchaseOrderFormController(FormController):
                             raise PermissionError("Cannot create PO for supplier from different branch")
                             
                 except PermissionError:
-                    raise  # Re-raise permission errors
+                    raise
                 except Exception as e:
                     current_app.logger.warning(f"Permission validation failed, proceeding: {str(e)}")
             
-           
-            # Determine if it's save as draft or save and submit
+            # ===== DETERMINE SAVE TYPE =====
             is_draft = 'save_draft' in request.form
             is_approved = 'save_approved' in request.form
             
-            # SAFETY CHECK: Validate hidden fields before processing
+            # ===== VALIDATE FORM HAS LINE ITEMS =====
             if not form.medicine_ids.data or not form.medicine_ids.data.strip():
-                current_app.logger.error("No medicine IDs found in form data")
                 raise ValueError("No line items found. Please add at least one item to the purchase order.")
 
-            # Extract line items from hidden fields
-            line_items = []
-            if form.medicine_ids.data:
-                medicine_ids = form.medicine_ids.data.split(',')
-                medicine_ids = [mid.strip() for mid in medicine_ids if mid.strip()]  # Remove empty values
+            # ===== PARSE LINE ITEMS FROM FORM (INLINE - NO SEPARATE METHOD NEEDED) =====
+            line_items_raw = []
 
-                if not medicine_ids:
-                    current_app.logger.error("Medicine IDs list is empty after cleaning")
-                    raise ValueError("No valid line items found. Please add at least one item to the purchase order.")
+            medicine_ids = form.medicine_ids.data.split(',')
+            medicine_ids = [mid.strip() for mid in medicine_ids if mid.strip()]
+
+            if not medicine_ids:
+                raise ValueError("No valid line items found. Please add at least one item to the purchase order.")
+
+            # Parse all the comma-separated fields
+            quantities = form.quantities.data.split(',')
+            pack_prices = form.pack_purchase_prices.data.split(',')
+            pack_mrps = form.pack_mrps.data.split(',')
+            units_per_packs = form.units_per_packs.data.split(',')
+            hsn_codes = form.hsn_codes.data.split(',') if form.hsn_codes.data else []
+            gst_rates = form.gst_rates.data.split(',') if form.gst_rates.data else []
+
+            # Handle optional fields with defaults
+            discount_percents = form.discount_percents.data.split(',') if hasattr(form, 'discount_percents') and form.discount_percents.data else ['0'] * len(medicine_ids)
+            is_free_items = form.is_free_items.data.split(',') if hasattr(form, 'is_free_items') and form.is_free_items.data else ['false'] * len(medicine_ids)
+
+            # Import required modules for medicine lookup
+            from app.services.supplier_service import resolve_medicine_identifier
+            from app.models.master import Medicine
+            from app.services.database_service import get_db_session
+
+            # Build line items
+            for i in range(len(medicine_ids)):
+                if not medicine_ids[i]:
+                    continue
                 
-                quantities = form.quantities.data.split(',')
-                pack_prices = form.pack_purchase_prices.data.split(',')
-                pack_mrps = form.pack_mrps.data.split(',')
-                units_per_packs = form.units_per_packs.data.split(',')
-                hsn_codes = form.hsn_codes.data.split(',')
-                gst_rates = form.gst_rates.data.split(',')
-                
-                # Handle NEW fields with validation
-                discount_percents = []
-                is_free_items = []
-                
-                if hasattr(form, 'discount_percents') and form.discount_percents.data:
-                    discount_percents = form.discount_percents.data.split(',')
-                else:
-                    discount_percents = ['0'] * len(medicine_ids)
+                try:
+                    medicine_id_str = medicine_ids[i].strip()
+                    if not medicine_id_str or medicine_id_str in ['undefined', 'null']:
+                        current_app.logger.warning(f"Skipping line {i+1}: Invalid medicine ID")
+                        continue
                     
-                if hasattr(form, 'is_free_items') and form.is_free_items.data:
-                    is_free_items = form.is_free_items.data.split(',')
-                else:
-                    is_free_items = ['false'] * len(medicine_ids)
-
-                for i in range(len(medicine_ids)):
-                    if medicine_ids[i]:  # Skip empty entries
-                        try:
-                            # Fix boolean conversion
-                            is_free = False
-                            if i < len(is_free_items):
-                                is_free = is_free_items[i].lower() == 'true'
+                    # Resolve medicine ID (handles both UUID and name)
+                    actual_medicine_id = resolve_medicine_identifier(
+                        medicine_id_str,
+                        current_user.hospital_id
+                    )
+                    
+                    # CRITICAL: Always fetch medicine details for GST rate and HSN code
+                    medicine_gst_rate = 0.0
+                    medicine_hsn_code = ''
+                    medicine_name = ''
+                    
+                    with get_db_session(read_only=True) as session:
+                        medicine = session.query(Medicine).filter_by(
+                            medicine_id=actual_medicine_id,
+                            hospital_id=current_user.hospital_id
+                        ).first()
+                        
+                        if medicine:
+                            medicine_name = medicine.medicine_name
                             
-                            line_item = {
-                                'medicine_id': uuid.UUID(medicine_ids[i]),
-                                'units': float(quantities[i]),
-                                'pack_purchase_price': float(pack_prices[i]),
-                                'pack_mrp': float(pack_mrps[i]),
-                                'units_per_pack': float(units_per_packs[i]),
-                                'hsn_code': hsn_codes[i],
-                                'gst_rate': float(gst_rates[i]),
-                                'discount_percent': float(discount_percents[i]) if i < len(discount_percents) else 0.0,
-                                'is_free_item': is_free
-                            }
-                            line_items.append(line_item)
-                        except (ValueError, IndexError) as e:
-                            current_app.logger.error(f"Error processing line item {i + 1}: {str(e)}")
-                            raise ValueError(f"Invalid data in line item {i + 1}")
+                            # Get GST rate from medicine
+                            if medicine.gst_rate is not None:
+                                medicine_gst_rate = float(medicine.gst_rate)
+                                current_app.logger.info(f"Medicine '{medicine_name}' GST from DB: {medicine_gst_rate}%")
+                            
+                            # Get HSN code from medicine
+                            if medicine.hsn_code:
+                                medicine_hsn_code = str(medicine.hsn_code)
+                                current_app.logger.info(f"Medicine '{medicine_name}' HSN from DB: {medicine_hsn_code}")
+                        else:
+                            current_app.logger.error(f"Medicine not found in DB: {actual_medicine_id}")
+                            raise ValueError(f"Medicine not found for ID: {actual_medicine_id}")
+                    
+                    # Parse form values with safe defaults
+                    form_gst_rate = 0.0
+                    if i < len(gst_rates) and gst_rates[i]:
+                        try:
+                            form_gst_rate = float(gst_rates[i])
+                        except (ValueError, TypeError):
+                            form_gst_rate = 0.0
+                    
+                    form_hsn_code = ''
+                    if i < len(hsn_codes) and hsn_codes[i]:
+                        form_hsn_code = str(hsn_codes[i]).strip()
+                    
+                    # CRITICAL LOGIC: Prefer form values if valid, otherwise use medicine values
+                    final_gst_rate = form_gst_rate if form_gst_rate > 0 else medicine_gst_rate
+                    final_hsn_code = form_hsn_code if form_hsn_code else medicine_hsn_code
+                    
+                    # If still no GST rate, use default based on HSN code
+                    if final_gst_rate <= 0:
+                        # Default GST rates based on HSN codes
+                        if final_hsn_code.startswith('3004'):  # Medicines
+                            final_gst_rate = 12.0
+                        elif final_hsn_code.startswith('3304'):  # Cosmetics
+                            final_gst_rate = 18.0
+                        else:
+                            final_gst_rate = 18.0  # Default
+                        current_app.logger.warning(f"No GST rate found for '{medicine_name}', using default: {final_gst_rate}%")
+                    
+                    # Convert boolean string
+                    is_free = is_free_items[i].lower() == 'true' if i < len(is_free_items) else False
+                    
+                    # Create line item data with proper GST rate
+                    line_item = {
+                        'medicine_id': actual_medicine_id,
+                        'units': float(quantities[i]),
+                        'pack_purchase_price': float(pack_prices[i]),
+                        'pack_mrp': float(pack_mrps[i]),
+                        'units_per_pack': float(units_per_packs[i]),
+                        'hsn_code': final_hsn_code,
+                        'gst_rate': final_gst_rate,  # THIS MUST NOT BE 0
+                        'discount_percent': float(discount_percents[i]) if i < len(discount_percents) else 0.0,
+                        'is_free_item': is_free
+                    }
+                    
+                    # Detailed logging for debugging
+                    current_app.logger.info(f"Line {i+1} Final Data:")
+                    current_app.logger.info(f"  Medicine: {medicine_name}")
+                    current_app.logger.info(f"  Form GST: {form_gst_rate}%, DB GST: {medicine_gst_rate}%, Final GST: {final_gst_rate}%")
+                    current_app.logger.info(f"  Form HSN: {form_hsn_code}, DB HSN: {medicine_hsn_code}, Final HSN: {final_hsn_code}")
+                    current_app.logger.info(f"  Units: {line_item['units']}, Price: {line_item['pack_purchase_price']}")
+                    current_app.logger.info(f"  Discount: {line_item['discount_percent']}%, Free: {line_item['is_free_item']}")
+                    
+                    line_items_raw.append(line_item)
+                    
+                except (ValueError, IndexError) as e:
+                    current_app.logger.error(f"Error processing line item {i + 1}: {str(e)}")
+                    raise ValueError(f"Invalid data in line item {i + 1}: {str(e)}")
+
+            if not line_items_raw:
+                raise ValueError("No valid line items found after processing.")
+
+            # Log summary before GST calculation
+            current_app.logger.info(f"Prepared {len(line_items_raw)} line items for GST calculation")
+            for idx, item in enumerate(line_items_raw):
+                current_app.logger.info(f"  Item {idx+1}: GST={item['gst_rate']}%, Price={item['pack_purchase_price']}, Qty={item['units']}")
+
+            # ===== CALCULATE GST FOR ALL LINE ITEMS =====
+            line_items = process_po_line_items_with_gst(
+                line_items_raw=line_items_raw,
+                hospital_id=current_user.hospital_id,
+                supplier_id=form.supplier_id.data
+            )
             
-            # Get branch_id from form or use default
+            # Log totals for debugging
+            total_gst = sum(item.get('total_gst', 0) for item in line_items)
+            grand_total = sum(item.get('line_total', 0) for item in line_items)
+            current_app.logger.info(f"PO Totals: Items={len(line_items)}, GST={total_gst:.2f}, Total={grand_total:.2f}")
+            
+            # ===== GET BRANCH ID =====
             branch_id = None
             if hasattr(form, 'branch_id') and form.branch_id.data:
                 branch_id = uuid.UUID(form.branch_id.data)
             else:
-                # Fallback to user's default branch
-                from app.services.branch_service import get_user_branch_id
                 user_branch_id = get_user_branch_id(current_user.user_id, current_user.hospital_id)
                 if user_branch_id:
                     branch_id = user_branch_id
 
-            # Create PO data with validation fields
+            # ===== CREATE PO DATA =====
             po_data = {
                 'po_number': form.po_number.data,
                 'supplier_id': uuid.UUID(form.supplier_id.data),
@@ -2350,28 +2648,26 @@ class PurchaseOrderFormController(FormController):
                 'terms_conditions': form.terms_conditions.data,
                 'notes': form.notes.data,
                 'status': 'approved' if is_approved else 'draft',
-                'line_items': line_items
+                'line_items': line_items  # Now includes GST calculations
             }
             
-            current_app.logger.info(f"Creating PO with {len(line_items)} line items using validation")
+            current_app.logger.info(f"Creating PO with {len(line_items)} GST-calculated line items")
             
-            # Use validation-enabled service function
+            # ===== CREATE PURCHASE ORDER =====
             result = create_purchase_order_with_validation(
                 hospital_id=current_user.hospital_id,
                 po_data=po_data,
                 current_user_id=current_user.user_id
             )
             
-            current_app.logger.info(f"Successfully created validated PO: {result.get('po_number')}")
-            
+            current_app.logger.info(f"Successfully created PO: {result.get('po_number')}")
             return result
         
         except PermissionError as pe:
             current_app.logger.warning(f"Permission denied: {str(pe)}")
-            raise  # Re-raise to be handled by form framework
+            raise
         except ValueError as ve:
-            # Handle validation errors specifically
-            current_app.logger.error(f"Validation error in PO creation: {str(ve)}")
+            current_app.logger.error(f"Validation error: {str(ve)}")
             raise
         except Exception as e:
             current_app.logger.error(f"Error processing PO form: {str(e)}")
@@ -2403,9 +2699,11 @@ class PurchaseOrderEditController(FormController):
         """Get additional context for template - ENHANCED with branch filtering"""
         context = {}
         try:
-            from app.services.database_service import get_db_session
+            from app.services.database_service import get_db_session, get_detached_copy
             from app.models.master import Supplier, Medicine, Branch
+            from app.models.transaction import PurchaseOrderHeader
             from flask_login import current_user
+            import uuid
             
             # NEW: Get branch context for filtering
             try:
@@ -2428,23 +2726,87 @@ class PurchaseOrderEditController(FormController):
                     status='active'
                 ).all()
                 
+                # FIXED: Create detached copies to prevent session errors
                 # Filter suppliers based on branch access
                 accessible_suppliers = []
+                suppliers_dict = {}  # ADD THIS: Store supplier details by ID
                 if current_user.user_id == '7777777777':  # PRESERVE: Testing bypass
-                    accessible_suppliers = all_suppliers
+                    accessible_suppliers = [get_detached_copy(s) for s in all_suppliers]
                 else:
                     accessible_branch_ids = [b['branch_id'] for b in branch_context.get('accessible_branches', [])]
                     for supplier in all_suppliers:
                         if (branch_context.get('can_cross_branch', False) or 
                             not supplier.branch_id or  # No branch restriction
                             str(supplier.branch_id) in accessible_branch_ids):
-                            accessible_suppliers.append(supplier)
+                            accessible_suppliers.append(get_detached_copy(supplier))
                 
-                context['suppliers'] = accessible_suppliers
+                # FIX: Build suppliers_dict from detached copies
+                for supplier_copy in accessible_suppliers:
+                    state_name = get_state_name_from_code(supplier_copy.state_code)
+                    suppliers_dict[str(supplier_copy.supplier_id)] = {
+                        'supplier_id': str(supplier_copy.supplier_id),
+                        'supplier_name': supplier_copy.supplier_name,
+                        'state': state_name,  # <-- FIXED: Derived from state_code
+                        'state_code': supplier_copy.state_code or '',
+                        'gst_registration_number': supplier_copy.gst_registration_number or ''
+                    }
                 
+                # FIXED: Get current PO's selected supplier details if editing - INSIDE session
+                selected_supplier_data = None
+                if hasattr(self, 'po_id') and self.po_id:
+                    try:
+                        # Query PO directly instead of calling service function
+                        po_header = session.query(PurchaseOrderHeader).filter_by(
+                            po_id=uuid.UUID(self.po_id),
+                            hospital_id=current_user.hospital_id
+                        ).first()
+                        
+                        if po_header and po_header.supplier_id:
+                            # Find the selected supplier in already-fetched list
+                            selected_supplier = next(
+                                (s for s in all_suppliers if str(s.supplier_id) == str(po_header.supplier_id)),
+                                None
+                            )
+                            if selected_supplier:
+                                state_name = get_state_name_from_code(selected_supplier.state_code)
+                                
+                                selected_supplier_data = {
+                                    'supplier_id': str(selected_supplier.supplier_id),
+                                    'supplier_name': selected_supplier.supplier_name,
+                                    'state': state_name,  # <-- FIXED: Derived from state_code
+                                    'state_code': selected_supplier.state_code or '',
+                                    'gst_registration_number': selected_supplier.gst_registration_number or ''
+                                }
+                    except Exception as e:
+                        current_app.logger.warning(f"Could not get selected supplier details: {str(e)}")
+                
+                # EXISTING: Get medicines for line items
+                medicines = session.query(Medicine).filter_by(
+                    hospital_id=current_user.hospital_id
+                ).all()
+                
+                # FIXED: Create detached copies for medicines
+                context['medicines'] = [get_detached_copy(med) for med in medicines]
+                
+                # Pass the po_id to the template
+                context['po_id'] = str(self.po_id) if self.po_id else None
+            
+            # NOW outside session - safe to use detached copies
+            context['suppliers'] = accessible_suppliers
+            context['suppliers_dict'] = suppliers_dict  # <-- ADD THIS LINE
+            
+            # Add selected supplier if found
+            if selected_supplier_data:
+                context['selected_supplier'] = selected_supplier_data
+            
         except Exception as e:
             current_app.logger.error(f"Error getting context: {str(e)}")
-            context['suppliers'] = []
+            context.update({
+                'suppliers': [],
+                'suppliers_dict': {},  # <-- ADD THIS to fallback
+                'medicines': [],
+                'branch_context': {'accessible_branches': [], 'can_cross_branch': False}
+            })
         
         return context
     

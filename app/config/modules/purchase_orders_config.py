@@ -673,6 +673,19 @@ PURCHASE_ORDER_ACTIONS = [
         order=5
     ),
     ActionDefinition(
+        id="edit",
+        label="Edit Purchase Order",
+        icon="fas fa-edit",
+        button_type=ButtonType.PRIMARY,
+        url_pattern="/supplier/purchase-order/edit/{po_id}",
+        show_in_list=False,
+        show_in_detail=True,
+        display_type=ActionDisplayType.DROPDOWN_ITEM,
+        conditions={"po_status": ["draft"]},  # Only allow editing draft POs
+        permission="purchase_order_edit",
+        order=6
+    ),
+    ActionDefinition(
         id="approve",
         label="Approve",
         icon="fas fa-check-circle",
