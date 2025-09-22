@@ -175,10 +175,28 @@ def get_entity_config(entity_type: str) -> Optional[EntityConfiguration]:
     return loader.get_config(entity_type)
 
 def is_valid_entity_type(entity_type: str) -> bool:
-    """Check if entity type is valid and registered"""
-    # Check entity registry instead of MODULE_MAPPING
+    """Check if entity type is valid and registered - handles plural forms"""
     from app.config.entity_registry import get_entity_registration
-    return get_entity_registration(entity_type) is not None
+    
+    # Check exact match first
+    if get_entity_registration(entity_type) is not None:
+        return True
+    
+    # Handle common plural→singular mappings
+    plural_mappings = {
+        'medicines': 'medicine',
+        'users': 'user',
+        'categories': 'category',
+        'invoices': 'invoice',
+        'payments': 'payment'
+    }
+    
+    # Try singular form if it's a known plural
+    if entity_type in plural_mappings:
+        singular_type = plural_mappings[entity_type]
+        return get_entity_registration(singular_type) is not None
+    
+    return False
 
 def list_entity_types() -> List[str]:
     """Get list of all registered entity types"""

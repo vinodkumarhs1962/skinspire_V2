@@ -86,7 +86,7 @@ class LineItemsHandler:
                     totals['gst'] += Decimal(str(formatted_line['gst_amount']))
                 
                 # Calculate grand total
-                totals['grand_total'] = totals['subtotal'] + totals['gst']
+                totals['grand_total'] = totals['subtotal'] + totals['gst'] - totals['discount']
                 
                 return {
                     'items': formatted_lines,
@@ -180,7 +180,7 @@ class LineItemsHandler:
                         totals['gst'] += Decimal(str(formatted_line['gst_amount']))
                 
                 # Calculate grand total
-                totals['grand_total'] = totals['subtotal'] + totals['gst']
+                totals['grand_total'] = totals['subtotal'] + totals['gst'] - totals['discount']
                 
                 return {
                     'items': formatted_lines,

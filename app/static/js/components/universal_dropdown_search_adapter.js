@@ -89,7 +89,7 @@
             
             // Initialize medicine
             if (document.querySelectorAll(this.config.selectors.medicine).length > 0) {
-                this.init(this.config.selectors.medicine, 'medicine', {
+                this.init(this.config.selectors.medicine, 'medicines', {
                     minSearchLength: 2,
                     maxResults: 30,
                     dynamic: true // Watch for dynamically added elements

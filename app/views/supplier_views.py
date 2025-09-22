@@ -2624,18 +2624,15 @@ def get_supplier_api(supplier_id):
 
 @supplier_views_bp.route('/api/medicines/search', methods=['GET'])
 @login_required
-@require_web_branch_permission('medicine', 'view')  # NEW: Branch-aware decorator
+@require_web_branch_permission('medicine', 'view')
 def search_medicines_api():
     """API endpoint to search medicines with branch awareness"""
-    # REMOVED: Manual permission check - decorator handles it now
-    
     try:
         term = request.args.get('term', '')
         
         if len(term) < 2:
             return jsonify({'medicines': []})
         
-        # NEW: Get branch context for filtering
         branch_uuid, branch_context = get_branch_uuid_from_context_or_request()
         
         with get_db_session(read_only=True) as session:
@@ -2644,7 +2641,6 @@ def search_medicines_api():
                 Medicine.medicine_name.ilike(f'%{term}%')
             )
             
-            # NEW: Apply branch filtering if applicable
             if branch_uuid:
                 query = query.filter(Medicine.branch_id == branch_uuid)
             
@@ -2661,9 +2657,12 @@ def search_medicines_api():
                     'cgst_rate': float(medicine.cgst_rate or 0),
                     'sgst_rate': float(medicine.sgst_rate or 0),
                     'igst_rate': float(medicine.igst_rate or 0),
-                    'mrp': float(medicine.cost_price or 0),
-                    'purchase_price': float(medicine.cost_price or 0),
-                    'branch_id': str(medicine.branch_id) if hasattr(medicine, 'branch_id') and medicine.branch_id else None  # NEW
+                    # UPDATED: Use new MRP field instead of cost_price
+                    'mrp': float(medicine.mrp or 0),  # <-- NEW MRP FIELD
+                    'purchase_price': float(medicine.last_purchase_price or medicine.cost_price or 0),  # <-- BETTER FIELD
+                    'selling_price': float(medicine.selling_price or medicine.mrp or 0),  # <-- NEW
+                    'currency_code': medicine.currency_code or 'INR',  # <-- NEW
+                    'branch_id': str(medicine.branch_id) if hasattr(medicine, 'branch_id') and medicine.branch_id else None
                 })
             
             return jsonify({'medicines': results})
@@ -2675,11 +2674,9 @@ def search_medicines_api():
 
 @supplier_views_bp.route('/api/medicines/<medicine_id>', methods=['GET'])
 @login_required
-@require_web_branch_permission('medicine', 'view', branch_source='entity')  # NEW: Entity-based branch detection
+@require_web_branch_permission('medicine', 'view', branch_source='entity')
 def get_medicine_api(medicine_id):
     """API endpoint to get medicine details by ID"""
-    # REMOVED: Manual permission check - decorator handles it now
-    
     try:
         with get_db_session(read_only=True) as session:
             medicine = session.query(Medicine).filter_by(
@@ -2700,21 +2697,20 @@ def get_medicine_api(medicine_id):
                 medicine_dict['sgst_rate'] = float(medicine.sgst_rate) if hasattr(medicine, 'sgst_rate') and medicine.sgst_rate is not None else 0
                 medicine_dict['igst_rate'] = float(medicine.igst_rate) if hasattr(medicine, 'igst_rate') and medicine.igst_rate is not None else 0
                 
-                # Check various price attributes
-                if hasattr(medicine, 'cost_price') and medicine.cost_price is not None:
-                    medicine_dict['purchase_price'] = float(medicine.cost_price)
-                    medicine_dict['mrp'] = float(medicine.cost_price)
-                else:
-                    medicine_dict['purchase_price'] = 0.0
-                    medicine_dict['mrp'] = 0.0
+                # UPDATED: Use new price fields properly
+                medicine_dict['mrp'] = float(medicine.mrp) if medicine.mrp else 0.0  # <-- NEW MRP FIELD
+                medicine_dict['selling_price'] = float(medicine.selling_price) if medicine.selling_price else float(medicine.mrp or 0)  # <-- NEW
+                medicine_dict['purchase_price'] = float(medicine.last_purchase_price or medicine.cost_price or 0)  # <-- BETTER
+                medicine_dict['last_purchase_price'] = float(medicine.last_purchase_price or 0)  # <-- NEW
+                medicine_dict['cost_price'] = float(medicine.cost_price or 0)
+                medicine_dict['currency_code'] = medicine.currency_code or 'INR'  # <-- NEW
+                medicine_dict['mrp_effective_date'] = medicine.mrp_effective_date.isoformat() if medicine.mrp_effective_date else None  # <-- NEW
                 
-                # Override MRP if other attributes exist
-                for attr in ['mrp', 'selling_price', 'sale_price', 'retail_price']:
-                    if hasattr(medicine, attr) and getattr(medicine, attr) is not None:
-                        medicine_dict['mrp'] = float(getattr(medicine, attr))
-                        break
+                # Add formatted prices using medicine service
+                from app.services.medicine_service import MedicineService
+                medicine_dict['formatted_mrp'] = MedicineService.format_medicine_price(medicine, 'mrp')  # <-- NEW
+                medicine_dict['formatted_selling_price'] = MedicineService.format_medicine_price(medicine, 'selling_price')  # <-- NEW
                 
-                # NEW: Add branch information
                 medicine_dict['branch_id'] = str(medicine.branch_id) if hasattr(medicine, 'branch_id') and medicine.branch_id else None
                         
                 return jsonify(medicine_dict)
@@ -2731,6 +2727,7 @@ def get_medicine_api(medicine_id):
                     'igst_rate': 0.0,
                     'purchase_price': 0.0,
                     'mrp': 0.0,
+                    'currency_code': 'INR',  # <-- NEW
                     'branch_id': None
                 })
     
@@ -3498,3 +3495,162 @@ def payment_list_universal_test():
     return redirect(url_for('universal_views.universal_list_view', 
                            entity_type='supplier_payments'))
 
+
+# ===================================================================
+# API ENDPOINTS FOR MRP AND PRICE MANAGEMENT
+# ===================================================================
+
+@supplier_views_bp.route('/api/supplier/<supplier_id>/medicine/<medicine_id>/last-price', methods=['GET'])
+@login_required
+@require_web_branch_permission('medicine', 'view')
+def api_get_last_purchase_price(supplier_id, medicine_id):
+    """
+    Get last purchase price for a medicine from a specific supplier
+    Used in PO creation for price hints
+    """
+    try:
+        from app.services.supplier_service import get_supplier_last_purchase_price
+        
+        price_info = get_supplier_last_purchase_price(
+            session=get_db_session(),
+            hospital_id=current_user.hospital_id,
+            supplier_id=uuid.UUID(supplier_id),
+            medicine_id=uuid.UUID(medicine_id)
+        )
+        
+        if price_info:
+            return jsonify(price_info), 200
+        else:
+            return jsonify({
+                'message': 'No price history found',
+                'supplier_id': supplier_id,
+                'medicine_id': medicine_id
+            }), 404
+            
+    except ValueError as e:
+        current_app.logger.error(f"Invalid UUID format: {str(e)}")
+        return jsonify({'error': 'Invalid ID format'}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error fetching last price: {str(e)}")
+        return jsonify({'error': 'Failed to fetch price history'}), 500
+
+
+@supplier_views_bp.route('/api/supplier/<supplier_id>/metrics', methods=['GET'])
+@login_required
+@require_web_branch_permission('supplier', 'view')
+def api_get_supplier_metrics(supplier_id):
+    """
+    Get supplier metrics including average discount and price trends
+    """
+    try:
+        from app.services.supplier_service import get_supplier_average_metrics
+        
+        medicine_id = request.args.get('medicine_id')
+        months = request.args.get('months', 6, type=int)
+        
+        if months < 1 or months > 24:
+            return jsonify({'error': 'Months must be between 1 and 24'}), 400
+        
+        with get_db_session() as session:
+            metrics = get_supplier_average_metrics(
+                session=session,
+                hospital_id=current_user.hospital_id,
+                supplier_id=uuid.UUID(supplier_id),
+                medicine_id=uuid.UUID(medicine_id) if medicine_id else None,
+                months=months
+            )
+            
+            return jsonify(metrics), 200
+            
+    except ValueError as e:
+        current_app.logger.error(f"Invalid UUID format: {str(e)}")
+        return jsonify({'error': 'Invalid ID format'}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error fetching supplier metrics: {str(e)}")
+        return jsonify({'error': 'Failed to fetch metrics'}), 500
+
+
+@supplier_views_bp.route('/api/medicines/<medicine_id>/prices', methods=['GET'])
+@login_required
+@require_web_branch_permission('medicine', 'view', branch_source='entity')
+def api_get_medicine_with_prices(medicine_id):
+    """
+    Get medicine with all price information including MRP, selling price, margins
+    Enhanced version of existing get_medicine_api
+    """
+    try:
+        from app.services.medicine_service import MedicineService
+        
+        with get_db_session(read_only=True) as session:
+            medicine_data = MedicineService.get_medicine_with_prices(
+                session=session,
+                medicine_id=uuid.UUID(medicine_id)
+            )
+            
+            if not medicine_data:
+                return jsonify({'error': 'Medicine not found'}), 404
+            
+            # Add branch info if needed
+            medicine = session.query(Medicine).filter_by(
+                medicine_id=uuid.UUID(medicine_id),
+                hospital_id=current_user.hospital_id
+            ).first()
+            
+            if medicine and hasattr(medicine, 'branch_id'):
+                medicine_data['branch_id'] = str(medicine.branch_id) if medicine.branch_id else None
+            
+            return jsonify(medicine_data), 200
+            
+    except ValueError as e:
+        current_app.logger.error(f"Invalid UUID format: {str(e)}")
+        return jsonify({'error': 'Invalid medicine ID'}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error fetching medicine prices: {str(e)}")
+        return jsonify({'error': 'Failed to fetch medicine prices'}), 500
+
+
+@supplier_views_bp.route('/api/medicines/validate-price', methods=['POST'])
+@login_required
+@require_web_branch_permission('purchase_order', 'create')
+def api_validate_purchase_price():
+    """
+    Validate purchase price against MRP
+    Used in PO/Invoice creation for real-time validation
+    """
+    try:
+        from app.services.medicine_service import MedicineService
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        medicine_id = data.get('medicine_id')
+        purchase_price = float(data.get('purchase_price', 0))
+        gst_rate = float(data.get('gst_rate', 0))
+        
+        if not medicine_id or purchase_price <= 0:
+            return jsonify({'error': 'Invalid input data'}), 400
+        
+        with get_db_session(read_only=True) as session:
+            medicine = session.query(Medicine).filter_by(
+                medicine_id=uuid.UUID(medicine_id),
+                hospital_id=current_user.hospital_id
+            ).first()
+            
+            if not medicine:
+                return jsonify({'error': 'Medicine not found'}), 404
+            
+            validation_result = MedicineService.validate_purchase_price(
+                medicine=medicine,
+                purchase_price=purchase_price,
+                gst_rate=gst_rate
+            )
+            
+            return jsonify(validation_result), 200
+            
+    except ValueError as e:
+        current_app.logger.error(f"Invalid value: {str(e)}")
+        return jsonify({'error': 'Invalid numeric values'}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error validating price: {str(e)}")
+        return jsonify({'error': 'Validation failed'}), 500

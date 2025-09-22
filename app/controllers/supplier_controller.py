@@ -6,7 +6,7 @@ from datetime import datetime, date
 import json
 from app.controllers.form_controller import FormController
 from app.services.database_service import get_db_session
-from app.models.master import Medicine, Supplier, Branch
+from app.models.master import Medicine, Supplier, Branch, CurrencyMaster
 from app.models.transaction import PurchaseOrderHeader
 from app.config.core_definitions import INDIAN_STATES
 from app.services.permission_service import (
@@ -503,13 +503,23 @@ class SupplierInvoiceFormController(FormController):
                 context['purchase_orders'] = po_details
                 context['po_suppliers'] = po_suppliers  # Add mapping to context
                 
-                # EXISTING: Get medicines for dropdown (unchanged)
-                from app.models.master import Medicine
-                medicines = session.query(Medicine).filter_by(
-                    hospital_id=current_user.hospital_id
-                ).order_by(Medicine.medicine_name).limit(100).all()
+                # UPDATED: Get medicines with MRP data for dropdown  
+                medicines = session.query(Medicine).filter(
+                    Medicine.hospital_id == current_user.hospital_id,
+                    Medicine.status == 'active'
+                ).order_by(Medicine.medicine_name).all()
                 
-                context['medicines'] = [get_detached_copy(medicine) for medicine in medicines]
+                # Enhance medicines with MRP data
+                medicines_with_prices = []
+                for m in medicines:
+                    medicine_copy = get_detached_copy(m)
+                    # Add price data attributes for template use
+                    medicine_copy.last_mrp = float(m.mrp or 0)  # <-- NEW
+                    medicine_copy.last_purchase_price = float(m.last_purchase_price or 0)  # <-- NEW
+                    medicine_copy.currency_code = m.currency_code or 'INR'  # <-- NEW
+                    medicines_with_prices.append(medicine_copy)
+                
+                context['medicines'] = medicines_with_prices
 
                 # EXISTING: Create line item form (unchanged)
                 from app.forms.supplier_forms import SupplierInvoiceLineForm
@@ -2141,7 +2151,44 @@ class PurchaseOrderFormController(FormController):
                     else:
                         context['hospital_state_code'] = ''
                         current_app.logger.warning("Hospital state code not found")
+
+                    # NEW: Add hospital currency information
+                    if hospital:
+                        default_currency = hospital.default_currency or 'INR'
                         
+                        # Try to get currency details from CurrencyMaster
+                        currency_master = session.query(CurrencyMaster).filter_by(
+                            hospital_id=current_user.hospital_id,
+                            currency_code=default_currency,
+                            is_base_currency=True,
+                            is_active=True
+                        ).first()
+                        
+                        if currency_master:
+                            context['hospital_currency'] = {
+                                'code': currency_master.currency_code,
+                                'symbol': currency_master.currency_symbol,
+                                'name': currency_master.currency_name,
+                                'decimal_places': currency_master.decimal_places
+                            }
+                        else:
+                            # Fallback to MedicineService for symbol lookup
+                            from app.services.medicine_service import MedicineService
+                            context['hospital_currency'] = {
+                                'code': default_currency,
+                                'symbol': MedicineService.get_currency_symbol(default_currency),
+                                'name': default_currency,
+                                'decimal_places': 2
+                            }
+                    else:
+                        # Default fallback
+                        context['hospital_currency'] = {
+                            'code': 'INR',
+                            'symbol': '₹',
+                            'name': 'Indian Rupee',
+                            'decimal_places': 2
+                        }
+
                 except Exception as e:
                     current_app.logger.error(f"Error getting hospital state: {str(e)}")
                     context['hospital_state_code'] = ''
@@ -2266,6 +2313,12 @@ class PurchaseOrderFormController(FormController):
                 'medicines': [],
                 'hospital_state_code': '', 
                 'branches': [],
+                'hospital_currency': {
+                    'code': 'INR',
+                    'symbol': '₹', 
+                    'name': 'Indian Rupee',
+                    'decimal_places': 2
+                    },
                 'branch_context': {'accessible_branches': [], 'can_cross_branch': False}
             })
         

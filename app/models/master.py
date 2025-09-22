@@ -534,6 +534,17 @@ class Medicine(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     
     # Pricing Information
     cost_price = Column(Numeric(10, 2))  # Cost price for profit calculation
+    mrp = Column(Numeric(10, 2))  # Maximum Retail Price (new from previous migration)
+    selling_price = Column(Numeric(10, 2))  # Actual selling price (new from previous migration)
+    last_purchase_price = Column(Numeric(10, 2))  # Last purchase price (new from previous migration)
+    
+    # Currency field - just store it, no complex logic
+    currency_code = Column(String(3), default='INR')  # Simple field, no constraints
+    
+    # MRP tracking fields
+    mrp_effective_date = Column(Date)  # When MRP was last updated
+    previous_mrp = Column(Numeric(10, 2))  # Previous MRP for tracking
+
 
     # Inventory Management
     safety_stock = Column(Integer)  # Minimum stock level
@@ -571,6 +582,9 @@ class Medicine(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
         # For now, each medicine belongs to one branch
         return False
     
+    def __repr__(self):
+        return f"<Medicine(name='{self.medicine_name}', status='{self.status}')>"
+
     def can_be_accessed_by_user(self, user):
         """Check if user can access this medicine - uses permission service"""
         if not self.branch_id:

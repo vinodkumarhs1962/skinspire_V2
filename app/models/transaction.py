@@ -673,6 +673,11 @@ class PurchaseOrderLine(Base, TimestampMixin, TenantMixin):
     pack_mrp = Column(Numeric(12, 2), nullable=False)  # MRP per pack
     units_per_pack = Column(Numeric(10, 2), nullable=False)  # Units in each pack
     unit_price = Column(Numeric(12, 2))  # Derived unit price
+
+    # ===== DISCOUNT FIELDS (matching supplier_invoice_line) =====
+    discount_percent = Column(Numeric(5, 2), default=0)  # Discount percentage
+    discount_amount = Column(Numeric(12, 2), default=0)  # Calculated discount amount
+    taxable_amount = Column(Numeric(12, 2))  # Amount after discount, before GST
     
     # GST Information
     hsn_code = Column(String(10))
@@ -740,6 +745,26 @@ class PurchaseOrderLine(Base, TimestampMixin, TenantMixin):
         if self.units and self.pack_purchase_price:
             return float(self.units) * float(self.pack_purchase_price)
         return 0
+    
+    @property
+    def effective_rate(self):
+        """Rate after discount per unit"""
+        if self.pack_purchase_price and self.discount_percent:
+            return float(self.pack_purchase_price) * (1 - float(self.discount_percent) / 100)
+        return float(self.pack_purchase_price or 0)
+    
+    @property
+    def discounted_amount(self):
+        """Taxable amount (after discount, before GST)"""
+        if self.taxable_amount:
+            return float(self.taxable_amount)
+        # Calculate if not set
+        base = self.base_amount
+        if self.discount_amount:
+            return base - float(self.discount_amount)
+        elif self.discount_percent:
+            return base * (1 - float(self.discount_percent) / 100)
+        return base
 
 class SupplierInvoice(Base, TimestampMixin, TenantMixin):
     """Supplier invoice information"""

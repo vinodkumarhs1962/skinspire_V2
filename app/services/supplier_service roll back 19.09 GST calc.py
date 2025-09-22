@@ -4555,127 +4555,146 @@ def _delete_supplier(
 
 # ===================================================================
 # GST Calculation Functions - COMPLETE (unchanged)
-# ===================================================================
+# ===================================================================/
 
 def calculate_gst_values(
     quantity: float,
     unit_rate: float,
-    gst_rate: float = 0,
+    gst_rate: float,
     discount_percent: float = 0,
     is_free_item: bool = False,
     is_interstate: bool = False,
-    conversion_factor: float = 1
-) -> Dict[str, Any]:
-        """
-        CORRECTED: Calculate GST and line totals - GST on original rate, not discounted
-        
-        Business Logic:
-        1. GST is calculated on the original rate (before discount)
-        2. Discount is applied to determine what clinic pays
-        3. Formula: Final Amount = (Base Amount + GST) - Discount
-        
-        Args:
-            quantity: Quantity of items
-            unit_rate: Rate per unit (before discount)
-            gst_rate: GST percentage
-            discount_percent: Discount percentage
-            is_free_item: Whether item is free
-            is_interstate: Whether transaction is interstate (IGST) or intrastate (CGST+SGST)
-            conversion_factor: Units per pack
-        """
+    conversion_factor: float = 1.0
+) -> dict:
+    """
+    Single source of truth for all GST calculations in the system - EXISTING FUNCTION (unchanged)
+    """
+    try:
+        # Convert to Decimal for precision in financial calculations
         from decimal import Decimal, ROUND_HALF_UP
         
-        # Convert to Decimal for precise calculations
         quantity_dec = Decimal(str(quantity))
         unit_rate_dec = Decimal(str(unit_rate))
         gst_rate_dec = Decimal(str(gst_rate))
         discount_percent_dec = Decimal(str(discount_percent))
         conversion_factor_dec = Decimal(str(conversion_factor))
         
-        # Handle free items
+        # Initialize all values
+        base_amount = Decimal('0')
+        discount_amount = Decimal('0')
+        discounted_rate = Decimal('0')
+        taxable_amount = Decimal('0')
+        cgst_rate = Decimal('0')
+        sgst_rate = Decimal('0')
+        igst_rate = Decimal('0')
+        cgst_amount = Decimal('0')
+        sgst_amount = Decimal('0')
+        igst_amount = Decimal('0')
+        total_gst_amount = Decimal('0')
+        line_total = Decimal('0')
+        sub_unit_price = Decimal('0')
+        
+        # CRITICAL FIX: Handle free items correctly - preserve quantity and conversion factor
         if is_free_item:
+            # For free items: financial values are zero, but quantities are preserved
+            sub_unit_price = Decimal('0')  # Free items have zero cost per sub-unit
+            
             return {
-                'quantity': float(quantity_dec),
-                'unit_rate': 0,
-                'discount_percent': 0,
-                'discount_amount': 0,
-                'base_amount': 0,
-                'taxable_amount': 0,  # For free items, taxable is 0
-                'gst_rate': 0,
-                'cgst_rate': 0,
-                'sgst_rate': 0,
-                'igst_rate': 0,
-                'cgst': 0,
-                'sgst': 0,
-                'igst': 0,
-                'total_gst': 0,
-                'line_total': 0,
-                'unit_price': 0,
-                'is_free_item': True,
+                # Input values (PRESERVED for free items)
+                'quantity': float(quantity_dec),                    # KEEP actual quantity
+                'unit_rate': 0.0,                                   # Rate is zero for free items
+                'discount_percent': 0.0,                           # No discount on free items
+                'conversion_factor': float(conversion_factor_dec),  # KEEP conversion factor
+                'is_free_item': is_free_item,
                 'is_interstate': is_interstate,
+                
+                # Calculated amounts (all zero for free items)
+                'base_amount': 0.0,
+                'discount_amount': 0.0,
+                'discounted_rate': 0.0,
+                'taxable_amount': 0.0,
+                
+                # GST rates and amounts (all zero for free items)
+                'gst_rate': float(gst_rate_dec),
+                'cgst_rate': 0.0,
+                'sgst_rate': 0.0,
+                'igst_rate': 0.0,
+                'cgst_amount': 0.0,
+                'sgst_amount': 0.0,
+                'igst_amount': 0.0,
+                'total_gst_amount': 0.0,
+                
+                # Final amounts (zero cost but preserve inventory data)
+                'line_total': 0.0,
+                'sub_unit_price': 0.0,
+                'total_sub_units': float(quantity_dec * conversion_factor_dec),  # PRESERVE for inventory
+                
+                # Database field mappings for free items
                 'db_mappings': {
-                    'units': float(quantity_dec),
-                    'pack_purchase_price': 0,
-                    'discount_percent': 0,
-                    'discount_amount': 0,
-                    'taxable_amount': 0,
-                    'gst_rate': 0,
-                    'cgst_rate': 0,
-                    'sgst_rate': 0,
-                    'igst_rate': 0,
-                    'cgst': 0,
-                    'sgst': 0,
-                    'igst': 0,
-                    'total_gst': 0,
-                    'line_total': 0,
-                    'units_per_pack': float(conversion_factor_dec),
-                    'unit_price': 0,
+                    'units': float(quantity_dec),              # CRITICAL: Preserve actual quantity
+                    'pack_purchase_price': 0.0,                # Zero rate for free items
+                    'discount_percent': 0.0,
+                    'discount_amount': 0.0,
+                    'taxable_amount': 0.0,
+                    'units_per_pack': float(conversion_factor_dec),  # PRESERVE conversion factor
+                    'unit_price': 0.0,
+                    'gst_rate': float(gst_rate_dec),
+                    'cgst_rate': 0.0,
+                    'sgst_rate': 0.0,
+                    'igst_rate': 0.0,
+                    'cgst': 0.0,
+                    'sgst': 0.0,
+                    'igst': 0.0,
+                    'total_gst': 0.0,
+                    'line_total': 0.0,
                     'is_free_item': True
                 }
             }
         
-        # CORRECTED CALCULATION for non-free items
-        
-        # Step 1: Calculate base amount (quantity × unit rate)
+        # Step 1: Calculate base amount (quantity × unit rate) - for non-free items
         base_amount = quantity_dec * unit_rate_dec
         
-        # Step 2: Calculate GST on FULL base amount (before discount)
-        # This is the key change - GST is on original rate
-        taxable_amount = base_amount  # Taxable amount is full amount before discount
+        # Step 2: Apply discount to get discounted rate
+        if discount_percent_dec > 0:
+            discount_amount = (base_amount * discount_percent_dec / 100).quantize(Decimal('0.01'), ROUND_HALF_UP)
+            discounted_rate = (unit_rate_dec * (100 - discount_percent_dec) / 100).quantize(Decimal('0.01'), ROUND_HALF_UP)
+        else:
+            discount_amount = Decimal('0')
+            discounted_rate = unit_rate_dec
         
-        # Determine GST structure
+        # Step 3: Calculate taxable amount (quantity × discounted rate)
+        taxable_amount = (quantity_dec * discounted_rate).quantize(Decimal('0.01'), ROUND_HALF_UP)
+        
+        # Step 4: Determine GST structure based on interstate/intrastate
         if is_interstate:
+            # Interstate transaction: Use IGST
             igst_rate = gst_rate_dec
             cgst_rate = Decimal('0')
             sgst_rate = Decimal('0')
         else:
+            # Intrastate transaction: Split into CGST + SGST
             cgst_rate = gst_rate_dec / 2
             sgst_rate = gst_rate_dec / 2
             igst_rate = Decimal('0')
         
-        # Calculate GST amounts on FULL base amount
+        # Step 5: Calculate GST amounts on taxable amount
         cgst_amount = (taxable_amount * cgst_rate / 100).quantize(Decimal('0.01'), ROUND_HALF_UP)
         sgst_amount = (taxable_amount * sgst_rate / 100).quantize(Decimal('0.01'), ROUND_HALF_UP)
         igst_amount = (taxable_amount * igst_rate / 100).quantize(Decimal('0.01'), ROUND_HALF_UP)
         total_gst_amount = cgst_amount + sgst_amount + igst_amount
         
-        # Step 3: Calculate discount amount
-        discount_amount = (base_amount * discount_percent_dec / 100).quantize(Decimal('0.01'), ROUND_HALF_UP)
+        # Step 6: Calculate final line total
+        line_total = taxable_amount + total_gst_amount
         
-        # Step 4: Calculate final line total
-        # Line Total = Base Amount + GST - Discount
-        line_total = base_amount + total_gst_amount - discount_amount
-        
-        # Step 5: Calculate sub-unit price for inventory
+        # Step 7: Calculate sub-unit price for inventory
         if conversion_factor_dec > 0:
-            # Effective unit price after discount
-            effective_unit_rate = unit_rate_dec * (1 - discount_percent_dec / 100)
-            sub_unit_price = effective_unit_rate / conversion_factor_dec
+            sub_unit_price = discounted_rate / conversion_factor_dec
         else:
-            sub_unit_price = unit_rate_dec
+            sub_unit_price = discounted_rate
         
+        # Return comprehensive calculation results for non-free items
         return {
-            # Input values
+            # Input values (for reference and validation)
             'quantity': float(quantity_dec),
             'unit_rate': float(unit_rate_dec),
             'discount_percent': float(discount_percent_dec),
@@ -4683,24 +4702,28 @@ def calculate_gst_values(
             'is_free_item': is_free_item,
             'is_interstate': is_interstate,
             
-            # Calculations
+            # Base calculations
             'base_amount': float(base_amount),
             'discount_amount': float(discount_amount),
-            'taxable_amount': float(taxable_amount),  # This is base amount (GST calculated on this)
+            'discounted_rate': float(discounted_rate),
+            'taxable_amount': float(taxable_amount),
             
-            # GST breakdown
+            # GST rates
             'gst_rate': float(gst_rate_dec),
             'cgst_rate': float(cgst_rate),
             'sgst_rate': float(sgst_rate),
             'igst_rate': float(igst_rate),
-            'cgst': float(cgst_amount),
-            'sgst': float(sgst_amount),
-            'igst': float(igst_amount),
-            'total_gst': float(total_gst_amount),
+            
+            # GST amounts
+            'cgst_amount': float(cgst_amount),
+            'sgst_amount': float(sgst_amount),
+            'igst_amount': float(igst_amount),
+            'total_gst_amount': float(total_gst_amount),
             
             # Final amounts
             'line_total': float(line_total),
-            'unit_price': float(sub_unit_price),
+            'sub_unit_price': float(sub_unit_price),
+            'total_sub_units': float(quantity_dec * conversion_factor_dec),
             
             # Database field mappings
             'db_mappings': {
@@ -4708,7 +4731,9 @@ def calculate_gst_values(
                 'pack_purchase_price': float(unit_rate_dec),
                 'discount_percent': float(discount_percent_dec),
                 'discount_amount': float(discount_amount),
-                'taxable_amount': float(taxable_amount),  # Full amount for GST calculation
+                'taxable_amount': float(taxable_amount),
+                'units_per_pack': float(conversion_factor_dec),
+                'unit_price': float(sub_unit_price),
                 'gst_rate': float(gst_rate_dec),
                 'cgst_rate': float(cgst_rate),
                 'sgst_rate': float(sgst_rate),
@@ -4718,21 +4743,55 @@ def calculate_gst_values(
                 'igst': float(igst_amount),
                 'total_gst': float(total_gst_amount),
                 'line_total': float(line_total),
-                'units_per_pack': float(conversion_factor_dec),
-                'unit_price': float(sub_unit_price),
                 'is_free_item': is_free_item
             }
         }
-
-    # Example calculation:
-    # Quantity: 10
-    # Rate: ₹100
-    # Base Amount: ₹1000
-    # GST (12%): ₹120 (calculated on ₹1000, not on discounted amount)
-    # Discount (10%): ₹100
-    # Line Total: ₹1000 + ₹120 - ₹100 = ₹1020
-    #
-    # The clinic pays ₹1020 (with GST on full amount, then discount applied)
+        
+    except (ValueError, TypeError, Exception) as e:
+        logger.error(f"Error in calculate_gst_values: {str(e)}")
+        # Return safe defaults with preserved quantity for free items
+        return {
+            'quantity': float(quantity) if quantity else 0.0,
+            'unit_rate': 0.0 if is_free_item else float(unit_rate) if unit_rate else 0.0,
+            'discount_percent': 0.0,
+            'conversion_factor': float(conversion_factor) if conversion_factor else 1.0,
+            'is_free_item': is_free_item,
+            'is_interstate': is_interstate,
+            'base_amount': 0.0,
+            'discount_amount': 0.0,
+            'discounted_rate': 0.0,
+            'taxable_amount': 0.0,
+            'gst_rate': 0.0,
+            'cgst_rate': 0.0,
+            'sgst_rate': 0.0,
+            'igst_rate': 0.0,
+            'cgst_amount': 0.0,
+            'sgst_amount': 0.0,
+            'igst_amount': 0.0,
+            'total_gst_amount': 0.0,
+            'line_total': 0.0,
+            'sub_unit_price': 0.0,
+            'total_sub_units': float(quantity * conversion_factor) if quantity and conversion_factor else 0.0,
+            'db_mappings': {
+                'units': float(quantity) if quantity else 0.0,
+                'pack_purchase_price': 0.0 if is_free_item else 0.0,
+                'discount_percent': 0.0,
+                'discount_amount': 0.0,
+                'taxable_amount': 0.0,
+                'units_per_pack': float(conversion_factor) if conversion_factor else 1.0,
+                'unit_price': 0.0,
+                'gst_rate': 0.0,
+                'cgst_rate': 0.0,
+                'sgst_rate': 0.0,
+                'igst_rate': 0.0,
+                'cgst': 0.0,
+                'sgst': 0.0,
+                'igst': 0.0,
+                'total_gst': 0.0,
+                'line_total': 0.0,
+                'is_free_item': is_free_item
+            }
+        }
 
 def apply_gst_calculations_to_line(line_obj, calculations):
     """

@@ -431,38 +431,48 @@
                             <tr>
                                 <th class="text-center w-12">#</th>
                                 <th class="w-2/5">Medicine</th>
-                                <th class="text-right w-20">Qty</th>
+                                <th class="text-right w-18">Qty</th>
                                 <th class="text-right w-24">Rate</th>
                                 <th class="text-right w-24">MRP</th>
+                                <th class="text-right w-20">Disc%</th>  <!-- NEW COLUMN -->
                                 <th class="text-center w-20">GST%</th>
                                 <th class="text-center w-16">Free</th>
-                                <th class="text-right w-24">Amount</th>
+                                <th class="text-right w-32">Amount</th>
                                 <th class="text-center w-16">Action</th>
                             </tr>
                         </thead>
                         <tbody id="line-items-container" class="universal-table-body"></tbody>
                         <tfoot class="table-footer-totals">
                             <tr>
-                                <td colspan="7" class="text-right font-semibold px-4 py-2">Subtotal:</td>
+                                <td colspan="8" class="text-right font-semibold px-4 py-2">Subtotal:</td>
                                 <td class="text-right font-semibold px-4 py-2">
-                                    <span class="currency-symbol">₹</span>
+                                    <span class="currency-symbol">{{ hospital_currency.symbol }}</span>
                                     <span id="subtotal-display">0.00</span>
                                 </td>
                                 <td></td>
                             </tr>
+                            <!-- NEW: Discount Row -->
+                            <tr id="discount-row" style="display: none;">
+                                <td colspan="8" class="text-right font-semibold px-4 py-2">Total Discount:</td>
+                                <td class="text-right font-semibold px-4 py-2 text-red-600">
+                                    <span class="currency-symbol">{{ hospital_currency.symbol }}</span>
+                                    <span id="discount-display">0.00</span>
+                                </td>
+                                <td></td>
+                            </tr>
                             <tr>
-                                <td colspan="7" class="text-right font-semibold px-4 py-2">Total GST:</td>
+                                <td colspan="8" class="text-right font-semibold px-4 py-2">Total GST:</td>
                                 <td class="text-right font-semibold px-4 py-2">
-                                    <span class="currency-symbol">₹</span>
+                                    <span class="currency-symbol">{{ hospital_currency.symbol }}</span>
                                     <span id="total-gst-display">0.00</span>
                                 </td>
                                 <td></td>
                             </tr>
                             <tr class="grand-total-row">
-                                <td colspan="7" class="text-right font-bold text-lg px-4 py-3">Grand Total:</td>
-                                <td class="text-right font-bold text-lg text-blue-600 dark:text-blue-400 px-4 py-3">
-                                    <span class="currency-symbol">₹</span>
-                                    <span id="grand-total-display">0.00</span>
+                                <td colspan="8" class="text-right font-bold text-base px-4 py-3">Grand Total:</td>
+                                <td class="text-right font-bold text-base text-blue-600 dark:text-blue-400 px-4 py-3">
+                                    <span class="currency-symbol text-base">{{ hospital_currency.symbol }}</span>
+                                    <span id="grand-total-display" class="text-base">0.00</span>
                                 </td>
                                 <td></td>
                             </tr>
@@ -551,7 +561,9 @@
                 <option value="{{ medicine.medicine_id }}" 
                         data-gst="{{ medicine.gst_rate or 0 }}"
                         data-hsn="{{ medicine.hsn_code or '' }}"
-                        data-pack-size="{{ medicine.pack_size or 1 }}">
+                        data-pack-size="{{ medicine.pack_size or 1 }}"
+                        data-mrp="{{ medicine.mrp or 0 }}"
+                        data-last-purchase="{{ medicine.last_purchase_price or 0 }}">  <!-- NEW ATTRIBUTES -->
                     {{ medicine.medicine_name }}
                     {% if medicine.strength %} - {{ medicine.strength }}{% endif %}
                 </option>
@@ -563,12 +575,22 @@
                    min="0" step="1" placeholder="0" required>
         </td>
         <td class="px-2 py-2">
-            <input type="number" class="rate form-input text-sm w-full text-right border rounded px-2 py-1" 
-                   min="0" step="0.01" placeholder="0.00" required>
+            <div class="flex items-center">
+                <span class="absolute left-2 text-gray-500 text-sm">{{ hospital_currency.symbol|default('₹') }}</span>
+                <input type="number" class="rate form-input text-sm flex-1 text-right border rounded px-2 py-1" 
+                       min="0" step="0.01" placeholder="0.00" required>
+            </div>
         </td>
         <td class="px-2 py-2">
-            <input type="number" class="mrp form-input text-sm w-full text-right border rounded px-2 py-1" 
-                   min="0" step="0.01" placeholder="0.00">
+            <div class="flex items-center">
+                <span class="absolute left-2 text-gray-500 text-sm">{{ hospital_currency.symbol|default('₹') }}</span>
+                <input type="number" class="mrp form-input text-sm flex-1 text-right border rounded px-2 py-1" 
+                       min="0" step="0.01" placeholder="0.00">
+            </div>
+        </td>
+        <td class="px-2 py-2">  <!-- NEW DISCOUNT FIELD -->
+            <input type="number" class="discount-percent form-input text-sm w-full text-right border rounded px-2 py-1" 
+                   min="0" max="100" step="0.01" placeholder="0" value="0">
         </td>
         <td class="text-center px-2 py-2">
             <span class="gst-rate text-sm">0%</span>
@@ -576,8 +598,10 @@
         <td class="text-center px-2 py-2">
             <input type="checkbox" class="is-free-item">
         </td>
-        <td class="text-right px-2 py-2">
-            <div class="line-total font-semibold text-sm">0.00</div>
+        <td class="text-right px-4 py-2">
+            <div class="line-total font-semibold text-sm">
+                <span class="currency-symbol">{{ hospital_currency.symbol|default('₹') }}</span> <span class="amount-value">0.00</span>
+            </div>
             <div class="text-xs text-gray-500 gst-details mt-1"></div>
         </td>
         <td class="text-center px-2 py-2">
@@ -594,6 +618,7 @@
 {% block scripts %}
 {{ super() }}
 <script src="{{ url_for('static', filename='js/components/form_handler.js') }}"></script>
+<script src="{{ url_for('static', filename='js/components/universal_dropdown_search_adapter.js') }}"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -652,11 +677,25 @@ document.addEventListener('DOMContentLoaded', function() {
     // Attach event handlers to line item row
     function attachLineItemHandlers(row) {
         const medicineSelect = row.querySelector('.medicine-select');
-        
-        // Medicine selection handler with GST display
-        medicineSelect.addEventListener('change', async function() {
-            const selectedOption = this.options[this.selectedIndex];
-            if (selectedOption.value) {
+        // Manually initialize Universal Dropdown for this new medicine select
+        if (window.UniversalDropdownAdapter && medicineSelect) {
+            window.UniversalDropdownAdapter.initializeElement(medicineSelect, 'medicines', {
+                apiBaseUrl: '/api/universal',  // ✅ Explicitly set API base URL
+                minSearchLength: 2,
+                maxResults: 30
+            });
+        }
+        // Medicine selection handler - Compatible with Universal Dropdown
+        async function handleMedicineSelection() {
+            const selectedOption = medicineSelect.options[medicineSelect.selectedIndex];
+            if (selectedOption && selectedOption.value) {
+                // Auto-populate MRP if available
+                const mrpValue = selectedOption.dataset.mrp || selectedOption.dataset.lastMrp || '0';
+                const mrpInput = row.querySelector('.mrp');
+                if (mrpInput && mrpValue !== '0') {
+                    mrpInput.value = mrpValue;
+                }
+                
                 // Get GST from data attribute
                 let gstRate = parseFloat(selectedOption.dataset.gst) || 0;
                 
@@ -666,26 +705,25 @@ document.addEventListener('DOMContentLoaded', function() {
                         const response = await fetch(`/api/medicine/${selectedOption.value}/gst-info`);
                         if (response.ok) {
                             const data = await response.json();
-                            gstRate = data.gst_rate || 12.0; // Default to 12% if not found
+                            gstRate = data.gst_rate || 12.0;
                         } else {
-                            gstRate = 12.0; // Default GST rate
+                            gstRate = 12.0;
                         }
                     } catch (error) {
                         console.error('Error fetching GST:', error);
-                        gstRate = 12.0; // Default GST rate on error
+                        gstRate = 12.0;
                     }
                 }
                 
-                // Update GST display - FIXED: Set both text and data attribute
+                // Update GST display
                 const gstRateElement = row.querySelector('.gst-rate');
                 gstRateElement.textContent = gstRate.toFixed(1) + '%';
                 gstRateElement.dataset.rate = gstRate;
                 
-                // Update other fields from medicine data
+                // Update other fields
                 row.querySelector('.units-per-pack').value = selectedOption.dataset.packSize || 1;
                 row.querySelector('.hsn-code').value = selectedOption.dataset.hsn || '';
                 
-                // Recalculate line total
                 calculateLineTotal(row);
             } else {
                 // Clear GST display when no medicine selected
@@ -694,13 +732,49 @@ document.addEventListener('DOMContentLoaded', function() {
                 gstRateElement.dataset.rate = 0;
                 calculateLineTotal(row);
             }
+        }
+        
+        // Regular change event for fallback
+        medicineSelect.addEventListener('change', handleMedicineSelection);
+        
+        // Universal Dropdown compatibility - watch for value changes
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'value') {
+                    handleMedicineSelection();
+                }
+            });
+        });
+        observer.observe(medicineSelect, { attributes: true, attributeFilter: ['value'] });
+        
+        // Also watch for option changes in case Universal Dropdown modifies options
+        const selectObserver = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'childList' || 
+                    (mutation.type === 'attributes' && mutation.attributeName === 'selected')) {
+                    handleMedicineSelection();
+                }
+            });
+        });
+        selectObserver.observe(medicineSelect, { 
+            childList: true, 
+            attributes: true, 
+            attributeFilter: ['selected'],
+            subtree: true 
         });
         
-        // Add input handlers for quantity, rate, mrp
-        ['quantity', 'rate', 'mrp'].forEach(field => {
+        // Add input handlers for quantity, rate, mrp, discount
+        ['quantity', 'rate', 'mrp', 'discount-percent'].forEach(field => {
             const input = row.querySelector(`.${field}`);
             if (input) {
-                input.addEventListener('input', () => calculateLineTotal(row));
+                input.addEventListener('input', () => {
+                    if (field === 'discount-percent') {
+                        const value = parseFloat(input.value) || 0;
+                        if (value > 100) input.value = 100;
+                        if (value < 0) input.value = 0;
+                    }
+                    calculateLineTotal(row);
+                });
             }
         });
         
@@ -718,70 +792,81 @@ document.addEventListener('DOMContentLoaded', function() {
             removeBtn.addEventListener('click', function() {
                 if (confirm('Remove this item?')) {
                     row.remove();
-                    updateLineNumbers();
+                    updateRowNumbers();
                     updateTotals();
                 }
             });
         }
     }
     
-    // Calculate line total with GST - FIXED calculation logic
+    // Calculate line total with GST
     function calculateLineTotal(row) {
         const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
         const rate = parseFloat(row.querySelector('.rate').value) || 0;
+        const discountPercent = parseFloat(row.querySelector('.discount-percent').value) || 0;
+        const gstRate = parseFloat(row.querySelector('.gst-rate').dataset.rate) || 0;
         const isFree = row.querySelector('.is-free-item').checked;
         
-        // Get GST rate - FIXED: Properly retrieve GST rate
-        const gstRateElement = row.querySelector('.gst-rate');
-        let gstRate = 0;
+        // Step 1: Calculate base amount (quantity × rate)
+        let baseAmount = quantity * rate;
         
-        // Try to get from data attribute first, then parse text content
-        if (gstRateElement.dataset.rate) {
-            gstRate = parseFloat(gstRateElement.dataset.rate);
-        } else if (gstRateElement.textContent) {
-            // Parse the text content (remove % sign)
-            gstRate = parseFloat(gstRateElement.textContent.replace('%', ''));
+        // Step 2: Calculate GST on ORIGINAL rate (before discount)
+        let gstAmount = (baseAmount * gstRate) / 100;  // GST on full amount
+        
+        // Step 3: Calculate discount on base amount
+        let discountAmount = (baseAmount * discountPercent) / 100;
+        
+        // Step 4: Calculate final line total
+        // Line Total = Base Amount + GST - Discount
+        // Or: Line Total = (Base Amount - Discount) + GST
+        let lineTotal = baseAmount + gstAmount - discountAmount;
+        
+        if (isFree) {
+            baseAmount = 0;
+            discountAmount = 0;
+            gstAmount = 0;
+            lineTotal = 0;
         }
         
-        let lineTotal = 0;
-        let gstAmount = 0;
-        let baseAmount = 0;
-        
-        if (!isFree && quantity > 0 && rate > 0) {
-            baseAmount = quantity * rate;
-            gstAmount = (baseAmount * gstRate) / 100;
-            lineTotal = baseAmount + gstAmount;
-        }
-        
-        // Update line total display
+        // Update display
         row.querySelector('.line-total').textContent = lineTotal.toFixed(2);
         
-        // Determine interstate and show proper GST breakdown
-        const isInterstate = currentSupplierStateCode && hospitalStateCode && 
-                            currentSupplierStateCode !== hospitalStateCode;
+        // Determine interstate for GST breakdown display
+        const isInterstate = (currentSupplierStateCode && currentSupplierStateCode !== hospitalStateCode);
         
-        // Show GST details breakdown
-        const gstDetailsElement = row.querySelector('.gst-details');
-        if (gstDetailsElement && gstAmount > 0) {
-            const gstDetails = isInterstate
-                ? `IGST: ₹${gstAmount.toFixed(2)}`
-                : `CGST: ₹${(gstAmount/2).toFixed(2)}, SGST: ₹${(gstAmount/2).toFixed(2)}`;
-            gstDetailsElement.textContent = gstDetails;
-        } else if (gstDetailsElement) {
-            gstDetailsElement.textContent = '';
+        // Show GST details
+        const gstDetails = row.querySelector('.gst-details');
+        if (gstDetails && gstAmount > 0) {
+            if (isInterstate) {
+                gstDetails.textContent = `IGST: ₹${gstAmount.toFixed(2)}`;
+            } else {
+                gstDetails.textContent = `CGST/SGST: ₹${(gstAmount/2).toFixed(2)} each`;
+            }
         }
         
-        // Store values for totals calculation - FIXED: Store correct values
+        // Show discount info if present
+        const marginInfo = row.querySelector('.margin-info');
+        if (marginInfo && discountPercent > 0) {
+            marginInfo.textContent = `Discount: ₹${discountAmount.toFixed(2)} (${discountPercent}%)`;
+        }
+        
+        // Store values for totals calculation
         row.dataset.baseAmount = baseAmount.toFixed(2);
+        row.dataset.discountAmount = discountAmount.toFixed(2);
         row.dataset.gstAmount = gstAmount.toFixed(2);
         row.dataset.lineTotal = lineTotal.toFixed(2);
+        row.dataset.taxableAmount = baseAmount.toFixed(2);  // Taxable is full amount
         
-        // Update totals immediately
+        // Store GST breakdown
+        row.dataset.cgst = isInterstate ? '0' : (gstAmount/2).toFixed(2);
+        row.dataset.sgst = isInterstate ? '0' : (gstAmount/2).toFixed(2);
+        row.dataset.igst = isInterstate ? gstAmount.toFixed(2) : '0';
+        
         updateTotals();
     }
     
     // Update line numbers after removal
-    function updateLineNumbers() {
+    function updateRowNumbers() {
         const rows = document.querySelectorAll('.line-item-row');
         rows.forEach((row, index) => {
             row.querySelector('.line-number').textContent = index + 1;
@@ -790,62 +875,57 @@ document.addEventListener('DOMContentLoaded', function() {
         lineItemIndex = rows.length;
     }
     
-    // Update totals - FIXED calculation
+    // Update totals
     function updateTotals() {
-        let subtotal = 0;
-        let totalGst = 0;
+        let subtotal = 0;      // Total of base amounts
+        let totalDiscount = 0;  // Total discounts
+        let totalGst = 0;       // Total GST
         
         document.querySelectorAll('.line-item-row').forEach(row => {
-            const baseAmount = parseFloat(row.dataset.baseAmount || 0);
-            const gstAmount = parseFloat(row.dataset.gstAmount || 0);
-            
-            subtotal += baseAmount;
-            totalGst += gstAmount;
+            subtotal += parseFloat(row.dataset.baseAmount || 0);
+            totalDiscount += parseFloat(row.dataset.discountAmount || 0);
+            totalGst += parseFloat(row.dataset.gstAmount || 0);
         });
         
-        const grandTotal = subtotal + totalGst;
+        // Grand Total = Subtotal + GST - Discount
+        const grandTotal = subtotal + totalGst - totalDiscount;
         
         // Update display elements
         const subtotalDisplay = document.getElementById('subtotal-display');
+        const discountDisplay = document.getElementById('discount-display');
         const totalGstDisplay = document.getElementById('total-gst-display');
         const grandTotalDisplay = document.getElementById('grand-total-display');
+        const discountRow = document.getElementById('discount-row');
         
         if (subtotalDisplay) subtotalDisplay.textContent = subtotal.toFixed(2);
         if (totalGstDisplay) totalGstDisplay.textContent = totalGst.toFixed(2);
         if (grandTotalDisplay) grandTotalDisplay.textContent = grandTotal.toFixed(2);
-    }
-    
-    // Form submission handler - FIXED GST rate collection
-    document.getElementById('purchase-order-form').addEventListener('submit', function(e) {
-        e.preventDefault();
         
-        const form = this;
-        const lineItems = [];
-        
-        document.querySelectorAll('.line-item-row').forEach(row => {
-            const medicineSelect = row.querySelector('.medicine-select');
-            if (medicineSelect && medicineSelect.value) {
-                lineItems.push({
-                    medicine_id: medicineSelect.value,
-                    medicine_name: medicineSelect.options[medicineSelect.selectedIndex].text,
-                    quantity: row.querySelector('.quantity').value || 0,
-                    rate: row.querySelector('.rate').value || 0,
-                    mrp: row.querySelector('.mrp').value || 0,
-                    gst_rate: parseFloat(medicineSelect.options[medicineSelect.selectedIndex].dataset.gst) || 0,
-                    is_free: row.querySelector('.is-free-item').checked,
-                    units_per_pack: row.querySelector('.units-per-pack').value || 1,
-                    hsn_code: row.querySelector('.hsn-code').value || ''
-                });
+        // FIXED: Show/hide discount row and update discount display
+        if (discountDisplay && discountRow) {
+            if (totalDiscount > 0) {
+                discountDisplay.textContent = totalDiscount.toFixed(2);
+                discountRow.style.display = 'table-row';
+            } else {
+                discountRow.style.display = 'none';
             }
-        });
-        
-        // Validate
-        if (lineItems.length === 0) {
-            alert('Please add at least one line item before submitting.');
-            return;
         }
+    }
+
+    // Example calculation breakdown:
+    // Rate: ₹100
+    // Quantity: 10
+    // Base Amount: ₹1000
+    // GST (12%): ₹120 (on ₹1000)
+    // Discount (10%): ₹100 (on ₹1000)
+    // Final Amount: ₹1000 + ₹120 - ₹100 = ₹1020
+
+    // The clinic pays: ₹1020 (not ₹1008 which would be if GST was on discounted amount)
+    
+    // Update hidden fields function (moved outside)
+    function updateHiddenFields(lineItems) {
+        const form = document.getElementById('purchase-order-form');
         
-        // Update hidden fields - ONLY RAW DATA
         form.medicine_ids.value = lineItems.map(item => item.medicine_id).join(',');
         form.medicine_names.value = lineItems.map(item => item.medicine_name).join(',');
         form.quantities.value = lineItems.map(item => item.quantity).join(',');
@@ -855,40 +935,11 @@ document.addEventListener('DOMContentLoaded', function() {
         form.hsn_codes.value = lineItems.map(item => item.hsn_code || '').join(',');
         form.gst_rates.value = lineItems.map(item => item.gst_rate || 0).join(',');
         
-        // Set CGST/SGST/IGST to empty - backend will calculate based on supplier state
-        form.cgst_rates.value = '';
-        form.sgst_rates.value = '';
-        form.igst_rates.value = '';
-        
-        // Only send these flags
-        form.discount_percents.value = lineItems.map(() => 0).join(',');
+        // Include discount percents
+        form.discount_percents.value = lineItems.map(item => item.discount || 0).join(',');
         form.is_free_items.value = lineItems.map(item => item.is_free ? '1' : '0').join(',');
         
-        // Use HTMLFormElement.requestSubmit() to properly submit
-        if (form.requestSubmit) {
-            // Remove the event listener to prevent recursion
-            form.removeEventListener('submit', arguments.callee);
-            form.requestSubmit();
-        } else {
-            // Fallback for older browsers
-            form.removeEventListener('submit', arguments.callee);
-            form.submit();
-        }
-    });
-    // ALSO ENSURE updateHiddenFields includes CGST/SGST/IGST calculation:
-    function updateHiddenFields(lineItems) {
-        const form = document.getElementById('purchase-order-form');
-        
-        form.medicine_ids.value = lineItems.map(item => item.medicine_id).join(',');
-        form.medicine_names.value = lineItems.map(item => item.medicine_name).join(',');
-        form.quantities.value = lineItems.map(item => item.quantity).join(',');
-        form.pack_purchase_prices.value = lineItems.map(item => item.rate).join(',');
-        form.pack_mrps.value = lineItems.map(item => item.mrp || 0).join(',');
-        form.units_per_packs.value = lineItems.map(item => item.units_per_pack).join(',');
-        form.hsn_codes.value = lineItems.map(item => item.hsn_code).join(',');
-        form.gst_rates.value = lineItems.map(item => item.gst_rate).join(',');
-        
-        // CGST/SGST/IGST calculation (keep for backward compatibility even if server recalculates)
+        // CGST/SGST/IGST calculation (for backward compatibility)
         const cgstRates = [];
         const sgstRates = [];
         const igstRates = [];
@@ -911,14 +962,73 @@ document.addEventListener('DOMContentLoaded', function() {
         form.cgst_rates.value = cgstRates.join(',');
         form.sgst_rates.value = sgstRates.join(',');
         form.igst_rates.value = igstRates.join(',');
-        form.discount_percents.value = lineItems.map(() => 0).join(',');
-        form.is_free_items.value = lineItems.map(item => item.is_free ? '1' : '0').join(',');
     }
+    
+    // Form submission handler
+    document.getElementById('purchase-order-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const lineItems = [];
+        document.querySelectorAll('.line-item-row').forEach(row => {
+            const medicineSelect = row.querySelector('.medicine-select');
+            if (medicineSelect && medicineSelect.value) {
+                const gstRateElement = row.querySelector('.gst-rate');
+                let gstRate = 0;
+                
+                // Get GST rate properly
+                if (gstRateElement) {
+                    if (gstRateElement.dataset.rate) {
+                        gstRate = parseFloat(gstRateElement.dataset.rate);
+                    } else if (gstRateElement.textContent) {
+                        gstRate = parseFloat(gstRateElement.textContent.replace('%', ''));
+                    }
+                }
+                
+                lineItems.push({
+                    medicine_id: medicineSelect.value,
+                    medicine_name: medicineSelect.options[medicineSelect.selectedIndex].text,
+                    quantity: row.querySelector('.quantity').value || 0,
+                    rate: row.querySelector('.rate').value || 0,
+                    mrp: row.querySelector('.mrp').value || 0,
+                    discount: row.querySelector('.discount-percent')?.value || 0,
+                    gst_rate: gstRate,
+                    is_free: row.querySelector('.is-free-item').checked,
+                    units_per_pack: row.querySelector('.units-per-pack').value || 1,
+                    hsn_code: row.querySelector('.hsn-code').value || ''
+                });
+            }
+        });
+        
+        // Validation
+        if (lineItems.length === 0) {
+            alert('Please add at least one line item before submitting.');
+            return;
+        }
+        
+        // Update hidden fields
+        updateHiddenFields(lineItems);
+        
+        // Use HTMLFormElement.requestSubmit() to properly submit
+        const form = this;
+        if (form.requestSubmit) {
+            // Remove the event listener to prevent recursion
+            form.removeEventListener('submit', arguments.callee);
+            form.requestSubmit();
+        } else {
+            // Fallback for older browsers
+            form.removeEventListener('submit', arguments.callee);
+            form.submit();
+        }
+    });
     
     // Add first line item on page load
     setTimeout(function() {
-        document.getElementById('add-line-item').click();
+        const addButton = document.getElementById('add-line-item');
+        if (addButton) {
+            addButton.click();
+        }
     }, 100);
-});
+    
+}); // End of DOMContentLoaded
 </script>
 {% endblock %}
