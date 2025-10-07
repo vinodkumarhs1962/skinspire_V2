@@ -6,8 +6,7 @@ from sqlalchemy import Column, String, ForeignKey, Boolean, Integer, DateTime, D
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship, backref
 from datetime import datetime, timezone
-from .base import Base, TimestampMixin, SoftDeleteMixin, generate_uuid
-from .base import TenantMixin  # Explicitly import TenantMixin
+from .base import Base, TimestampMixin, SoftDeleteMixin, generate_uuid, ApprovalMixin, TenantMixin
 from flask import current_app
 from flask_login import UserMixin
 import json
@@ -603,15 +602,15 @@ class PaymentDetail(Base, TimestampMixin, TenantMixin):
     advance_adjustment = relationship("AdvanceAdjustment", foreign_keys=[advance_adjustment_id], backref="related_payments")
     loyalty_redemption = relationship("LoyaltyRedemption", foreign_keys=[loyalty_redemption_id], backref="related_payment")
 
-class PurchaseOrderHeader(Base, TimestampMixin, TenantMixin):
-    """Purchase order header"""
+class PurchaseOrderHeader(Base, TimestampMixin, TenantMixin, SoftDeleteMixin, ApprovalMixin):
+    """Purchase order header - Enhanced with soft delete and approval tracking"""
     __tablename__ = 'purchase_order_header'
     
     po_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
     hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
-    branch_id = Column(UUID(as_uuid=True), ForeignKey('branches.branch_id'), nullable=False)  # ADDED
+    branch_id = Column(UUID(as_uuid=True), ForeignKey('branches.branch_id'), nullable=False)
     po_number = Column(String(20), nullable=False, unique=True)
-    po_date = Column(DateTime(timezone=True), nullable=False)  # With timezone
+    po_date = Column(DateTime(timezone=True), nullable=False)
     
     # Supplier Information
     supplier_id = Column(UUID(as_uuid=True), ForeignKey('suppliers.supplier_id'), nullable=False)
@@ -629,17 +628,27 @@ class PurchaseOrderHeader(Base, TimestampMixin, TenantMixin):
     
     # Status
     status = Column(String(20), default='draft')  # draft, approved, received, cancelled
-    deleted_flag = Column(Boolean, default=False)
+    deleted_flag = Column(Boolean, default=False)  # ✅ KEEP for backward compatibility
     
-    # Approval Information
-    approved_by = Column(String(50))
+    # ✅ REMOVED: approved_by = Column(String(50))  # Now inherited from ApprovalMixin
+    # ✅ NEW: approved_at field now available via ApprovalMixin
     
     # Amounts
     total_amount = Column(Numeric(12, 2))
     
-    # Relationships
+    # ✅ NEW FIELDS (inherited from mixins):
+    # From SoftDeleteMixin:
+    # - is_deleted = Column(Boolean, default=False, nullable=False, index=True)
+    # - deleted_at = Column(DateTime(timezone=True))
+    # - deleted_by = Column(String(50))
+    
+    # From ApprovalMixin:
+    # - approved_by = Column(String(50))
+    # - approved_at = Column(DateTime(timezone=True))
+    
+    # Relationships (unchanged)
     hospital = relationship("Hospital")
-    branch = relationship("Branch")  # ADDED
+    branch = relationship("Branch")
     supplier = relationship("Supplier", back_populates="purchase_orders")
     po_lines = relationship("PurchaseOrderLine", back_populates="po_header", cascade="all, delete-orphan")
     supplier_invoices = relationship("SupplierInvoice", back_populates="po_header")
@@ -655,7 +664,8 @@ class PurchaseOrderHeader(Base, TimestampMixin, TenantMixin):
         except Exception:
             return False
 
-class PurchaseOrderLine(Base, TimestampMixin, TenantMixin):
+
+class PurchaseOrderLine(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     """Purchase order line items"""
     __tablename__ = 'purchase_order_line'
     
@@ -696,6 +706,11 @@ class PurchaseOrderLine(Base, TimestampMixin, TenantMixin):
     # Delivery
     expected_delivery_date = Column(Date)
     
+    # ✅ NEW FIELDS (inherited from SoftDeleteMixin):
+    # - is_deleted = Column(Boolean, default=False, nullable=False, index=True)
+    # - deleted_at = Column(DateTime(timezone=True))
+    # - deleted_by = Column(String(50))
+
     # Relationships
     hospital = relationship("Hospital")
     po_header = relationship("PurchaseOrderHeader", back_populates="po_lines")
@@ -766,7 +781,7 @@ class PurchaseOrderLine(Base, TimestampMixin, TenantMixin):
             return base * (1 - float(self.discount_percent) / 100)
         return base
 
-class SupplierInvoice(Base, TimestampMixin, TenantMixin):
+class SupplierInvoice(Base, TimestampMixin, TenantMixin, SoftDeleteMixin, ApprovalMixin):
     """Supplier invoice information"""
     __tablename__ = 'supplier_invoice'
     
@@ -825,6 +840,17 @@ class SupplierInvoice(Base, TimestampMixin, TenantMixin):
     credited_by_invoice_id = Column(UUID(as_uuid=True), ForeignKey('supplier_invoice.invoice_id'))
     is_credit_note = Column(Boolean, default=False, nullable=False)
 
+    # ✅ NEW FIELDS (inherited from mixins):
+    # From SoftDeleteMixin:
+    # - is_deleted = Column(Boolean, default=False, nullable=False, index=True)
+    # - deleted_at = Column(DateTime(timezone=True))
+    # - deleted_by = Column(String(50))
+    
+    # From ApprovalMixin:
+    # - approved_by = Column(String(50))
+    # - approved_at = Column(DateTime(timezone=True))
+
+
     # Relationships
     hospital = relationship("Hospital")
     branch = relationship("Branch")  # ADDED
@@ -860,7 +886,7 @@ class SupplierInvoice(Base, TimestampMixin, TenantMixin):
             return False    
 
 
-class SupplierInvoiceLine(Base, TimestampMixin, TenantMixin):
+class SupplierInvoiceLine(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     """Supplier invoice line items"""
     __tablename__ = 'supplier_invoice_line'
     
@@ -913,12 +939,17 @@ class SupplierInvoiceLine(Base, TimestampMixin, TenantMixin):
     # ITC Eligibility
     itc_eligible = Column(Boolean, default=True)
     
+    # ✅ NEW FIELDS (inherited from SoftDeleteMixin):
+    # - is_deleted = Column(Boolean, default=False, nullable=False, index=True)
+    # - deleted_at = Column(DateTime(timezone=True))
+    # - deleted_by = Column(String(50))
+
     # Relationships
     hospital = relationship("Hospital")
     invoice = relationship("SupplierInvoice", back_populates="invoice_lines")
     medicine = relationship("Medicine")
 
-class SupplierPayment(Base, TimestampMixin, TenantMixin):
+class SupplierPayment(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     """Enhanced Payments to suppliers with Branch Support"""
     __tablename__ = 'supplier_payment'
     
@@ -994,6 +1025,11 @@ class SupplierPayment(Base, TimestampMixin, TenantMixin):
     posting_date = Column(DateTime(timezone=True))
     posting_reference = Column(String(50))
     posting_errors = Column(Text)
+
+    # ✅ NEW FIELDS ONLY (inherited from SoftDeleteMixin):
+    # - is_deleted = Column(Boolean, default=False, nullable=False, index=True)
+    # - deleted_at = Column(DateTime(timezone=True))
+    # - deleted_by = Column(String(50))
 
     # Workflow & Approval
     workflow_status = Column(String(20), default='draft')  # draft, pending_approval, approved, rejected, processed

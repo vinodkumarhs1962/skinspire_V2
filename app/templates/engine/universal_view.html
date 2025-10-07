@@ -173,51 +173,17 @@
                         Actions
                     </button>
                     <div id="header-actions-dropdown" class="dropdown-menu origin-top-right hidden">
-                        <!-- Delete Action (only if not deleted) -->
-                        {% if can_delete(entity_type) and item and not item.get('is_deleted', False) %}
-                            {% set delete_url = get_crud_url(entity_type, 'delete', item[assembled_data.entity_config.primary_key] if assembled_data.entity_config else None) %}
-                            {% if delete_url != '#' %}
-                                <a href="#" 
-                                class="dropdown-item text-danger delete-btn"
-                                data-delete-url="{{ delete_url }}"
-                                data-entity-name="{{ item[assembled_data.entity_config.title_field] if assembled_data.entity_config and assembled_data.entity_config.title_field and item else 'this item' }}"
-                                onclick="return false;">
-                                    <i class="fas fa-trash mr-2"></i>
-                                    Delete
-                                </a>
-                                <div class="dropdown-divider"></div>
-                            {% endif %}
-                        {% endif %}
-                        
-                        <!-- Undelete/Restore Action (only if deleted) -->
-                        {% if item and item.get('is_deleted', False) %}
-                            {% set undelete_url = url_for('universal_views.universal_undelete_view', 
-                                                        entity_type=entity_type, 
-                                                        item_id=item[assembled_data.entity_config.primary_key] if assembled_data.entity_config else None) %}
-                            <a href="#" 
-                            class="dropdown-item text-success undelete-btn"
-                            data-undelete-url="{{ undelete_url }}"
-                            data-entity-name="{{ item[assembled_data.entity_config.title_field] if assembled_data.entity_config and assembled_data.entity_config.title_field and item else 'this item' }}"
-                            onclick="handleUndelete(this); return false;">
-                                <i class="fas fa-undo mr-2"></i>
-                                Restore
-                            </a>
-                            <div class="dropdown-divider"></div>
-                        {% endif %}
-                        
                         <!-- Custom Dropdown Actions -->
                         {% if assembled_data.header_actions and assembled_data.header_actions.dropdown_actions %}
                             {% for action in assembled_data.header_actions.dropdown_actions %}
-                                {% if action.id not in ['delete'] %}
-                                    <a href="{{ action.url }}" 
-                                    class="dropdown-item"
-                                    {% if action.confirmation_required %}
-                                    onclick="return confirm('{{ action.confirmation_message }}')"
-                                    {% endif %}>
-                                        <i class="{{ action.icon }} mr-2"></i>
-                                        {{ action.label }}
-                                    </a>
-                                {% endif %}
+                                <a href="{{ action.url }}" 
+                                class="dropdown-item{% if action.id == 'delete' %} text-danger{% elif action.id in ['restore', 'undelete'] %} text-success{% endif %}"
+                                {% if action.confirmation_required %}
+                                onclick="return confirm('{{ action.confirmation_message }}')"
+                                {% endif %}>
+                                    <i class="{{ action.icon }} mr-2"></i>
+                                    {{ action.label }}
+                                </a>
                             {% endfor %}
                             <div class="dropdown-divider"></div>
                         {% endif %}

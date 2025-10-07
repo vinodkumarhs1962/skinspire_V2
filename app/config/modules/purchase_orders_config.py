@@ -9,6 +9,8 @@ Based on financial_transactions.py patterns
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
+
+from sqlalchemy import true
 from app.config.core_definitions import (
     FieldDefinition, FieldType, EntityConfiguration, EntityCategory,
     CRUDOperation, SectionDefinition, ViewLayoutConfiguration, LayoutType,
@@ -127,8 +129,8 @@ PURCHASE_ORDER_FIELDS = [
     FieldDefinition(
         name="po_date",
         label="PO Date",
-        field_type=FieldType.DATETIME,
-        format_pattern="%d/%b/%Y %H:%M",
+        field_type=FieldType.DATE,  # ✅ Changed to DATE (no time)
+        format_pattern="%d-%b-%Y", 
         required=True,
         sortable=True,
         filterable=False,
@@ -146,7 +148,7 @@ PURCHASE_ORDER_FIELDS = [
         name="expected_delivery_date",
         label="Expected Delivery",
         field_type=FieldType.DATE,
-        format_pattern="%d/%b/%Y",
+        format_pattern="%d-%b-%Y",
         show_in_list=True,
         show_in_detail=True,
         show_in_form=True,
@@ -430,6 +432,133 @@ PURCHASE_ORDER_FIELDS = [
         show_in_list=False,
         show_in_detail=False,
         show_in_form=False
+    ),
+    # === SOFT DELETE TRACKING FIELDS ===
+    FieldDefinition(
+        name="is_deleted",  # Will exist after migration
+        label="Is Deleted",
+        field_type=FieldType.BOOLEAN,  # ✅ Verified in core_definitions.py
+        show_in_list=False,
+        show_in_detail=False,  # Hidden from UI
+        show_in_form=False,
+        readonly=True,
+        filterable=True,  # Allow admin filtering
+    ),
+    
+    FieldDefinition(
+        name="deleted_at",  # Will exist after migration
+        label="Deleted At", 
+        field_type=FieldType.DATETIME,  # ✅ Verified in core_definitions.py
+        show_in_list=False,
+        show_in_detail=True,  # Show for audit
+        show_in_form=False,
+        readonly=True,
+        format_pattern="%d/%b/%Y at %H:%M",
+        tab_group="audit",  # ✅ Verified tab exists in current config
+        section="audit_info",  # ✅ Verified section exists
+        view_order=95
+    ),
+    
+    FieldDefinition(
+        name="deleted_by",  # Will exist after migration
+        label="Deleted By",
+        field_type=FieldType.TEXT,  # ✅ Verified in core_definitions.py
+        show_in_list=False,
+        show_in_detail=True,  # Show for audit
+        show_in_form=False,
+        readonly=True,
+        tab_group="audit",
+        section="audit_info",
+        view_order=96
+    ),
+    
+    # ✅ NEW: Missing approval timestamp field (approved_by exists in view)
+    FieldDefinition(
+        name="approved_at",  # Will exist after migration
+        label="Approved At",
+        field_type=FieldType.DATETIME,  # ✅ Verified in core_definitions.py
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=False,
+        readonly=True,
+        format_pattern="%d/%b/%Y at %H:%M",
+        tab_group="order_details",  # ✅ Verified tab exists
+        section="status_info",  # ✅ Verified section exists
+        view_order=32
+    ),
+    
+    # ✅ NEW: Virtual fields for business logic (calculated in service)
+    FieldDefinition(
+        name="has_invoice",
+        label="Has Invoice",
+        field_type=FieldType.BOOLEAN,  # ✅ Verified in core_definitions.py
+        virtual=True,  # Calculated field
+        show_in_list=False,
+        show_in_detail=False,  # Used by actions only
+        show_in_form=False,
+        readonly=True
+    ),
+    
+    FieldDefinition(
+        name="invoice_count",
+        label="Invoice Count",
+        field_type=FieldType.NUMBER,  # ✅ Verified in core_definitions.py (was INTEGER)
+        virtual=True,  # Calculated field
+        show_in_list=False,
+        show_in_detail=True,  # Can show for information
+        show_in_form=False,
+        readonly=True,
+        tab_group="financials",  # ✅ Verified tab exists
+        section="invoice_summary",  # ✅ Verified section exists
+        view_order=90
+    ),
+    
+    FieldDefinition(
+        name="approval_status",
+        label="Approval Status",
+        field_type=FieldType.TEXT,  # ✅ Verified in core_definitions.py
+        virtual=True,  # Calculated field
+        show_in_list=False,  # Good for list display
+        show_in_detail=True,
+        show_in_form=False,
+        readonly=True,
+        tab_group="order_details",
+        section="status_info",
+        view_order=30
+    ),
+    
+    # ✅ NEW: Action visibility control fields (used by action conditions)
+    FieldDefinition(
+        name="can_be_deleted",
+        label="Can Be Deleted",
+        field_type=FieldType.BOOLEAN,  # ✅ Verified in core_definitions.py
+        virtual=True,
+        show_in_list=False,
+        show_in_detail=False,  # Hidden from UI
+        show_in_form=False,
+        readonly=True
+    ),
+    
+    FieldDefinition(
+        name="can_be_approved",
+        label="Can Be Approved", 
+        field_type=FieldType.BOOLEAN,  # ✅ Verified in core_definitions.py
+        virtual=True,
+        show_in_list=False,
+        show_in_detail=False,  # Hidden from UI
+        show_in_form=False,
+        readonly=True
+    ),
+    
+    FieldDefinition(
+        name="can_be_unapproved",
+        label="Can Be Unapproved",
+        field_type=FieldType.BOOLEAN,  # ✅ Verified in core_definitions.py
+        virtual=True,
+        show_in_list=False,
+        show_in_detail=False,  # Hidden from UI
+        show_in_form=False,
+        readonly=True
     )
 ]
 
@@ -616,7 +745,7 @@ PURCHASE_ORDER_ACTIONS = [
         button_type=ButtonType.INFO,
         route_name="universal_entity.view",
         route_params={"entity_type": "purchase_orders"},
-        show_in_list=True,
+        show_in_list=False,
         show_in_detail=False,
         display_type=ActionDisplayType.BUTTON,
         permission="purchase_order_view",
@@ -629,7 +758,7 @@ PURCHASE_ORDER_ACTIONS = [
         icon="fas fa-file-invoice",
         button_type=ButtonType.SECONDARY,
         url_pattern="/supplier/invoice/list",
-        show_in_list=True,
+        show_in_list=False,
         show_in_detail=False,
         show_in_toolbar=True,
         display_type=ActionDisplayType.BUTTON,
@@ -641,7 +770,7 @@ PURCHASE_ORDER_ACTIONS = [
         icon="fas fa-building",
         button_type=ButtonType.SECONDARY,
         url_pattern="/supplier/list",
-        show_in_list=True,
+        show_in_list=False,
         show_in_detail=False,
         show_in_toolbar=True,
         display_type=ActionDisplayType.BUTTON,
@@ -653,7 +782,7 @@ PURCHASE_ORDER_ACTIONS = [
         icon="fas fa-money-bill",
         button_type=ButtonType.SECONDARY,
         url_pattern="/supplier/payment/list",
-        show_in_list=True,
+        show_in_list=False,
         show_in_detail=False,
         show_in_toolbar=True,
         display_type=ActionDisplayType.BUTTON,
@@ -665,13 +794,19 @@ PURCHASE_ORDER_ACTIONS = [
         label="Print",
         icon="fas fa-print",
         button_type=ButtonType.SECONDARY,
-        url_pattern="/supplier/purchase-order/print/{po_id}",
+        route_name="universal_views.universal_document_view",  # ✅ Universal Engine
+        route_params={
+            "entity_type": "purchase_orders",
+            "item_id": "{po_id}",
+            "doc_type": "invoice"  # Matches PURCHASE_ORDER_DOCUMENT_CONFIGS key
+        },
         show_in_list=False,
         show_in_detail=True,
         display_type=ActionDisplayType.BUTTON,
         permission="purchase_order_print",
         order=5
     ),
+
     ActionDefinition(
         id="edit",
         label="Edit Purchase Order",
@@ -681,7 +816,9 @@ PURCHASE_ORDER_ACTIONS = [
         show_in_list=False,
         show_in_detail=True,
         display_type=ActionDisplayType.DROPDOWN_ITEM,
-        conditions={"po_status": ["draft"]},  # Only allow editing draft POs
+        conditions={"po_status": ["draft"],
+                    "is_deleted": [False]  # ✅ NEW: Don't show for deleted records
+                    },
         permission="purchase_order_edit",
         order=6
     ),
@@ -691,28 +828,100 @@ PURCHASE_ORDER_ACTIONS = [
         icon="fas fa-check-circle",
         button_type=ButtonType.SUCCESS,
         url_pattern="/supplier/purchase-order/approve/{po_id}",
+        show_in_list=True,  # Show in list
+        show_in_detail=True,
+        display_type=ActionDisplayType.BUTTON,  # Changed to BUTTON for inline
+        conditions={
+            "po_status": ["draft"],
+            "is_deleted": [False]
+            # Removed can_be_approved check
+        },
+        permission="purchase_order_approve",
+        order=6,
+        confirmation_required=True,
+        confirmation_message="Are you sure you want to approve this purchase order?"
+    ),
+    
+    # ✅ NEW: Unapprove action for approved POs
+    ActionDefinition(
+        id="unapprove",
+        label="Unapprove", 
+        icon="fas fa-undo",
+        button_type=ButtonType.WARNING,  # ✅ Verified in core_definitions.py
+        url_pattern="/supplier/purchase-order/unapprove/{po_id}",
+        show_in_list=True,
+        show_in_detail=True,
+        display_type=ActionDisplayType.BUTTON,
+        conditions={
+            "po_status": ["approved"],  # ✅ Use correct field name from PurchaseOrderView
+            "is_deleted": [False],
+            "can_be_unapproved": [True]  # ✅ Check no invoices exist
+        },
+        permission="purchase_order_approve",  # Same permission as approve
+        order=7,
+        confirmation_required=True,
+        confirmation_message="Are you sure you want to unapprove this purchase order?"
+    ),
+    
+    # ✅ Delete action for draft POs
+    ActionDefinition(
+        id="delete",
+        label="Delete",
+        icon="fas fa-trash",
+        button_type=ButtonType.DANGER,
+        url_pattern="/supplier/purchase-order/delete/{po_id}",  # Use actual route
         show_in_list=False,
         show_in_detail=True,
         display_type=ActionDisplayType.DROPDOWN_ITEM,
-        conditions={"status": ["draft"]},
-        permission="purchase_order_approve",
-        order=6
+        conditions={
+            "is_deleted": [False, None]
+        },
+        permission="purchase_order_delete",
+        order=8,
+        confirmation_required=True,
+        confirmation_message="Are you sure you want to delete this purchase order? This will also delete all line items."
     ),
+    
+    # ✅ NEW: Restore action for deleted records
+    ActionDefinition(
+        id="restore",
+        label="Restore",
+        icon="fas fa-undo",
+        button_type=ButtonType.SUCCESS,
+        url_pattern="/supplier/purchase-order/restore/{po_id}",  # ✅ Matches delete pattern
+        show_in_list=False,
+        show_in_detail=True,
+        display_type=ActionDisplayType.DROPDOWN_ITEM,
+        conditions={
+            "is_deleted": [True]
+        },
+        permission="purchase_order_delete",
+        order=9,
+        confirmation_required=True,
+        confirmation_message="Are you sure you want to restore this purchase order?"
+    ),
+    
+    # ✅ UPDATED: Cancel action with enhanced conditions  
     ActionDefinition(
         id="cancel",
         label="Cancel",
         icon="fas fa-times-circle",
         button_type=ButtonType.DANGER,
         url_pattern="/supplier/purchase-order/cancel/{po_id}",
-        show_in_list=False,
+        show_in_list=True,   # ✅ NEW: Show in list
         show_in_detail=True,
-        display_type=ActionDisplayType.DROPDOWN_ITEM,
-        conditions={"status": ["draft", "approved"]},
+        display_type=ActionDisplayType.BUTTON,
+        conditions={
+            "po_status": ["draft", "approved"],  # ✅ FIXED: Use correct field name
+            "is_deleted": [False],  # ✅ NEW: Don't show for deleted
+            "has_invoice": [False]  # ✅ NEW: Only if no invoices
+        },
         confirmation_required=True,
         confirmation_message="Are you sure you want to cancel this purchase order?",
-        permission="purchase_order_cancel",
-        order=7
+        permission="purchase_order_edit",
+        order=10
     ),
+    
     ActionDefinition(
         id="create_invoice",
         label="Create Invoice",
@@ -914,7 +1123,7 @@ PURCHASE_ORDER_DOCUMENT = DocumentConfiguration(
     ],
     
     # Export options - using strings not enums
-    allowed_formats=["pdf", "print"],
+    allowed_formats=["pdf", "print", "excel", "word"],
     default_format="pdf"
 )
 
@@ -995,11 +1204,18 @@ PURCHASE_ORDER_CONFIG = EntityConfiguration(
     document_configs=PURCHASE_ORDER_DOCUMENT_CONFIGS,
     default_document="invoice",  # Changed from "order" to match document_type
     
+    # ✅ ENABLE SOFT DELETE SUPPORT
+    enable_soft_delete=True,  # Changed from False
+    soft_delete_field="is_deleted",  # Standard SoftDeleteMixin field
+    cascade_delete=["po_lines"],  # Cascade to line items
+    delete_confirmation_message="Are you sure you want to delete this purchase order? This will also delete all line items.",
+
     # === UNIVERSAL CRUD SETTINGS ===
     universal_crud_enabled=False,  # Transaction entity - read-only in Universal Engine
     allowed_operations=[
         CRUDOperation.READ,
         CRUDOperation.LIST,
+        CRUDOperation.DELETE,  # ✅ NOW ALLOWED via soft delete
         CRUDOperation.EXPORT,
         CRUDOperation.DOCUMENT
     ],
@@ -1015,7 +1231,13 @@ PURCHASE_ORDER_CONFIG = EntityConfiguration(
         "items_summary",
         "gst_summary",
         "amount_in_words",
-        "branch_name"
+        "branch_name",
+        "has_invoice",      # For action conditions
+        "invoice_count",    # For display
+        "approval_status",  # ✅ NEW: For approval tracking
+        "can_be_deleted",   # ✅ NEW: For action visibility
+        "can_be_approved",  # ✅ NEW: For action visibility
+        "can_be_unapproved" # ✅ NEW: For action visibility
     ],
     
     # === DOCUMENT PERMISSIONS ===

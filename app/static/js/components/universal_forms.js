@@ -48,6 +48,12 @@ class UniversalFormsEngine {
     // =============================================================================
 
     initialize(entityType = null) {
+        // Check for back navigation first - must be before any other initialization
+        if (this.checkAndHandleBackNavigation()) {
+            console.log('🔄 Page will reload for fresh data');
+            return; // Stop initialization as page will reload
+        }
+        
         if (this.state.isInitialized) {
             console.warn('Universal Forms Engine already initialized');
             return;
@@ -71,6 +77,74 @@ class UniversalFormsEngine {
         }
     }
 
+    /**
+     * Check navigation type and handle back navigation with page refresh
+     * Uses modern API with fallback to deprecated API for backward compatibility
+     * @returns {boolean} True if page will reload, false otherwise
+     */
+    checkAndHandleBackNavigation() {
+        let isBackForward = false;
+        
+        // Try modern Navigation Timing API Level 2 first
+        if (window.PerformanceNavigationTiming) {
+            try {
+                const entries = performance.getEntriesByType('navigation');
+                if (entries && entries.length > 0) {
+                    const navEntry = entries[0];
+                    isBackForward = navEntry.type === 'back_forward';
+                    console.log('📊 Modern navigation API - Type:', navEntry.type);
+                }
+            } catch (e) {
+                console.log('Modern navigation API error:', e);
+            }
+        }
+        
+        // Fallback to deprecated API for older browsers (backward compatibility)
+        if (!isBackForward && typeof performance !== 'undefined' && performance.navigation) {
+            try {
+                // TYPE_BACK_FORWARD = 2
+                isBackForward = performance.navigation.type === 2;
+                if (isBackForward) {
+                    console.log('📊 Legacy navigation API - Back navigation detected');
+                }
+            } catch (e) {
+                // Silently ignore if deprecated API fails
+            }
+        }
+        
+        // Check if returning from action pages
+        const referrer = document.referrer || '';
+        const actionPatterns = [
+            '/approve/', '/delete/', '/edit/', '/view/', 
+            '/unapprove/', '/cancel/', '/purchase-order/'
+        ];
+        const fromActionPage = actionPatterns.some(pattern => referrer.includes(pattern));
+        
+        // Check session storage flag
+        const needsRefresh = sessionStorage.getItem('listNeedsRefresh') === 'true';
+        
+        // Decide if we need to refresh
+        if (isBackForward || (fromActionPage && needsRefresh)) {
+            console.log('🔄 Navigation requires refresh:', {
+                isBackForward,
+                fromActionPage,
+                needsRefresh,
+                referrer
+            });
+            
+            // Clear the flag before reloading
+            if (needsRefresh) {
+                sessionStorage.removeItem('listNeedsRefresh');
+            }
+            
+            // Force reload from server
+            window.location.reload(true);
+            return true; // Page will reload
+        }
+        
+        return false; // Continue normal initialization
+    }
+
     initializeFilterForm() {
         const form = this.getFilterForm();
         if (!form) return;
@@ -86,6 +160,8 @@ class UniversalFormsEngine {
         
         console.log('✅ Filter form initialized');
     }
+
+    
 
     initializeDatePresets() {
         const presetButtons = document.querySelectorAll('.universal-date-preset-btn');
@@ -235,6 +311,23 @@ class UniversalFormsEngine {
         window.addEventListener('error', (event) => {
             console.error('Universal Forms Error:', event.error);
         });
+        
+        // Set refresh flag when navigating to action pages
+        document.addEventListener('click', (e) => {
+            const link = e.target.closest('a');
+            if (link && link.href) {
+                const actionPatterns = [
+                    '/approve/', '/delete/', '/edit/', '/view/', 
+                    '/unapprove/', '/cancel/', '/purchase-order/'
+                ];
+                const isActionLink = actionPatterns.some(pattern => link.href.includes(pattern));
+                
+                if (isActionLink) {
+                    console.log('🔗 Setting refresh flag for navigation to:', link.href);
+                    sessionStorage.setItem('listNeedsRefresh', 'true');
+                }
+            }
+        });
 
         // Make key methods globally available for inline handlers
         window.universalForms = {
@@ -287,12 +380,25 @@ class UniversalFormsEngine {
             if (!hasUrlStartDate && !hasUrlEndDate && !hasFieldStartDate && !hasFieldEndDate && !hasOtherFilters) {
                 
                 // ✅ SMART CHECK: Is this a fresh page visit or navigation from filters?
-                const isPageRefresh = performance.navigation.type === 1; // TYPE_RELOAD
-                const isBackNavigation = performance.navigation.type === 2; // TYPE_BACK_FORWARD
-                const hasNavigationContext = document.referrer.includes('/universal/');
+                let isPageRefresh = false;
+                let hasNavigationContext = document.referrer.includes('/universal/');
+                
+                // Use modern API to check for reload (backward compatible)
+                if (window.PerformanceNavigationTiming) {
+                    try {
+                        const entries = performance.getEntriesByType('navigation');
+                        if (entries && entries.length > 0) {
+                            isPageRefresh = entries[0].type === 'reload';
+                        }
+                    } catch (e) {
+                        // Fallback check
+                        isPageRefresh = false;
+                    }
+                }
                 
                 // ✅ ONLY auto-apply FY on truly fresh visits, not when user is navigating/filtering
-                if (!isPageRefresh && !isBackNavigation && !hasNavigationContext) {
+                // Note: Back navigation is already handled in checkAndHandleBackNavigation
+                if (!isPageRefresh && !hasNavigationContext) {
                     console.log('✅ Fresh visit - applying Financial Year preset');
                     this.applyDatePreset('financial_year', false);
                 } else {

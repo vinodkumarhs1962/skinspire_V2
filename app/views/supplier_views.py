@@ -563,250 +563,6 @@ def view_supplier_invoice(invoice_id):
         flash(f"Error retrieving supplier invoice details: {str(e)}", "error")
         return redirect(url_for('supplier_views.supplier_invoice_list'))
 
-# commented on 16.06.25 The code works for credit note feature.  However we are now rationalizing totals Hence new code is brought in.
-# @supplier_views_bp.route('/invoice/view/<invoice_id>', methods=['GET'])
-# @login_required
-# @require_web_branch_permission('supplier_invoice', 'view', branch_source='entity')  # NEW: Entity-based branch detection
-# def view_supplier_invoice(invoice_id):
-#     """View supplier invoice details with branch awareness."""
-#     # REMOVED: Manual permission check - decorator handles it now
-#     # OLD: if not has_permission(current_user, 'supplier_invoice', 'view'):
-    
-#     try:
-#         # Import service locally (UNCHANGED)
-#         from app.services.supplier_service import get_supplier_invoice_by_id, get_purchase_order_by_id
-        
-#         invoice = get_supplier_invoice_by_id(
-#             invoice_id=uuid.UUID(invoice_id),
-#             hospital_id=current_user.hospital_id,
-#             include_payments=True
-#         )
-        
-#         if not invoice:
-#             flash("Supplier invoice not found", "error")
-#             return redirect(url_for('supplier_views.supplier_invoice_list'))
-        
-#         # 🔥 ENHANCED CREDIT NOTE SEARCH - START 🔥
-#         if invoice and (not invoice.get('has_credit_notes') or not invoice.get('positive_payments_total')):
-#             logger.info(f"Calculating enhanced credit note fields for invoice {invoice_id}")
-            
-#             from app.services.database_service import get_db_session
-#             from app.models.transaction import SupplierPayment, SupplierInvoice
-#             from sqlalchemy import func, or_
-            
-#             with get_db_session(read_only=True) as session:
-#                 # DEBUG: Get ALL payments for this invoice first
-#                 all_payments = session.query(SupplierPayment).filter_by(
-#                     invoice_id=uuid.UUID(invoice_id)
-#                 ).all()
-                
-#                 logger.info(f"DEBUG: Found {len(all_payments)} payments linked to original invoice {invoice_id}")
-                
-#                 for payment in all_payments:
-#                     logger.info(f"DEBUG Payment: ID={payment.payment_id}, "
-#                                           f"Amount={payment.amount}, "
-#                                           f"Status={payment.workflow_status}, "
-#                                           f"Reference={payment.reference_no}")
-                
-#                 # NEW: Search for credit note invoices related to this invoice
-#                 invoice_number = invoice.get('supplier_invoice_number', '')
-#                 credit_note_invoices = session.query(SupplierInvoice).filter(
-#                     SupplierInvoice.hospital_id == current_user.hospital_id,
-#                     SupplierInvoice.is_credit_note == True,
-#                     or_(
-#                         SupplierInvoice.original_invoice_id == uuid.UUID(invoice_id),
-#                         SupplierInvoice.notes.like(f'%{invoice_number}%'),
-#                         SupplierInvoice.notes.like(f'%{invoice_id}%')
-#                     )
-#                 ).all()
-                
-#                 logger.info(f"DEBUG: Found {len(credit_note_invoices)} credit note invoices related to {invoice_id}")
-                
-#                 # NEW: Track unique credit payment IDs to avoid double-counting
-#                 found_credit_payment_ids = set()
-#                 credit_payments_total = 0
-                
-#                 for credit_invoice in credit_note_invoices:
-#                     logger.info(f"DEBUG Credit Note: {credit_invoice.supplier_invoice_number}, "
-#                                           f"Amount={credit_invoice.total_amount}, "
-#                                           f"Original_Invoice_ID={credit_invoice.original_invoice_id}")
-                    
-#                     # Get payments for this credit note
-#                     credit_payments = session.query(SupplierPayment).filter_by(
-#                         invoice_id=credit_invoice.invoice_id
-#                     ).all()
-                    
-#                     for cp in credit_payments:
-#                         logger.info(f"DEBUG Credit Payment: ID={cp.payment_id}, "
-#                                               f"Amount={cp.amount}, "
-#                                               f"Status={cp.workflow_status}, "
-#                                               f"Reference={cp.reference_no}")
-                        
-#                         # FIXED: Only count each credit payment once
-#                         if cp.amount < 0 and str(cp.payment_id) not in found_credit_payment_ids:
-#                             credit_payments_total += abs(float(cp.amount))
-#                             found_credit_payment_ids.add(str(cp.payment_id))
-                
-#                 # NEW: Also search by payment reference patterns (but avoid duplicates)
-#                 credit_payment_refs = session.query(SupplierPayment).filter(
-#                     SupplierPayment.hospital_id == current_user.hospital_id,
-#                     or_(
-#                         SupplierPayment.reference_no.like(f'%CN-ADJ%{invoice_number}%'),
-#                         SupplierPayment.reference_no.like(f'%CN-PAY%{invoice_number}%'),
-#                         SupplierPayment.notes.like(f'%{invoice_number}%'),
-#                         SupplierPayment.notes.like(f'%{invoice_id}%')
-#                     ),
-#                     SupplierPayment.amount < 0
-#                 ).all()
-                
-#                 logger.info(f"DEBUG: Found {len(credit_payment_refs)} credit payments by reference pattern")
-                
-#                 for cp in credit_payment_refs:
-#                     logger.info(f"DEBUG Credit Payment by Ref: ID={cp.payment_id}, "
-#                                           f"Amount={cp.amount}, "
-#                                           f"Invoice_ID={cp.invoice_id}, "
-#                                           f"Reference={cp.reference_no}")
-                    
-#                     # FIXED: Only count if not already found
-#                     if cp.amount < 0 and str(cp.payment_id) not in found_credit_payment_ids:
-#                         credit_payments_total += abs(float(cp.amount))
-#                         found_credit_payment_ids.add(str(cp.payment_id))
-                
-#                 # Calculate with corrected credit payments
-#                 positive_payments = session.query(func.sum(SupplierPayment.amount)).filter_by(
-#                     invoice_id=uuid.UUID(invoice_id),
-#                     workflow_status='approved'
-#                 ).filter(SupplierPayment.amount > 0).scalar() or 0
-                
-#                 positive_payments_total = float(positive_payments)
-#                 credit_adjustments = credit_payments_total  # Now correctly calculated
-#                 effective_payment = positive_payments_total - credit_adjustments
-                
-#                 total_amount = float(invoice.get('total_amount', 0))
-#                 balance_due = max(0, total_amount - effective_payment)
-                
-#                 # Add enhanced fields to invoice dict
-#                 invoice['positive_payments_total'] = positive_payments_total
-#                 invoice['credit_adjustments_total'] = credit_adjustments
-#                 invoice['has_credit_notes'] = credit_adjustments > 0
-#                 invoice['payment_total'] = effective_payment
-#                 invoice['balance_due'] = balance_due
-                
-#                 # Recalculate payment status based on net effective payments
-#                 if invoice.get('payment_status') != 'cancelled':
-#                     if effective_payment >= total_amount:
-#                         invoice['payment_status'] = 'paid'
-#                     elif effective_payment > 0:
-#                         invoice['payment_status'] = 'partial'
-#                     else:
-#                         invoice['payment_status'] = 'unpaid'
-                
-#                 logger.info(f"FINAL Enhanced calculation: Status={invoice['payment_status']}, "
-#                                       f"Positive={positive_payments_total}, Credits={credit_adjustments}, "
-#                                       f"Net={effective_payment}, Balance={balance_due}")
-#         # 🔥 ENHANCED CREDIT NOTE SEARCH - END 🔥
-
-#         # Rest of the function remains UNCHANGED (PO data, supplier extraction, etc.)
-#         po_data = None
-#         if invoice.get('po_id'):
-#             try:
-#                 if not invoice.get('po_number'):
-#                     with get_db_session(read_only=True) as po_session:
-#                         po_header = po_session.query(PurchaseOrderHeader).filter_by(
-#                             po_id=invoice.get('po_id')
-#                         ).first()
-#                         if po_header:
-#                             invoice['po_number'] = po_header.po_number
-#                             logger.info(f"Added PO number {po_header.po_number} to invoice")
-#             except Exception as po_error:
-#                 current_app.logger.warning(f"Could not fetch PO number: {str(po_error)}")
-        
-#         # Extract supplier from invoice data (UNCHANGED)
-#         supplier = {
-#             'supplier_id': invoice.get('supplier_id'),
-#             'supplier_name': invoice.get('supplier_name', ''),
-#             'supplier_address': invoice.get('supplier_address', {}),
-#             'contact_info': invoice.get('contact_info', {}),
-#             'gst_registration_number': invoice.get('supplier_gstin', ''),
-#             'pan_number': '',
-#             'tax_type': 'Regular',
-#             'supplier_category': ''
-#         }
-        
-#         # Get payments from invoice data (UNCHANGED)
-#         payments = invoice.get('payments', [])
-        
-#         # Calculate subtotal and taxable value (UNCHANGED)
-#         subtotal_sum = 0
-#         taxable_value_sum = 0
-        
-#         if 'line_items' in invoice:
-#             for line in invoice['line_items']:
-#                 units = float(line.get('units', 0))
-#                 price = float(line.get('pack_purchase_price', 0))
-#                 line_subtotal = units * price
-#                 subtotal_sum += line_subtotal
-                
-#                 if 'taxable_amount' in line and line['taxable_amount'] is not None:
-#                     taxable_value = float(line['taxable_amount'])
-#                 else:
-#                     discount = float(line.get('discount_amount', 0))
-#                     taxable_value = line_subtotal - discount
-                
-#                 taxable_value_sum += taxable_value
-        
-#         invoice['calculated_subtotal'] = subtotal_sum
-#         invoice['calculated_taxable_value'] = taxable_value_sum
-
-#         # Calculate GST summary (UNCHANGED)
-#         gst_summary = []
-#         if 'line_items' in invoice:
-#             gstin_groups = {}
-#             for line in invoice['line_items']:
-#                 key = (line.get('hsn_code', ''), line.get('gst_rate', 0))
-#                 if key not in gstin_groups:
-#                     gstin_groups[key] = {
-#                         'hsn_code': key[0],
-#                         'gst_rate': key[1],
-#                         'taxable_value': 0,
-#                         'cgst': 0,
-#                         'sgst': 0,
-#                         'igst': 0,
-#                         'total_gst': 0
-#                     }
-#                 gstin_groups[key]['taxable_value'] += float(line.get('taxable_amount', 0))
-#                 gstin_groups[key]['cgst'] += float(line.get('cgst', 0))
-#                 gstin_groups[key]['sgst'] += float(line.get('sgst', 0))
-#                 gstin_groups[key]['igst'] += float(line.get('igst', 0))
-#                 gstin_groups[key]['total_gst'] += float(line.get('total_gst', 0))
-            
-#             gst_summary = list(gstin_groups.values())
-        
-#         attachments = []
-            
-#         enhanced_context = {
-#             'invoice': invoice,
-#             'supplier': supplier,
-#             'payments': payments,
-#             'gst_summary': gst_summary,
-#             'attachments': attachments,
-#             'subtotal_sum': subtotal_sum,
-#             'taxable_value_sum': taxable_value_sum,
-#             'po_data': po_data,
-#             'branch_context': getattr(g, 'branch_context', None),
-            
-#             # NEW: Payment integration context
-#             'can_create_payment': invoice.get('payment_status') != 'paid',
-#             'payment_url': url_for('supplier_views.record_payment', invoice_id=invoice.get('invoice_id')),
-#             'payment_config': PAYMENT_CONFIG,
-#             'pending_amount': float(invoice.get('balance_due', 0))
-#         }
-        
-#         return render_template('supplier/view_supplier_invoice.html', **enhanced_context)
-#     except Exception as e:
-#         current_app.logger.error(f"Error in view_supplier_invoice: {str(e)}", exc_info=True)
-#         flash(f"Error retrieving supplier invoice details: {str(e)}", "error")
-#         return redirect(url_for('supplier_views.supplier_invoice_list'))
 
 @supplier_views_bp.route('/purchase-orders', methods=['GET'])
 @login_required
@@ -958,32 +714,6 @@ def create_purchase_order():
     """Alias for add_purchase_order for template consistency."""
     return add_purchase_order()
 
-
-@supplier_views_bp.route('/purchase-order/approve/<po_id>', methods=['GET', 'POST'])
-@login_required
-@require_web_branch_permission('purchase_order', 'edit', branch_source='entity')  # NEW: Entity-based branch detection
-def approve_purchase_order(po_id):
-    """Approve a purchase order"""
-    # REMOVED: Manual permission check - decorator handles it now
-    # OLD: if not has_permission(current_user, 'purchase_order', 'edit'):
-    
-    try:
-        # Import service locally
-        from app.services.supplier_service import update_purchase_order_status
-        
-        result = update_purchase_order_status(
-            po_id=uuid.UUID(po_id),
-            status='approved',
-            hospital_id=current_user.hospital_id,
-            current_user_id=current_user.user_id
-        )
-        
-        flash('Purchase order approved successfully', 'success')
-        return redirect(url_for('supplier_views.view_purchase_order', po_id=po_id))
-    except Exception as e:
-        current_app.logger.error(f"Error approving PO: {str(e)}", exc_info=True)
-        flash(f"Error approving purchase order: {str(e)}", "error")
-        return redirect(url_for('supplier_views.view_purchase_order', po_id=po_id))
 
 @supplier_views_bp.route('/purchase-order/view/<po_id>', methods=['GET'])
 @login_required
@@ -1196,7 +926,8 @@ def cancel_purchase_order(po_id):
         )
         
         flash('Purchase order cancelled successfully', 'success')
-        return redirect(url_for('supplier_views.view_purchase_order', po_id=po_id))
+        return redirect(url_for('universal_views.universal_detail_view', 
+                       entity_type='purchase_orders', item_id=po_id))
         
     except Exception as e:
         flash(f"Error cancelling purchase order: {str(e)}", "error")
@@ -3654,3 +3385,287 @@ def api_validate_purchase_price():
     except Exception as e:
         current_app.logger.error(f"Error validating price: {str(e)}")
         return jsonify({'error': 'Validation failed'}), 500
+
+@supplier_views_bp.route('/purchase-order/delete/<po_id>', methods=['GET', 'POST'])
+@login_required
+@require_web_branch_permission('purchase_order', 'delete', branch_source='entity')
+def delete_purchase_order(po_id):
+    """Soft delete a purchase order using SoftDeleteMixin (only draft status allowed)"""
+    try:
+        # Import service locally
+        from app.services.supplier_service import get_purchase_order_by_id
+        from app.services.database_service import get_db_session
+        from app.models.transaction import PurchaseOrderHeader
+        
+        # Get PO details first for validation
+        po_data = get_purchase_order_by_id(
+            po_id=uuid.UUID(po_id),
+            hospital_id=current_user.hospital_id
+        )
+        
+        if not po_data:
+            flash("Purchase order not found", "error")
+            return redirect(url_for('universal_views.universal_list_view', 
+                                  entity_type='purchase_orders'))
+        
+        # Check if PO is in draft status
+        if po_data.get('status') != 'draft':
+            flash('Only draft purchase orders can be deleted', 'error')
+            return redirect(url_for('universal_views.universal_detail_view', 
+                                  entity_type='purchase_orders', item_id=po_id))
+        
+        # ✅ NEW: Use SoftDeleteMixin for consistent deletion
+        with get_db_session() as session:
+            po_uuid = uuid.UUID(po_id)
+            
+            # Get the PO object
+            po = session.query(PurchaseOrderHeader).filter_by(
+                po_id=po_uuid,
+                hospital_id=current_user.hospital_id
+            ).first()
+            
+            if not po:
+                flash("Purchase order not found", "error")
+                return redirect(url_for('universal_views.universal_list_view', 
+                                    entity_type='purchase_orders'))
+            
+            # Store PO number before deletion
+            po_number = po.po_number
+            
+            # ✅ USE SOFTDELETEMIXIN: Replaces manual status/flag setting
+            po.soft_delete(
+                user_id=current_user.user_id,
+                reason=f"User requested deletion of draft PO {po_number}",
+                cascade_to_children=True  # Will automatically delete PO lines
+            )
+            
+            # Commit MUST happen before any other operations
+            session.commit()
+            
+            # Now we can show flash message
+            flash(f'Purchase order {po_number} deleted successfully', 'success')
+
+        # Outside the with block - cache invalidation
+        try:
+            from app.engine.universal_services import get_universal_service
+            po_service = get_universal_service('purchase_orders')
+            if hasattr(po_service, 'invalidate_cache'):
+                po_service.invalidate_cache(str(po_id))
+            logger.info(f"Cache invalidated for deleted PO {po_id}")
+        except Exception as cache_error:
+            logger.warning(f"Could not invalidate cache: {cache_error}")
+
+        return redirect(url_for('universal_views.universal_list_view', 
+                            entity_type='purchase_orders'))
+        
+    except Exception as e:
+        current_app.logger.error(f"Error deleting PO: {str(e)}", exc_info=True)
+        flash(f"Error deleting purchase order: {str(e)}", "error")
+        return redirect(url_for('universal_views.universal_detail_view', 
+                              entity_type='purchase_orders', item_id=po_id))
+
+@supplier_views_bp.route('/purchase-order/restore/<po_id>', methods=['GET', 'POST'])
+@login_required
+@require_web_branch_permission('purchase_order', 'delete', branch_source='entity')
+def restore_purchase_order(po_id):
+    """Restore a soft-deleted purchase order using SoftDeleteMixin"""
+    try:
+        from app.services.database_service import get_db_session
+        from app.models.transaction import PurchaseOrderHeader
+        
+        with get_db_session() as session:
+            po_uuid = uuid.UUID(po_id)
+            
+            # Get the deleted PO (must be deleted)
+            po = session.query(PurchaseOrderHeader).filter_by(
+                po_id=po_uuid,
+                hospital_id=current_user.hospital_id
+            ).filter(
+                PurchaseOrderHeader.is_deleted == True  # Only deleted POs
+            ).first()
+            
+            if not po:
+                flash("Deleted purchase order not found", "error")
+                return redirect(url_for('universal_views.universal_list_view', 
+                                      entity_type='purchase_orders'))
+            
+            # Store PO details for message
+            po_number = po.po_number
+            
+            # ✅ USE SOFTDELETEMIXIN undelete method
+            po.undelete(
+                user_id=current_user.user_id,
+                reason=f"User requested restoration of PO {po_number}",
+                cascade_to_children=True  # Will restore PO lines too
+            )
+            
+            session.commit()
+            
+        flash(f'Purchase order {po_number} restored successfully', 'success')
+        
+        # Invalidate cache after restoration
+        try:
+            from app.engine.universal_services import get_universal_service
+            po_service = get_universal_service('purchase_orders')
+            if hasattr(po_service, 'invalidate_cache'):
+                po_service.invalidate_cache(str(po_id))
+            logger.info(f"Cache invalidated for restored PO {po_id}")
+        except Exception as cache_error:
+            logger.warning(f"Could not invalidate cache: {cache_error}")
+        
+        return redirect(url_for('universal_views.universal_detail_view', 
+                              entity_type='purchase_orders', item_id=po_id))
+        
+    except Exception as e:
+        current_app.logger.error(f"Error restoring PO: {str(e)}", exc_info=True)
+        flash(f"Error restoring purchase order: {str(e)}", "error")
+        return redirect(url_for('universal_views.universal_list_view', 
+                              entity_type='purchase_orders'))
+
+@supplier_views_bp.route('/purchase-order/approve/<po_id>', methods=['GET', 'POST'])
+@login_required
+@require_web_branch_permission('purchase_order', 'approve', branch_source='entity')
+def approve_purchase_order(po_id):
+    """Approve a purchase order using ApprovalMixin"""
+    try:
+        from app.services.database_service import get_db_session
+        from app.models.transaction import PurchaseOrderHeader
+        
+        with get_db_session() as session:
+            po = session.query(PurchaseOrderHeader).filter_by(
+                po_id=uuid.UUID(po_id),
+                hospital_id=current_user.hospital_id
+            ).first()
+            
+            if not po:
+                flash("Purchase order not found", "error")
+                return redirect(url_for('universal_views.universal_list_view', 
+                                      entity_type='purchase_orders'))
+            
+            if po.status != 'draft':
+                flash("Only draft purchase orders can be approved", "error")
+                # Check if request came from list view
+                if request.referrer and '/list' in request.referrer:
+                    return redirect(url_for('universal_views.universal_list_view', 
+                                        entity_type='purchase_orders'))
+                else:
+                    return redirect(url_for('universal_views.universal_detail_view', 
+                                        entity_type='purchase_orders', item_id=po_id))
+            
+            # ✅ USE APPROVALMIXIN: Replaces manual approval tracking
+            po.approve(
+                approver_id=current_user.user_id,
+                notes=f"Purchase order approved via web interface"
+            )
+            # This automatically sets: approved_by, approved_at, status='approved', updated audit fields
+            
+            session.commit()
+            flash('Purchase order approved successfully', 'success')
+
+            # Invalidate cache after approval - ENHANCED
+            try:
+                # Method 1: Try service-level cache invalidation
+                from app.engine.universal_services import get_universal_service
+                po_service = get_universal_service('purchase_orders')
+                if hasattr(po_service, 'after_status_change'):
+                    po_service.after_status_change(str(po_id), 'approved')
+                    logger.info(f"Called after_status_change for PO {po_id}")
+                elif hasattr(po_service, 'invalidate_cache'):
+                    po_service.invalidate_cache(str(po_id))
+                    logger.info(f"Called invalidate_cache for PO {po_id}")
+                
+                # Method 2: Direct cache manager invalidation (more thorough)
+                from app.engine.universal_service_cache import get_service_cache_manager
+                cache_manager = get_service_cache_manager()
+                if cache_manager:
+                    # Invalidate all purchase_orders cache entries
+                    invalidated = cache_manager.invalidate_entity_cache('purchase_orders', cascade=True)
+                    logger.info(f"Invalidated {invalidated} cache entries for purchase_orders")
+                
+                logger.info(f"✅ Cache successfully invalidated for approved PO {po_id}")
+            except Exception as cache_error:
+                logger.error(f"Cache invalidation error: {cache_error}", exc_info=True)
+                # Fallback: Try alternative methods
+                try:
+                    from app.engine.universal_service_cache import invalidate_service_cache_for_entity
+                    invalidate_service_cache_for_entity('purchase_orders', cascade=True)
+                    logger.info(f"Used fallback cache invalidation for PO {po_id}")
+                except:
+                    pass
+            
+        return redirect(url_for('universal_views.universal_detail_view', 
+                              entity_type='purchase_orders', item_id=po_id))
+                              
+    except Exception as e:
+        current_app.logger.error(f"Error approving PO: {str(e)}", exc_info=True)
+        flash(f"Error approving purchase order: {str(e)}", "error")
+        return redirect(url_for('universal_views.universal_detail_view', 
+                              entity_type='purchase_orders', item_id=po_id))
+
+
+# ✅ Unapprove route using ApprovalMixin
+@supplier_views_bp.route('/purchase-order/unapprove/<po_id>', methods=['GET', 'POST'])
+@login_required
+@require_web_branch_permission('purchase_order', 'approve', branch_source='entity')
+def unapprove_purchase_order(po_id):
+    """Unapprove a purchase order using ApprovalMixin (only if no invoices exist)"""
+    try:
+        from app.services.database_service import get_db_session
+        from app.models.transaction import PurchaseOrderHeader, SupplierInvoice
+        
+        with get_db_session() as session:
+            po = session.query(PurchaseOrderHeader).filter_by(
+                po_id=uuid.UUID(po_id),
+                hospital_id=current_user.hospital_id
+            ).first()
+            
+            if not po:
+                flash("Purchase order not found", "error")
+                return redirect(url_for('universal_views.universal_list_view', 
+                                      entity_type='purchase_orders'))
+            
+            if po.status != 'approved':
+                flash("Only approved purchase orders can be unapproved", "error")
+                return redirect(url_for('universal_views.universal_detail_view', 
+                                      entity_type='purchase_orders', item_id=po_id))
+            
+            # Check if invoices exist
+            invoice_count = session.query(SupplierInvoice).filter_by(
+                po_id=uuid.UUID(po_id)
+            ).count()
+            
+            if invoice_count > 0:
+                flash('Cannot unapprove purchase order: Invoices have been raised against this PO', 'error')
+                return redirect(url_for('universal_views.universal_detail_view', 
+                                      entity_type='purchase_orders', item_id=po_id))
+            
+            # ✅ USE APPROVALMIXIN: Consistent unapproval
+            po.unapprove(
+                user_id=current_user.user_id,
+                reason="User requested unapproval via web interface"
+            )
+            # This automatically clears: approved_by, approved_at, sets status='draft'
+            
+            session.commit()
+            flash('Purchase order unapproved successfully', 'success')
+
+            # Invalidate cache after unapproval
+            try:
+                from app.engine.universal_services import get_universal_service
+                po_service = get_universal_service('purchase_orders')
+                if hasattr(po_service, 'after_status_change'):
+                    po_service.after_status_change(str(po_id), 'draft')  # FIXED - correct status
+                elif hasattr(po_service, 'invalidate_cache'):
+                    po_service.invalidate_cache(str(po_id))
+                logger.info(f"Cache invalidated for unapproved PO {po_id}")  # FIXED message
+            except Exception as cache_error:
+                logger.warning(f"Could not invalidate cache: {cache_error}")
+            
+        return redirect(url_for('universal_views.universal_detail_view', 
+                              entity_type='purchase_orders', item_id=po_id))
+                              
+    except Exception as e:
+        current_app.logger.error(f"Error unapproving PO: {str(e)}", exc_info=True)
+        flash(f"Error unapproving purchase order: {str(e)}", "error")
+        return redirect(url_for('universal_views.universal_detail_view', 
+                              entity_type='purchase_orders', item_id=po_id))

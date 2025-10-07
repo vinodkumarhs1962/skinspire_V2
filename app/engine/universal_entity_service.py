@@ -170,7 +170,7 @@ class UniversalEntityService(ABC):
             query = query.filter(self.model_class.branch_id == branch_id)
         
         # ✅ ENHANCED: Universal soft delete filter supporting multiple field names
-        show_deleted = self._get_user_show_deleted_preference(user)
+        show_deleted = self.get_user_show_deleted_preference(user)
         
         if not show_deleted:
             # Check for multiple possible soft delete fields (entity-agnostic)
@@ -183,7 +183,7 @@ class UniversalEntityService(ABC):
         
         return query
 
-    def _get_user_show_deleted_preference(self, user: Optional[Any] = None) -> bool:
+    def get_user_show_deleted_preference(self, user: Optional[Any] = None) -> bool:
         """
         ✅ NEW: Universal method to get user's show_deleted preference
         Entity-agnostic with multiple fallback strategies

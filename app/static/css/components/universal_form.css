@@ -612,3 +612,240 @@ small.text-gray-500 {
 .section-header i.fa-file-invoice { color: #8b5cf6; }
 .section-header i.fa-university { color: #ec4899; }
 .section-header i.fa-business-time { color: #ef4444; }
+
+
+
+/* Action column width and container */
+/* Action column width and container - increased for more actions */
+.actions-column-fixed {
+    width: 140px !important;
+    min-width: 140px !important;
+    max-width: 140px !important;
+    text-align: center !important;
+    padding: 6px 4px !important;
+    vertical-align: middle !important;
+    white-space: nowrap;
+    overflow: visible !important;
+}
+
+/* Container for list view with horizontal scroll */
+.universal-table-container {
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 1px; /* Prevents scroll bar from being hidden */
+}
+
+/* Ensure table doesn't break layout */
+.universal-data-table {
+    min-width: 100%;
+    table-layout: auto;
+}
+
+/* FIXED: Compact action container */
+.universal-table-actions-improved {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 3px !important;
+    flex-wrap: nowrap;
+}
+
+/* FIXED: Smaller action buttons with transparent background */
+.btn-action-sm {
+    padding: 3px 5px !important;
+    min-width: 24px !important;
+    height: 16px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 3px !important;
+    border: 1px solid transparent;
+    background-color: transparent !important;
+    text-decoration: none !important;
+    transition: all 0.15s ease;
+    font-size: 0 !important;
+}
+
+/* Button color variations - Colored icons only */
+.btn-action-sm.btn-info .action-icon-sm {
+    color: #17a2b8 !important;
+}
+
+.btn-action-sm.btn-info:hover {
+    background-color: rgba(23, 162, 184, 0.1) !important;
+    border-color: #17a2b8 !important;
+}
+
+.btn-action-sm.btn-primary .action-icon-sm {
+    color: #007bff !important;
+}
+
+.btn-action-sm.btn-primary:hover {
+    background-color: rgba(0, 123, 255, 0.1) !important;
+    border-color: #007bff !important;
+}
+
+.btn-action-sm.btn-warning .action-icon-sm {
+    color: #ffc107 !important;
+}
+
+.btn-action-sm.btn-warning:hover {
+    background-color: rgba(255, 193, 7, 0.1) !important;
+    border-color: #ffc107 !important;
+}
+
+.btn-action-sm.btn-danger .action-icon-sm {
+    color: #dc3545 !important;
+}
+
+.btn-action-sm.btn-danger:hover {
+    background-color: rgba(220, 53, 69, 0.1) !important;
+    border-color: #dc3545 !important;
+}
+
+.btn-action-sm.btn-success .action-icon-sm {
+    color: #28a745 !important;
+}
+
+.btn-action-sm.btn-success:hover {
+    background-color: rgba(40, 167, 69, 0.1) !important;
+    border-color: #28a745 !important;
+}
+
+.btn-action-sm.btn-secondary .action-icon-sm {
+    color: #6c757d !important;
+}
+
+.btn-action-sm.btn-secondary:hover {
+    background-color: rgba(108, 117, 125, 0.1) !important;
+    border-color: #6c757d !important;
+}
+
+/* FIXED: Smaller icons */
+.action-icon-sm {
+    font-size: 17px !important;  /* Increased from 10px */
+    width: 17px !important;       /* Increased from 10px */
+    height: 17px !important;      /* Increased from 10px */
+    line-height: 1 !important;
+    margin: 0 !important;
+    display: inline-block !important;
+}
+
+/* Button color variations - Info (same as others, no special height) */
+.btn-action-sm.btn-info .action-icon-sm {
+    color: #17a2b8 !important;
+}
+
+.btn-action-sm.btn-info:hover {
+    background-color: rgba(23, 162, 184, 0.1) !important;
+    border-color: #17a2b8 !important;
+}
+
+/* Button color variations - Primary */
+.btn-action-sm.btn-primary {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.btn-action-sm.btn-primary:hover {
+    background-color: #0056b3;
+    border-color: #004085;
+}
+
+/* Button color variations - Warning */
+.btn-action-sm.btn-warning {
+    background-color: #ffc107;
+    color: #212529;
+    border-color: #ffc107;
+}
+
+.btn-action-sm.btn-warning:hover {
+    background-color: #e0a800;
+    border-color: #d39e00;
+}
+
+/* Button color variations - Danger */
+.btn-action-sm.btn-danger {
+    background-color: #dc3545;
+    color: white;
+    border-color: #dc3545;
+}
+
+.btn-action-sm.btn-danger:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+}
+
+/* Button color variations - Success */
+.btn-action-sm.btn-success {
+    background-color: #28a745;
+    color: white;
+    border-color: #28a745;
+}
+
+.btn-action-sm.btn-success:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+}
+
+/* Button color variations - Secondary */
+.btn-action-sm.btn-secondary {
+    background-color: #6c757d;
+    color: white;
+    border-color: #6c757d;
+}
+
+.btn-action-sm.btn-secondary:hover {
+    background-color: #5a6268;
+    border-color: #545b62;
+}
+
+/* Table header styling */
+.universal-table thead th:last-child {
+    width: 110px !important;
+    min-width: 110px !important;
+    text-align: center !important;
+}
+
+/* Focus states for accessibility */
+.btn-action-sm:focus {
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25) !important;
+    outline: none !important;
+}
+
+/* Responsive adjustments for mobile */
+@media (max-width: 768px) {
+    .actions-column-fixed {
+        width: 90px !important;
+        min-width: 90px !important;
+    }
+    
+    .universal-table-actions-improved {
+        gap: 2px !important;
+    }
+    
+    .btn-action-sm {
+        min-width: 20px !important;
+        height: 20px !important;
+        padding: 2px 3px !important;
+    }
+    
+    .action-icon-sm {
+        font-size: 9px !important;
+    }
+}
+
+/* Disabled action buttons */
+.btn-action-sm.disabled {
+    opacity: 0.4 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+
+.btn-action-sm.disabled:hover {
+    transform: none !important;
+    box-shadow: none !important;
+}

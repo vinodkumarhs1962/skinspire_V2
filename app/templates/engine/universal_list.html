@@ -523,6 +523,7 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                             {% for column in table_columns %}
                                 <th class="universal-table-header {% if column.sortable %}universal-sortable-header{% endif %} {{ column.css_class }}"
                                     {% if column.sortable %}onclick="handleUniversalSort('{{ column.name }}')"{% endif %}
+                                    title="{{ column.label }}{% if column.sortable %} - Click to sort{% endif %}"
                                     style="{% if column.width and column.width != 'auto' %}width: {{ column.width }};{% endif %} text-align: {% if column.field_type in ['currency', 'amount', 'decimal', 'number'] %}right{% else %}{{ column.align|default('left') }}{% endif %};">
                                     {{ column.label }}
                                     {% if column.sortable %}
@@ -541,7 +542,6 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                         {% for item in items_list %}
                         {% set outer_loop_index = loop.index0 %}
                         <tr class="universal-table-row universal-clickable-row {% if item.is_deleted %}deleted-row{% endif %}" 
-                            onclick="handleRowClick(event, '{{ item.get(assembled_data.entity_config.primary_key, '') }}')"
                             {% if item.is_deleted %}title="This record has been deleted"{% endif %}>
                             
                             <!-- DYNAMIC CELLS BASED ON COLUMNS -->
@@ -561,6 +561,7 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                                     {% endif %}
                                 {% endif %}
                                 <td class="{{ column.css_class }} {{ column.css_classes }}" 
+                                    onclick="handleRowClick(event, '{{ item.get(assembled_data.entity_config.primary_key, '') }}')"
                                     style="{% if column.width and column.width != 'auto' %}width: {{ column.width }};{% endif %} text-align: {% if column.field_type in ['currency', 'amount', 'decimal', 'number'] %}right{% else %}{{ column.align|default('left') }}{% endif %};"
                                     title="{{ cell_value|striptags if cell_value and cell_value not in ['', '—', '&mdash;', 'â€"'] else '' }}">
                                     
@@ -642,58 +643,90 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                                         <!-- Status badges need safe filter to render HTML -->
                                         {{ cell_value|safe }}
                                     {% else %}
-                                            
-                                        <!-- Default text display -->
-                                        {{ cell_value|default('—', true)|safe if '&' in (cell_value|string) else cell_value|default('—', true) }}
-                                        
+                                        {# ✅ NEW: Middle truncation for text fields - shows first 10 and last 4 chars #}
+                                        {% set cell_text = cell_value|default('—', true)|string %}
+                                        {% if cell_text and cell_text not in ['—', '', '&mdash;'] and cell_text|length > 15 %}
+                                            {% set start_chars = cell_text[:10] %}
+                                            {% set end_chars = cell_text[-4:] %}
+                                            <span class="truncate-middle-wrapper" title="{{ cell_text }}">
+                                                <span class="truncate-middle-start">{{ start_chars }}</span><span class="truncate-middle-ellipsis">...</span><span class="truncate-middle-end">{{ end_chars }}</span>
+                                            </span>
+                                        {% else %}
+                                            <!-- Default text display for short text -->
+                                            {{ cell_value|default('—', true)|safe if '&' in (cell_value|string) else cell_value|default('—', true) }}
+                                        {% endif %}
                                     {% endif %}
                                 </td>
                             {% endfor %}
                             
                             <!-- Smart Actions column -->
-                            <td class="actions-column" onclick="event.stopPropagation()">
-                                <div class="universal-table-actions">
+                            <td class="actions-column-fixed" onclick="event.stopPropagation()">
+                                <div class="universal-table-actions-improved">
                                     {% set item_id = item.get(assembled_data.entity_config.primary_key) %}
                                     
-                                    <!-- View Button (Always show for all entities) -->
-                                    {% if assembled_data.entity_config.enable_detail_view != false %}
-                                        <a href="{{ get_crud_url(assembled_data.entity_config.entity_type, 'view', item_id) }}" 
-                                        class="btn-info btn-sm" title="View">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
-                                    {% endif %}
+                                    <!-- Always show View button -->
+                                    <a href="{{ get_crud_url(assembled_data.entity_config.entity_type, 'view', item_id) }}" 
+                                    class="btn-info btn-action-sm" title="View">
+                                        <i class="fas fa-eye action-icon-sm"></i>
+                                    </a>
                                     
-                                    <!-- Edit Button (Master entities only) -->
-                                    {% if can_edit(assembled_data.entity_config.entity_type) and not item.get('deleted_flag') and not item.get('is_deleted') %}
-                                        {% set edit_url = get_crud_url(assembled_data.entity_config.entity_type, 'update', item_id) %}
-                                        {% if edit_url != '#' %}
-                                            <a href="{{ edit_url }}" 
-                                            class="btn-primary btn-sm" title="Edit">
-                                                <i class="fas fa-edit"></i>
-                                            </a>
-                                        {% endif %}
-                                    {% endif %}
-                                    
-                                    <!-- Custom Actions from Configuration -->
-                                    {% for action in assembled_data.entity_config.actions %}
-                                        {% if action.show_in_list and action.id not in ['view', 'edit', 'delete', 'create'] %}
-                                            {% set action_url = action.get_url(item, assembled_data.entity_config) %}
-                                            {% if action.confirmation_required %}
-                                                <a href="#" 
-                                                onclick="confirmAction('{{ action_url }}', '{{ action.confirmation_message }}'); return false;"
-                                                class="{{ action.button_type.value }} btn-sm" 
-                                                title="{{ action.label }}">
-                                                    <i class="{{ action.icon }}"></i>
-                                                </a>
-                                            {% else %}
-                                                <a href="{{ action_url }}" 
-                                                class="{{ action.button_type.value }} btn-sm" 
-                                                title="{{ action.label }}">
-                                                    <i class="{{ action.icon }}"></i>
-                                                </a>
+                                    <!-- Only show other actions if not deleted -->
+                                    {% if not item.get('is_deleted') and not item.get('deleted_flag') %}
+                                        <!-- Show configured inline actions based on conditions -->
+                                        {% for action in assembled_data.entity_config.actions %}
+                                            {% if action.show_in_list and (not action.display_type or action.display_type.value == 'button') %}
+                                                {# Evaluate ALL conditions - all must pass #}
+                                                {% set show_action = true %}
+                                                
+                                                {% if action.conditions %}
+                                                    {% for field, allowed_values in action.conditions.items() %}
+                                                        {# Skip fields that don't exist in the item #}
+                                                        {% if field in ['can_be_approved', 'can_be_deleted', 'can_be_unapproved', 'has_invoice'] %}
+                                                            {# Skip virtual fields that might not exist #}
+                                                        {% else %}
+                                                            {% set field_value = item.get(field) %}
+                                                            {# ✅ FIXED: Handle None case for is_deleted - treat as False #}
+                                                            {% if field == 'is_deleted' and field_value is none %}
+                                                                {% set field_value = false %}
+                                                            {% endif %}
+                                                            {% if field_value not in allowed_values %}
+                                                                {% set show_action = false %}
+                                                            {% endif %}
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                {% endif %}
+                                                
+                                                {# Additional check to prevent both approve and unapprove showing #}
+                                                {% if action.id == 'approve' and item.get('po_status') != 'draft' %}
+                                                    {% set show_action = false %}
+                                                {% elif action.id == 'unapprove' and item.get('po_status') != 'approved' %}
+                                                    {% set show_action = false %}
+                                                {% elif action.id == 'cancel' and item.get('po_status') == 'cancelled' %}
+                                                    {% set show_action = false %}
+                                                {% endif %}
+                                                
+                                                {% if show_action %}
+                                                    {% set action_url = action.get_url(item, assembled_data.entity_config) %}
+                                                    {% set btn_type = action.button_type.value|replace('btn-', '') %}
+                                                    
+                                                    {% if action.confirmation_required %}
+                                                        <a href="#" 
+                                                        onclick="confirmAction('{{ action_url }}', '{{ action.confirmation_message }}'); return false;"
+                                                        class="btn-action-sm btn-{{ btn_type }}"
+                                                        title="{{ action.label }}">
+                                                            <i class="{{ action.icon }} action-icon-sm"></i>
+                                                        </a>
+                                                    {% else %}
+                                                        <a href="{{ action_url }}" 
+                                                        class="btn-action-sm btn-{{ btn_type }}"
+                                                        title="{{ action.label }}">
+                                                            <i class="{{ action.icon }} action-icon-sm"></i>
+                                                        </a>
+                                                    {% endif %}
+                                                {% endif %}
                                             {% endif %}
-                                        {% endif %}
-                                    {% endfor %}
+                                        {% endfor %}
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
@@ -1052,8 +1085,9 @@ function getCSRFToken() {
     
     return '';
 }
-</script>
 
+
+</script>
 
 </div> <!-- ✅ Close main container -->
 

@@ -1128,21 +1128,23 @@ def search_purchase_orders(
     status: Optional[str] = None,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
-    branch_id: Optional[uuid.UUID] = None,  # NEW: Added branch filter
-    current_user_id: Optional[str] = None,  # NEW: For auto-branch detection
+    branch_id: Optional[uuid.UUID] = None,
+    current_user_id: Optional[str] = None,
+    include_deleted: bool = False,  # ✅ NEW: Control deleted record inclusion
     page: int = 1,
     per_page: int = 20,
     session: Optional[Session] = None
 ) -> Dict:
     """
-    Search purchase orders with filtering and pagination - UPDATED to use branch_service
+    Search purchase orders with filtering and pagination - ENHANCED with soft delete support
     """
     logger.info(f"Searching purchase orders for hospital {hospital_id}")
     logger.debug(f"Filters: supplier={supplier_id}, po={po_number}, status={status}, branch={branch_id}")
+    logger.debug(f"Include deleted: {include_deleted}")
     logger.debug(f"Date range: {start_date} to {end_date}")
     logger.debug(f"Pagination: page={page}, per_page={per_page}")
     
-    # NEW: Use branch service for branch determination
+    # Use branch service for branch determination (unchanged)
     if not branch_id and current_user_id:
         accessible_branches = get_user_accessible_branches(current_user_id, hospital_id)
         if len(accessible_branches) == 1:
@@ -1151,13 +1153,13 @@ def search_purchase_orders(
     if session is not None:
         return _search_purchase_orders(
             session, hospital_id, supplier_id, po_number, 
-            status, start_date, end_date, branch_id, page, per_page
+            status, start_date, end_date, branch_id, include_deleted, page, per_page
         )
     
     with get_db_session() as new_session:
         return _search_purchase_orders(
             new_session, hospital_id, supplier_id, po_number, 
-            status, start_date, end_date, branch_id, page, per_page
+            status, start_date, end_date, branch_id, include_deleted, page, per_page
         )
 
 def _search_purchase_orders(
@@ -1168,20 +1170,26 @@ def _search_purchase_orders(
     status: Optional[str] = None,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
-    branch_id: Optional[uuid.UUID] = None,  # NEW: Added parameter
+    branch_id: Optional[uuid.UUID] = None,
+    include_deleted: bool = False,  # ✅ NEW: Parameter added
     page: int = 1,
     per_page: int = 20
 ) -> Dict:
     """
-    Internal function to search purchase orders within a session - UPDATED with branch support
+    Internal function to search purchase orders within a session - ENHANCED with soft delete filtering
     """
     try:
-        logger.debug("Building purchase order search query with branch support")
+        logger.debug("Building purchase order search query with branch and soft delete support")
         
-        # Base query
+        # Base query (unchanged)
         query = session.query(PurchaseOrderHeader).filter_by(hospital_id=hospital_id)
         
-        # NEW: Add branch filter if specified
+        # ✅ NEW: Consistent soft delete filtering
+        if not include_deleted:
+            logger.debug("Filtering out soft deleted records")
+            query = query.filter(PurchaseOrderHeader.is_deleted == False)
+        
+        # Add branch filter if specified (unchanged)
         if branch_id:
             logger.debug(f"Filtering by branch: {branch_id}")
             query = query.filter(PurchaseOrderHeader.branch_id == branch_id)
@@ -1225,18 +1233,27 @@ def _search_purchase_orders(
         for po in pos:
             po_dict = get_entity_dict(po)
             
-            # Get the supplier name
+            # Get the supplier name (unchanged)
             supplier = session.query(Supplier).filter_by(supplier_id=po.supplier_id).first()
             if supplier:
                 po_dict['supplier_name'] = supplier.supplier_name
                 
-            # Add line count
-            line_count = session.query(PurchaseOrderLine).filter_by(po_id=po.po_id).count()
+            # ✅ ENHANCED: Line count with soft delete awareness
+            line_count = session.query(PurchaseOrderLine).filter_by(
+                po_id=po.po_id
+            ).filter(
+                PurchaseOrderLine.is_deleted == False  # Only count active lines
+            ).count()
             po_dict['line_count'] = line_count
+            
+            # ✅ NEW: Add soft delete status for UI display
+            po_dict['is_deleted'] = bool(po.is_deleted)
+            po_dict['deleted_at'] = po.deleted_at
+            po_dict['deleted_by'] = po.deleted_by
             
             po_list.append(po_dict)
         
-        # Prepare pagination info
+        # Prepare pagination info (unchanged)
         pagination = {
             'page': page,
             'per_page': per_page,
@@ -1244,7 +1261,7 @@ def _search_purchase_orders(
             'total_pages': (total_count + per_page - 1) // per_page
         }
         
-        logger.info(f"Search completed: {len(po_list)} purchase orders returned")
+        logger.info(f"Search completed: {len(po_list)} purchase orders returned (include_deleted={include_deleted})")
         
         return {
             'purchase_orders': po_list,

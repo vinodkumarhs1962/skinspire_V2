@@ -64,8 +64,16 @@ class PurchaseOrderView(Base):
     # Status and workflow
     po_status = Column(String(20))
     status_order = Column(Integer)
+
+    # Approval tracking fields (from ApprovalMixin in PurchaseOrderHeader)
     approved_by = Column(String(50))
+    approved_at = Column(DateTime(timezone=True))
     
+    # Soft delete fields (from SoftDeleteMixin in PurchaseOrderHeader)
+    is_deleted = Column(Boolean, default=False)
+    deleted_at = Column(DateTime(timezone=True))
+    deleted_by = Column(String(50))
+
     # Reference information
     quotation_id = Column(String(50))
     

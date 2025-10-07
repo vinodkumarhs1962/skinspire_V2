@@ -681,6 +681,16 @@ class EnhancedUniversalDataAssembler:
             
             for field_name, allowed_values in action_config.conditions.items():
                 item_value = item.get(field_name)
+                
+                # ✅ FIXED: Ensure allowed_values is a list
+                if not isinstance(allowed_values, list):
+                    allowed_values = [allowed_values]
+                
+                # ✅ FIXED: Handle None case for is_deleted field explicitly
+                # When is_deleted is None (field doesn't exist), treat as False (not deleted)
+                if field_name == 'is_deleted' and item_value is None:
+                    item_value = False
+                
                 if item_value not in allowed_values:
                     return False
             
@@ -1075,11 +1085,21 @@ class EnhancedUniversalDataAssembler:
                 return True
             
             for field, allowed_values in action.conditions.items():
+                # Skip virtual/computed fields that might not exist
+                if field in ['can_be_approved', 'can_be_deleted', 'can_be_unapproved', 'has_invoice']:
+                    continue  # Skip these as they may not exist in the view
+                    
                 # Get value from item (works with dict or object)
                 if isinstance(item, dict):
                     actual_value = item.get(field)
                 else:
                     actual_value = getattr(item, field, None)
+                
+                # ✅ FIXED: Handle None case for is_deleted field explicitly
+                # When is_deleted is None (field doesn't exist), treat as False (not deleted)
+                if field == 'is_deleted' and actual_value is None:
+                    actual_value = False
+                    logger.debug(f"Field {field} is None, treating as False (not deleted)")
                 
                 # Ensure allowed_values is a list
                 if not isinstance(allowed_values, list):
@@ -1087,6 +1107,7 @@ class EnhancedUniversalDataAssembler:
                 
                 # Check if value matches any allowed value
                 if actual_value not in allowed_values:
+                    logger.debug(f"Action {action.id} condition failed: {field}={actual_value} not in {allowed_values}")
                     return False
             
             return True
