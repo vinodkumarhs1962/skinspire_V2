@@ -20,5 +20,6 @@
         }
     ],
     "python.defaultInterpreterPath": "C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe",
-    "python.pythonPath": "C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe"
+    "python.pythonPath": "C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe",
+    "python-envs.pythonProjects": []
 }

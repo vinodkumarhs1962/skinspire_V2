@@ -696,13 +696,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     mrpInput.value = mrpValue;
                 }
                 
+                // Auto-populate rate/purchase price if available
+                const lastPurchase = selectedOption.dataset.lastPurchase || '0';
+                const rateInput = row.querySelector('.rate');
+                if (rateInput && lastPurchase !== '0' && parseFloat(lastPurchase) > 0) {
+                    rateInput.value = lastPurchase;
+                }
+                
                 // Get GST from data attribute
-                let gstRate = parseFloat(selectedOption.dataset.gst) || 0;
+                let gstRate = parseFloat(selectedOption.dataset.gstRate) || parseFloat(selectedOption.dataset.gst) || 0;
                 
                 // If GST is 0, try to fetch from backend
-                if (gstRate === 0) {
+                if (gstRate === 0 && selectedOption.dataset.medicineId) {
                     try {
-                        const response = await fetch(`/api/medicine/${selectedOption.value}/gst-info`);
+                        const response = await fetch(`/supplier/api/medicine/${selectedOption.dataset.medicineId}/gst-info`);
                         if (response.ok) {
                             const data = await response.json();
                             gstRate = data.gst_rate || 12.0;
@@ -1030,5 +1037,37 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 100);
     
 }); // End of DOMContentLoaded
+</script>
+<script>
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('medicine-select')) {
+        const row = e.target.closest('tr');
+        
+        if (row) {
+            const selectedOption = e.target.options[e.target.selectedIndex];
+            const medicineId = selectedOption ? selectedOption.dataset.medicineId : null;
+            
+            if (medicineId) {
+                fetch(`/supplier/api/medicine/${medicineId}/gst-info`)
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            const mrp = row.querySelector('.mrp');
+                            if (mrp && data.mrp > 0) {
+                                mrp.value = data.mrp.toFixed(2);
+                                mrp.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                            
+                            const rate = row.querySelector('.rate');
+                            if (rate && data.last_purchase_price > 0) {
+                                rate.value = data.last_purchase_price.toFixed(2);
+                                rate.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                        }
+                    });
+            }
+        }
+    }
+});
 </script>
 {% endblock %}

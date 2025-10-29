@@ -12,6 +12,19 @@
     width: 100%;
 }
 
+td .entity-dropdown-container {
+    min-width: 300px !important;
+}
+
+td .entity-dropdown-search {
+    min-width: 280px !important;
+}
+
+td .entity-dropdown-results {
+    min-width: 500px;
+    max-width: 700px;
+}
+
 /* Hidden input for actual value */
 .entity-dropdown-hidden-input {
     display: none;

@@ -405,29 +405,72 @@ def supplier_invoice_list():
             menu_items=menu_items 
         )
 
-
-
 @supplier_views_bp.route('/invoice/add', methods=['GET', 'POST'])
 @login_required
-@require_web_branch_permission('supplier_invoice', 'add')  # NEW: Branch-aware decorator
+@require_web_branch_permission('supplier_invoice', 'add')
 def add_supplier_invoice():
-    """Create a new supplier invoice using FormController with branch awareness."""
-    # REMOVED: Manual permission check - decorator handles it now
-    # OLD: if not has_permission(current_user, 'supplier_invoice', 'add'):
+    """Create new supplier invoice with branch awareness"""
+    from flask import current_app, request
     
-    # Check if we're coming from a PO (UNCHANGED)
-    po_id = request.args.get('po_id')
-    
-    # Import controller locally (UNCHANGED)
-    from app.controllers.supplier_controller import SupplierInvoiceFormController
-    
-    # Create controller with or without pre-populated PO data (UNCHANGED)
-    if po_id:
-        controller = SupplierInvoiceFormController(po_id=po_id)
-    else:
-        controller = SupplierInvoiceFormController()
+    try:
+        current_app.logger.info(f"========== ADD_SUPPLIER_INVOICE ROUTE HIT ==========")
+        current_app.logger.info(f"Method: {request.method}")
+        current_app.logger.info(f"Form keys: {list(request.form.keys())}")
+        current_app.logger.info(f"Has submit_invoice: {'submit_invoice' in request.form}")
         
-    return controller.handle_request()
+        po_id = request.args.get('po_id')
+        
+        # Check if PO is fully invoiced before proceeding
+        if po_id:
+            from app.services.supplier_service import get_purchase_order_by_id
+            from app.models.transaction import SupplierInvoice
+            from sqlalchemy import func
+            from app.services.database_service import get_db_session
+            import uuid
+            
+            try:
+                po = get_purchase_order_by_id(
+                    po_id=uuid.UUID(po_id),
+                    hospital_id=current_user.hospital_id
+                )
+                
+                if po:
+                    po_total = float(po.get('total_amount', 0))
+                    po_number = po.get('po_number', 'N/A')
+                    
+                    # Check if fully invoiced
+                    with get_db_session() as session:
+                        invoiced_total = session.query(func.sum(SupplierInvoice.total_amount))\
+                            .filter(
+                                SupplierInvoice.po_id == uuid.UUID(po_id),
+                                SupplierInvoice.hospital_id == current_user.hospital_id,
+                                SupplierInvoice.payment_status != 'cancelled'
+                            ).scalar() or 0
+                        
+                        remaining = po_total - float(invoiced_total)
+                        
+                        if remaining <= 0.01:
+                            flash(f"Purchase Order {po_number} is already fully invoiced. No balance remaining.", "warning")
+                            return redirect(url_for('universal_views.universal_list_view', entity_type='purchase_orders'))
+            except Exception as e:
+                current_app.logger.error(f"Error checking PO invoice status: {str(e)}")
+                # Continue anyway if check fails
+        
+        from app.controllers.supplier_controller import SupplierInvoiceFormController
+        
+        if po_id:
+            controller = SupplierInvoiceFormController(po_id=po_id)
+        else:
+            controller = SupplierInvoiceFormController()
+        
+        current_app.logger.info(f"Controller created, calling handle_request...")
+        return controller.handle_request()
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in add_supplier_invoice: {str(e)}", exc_info=True)
+        flash(f"Error loading invoice form: {str(e)}", "error")
+        return redirect(url_for('supplier_views.supplier_invoice_list'))
+
 
 @supplier_views_bp.route('/invoice/view/<invoice_id>', methods=['GET'])
 @login_required
@@ -673,6 +716,18 @@ def add_purchase_order():
         # Handle the request through the controller (UNCHANGED)
         result = controller.handle_request()
         
+        # ✅ Cache invalidation
+        from flask import Response, request
+        if request.method == 'POST' and isinstance(result, Response) and result.status_code == 302:
+            try:
+                from app.engine.universal_service_cache import get_service_cache_manager
+                cache_manager = get_service_cache_manager()
+                if cache_manager:
+                    invalidated = cache_manager.invalidate_entity_cache('purchase_orders', cascade=True)
+                    current_app.logger.info(f"✅ Cache invalidated: {invalidated} entries")
+            except Exception as e:
+                current_app.logger.warning(f"⚠️ Cache failed: {e}")
+
         if isinstance(result, str):
             return result
             
@@ -2485,10 +2540,10 @@ def get_po_items_api(po_id):
         if not po:
             return jsonify({'error': 'Purchase order not found'}), 404
         
-        items = []
+        line_items = []
         if 'line_items' in po:
             for line in po['line_items']:
-                items.append({
+                line_items.append({
                     'medicine_id': str(line.get('medicine_id')),
                     'medicine_name': line.get('medicine_name'),
                     'units': float(line.get('units', 0)),
@@ -2504,15 +2559,16 @@ def get_po_items_api(po_id):
                 })
         
         return jsonify({
-            'items': items,
-            'po_branch_id': str(po.get('branch_id')) if po.get('branch_id') else None  # NEW
+            'success': True,  # ← Add success flag
+            'line_items': line_items,  # ← Correct key name
+            'po_number': po.get('po_number'),
+            'po_branch_id': str(po.get('branch_id')) if po.get('branch_id') else None
         })
     
     except Exception as e:
         current_app.logger.error(f"Error getting PO items: {str(e)}")
         return jsonify({'error': str(e)}), 500
     
-# app/views/supplier_views.py
 
 @supplier_views_bp.route('/api/po/calculate-line', methods=['POST'])
 @login_required
@@ -2536,56 +2592,43 @@ def calculate_po_total():
 
 @supplier_views_bp.route('/api/purchase-order/<po_id>/load-items', methods=['GET'])
 @login_required
-@require_web_branch_permission('purchase_order', 'view', branch_source='entity')  # NEW: Entity-based branch detection
+@require_web_branch_permission('supplier_invoice', 'view')
 def load_po_items(po_id):
-    """Load items from a purchase order for an invoice."""
-    # REMOVED: Manual permission check - decorator handles it now
+    """
+    THIN API ENDPOINT: Load items from a purchase order for an invoice
+    
+    This endpoint delegates to the controller's business logic method.
+    Following Universal Engine architecture: Views route, Controllers orchestrate.
+    
+    Returns:
+        JSON response with PO items (balance quantities) and GST fields
+    """
+    from flask import jsonify, current_app
+    from app.controllers.supplier_controller import SupplierInvoiceFormController
     
     try:
-        # Import service locally
-        from app.services.supplier_service import get_purchase_order_by_id
+        current_app.logger.info(f"API: load-po-items for PO {po_id}")
         
-        po = get_purchase_order_by_id(
-            po_id=uuid.UUID(po_id),
-            hospital_id=current_user.hospital_id
+        # Create controller instance and delegate to business logic
+        controller = SupplierInvoiceFormController(po_id=po_id)
+        result = controller.get_po_items_with_balance(
+            po_id=po_id,
+            include_gst_fields=True
         )
         
-        if not po:
-            return jsonify({'error': 'Purchase order not found'}), 404
-        
-        # Get line items
-        line_items = po.get('line_items', [])
-        
-        # Format for invoice
-        formatted_items = []
-        for item in line_items:
-            formatted_items.append({
-                'medicine_id': str(item.get('medicine_id')),
-                'medicine_name': item.get('medicine_name'),
-                'units': float(item.get('units', 0)),
-                'units_per_pack': float(item.get('units_per_pack', 1)),
-                'pack_purchase_price': float(item.get('pack_purchase_price', 0)),
-                'pack_mrp': float(item.get('pack_mrp', 0)),
-                'hsn_code': item.get('hsn_code'),
-                'gst_rate': float(item.get('gst_rate', 0)),
-                'cgst_rate': float(item.get('cgst_rate', 0)),
-                'sgst_rate': float(item.get('sgst_rate', 0)),
-                'igst_rate': float(item.get('igst_rate', 0)),
-                'branch_id': str(item.get('branch_id')) if item.get('branch_id') else None  # NEW
-            })
-        
-        return jsonify({
-            'success': True,
-            'po_number': po.get('po_number'),
-            'supplier_id': str(po.get('supplier_id')),
-            'supplier_name': po.get('supplier_name', ''),
-            'line_items': formatted_items,
-            'po_branch_id': str(po.get('branch_id')) if po.get('branch_id') else None  # NEW
-        })
-        
+        if result.get('success'):
+            return jsonify(result)
+        else:
+            error_msg = result.get('error', 'Unknown error')
+            current_app.logger.error(f"Controller error: {error_msg}")
+            return jsonify(result), 500
+    
     except Exception as e:
-        current_app.logger.error(f"Error loading PO items: {str(e)}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        current_app.logger.error(f"API endpoint error: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @supplier_views_bp.route('/invoice/cancel/<invoice_id>', methods=['GET', 'POST'])
 @login_required
@@ -3178,7 +3221,9 @@ def get_medicine_gst_info(medicine_id):
                 return jsonify({
                     'success': True,
                     'gst_rate': float(medicine.gst_rate) if medicine.gst_rate else 12.0,
-                    'hsn_code': str(medicine.hsn_code) if medicine.hsn_code else '30049099'
+                    'hsn_code': str(medicine.hsn_code) if medicine.hsn_code else '30049099',
+                    'mrp': float(medicine.mrp or 0),  # ✅ ADDED
+                    'last_purchase_price': float(medicine.last_purchase_price or 0)  # ✅ ADDED
                 })
             
         return jsonify({'success': False, 'gst_rate': 12.0, 'hsn_code': '30049099'})
@@ -3669,3 +3714,231 @@ def unapprove_purchase_order(po_id):
         flash(f"Error unapproving purchase order: {str(e)}", "error")
         return redirect(url_for('universal_views.universal_detail_view', 
                               entity_type='purchase_orders', item_id=po_id))
+    
+@supplier_views_bp.route('/invoice/debug-session', methods=['GET'])
+@login_required
+def debug_invoice_session():
+    """Debug endpoint to check session line items"""
+    from flask import jsonify, session
+    from flask_login import current_user
+    
+    session_key = f'supplier_invoice_line_items_{current_user.user_id}'
+    line_items = session.get(session_key, [])
+    
+    return jsonify({
+        'session_key': session_key,
+        'line_items_count': len(line_items),
+        'line_items': line_items,
+        'all_session_keys': list(session.keys())
+    })
+
+@supplier_views_bp.route('/api/get-supplier-currency', methods=['POST'])
+@login_required
+@require_web_branch_permission('supplier_invoice', 'add')
+def get_supplier_currency():
+    """API endpoint to get supplier's currency and exchange rate"""
+    try:
+        from app.services.database_service import get_db_session
+        from app.models.master import Supplier, CurrencyMaster, Hospital, Branch
+        from app.config.core_definitions import INDIAN_STATES
+        import uuid
+        
+        data = request.json
+        supplier_id = data.get('supplier_id')
+        
+        if not supplier_id:
+            return jsonify({'success': False, 'error': 'Supplier ID required'}), 400
+        
+        # CRITICAL FIX: Get user branch BEFORE opening session
+        from app.services.branch_service import get_user_branch_id
+        user_branch_id = get_user_branch_id(current_user.user_id, current_user.hospital_id)
+        
+        # Single session for all queries
+        with get_db_session(read_only=True) as session:
+            # Get supplier
+            supplier = session.query(Supplier).filter_by(
+                supplier_id=uuid.UUID(supplier_id),
+                hospital_id=current_user.hospital_id
+            ).first()
+            
+            if not supplier:
+                return jsonify({'success': False, 'error': 'Supplier not found'}), 404
+            
+            # Get currency code (default to INR)
+            currency_code = getattr(supplier, 'currency_code', 'INR') or 'INR'
+            supplier_state_code = supplier.state_code
+            supplier_gstin = supplier.gst_registration_number or ''
+            
+            # Extract tax defaults from supplier master
+            reverse_charge_default = False  # Safe default
+            itc_eligible_default = True     # Safe default
+            
+            # Try to get actual values from database if columns exist
+            if hasattr(supplier, 'reverse_charge_applicable'):
+                db_value = supplier.reverse_charge_applicable
+                if db_value is not None:
+                    reverse_charge_default = bool(db_value)
+            
+            if hasattr(supplier, 'default_itc_eligible'):
+                db_value = supplier.default_itc_eligible
+                if db_value is not None:
+                    itc_eligible_default = bool(db_value)
+            
+            # Extract tax type
+            tax_type = supplier.tax_type or 'regular'
+            
+            # Log for debugging
+            current_app.logger.info(
+                f"Supplier '{supplier.supplier_name}' tax defaults: "
+                f"RCM={reverse_charge_default}, ITC={itc_eligible_default}, "
+                f"type={tax_type}, GSTIN={'Yes' if supplier_gstin else 'No'}"
+            )
+            
+            # Business Logic: Override ONLY for unregistered suppliers without GSTIN
+            if tax_type == 'unregistered' or not supplier_gstin:
+                current_app.logger.info(f"Overriding: Unregistered supplier or no GSTIN")
+                reverse_charge_default = True
+                itc_eligible_default = False
+            
+            # Get exchange rate
+            exchange_rate = 1.0
+            currency_master = session.query(CurrencyMaster).filter_by(
+                hospital_id=current_user.hospital_id,
+                currency_code=currency_code,
+                is_active=True
+            ).first()
+            
+            if currency_master:
+                exchange_rate = float(currency_master.exchange_rate)
+            
+            # Get hospital state
+            hospital = session.query(Hospital).filter_by(
+                hospital_id=current_user.hospital_id
+            ).first()
+            
+            # Get branch state (using pre-fetched user_branch_id)
+            branch_state_code = None
+            if user_branch_id:
+                branch = session.query(Branch).filter_by(
+                    branch_id=user_branch_id,
+                    hospital_id=current_user.hospital_id
+                ).first()
+                if branch:
+                    branch_state_code = branch.state_code
+            
+            # Fallback to hospital state
+            if not branch_state_code and hospital:
+                branch_state_code = hospital.state_code
+            
+            # Get state name from code
+            supplier_state_name = supplier_state_code
+            if supplier_state_code:
+                for state in INDIAN_STATES:
+                    if state.get('value') == supplier_state_code:
+                        supplier_state_name = state.get('label', supplier_state_code)
+                        break
+            
+            # Calculate interstate flag
+            is_interstate = False
+            if supplier_state_code and branch_state_code:
+                is_interstate = (supplier_state_code != branch_state_code)
+            
+            current_app.logger.info(f"Supplier currency data: currency={currency_code}, rate={exchange_rate}, "
+                                  f"supplier_state={supplier_state_code}, branch_state={branch_state_code}, "
+                                  f"interstate={is_interstate}")
+        
+        # END OF SESSION CONTEXT - All data extracted
+        
+        # Return the data (all simple Python types now)
+        return jsonify({
+            'success': True,
+            'currency_code': currency_code,
+            'exchange_rate': exchange_rate,
+            'place_of_supply': supplier_state_code or '',
+            'supplier_state_name': supplier_state_name or '',
+            'supplier_gstin': supplier_gstin,
+            'is_interstate': is_interstate,
+            'branch_state': branch_state_code or '',
+            'supplier_state': supplier_state_code or '',
+            'reverse_charge_default': reverse_charge_default,
+            'itc_eligible_default': itc_eligible_default,
+            'tax_type': tax_type
+        })
+            
+    except Exception as e:
+        current_app.logger.error(f"Error getting supplier currency: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+    
+@supplier_views_bp.route('/api/get-supplier-pos', methods=['POST'])
+@login_required
+@require_web_branch_permission('supplier_invoice', 'add')
+def get_supplier_pos():
+    """API endpoint to get available POs for a supplier"""
+    try:
+        from app.services.supplier_service import search_purchase_orders
+        from app.services.branch_service import get_user_branch_id
+        from app.services.database_service import get_db_session
+        from app.models.transaction import SupplierInvoice
+        from sqlalchemy import func
+        import uuid
+        
+        data = request.json
+        supplier_id = data.get('supplier_id')
+        
+        if not supplier_id:
+            return jsonify({'success': False, 'error': 'Supplier ID required'}), 400
+        
+        # Get user's branch
+        user_branch_id = get_user_branch_id(current_user.user_id, current_user.hospital_id)
+        
+        # Search for approved POs for this supplier
+        po_results = search_purchase_orders(
+            hospital_id=current_user.hospital_id,
+            supplier_id=uuid.UUID(supplier_id),
+            status='approved',
+            branch_id=user_branch_id,
+            page=1,
+            per_page=100
+        )
+        
+        purchase_orders = []
+        
+        # Filter out fully invoiced POs
+        with get_db_session() as session:
+            for po in po_results.get('purchase_orders', []):
+                po_id = po.get('po_id')
+                po_total = float(po.get('total_amount', 0))
+                
+                # Calculate invoiced amount
+                invoiced_total = session.query(func.sum(SupplierInvoice.total_amount))\
+                    .filter(
+                        SupplierInvoice.po_id == po_id,
+                        SupplierInvoice.hospital_id == current_user.hospital_id,
+                        SupplierInvoice.payment_status != 'cancelled'
+                    ).scalar() or 0
+                
+                invoiced_total = float(invoiced_total)
+                remaining = po_total - invoiced_total
+                
+                # Only include if remaining amount > 0
+                if remaining > 0.01:
+                    po_number = po.get('po_number', 'Unknown')
+                    po_date = po.get('po_date')
+                    
+                    po_date_str = ''
+                    if po_date:
+                        po_date_str = po_date.strftime('%Y-%m-%d') if hasattr(po_date, 'strftime') else str(po_date)[:10]
+                    
+                    purchase_orders.append({
+                        'po_id': str(po_id),
+                        'po_display': f"{po_number} - {po_date_str} (₹{remaining:,.2f} remaining)"
+                    })
+        
+        return jsonify({
+            'success': True,
+            'purchase_orders': purchase_orders
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting supplier POs: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500

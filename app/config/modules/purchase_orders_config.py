@@ -849,9 +849,9 @@ PURCHASE_ORDER_ACTIONS = [
         icon="fas fa-undo",
         button_type=ButtonType.WARNING,  # ✅ Verified in core_definitions.py
         url_pattern="/supplier/purchase-order/unapprove/{po_id}",
-        show_in_list=True,
+        show_in_list=False,
         show_in_detail=True,
-        display_type=ActionDisplayType.BUTTON,
+        display_type=ActionDisplayType.DROPDOWN_ITEM,
         conditions={
             "po_status": ["approved"],  # ✅ Use correct field name from PurchaseOrderView
             "is_deleted": [False],
@@ -877,7 +877,7 @@ PURCHASE_ORDER_ACTIONS = [
             "is_deleted": [False, None]
         },
         permission="purchase_order_delete",
-        order=8,
+        order=12,
         confirmation_required=True,
         confirmation_message="Are you sure you want to delete this purchase order? This will also delete all line items."
     ),
@@ -919,7 +919,7 @@ PURCHASE_ORDER_ACTIONS = [
         confirmation_required=True,
         confirmation_message="Are you sure you want to cancel this purchase order?",
         permission="purchase_order_edit",
-        order=10
+        order=11
     ),
     
     ActionDefinition(
@@ -928,12 +928,15 @@ PURCHASE_ORDER_ACTIONS = [
         icon="fas fa-file-invoice-dollar",
         button_type=ButtonType.WARNING,
         url_pattern="/supplier/invoice/add?po_id={po_id}",
-        show_in_list=False,
+        show_in_list=True,
         show_in_detail=True,
-        display_type=ActionDisplayType.DROPDOWN_ITEM,
-        conditions={"status": ["approved"]},
+        display_type=ActionDisplayType.BUTTON,
+        conditions={
+            "po_status": ["approved"],  # ✅ FIXED: Use po_status not status
+            "is_deleted": [False]
+        },
         permission="supplier_invoice_create",
-        order=8
+        order=9
     ),
     ActionDefinition(
         id="view_payment",

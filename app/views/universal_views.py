@@ -2781,7 +2781,12 @@ def universal_entity_search_api(entity_type: str):
             else:
                 # Convert SQLAlchemy object to dict
                 result_dict = {}
-                for field in search_fields + [config.primary_key]:
+                # Include search fields, primary key, and additional price fields for medicines
+                fields_to_include = search_fields + [config.primary_key]
+                if entity_type == 'medicines':
+                    fields_to_include.extend(['mrp', 'last_purchase_price', 'gst_rate', 'hsn_code', 'medicine_id'])
+                    
+                for field in fields_to_include:
                     if hasattr(result, field):
                         value = getattr(result, field)
                         # Handle UUID and datetime serialization

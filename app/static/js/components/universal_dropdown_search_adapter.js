@@ -622,8 +622,8 @@
         
         setDataAttributes: function(item, result, entityType) {
             const attrs = ['gst', 'state', 'payment_terms', 'hsn', 'pack_size', 
-                          'gst_rate', 'hsn_code', 'strength', 'generic_name', 
-                          'state_code', 'supplier_gst'];
+              'gst_rate', 'hsn_code', 'strength', 'generic_name', 
+              'state_code', 'supplier_gst', 'medicine_id', 'mrp', 'last_purchase_price'];
             
             attrs.forEach(attr => {
                 if (result[attr] !== undefined) {

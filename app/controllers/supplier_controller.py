@@ -5,8 +5,8 @@ import uuid
 from datetime import datetime, date
 import json
 from app.controllers.form_controller import FormController
-from app.services.database_service import get_db_session
-from app.models.master import Medicine, Supplier, Branch, CurrencyMaster
+from app.services.database_service import get_db_session, get_detached_copy
+from app.models.master import Medicine, Supplier, Branch, CurrencyMaster, Hospital
 from app.models.transaction import PurchaseOrderHeader
 from app.config.core_definitions import INDIAN_STATES
 from app.services.permission_service import (
@@ -354,10 +354,125 @@ class SupplierInvoiceFormController(FormController):
         )
     
     def _get_success_url(self, result):
-        """Get success URL using local import to avoid circular reference"""
+        """Generate success URL after invoice creation - USES UNIVERSAL ENGINE VIEW"""
         from flask import url_for
-        return url_for('supplier_views.view_supplier_invoice', invoice_id=result['invoice_id'])
+        invoice_id = result.get('invoice_id')
+        return url_for('universal_views.universal_detail_view', 
+                      entity_type='supplier_invoices', 
+                      item_id=invoice_id)
     
+    def process_form(self, form, *args, **kwargs):
+        """Process supplier invoice form submission - COMPLETE IMPLEMENTATION"""
+        try:
+            from flask import current_app, request
+            from flask_login import current_user
+            import uuid
+            from app.services.supplier_service import create_supplier_invoice
+            from app.services.branch_service import get_user_branch_id
+            
+            current_app.logger.info("=== SUPPLIER INVOICE FORM SUBMISSION START ===")
+            
+            # Validate form has line items
+            if not form.medicine_ids.data or not form.medicine_ids.data.strip():
+                raise ValueError("No line items found. Please add at least one item to the invoice.")
+            
+            # Parse line items from hidden fields (SAME AS PO DOES)
+            medicine_ids = form.medicine_ids.data.split(',')
+            medicine_ids = [mid.strip() for mid in medicine_ids if mid.strip()]
+            
+            if not medicine_ids:
+                raise ValueError("No valid line items found. Please add at least one item to the invoice.")
+            
+            current_app.logger.info(f"Processing {len(medicine_ids)} line items")
+
+            # Parse all comma-separated fields - ADD NONE PROTECTION
+            medicine_names = (form.medicine_names.data or '').split(',')
+            quantities = (form.quantities.data or '').split(',')
+            batch_numbers = (form.batch_numbers.data or '').split(',')
+            expiry_dates = (form.expiry_dates.data or '').split(',')
+            pack_purchase_prices = (form.pack_purchase_prices.data or '').split(',')
+            pack_mrps = (form.pack_mrps.data or '').split(',')
+            units_per_packs = (form.units_per_packs.data or '').split(',')
+            hsn_codes = form.hsn_codes.data.split(',') if form.hsn_codes.data else []
+            gst_rates = form.gst_rates.data.split(',') if form.gst_rates.data else []
+            cgst_rates = form.cgst_rates.data.split(',') if form.cgst_rates.data else []
+            sgst_rates = form.sgst_rates.data.split(',') if form.sgst_rates.data else []
+            igst_rates = form.igst_rates.data.split(',') if form.igst_rates.data else []
+            
+            # Optional fields with defaults
+            discount_percents = form.discount_percents.data.split(',') if form.discount_percents.data else ['0'] * len(medicine_ids)
+            is_free_items = form.is_free_items.data.split(',') if form.is_free_items.data else ['false'] * len(medicine_ids)
+            
+            # Determine if interstate
+            is_interstate = form.is_interstate.data if hasattr(form, 'is_interstate') else False
+            
+            # Build line items array
+            line_items = []
+            for i in range(len(medicine_ids)):
+                is_free = is_free_items[i].lower() == 'true'
+                
+                line_item = {
+                    'medicine_id': medicine_ids[i],
+                    'medicine_name': medicine_names[i],
+                    'units': float(quantities[i]),
+                    'pack_purchase_price': 0.0 if is_free else float(pack_purchase_prices[i]),
+                    'pack_mrp': float(pack_mrps[i]),
+                    'units_per_pack': float(units_per_packs[i]),
+                    'is_free_item': is_free,
+                    'discount_percent': 0.0 if is_free else float(discount_percents[i]),
+                    'pre_gst_discount': True,
+                    'hsn_code': hsn_codes[i] if i < len(hsn_codes) else '',
+                    'gst_rate': float(gst_rates[i]) if i < len(gst_rates) else 0,
+                    'cgst_rate': float(cgst_rates[i]) if i < len(cgst_rates) else 0,
+                    'sgst_rate': float(sgst_rates[i]) if i < len(sgst_rates) else 0,
+                    'igst_rate': float(igst_rates[i]) if i < len(igst_rates) else 0,
+                    'batch_number': batch_numbers[i],
+                    'expiry_date': expiry_dates[i],
+                    'itc_eligible': True,
+                    'is_interstate': is_interstate
+                }
+                
+                line_items.append(line_item)
+            
+            current_app.logger.info(f"Built {len(line_items)} line items for invoice")
+            
+            # Build invoice data
+            invoice_data = {
+                'supplier_id': uuid.UUID(form.supplier_id.data),
+                'supplier_invoice_number': form.supplier_invoice_number.data,
+                'invoice_date': form.invoice_date.data,
+                'po_id': uuid.UUID(form.po_id.data) if form.po_id.data else None,
+                'supplier_gstin': form.supplier_gstin.data,
+                'place_of_supply': form.place_of_supply.data,
+                'due_date': form.due_date.data,
+                'reverse_charge': form.reverse_charge.data if hasattr(form, 'reverse_charge') else False,
+                'is_interstate': is_interstate,
+                'itc_eligible': form.itc_eligible.data if hasattr(form, 'itc_eligible') else True,
+                'currency_code': form.currency_code.data if hasattr(form, 'currency_code') else 'INR',
+                'exchange_rate': float(form.exchange_rate.data) if hasattr(form, 'exchange_rate') and form.exchange_rate.data else 1.0,
+                'notes': form.notes.data if hasattr(form, 'notes') else '',
+                'line_items': line_items
+            }
+            
+            # Get branch ID
+            branch_id = get_user_branch_id(current_user.user_id, current_user.hospital_id)
+            
+            # Create invoice using service
+            result = create_supplier_invoice(
+                hospital_id=current_user.hospital_id,
+                branch_id=branch_id,
+                invoice_data=invoice_data,
+                create_stock_entries=True,
+                current_user_id=current_user.user_id
+            )
+            
+            current_app.logger.info(f"Invoice created successfully: {result.get('invoice_id')}")
+            return result
+            
+        except Exception as e:
+            current_app.logger.error(f"Error processing invoice form: {str(e)}", exc_info=True)
+            raise
+
     def get_additional_context(self, *args, **kwargs):
         """Get additional context for the template - ENHANCED with branch filtering"""
         context = {}
@@ -371,6 +486,11 @@ class SupplierInvoiceFormController(FormController):
             from app.models.transaction import User
             from app.models.master import Branch, Supplier
             from app.models.transaction import PurchaseOrderHeader
+            from app.config.core_definitions import INDIAN_STATES
+
+            # Add INDIAN_STATES to context for dropdown
+            context['INDIAN_STATES'] = INDIAN_STATES
+            current_app.logger.info("Added INDIAN_STATES to context for dropdown")
 
             user_branch_id = get_user_branch_id(current_user.user_id, current_user.hospital_id)
 
@@ -474,34 +594,83 @@ class SupplierInvoiceFormController(FormController):
                 
                 context['branches'] = [get_detached_copy(branch) for branch in accessible_branches]
                 
-                # EXISTING: Get purchase orders and other data (unchanged)
-                pos = session.query(PurchaseOrderHeader).filter_by(
-                    hospital_id=current_user.hospital_id,
-                    status='approved'
-                ).all()
-                
-                # Get supplier information for each PO
+                # ✅ OPTIMIZED: Only load POs in get_additional_context if coming from a specific PO
+                # Otherwise, PO dropdown will be populated dynamically in get_form() based on supplier selection
                 po_details = []
-                po_suppliers = {}  # To store supplier_id for each PO
-                
-                for po in pos:
-                    po_copy = get_detached_copy(po)
-                    
-                    # Get supplier name for display in dropdown
-                    supplier = session.query(Supplier).filter_by(
-                        supplier_id=po.supplier_id
-                    ).first()
-                    
-                    if supplier:
-                        po_copy.supplier_name = supplier.supplier_name
+                po_suppliers = {}
+
+                if self.po_id:
+                    # When coming from PO list/view with po_id, fetch ONLY that specific PO
+                    try:
+                        specific_po = session.query(PurchaseOrderHeader).filter_by(
+                            hospital_id=current_user.hospital_id,
+                            po_id=uuid.UUID(self.po_id)
+                        ).first()
                         
-                    # Add to mapping
-                    po_suppliers[str(po_copy.po_id)] = str(po.supplier_id)
-                    
-                    po_details.append(po_copy)
-                    
+                        if specific_po:
+                            po_copy = get_detached_copy(specific_po)
+                            
+                            # Get supplier name for display
+                            supplier = session.query(Supplier).filter_by(
+                                supplier_id=specific_po.supplier_id
+                            ).first()
+                            
+                            if supplier:
+                                po_copy.supplier_name = supplier.supplier_name
+                                
+                            po_suppliers[str(po_copy.po_id)] = str(specific_po.supplier_id)
+                            po_details.append(po_copy)
+                            
+                            current_app.logger.info(f"✅ Loaded specific PO: {specific_po.po_number} (ID: {self.po_id})")
+                        else:
+                            current_app.logger.warning(f"⚠️ PO {self.po_id} not found")
+                    except Exception as e:
+                        current_app.logger.error(f"Error loading specific PO: {str(e)}")
+                else:
+                    # ✅ When creating invoice without PO reference:
+                    # Don't load all POs here - they will be loaded dynamically in get_form() 
+                    # based on supplier selection (see SCENARIO 2 in get_form)
+                    current_app.logger.info("✅ No po_id - PO dropdown will be populated dynamically when supplier is selected")
+
                 context['purchase_orders'] = po_details
                 context['po_suppliers'] = po_suppliers  # Add mapping to context
+                
+                # NEW: If we have a specific PO ID, ensure it's loaded regardless of status
+                if self.po_id:
+                    po_id_str = str(self.po_id)
+                    # Check if this PO is already in the list
+                    po_exists = any(str(po.po_id) == po_id_str for po in po_details)
+                    
+                    if not po_exists:
+                        current_app.logger.warning(f"Specific PO {po_id_str} not in approved list, loading separately")
+                        # Load the specific PO regardless of status
+                        specific_po = session.query(PurchaseOrderHeader).filter_by(
+                            po_id=self.po_id,
+                            hospital_id=current_user.hospital_id
+                        ).first()
+                        
+                        if specific_po:
+                            # Add to po_suppliers mapping
+                            po_suppliers[po_id_str] = str(specific_po.supplier_id)
+                            current_app.logger.info(f"Added specific PO supplier to mapping: {specific_po.supplier_id}")
+                            
+                            # Add to po_details list
+                            po_copy = get_detached_copy(specific_po)
+                            supplier = session.query(Supplier).filter_by(
+                                supplier_id=specific_po.supplier_id
+                            ).first()
+                            if supplier:
+                                po_copy.supplier_name = supplier.supplier_name
+                            po_details.insert(0, po_copy)  # Add at beginning for visibility
+                            current_app.logger.info(f"Added specific PO {specific_po.po_number} to dropdown list")
+                        else:
+                            current_app.logger.error(f"Specific PO {po_id_str} not found in database!")
+                    else:
+                        current_app.logger.info(f"Specific PO {po_id_str} already in list")
+                    
+                    # Update context with potentially added PO
+                    context['purchase_orders'] = po_details
+                    context['po_suppliers'] = po_suppliers
                 
                 # UPDATED: Get medicines with MRP data for dropdown  
                 medicines = session.query(Medicine).filter(
@@ -569,7 +738,21 @@ class SupplierInvoiceFormController(FormController):
         
         # EXISTING: Add flag to indicate if we have pre-populated PO data (unchanged)
         context['has_po_data'] = self.po_id is not None
-        
+
+        # NEW: If we have a pre-selected PO, add flags for locking supplier and PO
+        if self.po_id:
+            # Get the supplier_id for this PO from the mapping built earlier
+            po_suppliers = context.get('po_suppliers', {})
+            locked_supplier_id = po_suppliers.get(str(self.po_id))
+            if locked_supplier_id:
+                # Only set these flags if we have a valid supplier for the PO
+                context['pre_selected_po_id'] = str(self.po_id)
+                context['supplier_locked'] = True
+                context['locked_supplier_id'] = locked_supplier_id
+                current_app.logger.info(f"✅ Locking supplier {locked_supplier_id} for pre-selected PO {self.po_id}")
+            else:
+                current_app.logger.warning(f"⚠️ No supplier found for PO {self.po_id}, not locking")
+
         # ADD DEBUG LOGGING HERE (at the end of get_additional_context method):
         current_app.logger.info(f"DEBUG Branch Context Values:")
         current_app.logger.info(f"  branches count: {len(context.get('branches', []))}")
@@ -596,473 +779,838 @@ class SupplierInvoiceFormController(FormController):
 
         try:
             from flask_login import current_user
+            from flask import request, session
+            
+            # ===== AUTO-SET BRANCH FROM USER CONTEXT =====
+            current_app.logger.info("=== BRANCH AUTO-SETUP START ===")
+            
+            # Get branch from user context
+            from app.services.branch_service import get_user_branch_id
+            user_branch_id = get_user_branch_id(current_user.user_id, current_user.hospital_id)
+            
+            if user_branch_id:
+                branch_id_str = str(user_branch_id)
+                current_app.logger.info(f"User's branch_id: {branch_id_str}")
+                
+                # Set as the only choice (hidden from user, auto-selected)
+                form.branch_id.choices = [(branch_id_str, 'User Branch')]
+                form.branch_id.data = branch_id_str
+                
+                current_app.logger.info(f"✅ Branch auto-set to: {branch_id_str}")
+            else:
+                # Fallback: Try to get from context
+                context = self.get_additional_context(*args, **kwargs)
+                default_branch_id = context.get('default_branch_id')
+                
+                if default_branch_id:
+                    branch_id_str = str(default_branch_id)
+                    current_app.logger.info(f"Using default_branch_id from context: {branch_id_str}")
+                    
+                    form.branch_id.choices = [(branch_id_str, 'Default Branch')]
+                    form.branch_id.data = branch_id_str
+                    
+                    current_app.logger.info(f"✅ Branch set from context: {branch_id_str}")
+                else:
+                    current_app.logger.error("❌ No branch_id found for user")
+                    form.branch_id.choices = [('', 'No Branch')]
+            
+            current_app.logger.info("=== BRANCH AUTO-SETUP END ===")
+            
+        except Exception as e:
+            current_app.logger.error(f"❌ Error auto-setting branch: {str(e)}", exc_info=True)
+            form.branch_id.choices = [('', 'Error')]
+        # ===== END BRANCH AUTO-SETUP =====
+        
+        # ===== NEW: AUTO-POPULATE SUPPLIER-DEPENDENT FIELDS =====
+        try:
             from flask import request
+            from flask_login import current_user
+            
+            # Get supplier_id from form data or query params
+            supplier_id = request.form.get('supplier_id') or request.args.get('supplier_id')
+            
+            if supplier_id:
+                current_app.logger.info(f"=== AUTO-POPULATING SUPPLIER-DEPENDENT FIELDS for supplier: {supplier_id} ===")
+                
+                with get_db_session(read_only=True) as session:
+                    # Get supplier details
+                    supplier = session.query(Supplier).filter_by(
+                        supplier_id=uuid.UUID(supplier_id),
+                        hospital_id=current_user.hospital_id
+                    ).first()
+                    
+                    if supplier:
+                        # REQUIREMENT 3: Default currency from supplier's country
+                        supplier_currency = supplier.currency_code or 'INR'
+                        form.currency_code.data = supplier_currency
+                        current_app.logger.info(f"âœ… Set currency from supplier: {supplier_currency}")
+                        
+                        # REQUIREMENT 2: Get exchange rate from CurrencyMaster
+                        currency_master = session.query(CurrencyMaster).filter_by(
+                            hospital_id=current_user.hospital_id,
+                            currency_code=supplier_currency,
+                            is_active=True
+                        ).first()
+                        
+                        if currency_master:
+                            form.exchange_rate.data = float(currency_master.exchange_rate)
+                            current_app.logger.info(f"âœ… Set exchange rate from CurrencyMaster: {currency_master.exchange_rate}")
+                        else:
+                            form.exchange_rate.data = 1.0
+                            current_app.logger.warning(f"⚠️ No CurrencyMaster entry found for {supplier_currency}, defaulting to 1.0")
+                        
+                        # REQUIREMENT 4: Default place of supply from supplier state
+                        if supplier.state_code:
+                            form.place_of_supply.data = supplier.state_code
+                            current_app.logger.info(f"âœ… Set place of supply from supplier state: {supplier.state_code}")
+                            
+                            # REQUIREMENT 5: Determine if interstate
+                            hospital = session.query(Hospital).filter_by(
+                                hospital_id=current_user.hospital_id
+                            ).first()
+                            
+                            if hospital and hospital.state_code:
+                                # Get branch state code (user's branch)
+                                branch = None
+                                if form.branch_id.data:
+                                    branch = session.query(Branch).filter_by(
+                                        branch_id=uuid.UUID(form.branch_id.data),
+                                        hospital_id=current_user.hospital_id
+                                    ).first()
+                                
+                                # Use branch state if available, otherwise hospital state
+                                branch_state_code = branch.state_code if (branch and branch.state_code) else hospital.state_code
+                                
+                                is_interstate = supplier.state_code != branch_state_code
+                                form.is_interstate.data = is_interstate
+                                
+                                current_app.logger.info(f"âœ… Interstate check: Branch/Hospital={branch_state_code}, Supplier={supplier.state_code}, Interstate={is_interstate}")
+                        
+        except Exception as e:
+            current_app.logger.error(f"âŒ Error auto-populating supplier fields: {str(e)}", exc_info=True)
+        # ===== END AUTO-POPULATE SUPPLIER-DEPENDENT FIELDS =====
+
+        # ===== SET FORM CHOICES FROM CONTEXT =====
+        try:
+            current_app.logger.info("=== SETTING FORM CHOICES ===")
             
             # Get additional context (which includes suppliers and POs)
             context = self.get_additional_context(*args, **kwargs)
             
             # Set choices for supplier dropdown
             suppliers = context.get('suppliers', [])
-            form.supplier_id.choices = [('', 'Select Supplier')] + [
-                (str(supplier['supplier_id']), supplier['supplier_name']) 
-                for supplier in suppliers
-            ]
+            if suppliers:
+                form.supplier_id.choices = [('', 'Select Supplier')] + [
+                    (str(supplier['supplier_id']), supplier['supplier_name']) 
+                    for supplier in suppliers
+                ]
+                current_app.logger.info(f"✅ Set {len(suppliers)} supplier choices")
+            else:
+                form.supplier_id.choices = [('', 'No Suppliers Available')]
+                current_app.logger.warning("⚠️ No suppliers found in context")
             
             # Set choices for purchase order dropdown
-            purchase_orders = context.get('purchase_orders', [])
-            
-            # Create list of choices
-            po_choices = [('', 'Select Purchase Order')]
-            for po in purchase_orders:
-                po_text = f"{po.po_number} - {po.supplier_name if hasattr(po, 'supplier_name') else ''}"
-                po_choices.append((str(po.po_id), po_text))
-                
-            form.po_id.choices = po_choices
+            # Handle three scenarios:
+            # 1. Coming from PO (po_id in URL) - fetch that specific PO
+            # 2. Supplier selected - fetch available POs for that supplier  
+            # 3. Regular form load - start empty, populate via JS
 
-            # Set initial values from request parameters (for PO selection)
-            po_id = request.args.get('po_id') or self.po_id
-            if po_id:
+            from flask import request
+            po_id_param = request.args.get('po_id') or self.po_id
+            current_supplier_id = form.supplier_id.data or request.args.get('supplier_id')
+
+            if po_id_param:
+                # ✅ SCENARIO 2: Coming from PO list/view action button - auto-load everything
                 try:
-                    # Validate PO ID format
-                    import uuid
-                    valid_po_id = str(uuid.UUID(po_id))
-                    form.po_id.data = valid_po_id
+                    from app.services.supplier_service import get_purchase_order_by_id, get_supplier_by_id
+                    import uuid as uuid_lib
                     
-                    # Get supplier_id for this PO from our mapping
-                    po_suppliers = context.get('po_suppliers', {})
-                    supplier_id = po_suppliers.get(valid_po_id)
+                    po = get_purchase_order_by_id(
+                        po_id=uuid_lib.UUID(po_id_param),
+                        hospital_id=current_user.hospital_id
+                    )
                     
-                    if supplier_id:
-                        form.supplier_id.data = supplier_id
-                        current_app.logger.info(f"Set initial supplier_id to {supplier_id} from PO {valid_po_id}")
-                except ValueError:
-                    current_app.logger.warning(f"Invalid PO ID in URL: {po_id}")
+                    if po:
+                        po_number = po.get('po_number', 'Unknown PO')
+                        
+                        # ✅ Set PO dropdown with ONLY this PO (locked)
+                        # CRITICAL: Include empty first option because template uses [1:] to skip it
+                        form.po_id.choices = [
+                            ('', 'Select Purchase Order'),  # Empty first option (skipped by template)
+                            (str(po.get('po_id')), po_number)  # The actual PO option
+                        ]
+                        form.po_id.data = str(po.get('po_id'))
+                        
+                        # ✅ CRITICAL: Lock supplier dropdown to PO's supplier
+                        if po.get('supplier_id'):
+                            supplier_id_str = str(po.get('supplier_id'))
+                            form.supplier_id.data = supplier_id_str
+                            
+                            # Fetch supplier details to display in dropdown
+                            try:
+                                supplier = get_supplier_by_id(
+                                    supplier_id=uuid_lib.UUID(supplier_id_str),
+                                    hospital_id=current_user.hospital_id
+                                )
+                                if supplier:
+                                    # Lock supplier choices to only this supplier
+                                    form.supplier_id.choices = [
+                                        ('', 'Select Supplier'),  # Empty first option (skipped by template)
+                                        (supplier_id_str, supplier.get('supplier_name', 'Unknown Supplier'))
+                                    ]
+                                    
+                                    # ✅ NEW: Populate supplier GSTIN immediately
+                                    if supplier.get('gst_registration_number'):
+                                        form.supplier_gstin.data = supplier.get('gst_registration_number')
+                                        current_app.logger.info(f"✅ Set supplier GSTIN: {supplier.get('gst_registration_number')}")
+                                    
+                                    # ✅ NEW: Populate place of supply from supplier state
+                                    if supplier.get('state_code'):
+                                        form.place_of_supply.data = supplier.get('state_code')
+                                        current_app.logger.info(f"✅ Set place of supply: {supplier.get('state_code')}")
+                                    
+                                    current_app.logger.info(f"✅ Locked supplier to {supplier.get('supplier_name')} from PO")
+                            except Exception as supplier_error:
+                                current_app.logger.warning(f"Could not fetch supplier: {str(supplier_error)}")
+                                # Fallback: still set data but with generic choice
+                                # CRITICAL: Include empty first option because template uses [1:] to skip it
+                                form.supplier_id.choices = [
+                                    ('', 'Select Supplier'),  # Empty first option (skipped by template)
+                                    (supplier_id_str, 'Supplier from PO')
+                                ]
+                        
+                        # ✅ Mark context to indicate this is from PO URL (for template)
+                        context = context or {}
+                        context['is_from_po_url'] = True
+                        context['po_number'] = po_number
+                        
+                        current_app.logger.info(f"✅ SCENARIO 2: Auto-loading from PO {po_number} - dropdown locked, will auto-populate line items")
+                    else:
+                        form.po_id.choices = [('', 'Select Purchase Order (Optional)')]
+                        current_app.logger.warning(f"⚠️ PO {po_id_param} not found")
+                        
+                except Exception as po_error:
+                    current_app.logger.error(f"Error fetching PO from URL: {str(po_error)}")
+                    form.po_id.choices = [('', 'Select Purchase Order (Optional)')]
+                    
+            elif current_supplier_id:
+                # ✅ SCENARIO 1: Normal flow - supplier selected, populate filtered POs
+                try:
+                    from app.services.supplier_service import search_purchase_orders
+                    from app.services.branch_service import get_user_branch_id
+                    from app.services.database_service import get_db_session
+                    from app.models.transaction import SupplierInvoice
+                    from sqlalchemy import func
+                    import uuid as uuid_lib
+                    
+                    user_branch_id = get_user_branch_id(current_user.user_id, current_user.hospital_id)
+                    
+                    # ✅ Search for APPROVED POs only (not draft, not cancelled)
+                    po_results = search_purchase_orders(
+                        hospital_id=current_user.hospital_id,
+                        supplier_id=uuid_lib.UUID(current_supplier_id),
+                        status='approved',  # ✅ Only approved POs
+                        branch_id=user_branch_id,
+                        page=1,
+                        per_page=100
+                    )
+                    
+                    po_choices = [('', 'Select Purchase Order (Optional)')]
+                    
+                    # ✅ Filter out fully invoiced POs, keep partially invoiced ones
+                    with get_db_session() as session:
+                        for po in po_results.get('results', []):
+                            po_id = po.get('po_id')
+                            po_total = float(po.get('total_amount', 0))
+                            
+                            # Calculate total already invoiced (exclude cancelled invoices)
+                            invoiced_total = session.query(func.sum(SupplierInvoice.total_amount))\
+                                .filter(
+                                    SupplierInvoice.po_id == po_id,
+                                    SupplierInvoice.hospital_id == current_user.hospital_id,
+                                    SupplierInvoice.payment_status != 'cancelled'
+                                ).scalar() or 0
+                            
+                            invoiced_total = float(invoiced_total)
+                            remaining = po_total - invoiced_total
+                            
+                            # ✅ Include if remaining amount > 0 (includes partially invoiced)
+                            if remaining > 0.01:
+                                po_number = po.get('po_number', 'Unknown')
+                                po_date = po.get('po_date')
+                                
+                                date_str = ''
+                                if po_date:
+                                    if isinstance(po_date, str):
+                                        date_str = po_date[:10]
+                                    else:
+                                        date_str = po_date.strftime('%Y-%m-%d')
+                                
+                                # Show remaining amount for partial invoices
+                                po_label = f"{po_number} - {date_str} (₹{remaining:,.2f} remaining)"
+                                po_choices.append((str(po_id), po_label))
+                    
+                    form.po_id.choices = po_choices
+                    current_app.logger.info(f"✅ SCENARIO 1: Added {len(po_choices) - 1} approved POs for supplier (includes partially invoiced)")
+                    
+                except Exception as po_error:
+                    current_app.logger.error(f"Error fetching POs for supplier: {str(po_error)}")
+                    form.po_id.choices = [('', 'Select Purchase Order (Optional)')]
+                    
+            elif current_supplier_id:
+                # SCENARIO 2: Supplier selected (but no PO in URL) - fetch available POs for that supplier
+                try:
+                    from app.services.supplier_service import search_purchase_orders
+                    from app.services.branch_service import get_user_branch_id
+                    from app.services.database_service import get_db_session
+                    from app.models.transaction import SupplierInvoice
+                    from sqlalchemy import func
+                    import uuid as uuid_lib
+                    
+                    user_branch_id = get_user_branch_id(current_user.user_id, current_user.hospital_id)
+                    
+                    # Search for approved POs for this supplier
+                    po_results = search_purchase_orders(
+                        hospital_id=current_user.hospital_id,
+                        supplier_id=uuid_lib.UUID(current_supplier_id),
+                        status='approved',
+                        branch_id=user_branch_id,
+                        page=1,
+                        per_page=100
+                    )
+                    
+                    purchase_orders = po_results.get('results', [])
+                    po_choices = [('', 'Select Purchase Order (Optional)')]
+                    
+                    # Filter out fully invoiced POs
+                    with get_db_session() as session:
+                        for po in purchase_orders:
+                            po_id = po.get('po_id')
+                            po_total = float(po.get('total_amount', 0))
+                            
+                            # Calculate invoiced amount
+                            invoiced_total = session.query(func.sum(SupplierInvoice.total_amount))\
+                                .filter(
+                                    SupplierInvoice.po_id == po_id,
+                                    SupplierInvoice.hospital_id == current_user.hospital_id,
+                                    SupplierInvoice.payment_status != 'cancelled'
+                                ).scalar() or 0
+                            
+                            invoiced_total = float(invoiced_total)
+                            remaining = po_total - invoiced_total
+                            
+                            # Only include if remaining amount > 0
+                            if remaining > 0.01:
+                                po_number = po.get('po_number', 'Unknown')
+                                po_date = po.get('po_date')
+                                
+                                po_date_str = ''
+                                if po_date:
+                                    po_date_str = po_date.strftime('%Y-%m-%d') if hasattr(po_date, 'strftime') else str(po_date)[:10]
+                                
+                                po_text = f"{po_number} - {po_date_str} (₹{remaining:,.2f} remaining)"
+                                po_choices.append((str(po_id), po_text))
+                    
+                    form.po_id.choices = po_choices
+                    current_app.logger.info(f"✅ Added {len(po_choices) - 1} available PO choices for supplier")
+                    
+                except Exception as po_error:
+                    current_app.logger.error(f"Error fetching POs for supplier: {str(po_error)}")
+                    form.po_id.choices = [('', 'Select Purchase Order (Optional)')]
+                    
+            else:
+                # SCENARIO 3: No PO in URL and no supplier selected - start empty
+                form.po_id.choices = [('', 'Select Purchase Order (Optional)')]
+                current_app.logger.info("PO dropdown initialized empty - will be populated when supplier is selected")
+
+            current_app.logger.info(f"✅ Final PO choices count: {len(form.po_id.choices)}")
+
+            # Set currency choices if not already set
+            if not form.currency_code.choices:
+                form.currency_code.choices = [
+                    ('INR', 'INR'),
+                    ('USD', 'USD'),
+                    ('EUR', 'EUR')
+                ]
 
             # If we have a PO ID for pre-population, do it now - but not if we're coming from an edit
             if self.po_id and request.args.get('edited') != '1':
                 self.pre_populate_from_po(form, context)
+                # Force reload line items from session after PO pre-population
+                session_key = f'supplier_invoice_line_items_{current_user.user_id}'
+                if session_key in session:
+                    line_items_from_session = session.get(session_key, [])
+                    current_app.logger.info(f"✅ Line items in session after PO pre-population: {len(line_items_from_session)}")
+
+        except Exception as e:
+            current_app.logger.error(f"❌ Error setting form choices: {str(e)}", exc_info=True)
+            # Set minimal fallback choices
+            if form.supplier_id.choices is None:
+                form.supplier_id.choices = [('', 'Select Supplier')]
+            if form.po_id.choices is None:
+                form.po_id.choices = [('', 'Select Purchase Order (Optional)')]
+        # ===== END SET FORM CHOICES =====
+
+        # CRITICAL FIX: Ensure choices are NEVER None and log what was set
+        try:
+            # Log current state
+            current_app.logger.info(f"🔍 Final form state check:")
+            current_app.logger.info(f"   supplier_id.choices type: {type(form.supplier_id.choices)}")
+            current_app.logger.info(f"   supplier_id.choices length: {len(form.supplier_id.choices) if form.supplier_id.choices else 'None'}")
+            
+            # Safety check: If choices are None, set to empty list
+            if form.supplier_id.choices is None:
+                current_app.logger.error("❌ supplier_id.choices was None, setting to empty list")
+                form.supplier_id.choices = [('', 'Select Supplier')]
+            elif len(form.supplier_id.choices) == 0:
+                current_app.logger.error("❌ supplier_id.choices was empty list, setting default")
+                form.supplier_id.choices = [('', 'Select Supplier')]
+            else:
+                current_app.logger.info(f"✅ supplier_id has {len(form.supplier_id.choices)} choices")
+            
+            if form.po_id.choices is None:
+                current_app.logger.warning("⚠️ po_id.choices was None, setting to empty list")
+                form.po_id.choices = [('', 'Select Purchase Order')]
+                
+            if form.currency_code.choices is None:
+                current_app.logger.warning("⚠️ currency_code.choices was None, setting defaults")
+                form.currency_code.choices = [('INR', 'INR'), ('USD', 'USD'), ('EUR', 'EUR')]
                 
         except Exception as e:
-            current_app.logger.error(f"Error initializing form: {str(e)}", exc_info=True)
+            current_app.logger.error(f"Error in final choices safety check: {str(e)}", exc_info=True)
         
         return form
+
     
     def pre_populate_from_po(self, form, context=None):
-        """Pre-populate form data from a purchase order"""
+        """
+        Pre-populate form data from a purchase order
+        
+        CORRECTED VERSION: Includes currency, exchange_rate, and notes
+        for full backward compatibility with existing functionality.
+        
+        Now uses the unified get_po_items_with_balance() method for consistency.
+        This ensures both the form pre-population and API endpoint use the same logic.
+        """
+        from flask_login import current_user
+        from flask import current_app, session, flash
+        from datetime import datetime
+        
         try:
-            from flask_login import current_user
-            from app.services.supplier_service import get_purchase_order_by_id
-            import uuid
-            from datetime import datetime, timedelta
-            from app.services.database_service import get_db_session
-            from app.models.master import Supplier
-            from flask import session, flash
-            
             current_app.logger.info(f"Pre-populating form from PO ID: {self.po_id}")
             
-            # CRITICAL FIX: Check if we already have edited line items in the session
-            # The key check is to not overwrite any existing session data with PO data
+            # STEP 1: Check if we already have edited line items in session
             session_key = f'supplier_invoice_line_items_{current_user.user_id}'
             
-            # Check if there are already edited items in the session - if so, skip pre-population completely
             if session_key in session and len(session.get(session_key, [])) > 0:
-                # Check if any line items have batch numbers other than placeholder
                 has_edited_items = False
                 for item in session[session_key]:
-                    if item.get('batch_number') != '[ENTER BATCH #]' or item.get('expiry_date') != 'YYYY-MM-DD':
+                    if (item.get('batch_number') != '[ENTER BATCH #]' or 
+                        item.get('expiry_date') != 'YYYY-MM-DD'):
                         has_edited_items = True
                         break
-                        
+                
                 if has_edited_items:
-                    current_app.logger.info(f"Preserving existing {len(session[session_key])} edited line items in session")
+                    current_app.logger.info(f"Preserving {len(session[session_key])} edited items")
                     return
+            
+            # STEP 2: Use unified method to get PO data with balance quantities
+            po_data = self.get_po_items_with_balance(
+                po_id=self.po_id,
+                include_gst_fields=True
+            )
+            
+            if not po_data.get('success'):
+                error_msg = po_data.get('error', 'Unknown error')
+                current_app.logger.warning(f"Failed to get PO data: {error_msg}")
+                flash(f"Error loading purchase order: {error_msg}", "error")
+                return
+            
+            current_app.logger.info(f"Found PO {po_data.get('po_number')}")
+            
+            # STEP 3: Populate form fields from PO data
+            form.po_id.data = self.po_id
+            
+            # Supplier
+            supplier_id = po_data.get('supplier_id')
+            if supplier_id:
+                form.supplier_id.data = supplier_id
+            
+            # GST fields
+            if po_data.get('supplier_gstin'):
+                form.supplier_gstin.data = po_data.get('supplier_gstin')
+            
+            if po_data.get('place_of_supply'):
+                form.place_of_supply.data = po_data.get('place_of_supply')
+            
+            if po_data.get('is_interstate') is not None:
+                form.is_interstate.data = po_data.get('is_interstate')
+            
+            # ✅ CRITICAL FOR BACKWARD COMPATIBILITY: Currency fields
+            if po_data.get('currency_code'):
+                form.currency_code.data = po_data.get('currency_code')
+                form.exchange_rate.data = po_data.get('exchange_rate', 1.0)
+            
+            # ✅ CRITICAL FOR BACKWARD COMPATIBILITY: Notes field
+            if po_data.get('notes'):
+                form.notes.data = po_data.get('notes')
+            
+            # Standard fields
+            form.invoice_date.data = datetime.now().date()
+            form.supplier_invoice_number.data = ""
+            
+            # STEP 4: Process line items for form
+            line_items = []
+            batch_placeholder = "[ENTER BATCH #]"
+            expiry_placeholder = "YYYY-MM-DD"
+            
+            po_line_items = po_data.get('line_items', [])
+            
+            if not po_line_items:
+                current_app.logger.warning("No items with balance remaining")
+                flash("All items fully invoiced. No balance remaining.", "warning")
+                return
+            
+            from app.services.supplier_service import calculate_gst_values
+            
+            for item in po_line_items:
+                try:
+                    is_interstate = form.is_interstate.data if hasattr(
+                        form, 'is_interstate'
+                    ) and form.is_interstate.data else False
                     
-            # Check for PO invoices to avoid creating duplicates
-            try:
-                from app.services.supplier_service import search_supplier_invoices
+                    gst_calcs = calculate_gst_values(
+                        quantity=item['units'],
+                        unit_rate=item['pack_purchase_price'],
+                        gst_rate=item['gst_rate'],
+                        discount_percent=item['discount_percent'],
+                        is_free_item=False,
+                        is_interstate=is_interstate,
+                        conversion_factor=item['units_per_pack']
+                    )
+                    
+                    line_item = {
+                        'medicine_id': item['medicine_id'],
+                        'medicine_name': item['medicine_name'],
+                        'units': item['units'],
+                        'pack_purchase_price': item['pack_purchase_price'],
+                        'pack_mrp': item['pack_mrp'],
+                        'units_per_pack': item['units_per_pack'],
+                        'hsn_code': item['hsn_code'],
+                        'gst_rate': item['gst_rate'],
+                        'cgst_rate': item['cgst_rate'],
+                        'sgst_rate': item['sgst_rate'],
+                        'igst_rate': item['igst_rate'],
+                        'batch_number': batch_placeholder,
+                        'expiry_date': expiry_placeholder,
+                        'is_free_item': False,
+                        'discount_percent': item['discount_percent'],
+                        'cgst': float(gst_calcs.get('cgst_amount', 0)),
+                        'sgst': float(gst_calcs.get('sgst_amount', 0)),
+                        'igst': float(gst_calcs.get('igst_amount', 0)),
+                        'total_gst': float(gst_calcs.get('total_gst_amount', 0)),
+                        'line_total': float(gst_calcs.get('line_total', 0)),
+                        'taxable_amount': float(gst_calcs.get('taxable_amount', 0)),
+                        'unit_price': float(gst_calcs.get('sub_unit_price', 0))
+                    }
+                    
+                    line_items.append(line_item)
                 
-                # Check if this PO already has invoices
-                invoices_result = search_supplier_invoices(
-                    hospital_id=current_user.hospital_id,
-                    po_id=uuid.UUID(self.po_id),
-                    page=1,
-                    per_page=1
-                )
-                
-                if invoices_result.get('invoices', []):
-                    current_app.logger.info(f"PO already has invoices - checking if more items can be invoiced")
-                    # We could add logic here to check remaining quantities, but for now just warn
-                
-            except Exception as e:
-                current_app.logger.error(f"Error checking PO invoices: {str(e)}")
+                except Exception as item_error:
+                    current_app.logger.error(f"Error processing line item: {str(item_error)}")
+                    continue
+            
+            # STEP 5: Store in session
+            session[session_key] = line_items
+            current_app.logger.info(f"Saved {len(line_items)} items to session")
+            
+            flash(
+                f"Form pre-populated with {len(line_items)} items (balance quantities). "
+                f"Please review Batch Numbers and Expiry Dates.", 
+                "info"
+            )
         
+        except Exception as e:
+            current_app.logger.error(f"Error in pre_populate_from_po: {str(e)}", exc_info=True)
+            flash(f"Error pre-populating form: {str(e)}", "error")
+    
 
-            # Get PO details
+    def get_po_items_with_balance(self, po_id, include_gst_fields=True):
+        """
+        UNIFIED METHOD: Get PO items with balance quantities and ALL PO fields
+        
+        CORRECTED VERSION: Includes currency_code, exchange_rate, and notes
+        for full backward compatibility with existing functionality.
+        
+        This method consolidates ALL business logic for loading PO data:
+        - Calculates balance quantities (PO qty - invoiced qty)
+        - Retrieves supplier GST information
+        - Retrieves currency and exchange rate from PO
+        - Retrieves notes from PO
+        - Skips fully invoiced items
+        - Returns properly formatted data for both API and form pre-population
+        
+        Used by:
+        1. API endpoint: /supplier/api/purchase-order/<po_id>/load-items
+        2. Form pre-population: When PO is selected from dropdown
+        
+        Args:
+            po_id (str): Purchase Order ID (UUID as string)
+            include_gst_fields (bool): Whether to include supplier GST fields
+            
+        Returns:
+            dict: {
+                'success': bool,
+                'po_number': str,
+                'supplier_id': str,
+                'supplier_name': str,
+                'line_items': list[dict],  # Balance quantities only
+                'po_branch_id': str,
+                'currency_code': str,  # ✅ ADDED for backward compatibility
+                'exchange_rate': float,  # ✅ ADDED for backward compatibility
+                'notes': str,  # ✅ ADDED for backward compatibility
+                'supplier_gstin': str (if include_gst_fields),
+                'place_of_supply': str (if include_gst_fields),
+                'is_interstate': bool (if include_gst_fields),
+                'error': str (if error occurred)
+            }
+        """
+        from flask_login import current_user
+        from flask import current_app
+        from app.services.supplier_service import (
+            get_purchase_order_by_id, 
+            search_supplier_invoices
+        )
+        from app.models.master import Supplier, Hospital
+        from app.services.database_service import get_db_session
+        import uuid
+        
+        try:
+            current_app.logger.info(f"=== GET PO ITEMS WITH BALANCE: PO {po_id} ===")
+            
+            # STEP 1: Get Purchase Order
             po = get_purchase_order_by_id(
-                po_id=uuid.UUID(self.po_id),
+                po_id=uuid.UUID(po_id),
                 hospital_id=current_user.hospital_id
             )
             
             if not po:
-                current_app.logger.warning(f"PO {self.po_id} not found for pre-population")
-                flash("Purchase order not found", "error")
-                return
+                return {
+                    'success': False,
+                    'error': 'Purchase order not found'
+                }
             
-            current_app.logger.info(f"Found PO {po.get('po_number')} for pre-population")
+            po_number = po.get('po_number', 'N/A')
+            current_app.logger.info(f"Found PO: {po_number}")
             
-            # Set supplier and PO reference
-            form.po_id.data = self.po_id
-            
-            supplier_id = str(po.get('supplier_id', ''))
-            if supplier_id:
-                form.supplier_id.data = supplier_id
-                
-                # Get supplier details
-                try:
-                    with get_db_session(read_only=True) as db_session:
-                        supplier = db_session.query(Supplier).filter_by(
-                            supplier_id=supplier_id,
-                            hospital_id=current_user.hospital_id
-                        ).first()
-                        
-                        if supplier:
-                            # Set GST information
-                            if supplier.gst_registration_number:
-                                form.supplier_gstin.data = supplier.gst_registration_number
-                                
-                            # Set place of supply if available
-                            if supplier.state_code:
-                                form.place_of_supply.data = supplier.state_code
-                                
-                            # Set interstate flag
-                            if supplier.state_code:
-                                if not context:
-                                    context = self.get_additional_context()
-                                hospital_state_code = context.get('hospital_state_code', '')
-                                form.is_interstate.data = supplier.state_code != hospital_state_code
-                except Exception as supplier_error:
-                    current_app.logger.error(f"Error getting supplier details: {str(supplier_error)}")
-            
-            # Set currency and exchange rate
-            if po.get('currency_code'):
-                form.currency_code.data = po.get('currency_code')
-                form.exchange_rate.data = po.get('exchange_rate', 1.0)
-            
-            # Set default invoice date to today
-            form.invoice_date.data = datetime.now().date()
-            
-            # Copy notes
-            if po.get('notes'):
-                form.notes.data = po.get('notes')
-            
-            # Get line items from PO
-            po_line_items = po.get('line_items', [])
-            current_app.logger.info(f"Found {len(po_line_items)} line items in PO")
-            
-            if not po_line_items:
-                current_app.logger.warning("No items found in PO for pre-population")
-                return
-            
-            # ENHANCEMENT: Check if PO has already been fully invoiced
-            from app.services.supplier_service import search_supplier_invoices
+            # STEP 2: Calculate Balance Quantities
+            invoiced_quantities = {}
+
             try:
-                # Get existing invoices for this PO
+                po_uuid = uuid.UUID(po_id) if isinstance(po_id, str) else po_id
+                
+                # First, get list of invoice IDs for this PO
                 invoices_result = search_supplier_invoices(
                     hospital_id=current_user.hospital_id,
-                    po_id=uuid.UUID(self.po_id),
+                    po_id=po_uuid,
                     page=1,
-                    per_page=1000  # Get all invoices for this PO
+                    per_page=1000
                 )
                 
                 existing_invoices = invoices_result.get('invoices', [])
+                
                 if existing_invoices:
-                    current_app.logger.info(f"Found {len(existing_invoices)} existing invoices for PO {po.get('po_number')}")
+                    current_app.logger.info(
+                        f"Found {len(existing_invoices)} existing invoice(s) for PO {po_number}"
+                    )
                     
-                    # Check if all quantities have been invoiced
-                    # For simplicity in this implementation, we'll just show a warning
-                    flash(f"Warning: This PO already has {len(existing_invoices)} invoice(s). Please ensure you're not creating duplicate invoices.", "warning")
-            except Exception as inv_error:
-                current_app.logger.error(f"Error checking existing invoices: {str(inv_error)}")
-
-            # Process line items
-            line_items = []
-            today = datetime.now()
-            # Create clearly marked placeholder values
-            batch_placeholder = "[ENTER BATCH #]"  # Clearly indicates action needed
-            expiry_placeholder = "YYYY-MM-DD"     # Shows format but clearly not a real date
-
-            # # Generate a default batch number as a placeholder
-            # default_batch = f"PO-{po.get('po_number', '').replace('/', '-')}"
-            # # Default expiry date one year from now as a placeholder
-            # default_expiry = (today + timedelta(days=365)).strftime('%Y-%m-%d')
-            
-            for po_line in po_line_items:
-                try:
-                    # Extract data with safe conversions
-                    medicine_id = str(po_line.get('medicine_id', ''))
-                    medicine_name = po_line.get('medicine_name', 'Unknown Medicine')
+                    # ✅ FIX: Fetch FULL invoice details (with line items) for each invoice
+                    from app.services.supplier_service import get_supplier_invoice_by_id
                     
-                    try:
-                        units = float(po_line.get('units', 0))
-                    except (ValueError, TypeError):
-                        units = 1
+                    for invoice_summary in existing_invoices:
+                        # Skip cancelled invoices
+                        if invoice_summary.get('payment_status') == 'cancelled':
+                            current_app.logger.info(
+                                f"Skipping cancelled invoice {invoice_summary.get('supplier_invoice_number')}"
+                            )
+                            continue
                         
-                    try:
-                        pack_purchase_price = float(po_line.get('pack_purchase_price', 0))
-                    except (ValueError, TypeError):
-                        pack_purchase_price = 0
+                        # ✅ Get FULL invoice with line items
+                        invoice_id = invoice_summary.get('invoice_id')
+                        if not invoice_id:
+                            current_app.logger.warning(
+                                f"Invoice {invoice_summary.get('supplier_invoice_number')} has no ID"
+                            )
+                            continue
                         
-                    try:
-                        pack_mrp = float(po_line.get('pack_mrp', 0))
-                    except (ValueError, TypeError):
-                        pack_mrp = 0
-                        
-                    try:
-                        units_per_pack = float(po_line.get('units_per_pack', 1))
-                    except (ValueError, TypeError):
-                        units_per_pack = 1
-                    
-                    # Create line item with all needed fields
-                    line_item = {
-                        'medicine_id': medicine_id,
-                        'medicine_name': medicine_name,
-                        'units': units,
-                        'pack_purchase_price': pack_purchase_price,
-                        'pack_mrp': pack_mrp,
-                        'units_per_pack': units_per_pack,
-                        'hsn_code': po_line.get('hsn_code', ''),
-                        'gst_rate': float(po_line.get('gst_rate', 0)),
-                        'cgst_rate': float(po_line.get('cgst_rate', 0)),
-                        'sgst_rate': float(po_line.get('sgst_rate', 0)),
-                        'igst_rate': float(po_line.get('igst_rate', 0)),
-                        'batch_number': batch_placeholder,  # Clear placeholder
-                        'expiry_date': expiry_placeholder,  # Clear placeholder
-                        'is_free_item': False,
-                        'discount_percent': 0,
-                        # Include calculated values
-                        'cgst': float(po_line.get('cgst', 0)),
-                        'sgst': float(po_line.get('sgst', 0)),
-                        'igst': float(po_line.get('igst', 0)),
-                        'total_gst': float(po_line.get('total_gst', 0)),
-                        'line_total': float(po_line.get('line_total', 0)),
-                        'taxable_amount': float(po_line.get('taxable_amount', 0)),
-                        'unit_price': float(po_line.get('unit_price', 0))
-                    }
-                    
-                    line_items.append(line_item)
-                    
-                except Exception as item_error:
-                    current_app.logger.error(f"Error processing PO line item: {str(item_error)}")
-                    continue
-            
-            # Store line items in session
-            session_key = f'supplier_invoice_line_items_{current_user.user_id}'
-            session[session_key] = line_items
-            current_app.logger.info(f"Saved {len(line_items)} items to session for pre-population")
-            
-            # Create a default invoice number based on PO number
-            if not form.supplier_invoice_number.data:
-                form.supplier_invoice_number.data = f"INV-{po.get('po_number', '').replace('PO/', '')}"
-            
-            # Show message
-            flash(f"Form pre-populated from Purchase Order with {len(line_items)} items. Please review all fields, especially Batch Numbers and Expiry Dates.", "info")
-            
-        except Exception as e:
-            current_app.logger.error(f"Error pre-populating from PO: {str(e)}", exc_info=True)
-            flash(f"Error loading data from purchase order: {str(e)}", "error")
-    
-    def process_form(self, form, line_items=None, *args, **kwargs):
-        """
-        Process the invoice form data - ENHANCED with centralized branch validation
-        """
-        try:
-            # NEW: Add permission validation using centralized functions
-            from app.services.supplier_service import create_supplier_invoice
-            from flask_login import current_user
-            from app.services.branch_service import get_user_branch_id, validate_entity_branch_access
-            from app.services.permission_service import has_branch_permission
-            
-            # PRESERVE: Testing bypass
-            if current_user.user_id != '7777777777':
-                try:
-                    # Validate user can create invoices
-                    user_obj = {'user_id': current_user.user_id, 'hospital_id': current_user.hospital_id}
-                    if not has_branch_permission(user_obj, 'supplier_invoice', 'add'):
-                        raise PermissionError("Insufficient permissions to create supplier invoices")
-                    
-                    # Validate supplier access if supplier is selected
-                    if form.supplier_id.data:
-                        if not validate_entity_branch_access(
-                            current_user.user_id,
-                            current_user.hospital_id,
-                            form.supplier_id.data,
-                            'supplier',
-                            'view'
-                        ):
-                            raise PermissionError("Cannot create invoice for supplier from different branch")
-                    
-                    # Validate PO access if PO is selected
-                    if form.po_id.data and form.po_id.data.strip():
-                        if not validate_entity_branch_access(
-                            current_user.user_id,
-                            current_user.hospital_id,
-                            form.po_id.data,
-                            'purchase_order',
-                            'view'
-                        ):
-                            raise PermissionError("Cannot create invoice for PO from different branch")
+                        try:
+                            # Fetch full invoice details
+                            full_invoice = get_supplier_invoice_by_id(
+                                invoice_id=uuid.UUID(invoice_id) if isinstance(invoice_id, str) else invoice_id,
+                                hospital_id=current_user.hospital_id
+                            )
                             
-                except PermissionError:
-                    raise  # Re-raise permission errors
-                except Exception as e:
-                    current_app.logger.warning(f"Permission validation failed, proceeding: {str(e)}")
-            
-            # EXISTING: All the original logic unchanged
+                            if not full_invoice:
+                                current_app.logger.warning(
+                                    f"Could not fetch full invoice {invoice_id}"
+                                )
+                                continue
+                            
+                            invoice_lines = full_invoice.get('line_items', [])
+                            
+                            current_app.logger.info(
+                                f"Invoice {full_invoice.get('supplier_invoice_number')}: "
+                                f"{len(invoice_lines)} line items"
+                            )
+                            
+                            if not invoice_lines:
+                                current_app.logger.warning(
+                                    f"Invoice {full_invoice.get('supplier_invoice_number')} "
+                                    f"has no line_items in database!"
+                                )
+                                continue
+                            
+                            # Process line items
+                            for line in invoice_lines:
+                                med_id = str(line.get('medicine_id'))
+                                qty = float(line.get('units', 0))
+                                
+                                current_app.logger.info(
+                                    f"  Line: {line.get('medicine_name', 'Unknown')} - {qty} units"
+                                )
+                                
+                                if med_id in invoiced_quantities:
+                                    invoiced_quantities[med_id] += qty
+                                else:
+                                    invoiced_quantities[med_id] = qty
+                        
+                        except Exception as invoice_error:
+                            current_app.logger.error(
+                                f"Error fetching invoice {invoice_id}: {str(invoice_error)}"
+                            )
+                            continue
+                    
+                    current_app.logger.info(
+                        f"✅ Final invoiced quantities: {invoiced_quantities}"
+                    )
+                else:
+                    current_app.logger.info("No existing invoices found")
 
-          
-            # Log what's being processed
-            current_app.logger.info(f"Processing form with supplier_id: {form.supplier_id.data}, po_id: {form.po_id.data}")
+            except Exception as inv_error:
+                current_app.logger.error(
+                    f"Error checking invoices: {str(inv_error)}", 
+                    exc_info=True
+                )
             
-            # Convert UUIDs to strings to avoid type mismatch
-            supplier_id = str(form.supplier_id.data) if form.supplier_id.data else None
-            # Handle empty PO ID - make it explicitly None
-            po_id = None
-            if form.po_id.data and form.po_id.data.strip():
-                po_id = str(form.po_id.data)
-            
-            current_app.logger.info(f"Processing form with supplier_id: {supplier_id}, po_id: {po_id}")
-            
-            # Get branch_id from form or use default
-            branch_id = None
-            if hasattr(form, 'branch_id') and form.branch_id.data:
-                branch_id = uuid.UUID(form.branch_id.data)
-            else:
-                # Fallback to user's default branch
-                from app.services.branch_service import get_user_branch_id
-                user_branch_id = get_user_branch_id(current_user.user_id, current_user.hospital_id)
-                if user_branch_id:
-                    branch_id = user_branch_id
-            
-            # Get is_interstate for line item processing
-            is_interstate = form.is_interstate.data if hasattr(form, 'is_interstate') else False
+            # STEP 3: Get Supplier GST Information
+            supplier_gstin = None
+            place_of_supply = None
+            is_interstate = False
 
-            # Prepare invoice data
-            invoice_data = {
-                'supplier_id': form.supplier_id.data,
-                'po_id': po_id,  # Use our preprocessed PO ID
-                'supplier_invoice_number': form.supplier_invoice_number.data,
-                'invoice_date': form.invoice_date.data,
-                'supplier_gstin': form.supplier_gstin.data,
-                'place_of_supply': form.place_of_supply.data,
-                'reverse_charge': form.reverse_charge.data,
-                'currency_code': form.currency_code.data,
-                'exchange_rate': form.exchange_rate.data,
-                'payment_status': form.payment_status.data,
-                'due_date': form.due_date.data,
-                'itc_eligible': form.itc_eligible.data,
-                'branch_id': branch_id,
-                'notes': form.notes.data,
-                'is_interstate': form.is_interstate.data,
-                'line_items': line_items or []
+            if include_gst_fields:
+                supplier_id = po.get('supplier_id')
+                
+                if supplier_id:
+                    try:
+                        # ✅ FIX: Ensure supplier_id is UUID object (handle both string and UUID)
+                        if isinstance(supplier_id, str):
+                            supplier_uuid = uuid.UUID(supplier_id)
+                        else:
+                            supplier_uuid = supplier_id  # Already a UUID object
+                        
+                        with get_db_session(read_only=True) as db_session:
+                            supplier = db_session.query(Supplier).filter_by(
+                                supplier_id=supplier_uuid,  # ✅ FIXED: Use converted UUID
+                                hospital_id=current_user.hospital_id
+                            ).first()
+                            
+                            if supplier:
+                                supplier_gstin = supplier.gst_registration_number
+                                place_of_supply = supplier.state_code
+                                
+                                hospital = db_session.query(Hospital).filter_by(
+                                    hospital_id=current_user.hospital_id
+                                ).first()
+                                
+                                if hospital and supplier.state_code and hospital.state_code:
+                                    is_interstate = (supplier.state_code != hospital.state_code)
+                                    current_app.logger.info(
+                                        f"Interstate: Supplier={supplier.state_code}, "
+                                        f"Hospital={hospital.state_code}, Result={is_interstate}"
+                                    )
+                    
+                    except Exception as supplier_error:
+                        current_app.logger.error(f"Error getting supplier GST: {str(supplier_error)}")
+            
+            # STEP 4: Process Line Items with Balance
+            line_items = po.get('line_items', [])
+            formatted_items = []
+            
+            for item in line_items:
+                medicine_id = str(item.get('medicine_id'))
+                medicine_name = item.get('medicine_name', 'Unknown')
+                po_units = float(item.get('units', 0))
+                
+                invoiced_qty = invoiced_quantities.get(medicine_id, 0)
+                balance_qty = po_units - invoiced_qty
+                
+                current_app.logger.info(
+                    f"{medicine_name}: PO={po_units}, Invoiced={invoiced_qty}, Balance={balance_qty}"
+                )
+                
+                if balance_qty <= 0.001:
+                    current_app.logger.info(f"Skipping {medicine_name} - fully invoiced")
+                    continue
+                
+                formatted_items.append({
+                    'medicine_id': medicine_id,
+                    'medicine_name': medicine_name,
+                    'units': balance_qty,
+                    'units_per_pack': float(item.get('units_per_pack', 1)),
+                    'pack_purchase_price': float(item.get('pack_purchase_price', 0)),
+                    'pack_mrp': float(item.get('pack_mrp', 0)),
+                    'discount_percent': float(item.get('discount_percent', 0)),
+                    'hsn_code': item.get('hsn_code'),
+                    'gst_rate': float(item.get('gst_rate', 0)),
+                    'cgst_rate': float(item.get('cgst_rate', 0)),
+                    'sgst_rate': float(item.get('sgst_rate', 0)),
+                    'igst_rate': float(item.get('igst_rate', 0)),
+                    'branch_id': str(item.get('branch_id')) if item.get('branch_id') else None
+                })
+            
+            current_app.logger.info(f"Returning {len(formatted_items)} items with balance")
+            
+            # STEP 5: Build response with ALL PO fields
+            result = {
+                'success': True,
+                'po_number': po_number,
+                'supplier_id': str(po.get('supplier_id')),
+                'supplier_name': po.get('supplier_name', ''),
+                'line_items': formatted_items,
+                'po_branch_id': str(po.get('branch_id')) if po.get('branch_id') else None,
+                # ✅ CRITICAL FOR BACKWARD COMPATIBILITY
+                'currency_code': po.get('currency_code'),
+                'exchange_rate': po.get('exchange_rate', 1.0),
+                'notes': po.get('notes')
             }
             
-            # Apply interstate flag and validate free items
-            if line_items:
-                for idx, item in enumerate(line_items):
-                    item['is_interstate'] = is_interstate
-                    
-                    # Validate free item business rules
-                    if item.get('is_free_item', False):
-                        # Free items: ensure zero rate and positive quantity
-                        if float(item.get('pack_purchase_price', 0)) > 0:
-                            current_app.logger.warning(f"Line {idx + 1}: Adjusting free item rate to zero")
-                            item['pack_purchase_price'] = 0.0
-                        if float(item.get('units', 0)) <= 0:
-                            raise ValueError(f"Line {idx + 1}: Free items must have positive quantity")
-                    else:
-                        # Regular items: ensure positive rate and quantity
-                        if float(item.get('pack_purchase_price', 0)) <= 0:
-                            raise ValueError(f"Line {idx + 1}: Non-free items must have positive price")
-                        if float(item.get('units', 0)) <= 0:
-                            raise ValueError(f"Line {idx + 1}: Non-free items must have positive quantity")
+            if include_gst_fields:
+                result.update({
+                    'supplier_gstin': supplier_gstin,
+                    'place_of_supply': place_of_supply,
+                    'is_interstate': is_interstate
+                })
             
-            current_app.logger.info(f"Creating invoice with {len(line_items)} line items. Interstate: {is_interstate}")
-
-            # Process dynamic line items from form hidden fields (backward compatibility)
-            if form.medicine_ids.data:
-                medicine_ids = form.medicine_ids.data.split(',')
-                medicine_names = form.medicine_names.data.split(',')
-                quantities = form.quantities.data.split(',')
-                pack_purchase_prices = form.pack_purchase_prices.data.split(',')
-                pack_mrps = form.pack_mrps.data.split(',')
-                units_per_packs = form.units_per_packs.data.split(',')
-                hsn_codes = form.hsn_codes.data.split(',')
-                gst_rates = form.gst_rates.data.split(',')
-                cgst_rates = form.cgst_rates.data.split(',')
-                sgst_rates = form.sgst_rates.data.split(',')
-                igst_rates = form.igst_rates.data.split(',')
-                batch_numbers = form.batch_numbers.data.split(',')
-                expiry_dates = form.expiry_dates.data.split(',')
-                
-                # Optional fields with defaults
-                is_free_items = form.is_free_items.data.split(',') if form.is_free_items.data else ['false'] * len(medicine_ids)
-                referenced_line_ids = form.referenced_line_ids.data.split(',') if form.referenced_line_ids.data else [''] * len(medicine_ids)
-                discount_percents = form.discount_percents.data.split(',') if form.discount_percents.data else ['0'] * len(medicine_ids)
-                pre_gst_discounts = form.pre_gst_discounts.data.split(',') if form.pre_gst_discounts.data else ['true'] * len(medicine_ids)
-                manufacturing_dates = form.manufacturing_dates.data.split(',') if form.manufacturing_dates.data else [''] * len(medicine_ids)
-                item_itc_eligibles = form.item_itc_eligibles.data.split(',') if form.item_itc_eligibles.data else ['true'] * len(medicine_ids)
-                
-                for i in range(len(medicine_ids)):
-                    is_free = is_free_items[i].lower() == 'true'
-                    
-                    line_item = {
-                        'medicine_id': medicine_ids[i],
-                        'medicine_name': medicine_names[i],
-                        'units': float(quantities[i]),
-                        'pack_purchase_price': 0.0 if is_free else float(pack_purchase_prices[i]),  # Force zero for free items
-                        'pack_mrp': float(pack_mrps[i]),
-                        'units_per_pack': float(units_per_packs[i]),
-                        'is_free_item': is_free,
-                        'referenced_line_id': referenced_line_ids[i] if referenced_line_ids[i] else None,
-                        'discount_percent': 0.0 if is_free else float(discount_percents[i]),  # No discount for free items
-                        'pre_gst_discount': pre_gst_discounts[i].lower() == 'true',
-                        'hsn_code': hsn_codes[i],
-                        'gst_rate': float(gst_rates[i]),
-                        'cgst_rate': float(cgst_rates[i]),
-                        'sgst_rate': float(sgst_rates[i]),
-                        'igst_rate': float(igst_rates[i]),
-                        'batch_number': batch_numbers[i],
-                        'manufacturing_date': manufacturing_dates[i] if manufacturing_dates[i] else None,
-                        'expiry_date': expiry_dates[i],
-                        'itc_eligible': item_itc_eligibles[i].lower() == 'true',
-                        'is_interstate': is_interstate
-                    }
-                    
-                    # Validate free item rules
-                    if is_free and float(quantities[i]) <= 0:
-                        raise ValueError(f"Line {i + 1}: Free items must have positive quantity")
-                    
-                    invoice_data['line_items'].append(line_item)
-            
-            branch_id = get_user_branch_id(current_user.user_id, current_user.hospital_id)
-
-            # Create invoice using centralized service with GST calculations
-            return create_supplier_invoice(
-                hospital_id=current_user.hospital_id,
-                branch_id=branch_id,
-                invoice_data=invoice_data,
-                create_stock_entries=True,
-                current_user_id=current_user.user_id
-            )
+            return result
         
-        except PermissionError as pe:
-            current_app.logger.warning(f"Permission denied: {str(pe)}")
-            raise  # Re-raise to be handled by form framework
         except Exception as e:
-            current_app.logger.error(f"Error processing invoice form: {str(e)}", exc_info=True)
-            raise
+            current_app.logger.error(f"Error getting PO items: {str(e)}", exc_info=True)
+            return {
+                'success': False,
+                'error': str(e)
+            }
 
-    
+
     def process_line_item_form(self, form, *args, **kwargs):
         """
         Process a line item form submission within the invoice creation form
@@ -1167,273 +1715,62 @@ class SupplierInvoiceFormController(FormController):
             return None
         
     def handle_request(self, *args, **kwargs):
-        """Handle GET/POST request with direct line item management"""
-        # Import necessary modules
-        from flask import request, flash, redirect, url_for, session
+        """Handle GET/POST request - SIMPLIFIED for hidden fields approach"""
+        from flask import request, flash, redirect, current_app
         from flask_login import current_user
-        from app.forms.supplier_forms import SupplierInvoiceLineForm
-        import uuid
         
-        # Add logging for request type
-        current_app.logger.info(f"==== HANDLE REQUEST: {request.method} ====")
+        current_app.logger.info(f"==== SUPPLIER INVOICE HANDLE REQUEST: {request.method} ====")
         
-        # Add this clear line items functionality
-        # Clear line items if requested via URL parameter
-        if request.args.get('clear_items') == '1':
-            session_key = f'supplier_invoice_line_items_{current_user.user_id}'
-            if session_key in session:
-                session.pop(session_key)
-                flash("Line items cleared successfully", "success")
-                # Redirect to remove the query parameter
-                return redirect(request.path)
-
         # Get the main invoice form
         form = self.get_form(*args, **kwargs)
         
-        # Create a form for line items
-        line_item_form = SupplierInvoiceLineForm()
-        
-        # Set medicine choices from additional context
-        context = self.get_additional_context(*args, **kwargs)
-        medicines = context.get('medicines', [])
-        medicine_choices = [('', 'Select Medicine')] + [
-            (str(med.medicine_id), med.medicine_name) for med in medicines
-        ]
-        line_item_form.medicine_id.choices = medicine_choices
-        
-        # Prepare line items list
-        session_key = f'supplier_invoice_line_items_{current_user.user_id}'
-        if session_key not in session:
-            session[session_key] = []
-        
-        line_items = session.get(session_key, [])
-        
-        # Add logging for session data
-        current_app.logger.info(f"Loaded {len(line_items)} line items from session")
-        
-        # Handle EDIT LINE ITEM submission - this will override the add line item if edit_line_index is present
-        if request.method == 'POST' and 'add_line_item' in request.form:
-            # Add debugging for form submission detection
-            current_app.logger.info("===== ADD/EDIT LINE ITEM DETECTED =====")
-            current_app.logger.info(f"Form data keys: {list(request.form.keys())}")
-            current_app.logger.info(f"Medicine ID: {line_item_form.medicine_id.data}")
-            current_app.logger.info(f"Quantity: {line_item_form.quantity.data}")
+        # REMOVE THIS CHECK FOR submit_invoice - it's not in form data when using form.submit()
+        if request.method == 'POST':
+            current_app.logger.info("===== POST REQUEST DETECTED =====")
+            current_app.logger.info(f"Form keys: {list(request.form.keys())}")
+            current_app.logger.info(f"medicine_ids from form: {form.medicine_ids.data}")
             
-            if line_item_form.validate_on_submit():
-                # Add logging for form validation success
-                current_app.logger.info("Form validation successful")
-                
+            # CRITICAL FIX: Add selected PO to choices if it exists
+            if form.po_id.data and form.po_id.data.strip():
                 try:
-                    # Check if we're editing an existing item
-                    edit_index = request.form.get('edit_line_index', '')
-                    current_app.logger.info(f"Edit index from form: '{edit_index}'")
-                    
-                    if edit_index and edit_index.isdigit():
-                        # Process editing existing item
-                        edit_index = int(edit_index)
-                        current_app.logger.info(f"Editing line item at index {edit_index}")
-                        
-                        # Make sure index is valid
-                        if 0 <= edit_index < len(line_items):
-                            # Get hospital state code
-                            hospital_state_code = context.get('hospital_state_code', '')
-                            
-                            # Process the line item form
-                            updated_line_item = self.process_line_item_form(
-                                line_item_form, 
-                                hospital_state_code=hospital_state_code,
-                                *args, **kwargs
-                            )
-                            
-                            if updated_line_item:
-                                # Update the line item in the session
-                                line_items[edit_index] = updated_line_item
-                                session[session_key] = line_items
-                                flash("Line item updated successfully", "success")
-                                current_app.logger.info("Line item updated successfully")
-                            else:
-                                flash("Failed to update line item", "error")
-                                current_app.logger.error("Failed to update line item - process_line_item_form returned None")
-                        else:
-                            flash("Invalid line item index", "error")
-                            current_app.logger.error(f"Invalid edit index: {edit_index}, valid range: 0-{len(line_items)-1}")
-                    else:
-                        # Process adding new item
-                        current_app.logger.info("Adding new line item")
-                        
-                        # Get hospital state code
-                        hospital_state_code = context.get('hospital_state_code', '')
-                        current_app.logger.info(f"Hospital state code: {hospital_state_code}")
-                        
-                        # Process the line item form
-                        new_line_item = self.process_line_item_form(
-                            line_item_form, 
-                            hospital_state_code=hospital_state_code,
-                            *args, **kwargs
-                        )
-                        
-                        if new_line_item:
-                            # Add the new line item to the session
-                            line_items.append(new_line_item)
-                            session[session_key] = line_items
-                            flash("Line item added successfully", "success")
-                            current_app.logger.info("Line item added successfully, new count: " + str(len(line_items)))
-                            current_app.logger.info(f"New line item: {new_line_item}")
-                        else:
-                            flash("Failed to add line item", "error")
-                            current_app.logger.error("Failed to add line item - process_line_item_form returned None")
-                    
-                    # Reset line item form
-                    line_item_form = SupplierInvoiceLineForm()
-                    line_item_form.medicine_id.choices = medicine_choices
-                    
-                except Exception as e:
-                    current_app.logger.error(f"Error processing line item: {str(e)}", exc_info=True)
-                    flash(f"Error processing line item: {str(e)}", "error")
-                
-                # Add anchor to redirect to line item section
-                from flask import url_for
-                po_param = f"?po_id={form.po_id.data}" if form.po_id.data else ""
-                # return redirect(f"{request.path}{po_param}#line-items-section")
-                return self.render_form(form, line_item_form=line_item_form, line_items=line_items, *args, **kwargs)
-            else:
-                # Log validation errors
-                current_app.logger.error(f"Form validation failed: {line_item_form.errors}")
-                for field_name, errors in line_item_form.errors.items():
-                    current_app.logger.error(f"Field '{field_name}' errors: {errors}")
-                    
-                flash("Please correct the errors in the form", "error")
-        
-        # Handle REMOVE LINE ITEM submission
-        if request.method == 'POST' and 'remove_line_item' in request.form:
-            current_app.logger.info("===== REMOVE LINE ITEM DETECTED =====")
-            try:
-                index = int(request.form.get('remove_line_item', 0))
-                current_app.logger.info(f"Attempting to remove item at index: {index}")
-                
-                if 0 <= index < len(line_items):
-                    removed_item = line_items.pop(index)
-                    session[session_key] = line_items
-                    flash(f"Removed line item: {removed_item['medicine_name']}", "success")
-                    current_app.logger.info(f"Successfully removed line item {removed_item['medicine_name']}")
-                else:
-                    current_app.logger.error(f"Invalid index: {index}, valid range: 0-{len(line_items)-1}")
-                    
-                # Return the form with updated line items
-                return self.render_form(form, line_item_form=line_item_form, line_items=line_items, *args, **kwargs)
-            except Exception as e:
-                current_app.logger.error(f"Error removing line item: {str(e)}", exc_info=True)
-                flash(f"Error removing line item: {str(e)}", "error")
-        
-        # Handle MAIN FORM SUBMISSION
-        if request.method == 'POST' and 'submit_invoice' in request.form:
-            current_app.logger.info(f"===== SUBMIT INVOICE DETECTED =====")
-            current_app.logger.info(f"Supplier ID: {form.supplier_id.data}")
-            current_app.logger.info(f"PO ID: {form.po_id.data}")
-            
-            # CRITICAL FIX: Explicitly set a flag to prevent PO pre-population during form submission
-            request.skip_po_prepopulation = True
-            # Check for missing fields before validation
-            missing_fields = []
-
-            # Check if invoice number needs attention
-            invoice_number = form.supplier_invoice_number.data
-            po_number = None
-            
-            # If we have a PO ID, get the PO number to check if invoice number is default
-            if form.po_id.data:
-                try:
-                    import uuid
                     from app.services.supplier_service import get_purchase_order_by_id
-                    from flask_login import current_user
+                    import uuid as uuid_lib
                     
                     po = get_purchase_order_by_id(
-                        po_id=uuid.UUID(form.po_id.data),
+                        po_id=uuid_lib.UUID(form.po_id.data),
                         hospital_id=current_user.hospital_id
                     )
                     
                     if po:
-                        po_number = po.get('po_number')
-                except Exception as e:
-                    current_app.logger.error(f"Error getting PO details: {str(e)}")
-            
-            # Check if invoice number matches default pattern
-            is_default_invoice_number = False
-            if po_number and invoice_number:
-                default_pattern = f"INV-{po_number.replace('PO/', '')}"
-                if invoice_number == default_pattern:
-                    is_default_invoice_number = True
-                    current_app.logger.warning(f"Invoice number ({invoice_number}) matches default pattern")
-            
-            # Add warning about default invoice number
-            if is_default_invoice_number:
-                flash("You are using the default invoice number. Please verify this matches the actual supplier invoice number.", "warning")
-                # Don't add to missing_fields to allow submission, just warn
-
-            if not form.supplier_invoice_number.data:
-                missing_fields.append("Invoice Number")
-            if not form.invoice_date.data:
-                missing_fields.append("Invoice Date")
-            if not form.place_of_supply.data:
-                missing_fields.append("Place of Supply")
-            
-            # Check line items for missing required fields
-            has_missing_batch_expiry = False
-            for idx, item in enumerate(line_items):
-                medicine_name = item.get('medicine_name', f'Item {idx+1}')
-                batch_number = item.get('batch_number', '')
-                expiry_date = item.get('expiry_date', '')
-                
-                # Check if batch number is missing or is a placeholder
-                if not batch_number or batch_number == '[ENTER BATCH #]':
-                    has_missing_batch_expiry = True
-                    missing_fields.append(f"Batch Number for {medicine_name}")
-                    
-                # Check if expiry date is missing or is a placeholder
-                if not expiry_date or expiry_date == 'YYYY-MM-DD':
-                    has_missing_batch_expiry = True
-                    missing_fields.append(f"Expiry Date for {medicine_name}")
-            
-            # Show error if mandatory fields are missing
-            if missing_fields:
-                flash(f"Please fill in the following required fields: {', '.join(missing_fields)}", "error")
-                return self.render_form(form, line_item_form=line_item_form, line_items=line_items, *args, **kwargs)
-            
-            # Log PO supplier mapping for debugging
-            po_suppliers = context.get('po_suppliers', {})
-            current_app.logger.info(f"PO suppliers mapping: {po_suppliers}")
-            
-            # Check if PO is in the mapping
-            if form.po_id.data in po_suppliers:
-                po_supplier_id = po_suppliers[form.po_id.data]
-                current_app.logger.info(f"Expected supplier for PO: {po_supplier_id}")
-
-            if form.validate_on_submit():
-                try:
-                    # Validate line items
-                    if not line_items:
-                        flash("At least one line item is required", "error")
-                        return self.render_form(form, line_item_form=line_item_form, line_items=line_items, *args, **kwargs)
-                    
-                    # Only check PO-supplier matching if a PO is actually selected
-                    po_id = form.po_id.data
-                    if po_id and po_id.strip():  # Check if po_id is not empty
-                        # Get the PO supplier from context
-                        po_suppliers = context.get('po_suppliers', {})
-                        po_supplier_id = po_suppliers.get(po_id)
+                        # Add this PO to the choices to pass validation
+                        po_date_str = ''
+                        if po.get('po_date'):
+                            po_date = po.get('po_date')
+                            po_date_str = po_date.strftime('%Y-%m-%d') if hasattr(po_date, 'strftime') else str(po_date)[:10]
                         
-                        # Make sure the supplier in the form matches the PO's supplier
-                        if po_supplier_id and form.supplier_id.data != po_supplier_id:
-                            current_app.logger.info(f"Setting supplier_id to match PO supplier: {po_supplier_id}")
-                            form.supplier_id.data = po_supplier_id
+                        po_text = f"{po.get('po_number')} - {po_date_str}"
+                        
+                        # Check if already in choices
+                        existing_choices = [choice[0] for choice in form.po_id.choices]
+                        if form.po_id.data not in existing_choices:
+                            form.po_id.choices.append((form.po_id.data, po_text))
+                            current_app.logger.info(f"✅ Added PO {po.get('po_number')} to choices for validation")
+                except Exception as e:
+                    current_app.logger.error(f"Error adding PO to choices: {str(e)}")
+            
+            # Validate form
+            if form.validate_on_submit():
+                current_app.logger.info("✅ Form validated successfully")
+                
+                # Check if hidden fields have data
+                if not form.medicine_ids.data or not form.medicine_ids.data.strip():
+                    flash("No line items found. Please add at least one item to the invoice.", "error")
+                    return self.render_form(form, *args, **kwargs)
+                
+                try:
+                    # Process the form - process_form() will parse hidden fields
+                    result = self.process_form(form, *args, **kwargs)
                     
-                    # Process main form with line items from session
-                    result = self.process_form(form, line_items=line_items, *args, **kwargs)
-                    
-                    # Clear session line items
-                    session.pop(session_key, None)
-                    
-                    # Success message
                     flash(self.success_message, "success")
                     
                     # Redirect to success URL
@@ -1442,20 +1779,20 @@ class SupplierInvoiceFormController(FormController):
                     return redirect(self.success_url)
                     
                 except Exception as e:
-                    current_app.logger.error(f"Error processing form: {str(e)}", exc_info=True)
-                    flash(f"Error: {str(e)}", "error")
+                    current_app.logger.error(f"❌ Error processing invoice: {str(e)}", exc_info=True)
+                    flash(f"Error creating invoice: {str(e)}", "error")
+                    return self.render_form(form, *args, **kwargs)
             else:
-                # Log validation errors
+                # Form validation failed
+                current_app.logger.error(f"❌ Form validation failed: {form.errors}")
                 for field, errors in form.errors.items():
-                    current_app.logger.warning(f"Validation error in {field}: {errors}")
-            
-            # CRITICAL FIX: Redirect to the same page with fragment to prevent re-populating from PO
-            # We'll add a flag in the URL to indicate we're coming back from an edit
-            po_param = f"?po_id={form.po_id.data}&edited=1" if form.po_id.data else ""
-            return redirect(f"{request.path}{po_param}#line-items-section")
+                    for error in errors:
+                        flash(f"{field}: {error}", "error")
+                return self.render_form(form, *args, **kwargs)
         
         # GET request
-        return self.render_form(form, line_item_form=line_item_form, line_items=line_items, *args, **kwargs)
+        current_app.logger.info("GET request - rendering form")
+        return self.render_form(form, *args, **kwargs)
     
     def get_payment_context_for_invoice(self):
         """Get payment-ready context for invoice that can be paid"""
@@ -1544,9 +1881,11 @@ class SupplierInvoiceEditController(FormController):
         )
     
     def _get_success_url(self, result):
-        """Generate success URL"""
+        """Generate success URL - USES UNIVERSAL ENGINE VIEW"""
         from flask import url_for
-        return url_for('supplier_views.view_supplier_invoice', invoice_id=self.invoice_id)
+        return url_for('universal_views.universal_detail_view', 
+                      entity_type='supplier_invoices', 
+                      item_id=self.invoice_id)
     
     def get_success_message(self, result):
         base_message = "Supplier invoice created successfully"
@@ -1566,7 +1905,7 @@ class SupplierInvoiceEditController(FormController):
             from app.services.database_service import get_db_session
             from app.models.master import Supplier, Medicine
             from flask_login import current_user
-            
+
             # NEW: Get branch context for filtering
             try:
                 from app.services.permission_service import get_user_branch_context
@@ -1634,8 +1973,16 @@ class SupplierInvoiceEditController(FormController):
         return form
     
     def _set_form_choices(self, form):
-        """Set form choices - centralized method"""
+        """Set form choices - centralized method with PO filtering"""
         try:
+            from flask_login import current_user
+            from app.services.supplier_service import search_purchase_orders
+            from app.services.branch_service import get_user_branch_id
+            from app.services.database_service import get_db_session
+            from app.models.transaction import SupplierInvoice
+            from sqlalchemy import func
+            import uuid
+            
             # Get suppliers
             context = self.get_additional_context()
             suppliers = context.get('suppliers', [])
@@ -1650,10 +1997,69 @@ class SupplierInvoiceEditController(FormController):
                 ('EUR', 'EUR')
             ]
             
-            # Set PO choices (optional field)
+            # Set PO choices - filtered by current supplier if selected
             form.po_id.choices = [('', 'Select Purchase Order (Optional)')]
             
-            current_app.logger.debug(f"Set {len(suppliers)} supplier choices and currency choices")
+            # Get current supplier from form data
+            current_supplier_id = form.supplier_id.data
+            
+            if current_supplier_id:
+                try:
+                    # Get user's branch for filtering
+                    user_branch_id = get_user_branch_id(current_user.user_id, current_user.hospital_id)
+                    
+                    # Search for approved POs for this supplier
+                    po_results = search_purchase_orders(
+                        hospital_id=current_user.hospital_id,
+                        supplier_id=uuid.UUID(current_supplier_id),
+                        status='approved',
+                        branch_id=user_branch_id,
+                        page=1,
+                        per_page=100
+                    )
+                    
+                    # Filter out fully invoiced POs
+                    with get_db_session() as session:
+                        for po in po_results.get('results', []):
+                            po_id = po.get('po_id')
+                            po_total = float(po.get('total_amount', 0))
+                            
+                            # Calculate total already invoiced against this PO
+                            invoiced_total = session.query(func.sum(SupplierInvoice.total_amount))\
+                                .filter(
+                                    SupplierInvoice.po_id == po_id,
+                                    SupplierInvoice.hospital_id == current_user.hospital_id,
+                                    SupplierInvoice.payment_status != 'cancelled'
+                                ).scalar() or 0
+                            
+                            invoiced_total = float(invoiced_total)
+                            remaining = po_total - invoiced_total
+                            
+                            # Only include if there's remaining amount (with tolerance for rounding)
+                            if remaining > 0.01:
+                                po_number = po.get('po_number', 'Unknown')
+                                po_date = po.get('po_date')
+                                
+                                # Format date
+                                date_str = ''
+                                if po_date:
+                                    if isinstance(po_date, str):
+                                        date_str = po_date[:10]
+                                    else:
+                                        date_str = po_date.strftime('%Y-%m-%d')
+                                
+                                # Create label with remaining amount
+                                po_label = f"{po_number} - {date_str} (₹{remaining:,.2f} remaining)"
+                                form.po_id.choices.append((str(po_id), po_label))
+                    
+                    current_app.logger.info(f"Set {len(form.po_id.choices) - 1} available PO choices for supplier {current_supplier_id}")
+                    
+                except Exception as po_error:
+                    current_app.logger.warning(f"Error filtering POs: {str(po_error)}")
+                    # Fallback - keep empty PO list
+                    pass
+            
+            current_app.logger.debug(f"Set {len(suppliers)} supplier choices and {len(form.po_id.choices)} PO choices")
             
         except Exception as e:
             current_app.logger.error(f"Error setting form choices: {str(e)}")
@@ -2279,11 +2685,22 @@ class PurchaseOrderFormController(FormController):
                     except Exception as e:
                         current_app.logger.warning(f"Could not get selected supplier details: {str(e)}")
 
-                # Get medicines
+                # Get medicines with MRP data for line items
                 medicines = session.query(Medicine).filter_by(
-                    hospital_id=current_user.hospital_id
-                ).all()
-                context['medicines'] = medicines
+                    hospital_id=current_user.hospital_id,
+                    status='active'
+                ).order_by(Medicine.medicine_name).all()
+
+                # Enhance medicines with price data
+                from app.services.database_service import get_detached_copy
+                medicines_with_prices = []
+                for m in medicines:
+                    medicine_copy = get_detached_copy(m)
+                    medicine_copy.mrp_value = float(m.mrp or 0)
+                    medicine_copy.last_purchase_price_value = float(m.last_purchase_price or 0)
+                    medicines_with_prices.append(medicine_copy)
+
+                context['medicines'] = medicines_with_prices
                 
                 # Get branches with filtering
                 all_branches = session.query(Branch).filter_by(
@@ -2747,7 +3164,7 @@ class PurchaseOrderEditController(FormController):
         """Generate success URL"""
         from flask import url_for
         return url_for('supplier_views.view_purchase_order', po_id=self.po_id)
-    
+
     def get_additional_context(self, *args, **kwargs):
         """Get additional context for template - ENHANCED with branch filtering"""
         context = {}

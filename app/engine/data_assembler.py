@@ -1085,15 +1085,18 @@ class EnhancedUniversalDataAssembler:
                 return True
             
             for field, allowed_values in action.conditions.items():
-                # Skip virtual/computed fields that might not exist
-                if field in ['can_be_approved', 'can_be_deleted', 'can_be_unapproved', 'has_invoice']:
-                    continue  # Skip these as they may not exist in the view
-                    
+                # ✅ FIXED: Check if field exists in item, evaluate if present
                 # Get value from item (works with dict or object)
                 if isinstance(item, dict):
                     actual_value = item.get(field)
                 else:
                     actual_value = getattr(item, field, None)
+                
+                # ✅ FIXED: If virtual field doesn't exist, skip evaluation (default to show)
+                # This allows gradual rollout of virtual fields without breaking existing functionality
+                if actual_value is None and field in ['can_be_approved', 'can_be_deleted', 'can_be_unapproved', 'has_invoice']:
+                    logger.debug(f"Virtual field {field} not present in item, skipping condition check")
+                    continue
                 
                 # ✅ FIXED: Handle None case for is_deleted field explicitly
                 # When is_deleted is None (field doesn't exist), treat as False (not deleted)

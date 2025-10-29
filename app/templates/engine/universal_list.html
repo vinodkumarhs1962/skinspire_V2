@@ -664,12 +664,6 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                                 <div class="universal-table-actions-improved">
                                     {% set item_id = item.get(assembled_data.entity_config.primary_key) %}
                                     
-                                    <!-- Always show View button -->
-                                    <a href="{{ get_crud_url(assembled_data.entity_config.entity_type, 'view', item_id) }}" 
-                                    class="btn-info btn-action-sm" title="View">
-                                        <i class="fas fa-eye action-icon-sm"></i>
-                                    </a>
-                                    
                                     <!-- Only show other actions if not deleted -->
                                     {% if not item.get('is_deleted') and not item.get('deleted_flag') %}
                                         <!-- Show configured inline actions based on conditions -->
@@ -702,6 +696,9 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                                                 {% elif action.id == 'unapprove' and item.get('po_status') != 'approved' %}
                                                     {% set show_action = false %}
                                                 {% elif action.id == 'cancel' and item.get('po_status') == 'cancelled' %}
+                                                    {% set show_action = false %}
+                                                {# ✅ NEW: Hide Create Invoice for draft and cancelled POs #}
+                                                {% elif action.id == 'create_invoice' and item.get('po_status') in ['draft', 'cancelled'] %}
                                                     {% set show_action = false %}
                                                 {% endif %}
                                                 

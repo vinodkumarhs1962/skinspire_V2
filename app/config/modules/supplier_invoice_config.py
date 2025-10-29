@@ -782,8 +782,8 @@ SUPPLIER_INVOICE_ACTIONS = [
         label="View Details",
         icon="fas fa-eye",
         button_type=ButtonType.INFO,
-        route_name="universal_entity.view",
-        route_params={"entity_type": "supplier_invoices"},
+        route_name="universal_views.universal_detail_view",
+        route_params={"entity_type": "supplier_invoices", "item_id": "{invoice_id}"},
         show_in_list=True,
         show_in_detail=False,
         display_type=ActionDisplayType.BUTTON,
@@ -792,12 +792,29 @@ SUPPLIER_INVOICE_ACTIONS = [
     ),
     
     ActionDefinition(
+        id="make_payment",
+        label="Make Payment",
+        icon="fas fa-money-bill-wave",
+        button_type=ButtonType.SUCCESS,
+        route_name="supplier_views.create_payment",
+        route_params={"invoice_id": "{invoice_id}"},
+        show_in_list=True,
+        show_in_detail=True,
+        display_type=ActionDisplayType.BUTTON,
+        permission="supplier_payment_create",
+        order=1.5,
+        conditions={
+            "payment_status": ["pending", "partial", "overdue"]
+        }
+    ),
+
+    ActionDefinition(
         id="export",
         label="Export",
         icon="fas fa-download",
         button_type=ButtonType.SECONDARY,
         url_pattern="/universal/supplier_invoices/export",
-        show_in_list=True,
+        show_in_list=False,
         show_in_detail=False,
         show_in_toolbar=True,
         display_type=ActionDisplayType.BUTTON,
@@ -826,8 +843,9 @@ SUPPLIER_INVOICE_ACTIONS = [
         label="Print Invoice",
         icon="fas fa-print",
         button_type=ButtonType.INFO,
-        url_pattern="/universal/supplier_invoices/document/{invoice_id}?type=invoice&format=print",
-        show_in_list=False,
+        route_name="universal_views.universal_document_view",
+        route_params={"entity_type": "supplier_invoices", "item_id": "{invoice_id}", "doc_type": "invoice"},
+        show_in_list=True,
         show_in_detail=True,
         show_in_toolbar=True,
         display_type=ActionDisplayType.BUTTON,

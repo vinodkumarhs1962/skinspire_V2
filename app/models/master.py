@@ -469,6 +469,10 @@ class Supplier(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     tax_type = Column(String(20))  # Regular/Composition/Unregistered
     state_code = Column(String(2))
     
+    # Tax default fields for invoice transactions
+    reverse_charge_applicable = Column(Boolean, default=False)  # RCM applicable by default
+    default_itc_eligible = Column(Boolean, default=True)  # Default ITC eligibility
+
     bank_details = Column(JSONB)
     remarks = Column(String(255))
     status = Column(String(20), default='active')

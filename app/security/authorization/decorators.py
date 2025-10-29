@@ -242,6 +242,17 @@ def require_web_branch_permission(module_name, permission_type, branch_source='a
                 
                 # Testing bypass (preserve existing pattern)
                 if current_user.user_id == '7777777777':
+                    # CRITICAL FIX: Set g.branch_context even for testing bypass
+                    # to prevent 'NoneType' subscriptable errors in templates/handlers
+                    if not hasattr(g, 'branch_context') or g.branch_context is None:
+                        g.branch_context = {
+                            'method': 'testing_bypass',
+                            'accessible_branches': [],
+                            'assigned_branch_id': None,
+                            'can_cross_branch': True,
+                            'is_multi_branch_user': False,
+                            'branch_filter_required': False
+                        }
                     return f(*args, **kwargs)
                 
                 # Check if branch validation is enabled for this module
@@ -263,10 +274,12 @@ def require_web_branch_permission(module_name, permission_type, branch_source='a
                     return redirect(url_for('auth_views.dashboard'))
                 
                 # Set branch context for view function (NEW)
-                g.branch_context = get_branch_context_for_decorator(
+                # CRITICAL FIX: Ensure g.branch_context is never None
+                branch_context = get_branch_context_for_decorator(
                     current_user.user_id, current_user.hospital_id, 
                     branch_id, module_name, permission_type
                 )
+                g.branch_context = branch_context if branch_context else {}
                 
                 return f(*args, **kwargs)
                 
@@ -296,6 +309,17 @@ def require_web_cross_branch_permission(module_name, action='view'):
                 
                 # Testing bypass
                 if current_user.user_id == '7777777777':
+                    # CRITICAL FIX: Set g.branch_context even for testing bypass
+                    if not hasattr(g, 'branch_context') or g.branch_context is None:
+                        g.branch_context = {
+                            'method': 'testing_bypass',
+                            'accessible_branches': [],
+                            'assigned_branch_id': None,
+                            'can_cross_branch': True,
+                            'is_multi_branch_user': False,
+                            'branch_filter_required': False,
+                            'is_cross_branch': True
+                        }
                     return f(*args, **kwargs)
                 
                 # Check cross-branch permission
@@ -304,10 +328,12 @@ def require_web_cross_branch_permission(module_name, action='view'):
                     return redirect(url_for('auth_views.dashboard'))
                 
                 # Set cross-branch context
-                g.branch_context = get_branch_context_for_decorator(
+                # CRITICAL FIX: Ensure g.branch_context is never None
+                branch_context = get_branch_context_for_decorator(
                     current_user.user_id, current_user.hospital_id, 
                     'all', module_name, action
                 )
+                g.branch_context = branch_context if branch_context else {}
                 g.branch_context['is_cross_branch'] = True
                 
                 return f(*args, **kwargs)
