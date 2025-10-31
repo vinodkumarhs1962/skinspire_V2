@@ -911,11 +911,87 @@ def edit_supplier_invoice(invoice_id):
     except ValueError as ve:
         # Handle validation errors
         flash(str(ve), "error")
-        return redirect(url_for('supplier_views.view_supplier_invoice', invoice_id=invoice_id))
+        return redirect(url_for('universal_views.universal_detail_view', entity_type='supplier_invoices', item_id=invoice_id))
     except Exception as e:
         current_app.logger.error(f"Error in edit_supplier_invoice: {str(e)}", exc_info=True)
         flash(f"Error loading invoice for editing: {str(e)}", "error")
-        return redirect(url_for('supplier_views.supplier_invoice_list'))
+        return redirect(url_for('universal_views.universal_list_view', entity_type='supplier_invoices'))
+
+@supplier_views_bp.route('/api/supplier-invoice/<invoice_id>/details', methods=['GET'])
+@login_required
+@require_web_branch_permission('supplier_invoice', 'view', branch_source='entity')
+def get_supplier_invoice_details_api(invoice_id):
+    """
+    API endpoint to get supplier invoice details with line items for edit page
+    Called by JavaScript in edit_supplier_invoice.html to load existing invoice data
+    """
+    try:
+        from app.services.supplier_service import get_supplier_invoice_by_id
+        import uuid
+
+        # Get invoice with line items
+        invoice = get_supplier_invoice_by_id(
+            invoice_id=uuid.UUID(invoice_id),
+            hospital_id=current_user.hospital_id,
+            include_payments=False  # Don't need payment history for edit
+        )
+
+        if not invoice:
+            return jsonify({
+                'success': False,
+                'message': 'Invoice not found'
+            }), 404
+
+        # Format line items for JavaScript consumption
+        line_items = []
+        if invoice.get('line_items'):
+            for line in invoice['line_items']:
+                line_items.append({
+                    'medicine_id': str(line.get('medicine_id')),
+                    'medicine_name': line.get('medicine_name', ''),
+                    'batch_number': line.get('batch_number', ''),
+                    'expiry_date': line.get('expiry_date').isoformat() if line.get('expiry_date') else '',
+                    'quantity': float(line.get('units', 0)),
+                    'pack_purchase_price': float(line.get('pack_purchase_price', 0)),
+                    'pack_mrp': float(line.get('pack_mrp', 0)),
+                    'units_per_pack': float(line.get('units_per_pack', 1)),
+                    'discount_percent': float(line.get('discount_percent', 0)),
+                    'is_free_item': line.get('is_free_item', False),
+                    'hsn_code': line.get('hsn_code', ''),
+                    'gst_rate': float(line.get('gst_rate', 0)),
+                    'cgst_rate': float(line.get('cgst_rate', 0)),
+                    'sgst_rate': float(line.get('sgst_rate', 0)),
+                    'igst_rate': float(line.get('igst_rate', 0)),
+                    'line_total': float(line.get('line_total', 0))
+                })
+
+        return jsonify({
+            'success': True,
+            'invoice': {
+                'invoice_id': str(invoice.get('invoice_id')),
+                'supplier_invoice_number': invoice.get('supplier_invoice_number'),
+                'invoice_date': invoice.get('invoice_date').isoformat() if invoice.get('invoice_date') else None,
+                'supplier_id': str(invoice.get('supplier_id')),
+                'po_id': str(invoice.get('po_id')) if invoice.get('po_id') else None,
+                'place_of_supply': invoice.get('place_of_supply'),
+                'is_interstate': invoice.get('is_interstate', False),
+                'payment_status': invoice.get('payment_status', 'unpaid')
+            },
+            'line_items': line_items
+        }), 200
+
+    except ValueError as ve:
+        current_app.logger.warning(f"Validation error in get_supplier_invoice_details_api: {str(ve)}")
+        return jsonify({
+            'success': False,
+            'message': str(ve)
+        }), 400
+    except Exception as e:
+        current_app.logger.error(f"Error in get_supplier_invoice_details_api: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'message': f'Error loading invoice details: {str(e)}'
+        }), 500
 
 @supplier_views_bp.route('/purchase-order/invoice-po/<po_id>', methods=['GET'])
 @login_required
@@ -2717,9 +2793,90 @@ def cancel_supplier_invoice(invoice_id):
             invoice=invoice,
             return_to=return_to
         )
-    
 
-    
+@supplier_views_bp.route('/invoice/delete/<invoice_id>', methods=['GET', 'POST'])
+@login_required
+@require_web_branch_permission('supplier_invoice', 'delete', branch_source='entity')
+def delete_supplier_invoice(invoice_id):
+    """Soft delete a supplier invoice (unpaid only)"""
+    from app.services.supplier_service import soft_delete_supplier_invoice
+
+    try:
+        result = soft_delete_supplier_invoice(
+            invoice_id=uuid.UUID(invoice_id),
+            hospital_id=current_user.hospital_id,
+            current_user_id=current_user.user_id
+        )
+
+        if result.get('success'):
+            # Invalidate ALL cache for supplier_invoices (including list views)
+            try:
+                from app.engine.universal_service_cache import invalidate_service_cache_for_entity
+                invalidated_count = invalidate_service_cache_for_entity('supplier_invoices', cascade=False)
+                current_app.logger.info(f"Cache invalidated for supplier_invoices: {invalidated_count} entries cleared")
+            except Exception as cache_error:
+                current_app.logger.warning(f"Could not invalidate cache: {cache_error}")
+
+            flash(f"✓ {result.get('message')}", 'success')
+            return redirect(url_for('universal_views.universal_detail_view',
+                                   entity_type='supplier_invoices', item_id=invoice_id))
+        else:
+            flash(f"Failed to delete invoice: {result.get('message')}", 'error')
+            return redirect(url_for('universal_views.universal_detail_view',
+                                   entity_type='supplier_invoices', item_id=invoice_id))
+
+    except ValueError as ve:
+        current_app.logger.warning(f"Validation error deleting invoice {invoice_id}: {str(ve)}")
+        flash(str(ve), 'error')
+        return redirect(url_for('universal_views.universal_detail_view',
+                               entity_type='supplier_invoices', item_id=invoice_id))
+    except Exception as e:
+        current_app.logger.error(f"Error deleting invoice {invoice_id}: {str(e)}", exc_info=True)
+        flash(f"Error deleting invoice: {str(e)}", 'error')
+        return redirect(url_for('universal_views.universal_detail_view',
+                               entity_type='supplier_invoices', item_id=invoice_id))
+
+
+@supplier_views_bp.route('/invoice/undelete/<invoice_id>', methods=['GET', 'POST'])
+@login_required
+@require_web_branch_permission('supplier_invoice', 'delete', branch_source='entity')
+def undelete_supplier_invoice(invoice_id):
+    """Restore a soft-deleted supplier invoice"""
+    from app.services.supplier_service import undelete_supplier_invoice as service_undelete
+
+    try:
+        result = service_undelete(
+            invoice_id=uuid.UUID(invoice_id),
+            hospital_id=current_user.hospital_id,
+            current_user_id=current_user.user_id
+        )
+
+        if result.get('success'):
+            # Invalidate ALL cache for supplier_invoices (including list views)
+            try:
+                from app.engine.universal_service_cache import invalidate_service_cache_for_entity
+                invalidated_count = invalidate_service_cache_for_entity('supplier_invoices', cascade=False)
+                current_app.logger.info(f"Cache invalidated for supplier_invoices: {invalidated_count} entries cleared")
+            except Exception as cache_error:
+                current_app.logger.warning(f"Could not invalidate cache: {cache_error}")
+
+            flash(f"✓ {result.get('message')}", 'success')
+            return redirect(url_for('universal_views.universal_detail_view',
+                                   entity_type='supplier_invoices', item_id=invoice_id))
+        else:
+            flash(f"Failed to restore invoice: {result.get('message')}", 'error')
+            return redirect(url_for('universal_views.universal_list_view', entity_type='supplier_invoices'))
+
+    except ValueError as ve:
+        current_app.logger.warning(f"Validation error restoring invoice {invoice_id}: {str(ve)}")
+        flash(str(ve), 'error')
+        return redirect(url_for('universal_views.universal_list_view', entity_type='supplier_invoices'))
+    except Exception as e:
+        current_app.logger.error(f"Error restoring invoice {invoice_id}: {str(e)}", exc_info=True)
+        flash(f"Error restoring invoice: {str(e)}", 'error')
+        return redirect(url_for('universal_views.universal_list_view', entity_type='supplier_invoices'))
+
+
 # NEW: Additional utility endpoint for branch information
 @supplier_views_bp.route('/api/branch/context', methods=['GET'])
 @login_required

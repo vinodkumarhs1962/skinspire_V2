@@ -135,7 +135,12 @@ SELECT
     si.created_by,
     si.updated_at,
     si.updated_by,
-    
+
+    -- Soft delete fields (from SoftDeleteMixin)
+    si.is_deleted,
+    si.deleted_at,
+    si.deleted_by,
+
     -- Search helper field
     LOWER(
         COALESCE(si.supplier_invoice_number, '') || ' ' ||

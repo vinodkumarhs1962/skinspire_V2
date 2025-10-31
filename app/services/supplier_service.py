@@ -2196,15 +2196,33 @@ def _update_supplier_invoice(
 
         if invoice.inventory_posted:
             logger.info("Reversing original inventory entries")
-            
-            # ✅ SAFE: Find ONLY inventory entries for THIS SPECIFIC INVOICE
-            stock_entries = session.query(Inventory).filter_by(
-                hospital_id=hospital_id,
-                distributor_invoice_no=invoice.supplier_invoice_number,
-                stock_type='Purchase'
+
+            # CRITICAL FIX: Match by invoice line items to avoid reversing duplicate invoice numbers
+            # Get the current invoice's line items to match exact batches and medicines
+            current_invoice_lines = session.query(SupplierInvoiceLine).filter_by(
+                invoice_id=invoice_id
             ).all()
-            
-            logger.info(f"Found {len(stock_entries)} stock entries for invoice {invoice.supplier_invoice_number}")
+
+            logger.info(f"Found {len(current_invoice_lines)} invoice lines to match for reversal")
+
+            stock_entries = []
+            for line in current_invoice_lines:
+                # FIXED: Match by distributor_invoice_no + medicine_id + batch + expiry
+                # This ensures we only reverse the EXACT items from THIS invoice
+                matching_stocks = session.query(Inventory).filter(
+                    Inventory.hospital_id == hospital_id,
+                    Inventory.distributor_invoice_no == invoice.supplier_invoice_number,
+                    Inventory.medicine_id == line.medicine_id,
+                    Inventory.batch == line.batch_number,
+                    Inventory.expiry == line.expiry_date,
+                    Inventory.stock_type == 'Purchase'
+                ).all()
+
+                stock_entries.extend(matching_stocks)
+                logger.debug(f"Found {len(matching_stocks)} stock entries for {line.medicine_name}, "
+                           f"Batch: {line.batch_number}, Expiry: {line.expiry_date}")
+
+            logger.info(f"Found {len(stock_entries)} total stock entries to reverse for invoice {invoice.supplier_invoice_number}")
             
             if stock_entries:
                 reversal_timestamp = datetime.now(timezone.utc)
@@ -2216,6 +2234,7 @@ def _update_supplier_invoice(
                 
                 for stock_entry in stock_entries:
                     # Use exact same reversal logic as cancel function
+                    # CRITICAL FIX: GST amounts must be NEGATIVE for reversal
                     reversal_stock_entry = Inventory(
                         hospital_id=hospital_id,
                         branch_id=getattr(stock_entry, 'branch_id', None) or getattr(invoice, 'branch_id', None),
@@ -2231,10 +2250,11 @@ def _update_supplier_invoice(
                         sale_price=getattr(stock_entry, 'sale_price', 0),
                         units=-int(stock_entry.units),  # Negative quantity for reversal
                         percent_discount=getattr(stock_entry, 'percent_discount', 0),
-                        cgst=getattr(stock_entry, 'cgst', 0),
-                        sgst=getattr(stock_entry, 'sgst', 0),
-                        igst=getattr(stock_entry, 'igst', 0),
-                        total_gst=getattr(stock_entry, 'total_gst', 0),
+                        # FIXED: GST amounts must be NEGATIVE for reversal
+                        cgst=-abs(Decimal(str(getattr(stock_entry, 'cgst', 0)))),
+                        sgst=-abs(Decimal(str(getattr(stock_entry, 'sgst', 0)))),
+                        igst=-abs(Decimal(str(getattr(stock_entry, 'igst', 0)))),
+                        total_gst=-abs(Decimal(str(getattr(stock_entry, 'total_gst', 0)))),
                         stock_type='Purchase_Edit_Reversal',
                         distributor_invoice_no=f"REV-{stock_entry.distributor_invoice_no}",
                         transaction_date=reversal_timestamp,
@@ -2627,6 +2647,12 @@ def _update_supplier_invoice(
                     hospital_id=hospital_id
                 ).first()
                 
+                # FIXED: Include GST amounts in new inventory entries
+                # Convert all values to Decimal to avoid type errors
+                line_cgst = Decimal(str(line.cgst or 0))
+                line_sgst = Decimal(str(line.sgst or 0))
+                line_igst = Decimal(str(line.igst or 0))
+
                 stock_entry = Inventory(
                     hospital_id=hospital_id,
                     branch_id=getattr(invoice, 'branch_id', None),
@@ -2641,6 +2667,12 @@ def _update_supplier_invoice(
                     unit_price=line.unit_price,  # FIXED: Populate unit price
                     sale_price=line.pack_mrp,  # FIXED: Use MRP as sale price (or could be different logic)
                     units=int(line.units),
+                    percent_discount=line.discount_percent or 0,
+                    # FIXED: Include GST amounts from invoice line (properly converted to Decimal)
+                    cgst=line_cgst,
+                    sgst=line_sgst,
+                    igst=line_igst,
+                    total_gst=line_cgst + line_sgst + line_igst,
                     stock_type='Purchase',
                     distributor_invoice_no=invoice.supplier_invoice_number,
                     transaction_date=invoice.invoice_date,
@@ -3615,6 +3647,179 @@ def _cancel_supplier_invoice(session, invoice_id, hospital_id, cancellation_reas
     except Exception as e:
         logger.error(f"Error cancelling invoice with proper reversal: {str(e)}")
         session.rollback()
+        raise
+
+# ===================================================================
+# Supplier Invoice Soft Delete and Undelete
+# ===================================================================
+
+def soft_delete_supplier_invoice(
+    invoice_id: uuid.UUID,
+    hospital_id: uuid.UUID,
+    current_user_id: Optional[str] = None,
+    session: Optional[Session] = None
+) -> Dict:
+    """
+    Soft delete a supplier invoice (simple flag operation)
+
+    Business Rules:
+    - Cannot delete invoices with payment_status = 'paid' or 'partial'
+    - Can delete 'unpaid' invoices
+    - Can delete 'cancelled' invoices (already reversed)
+    - Does NOT impact accounting or inventory (unlike cancel)
+    - Can be undeleted
+
+    Args:
+        invoice_id: UUID of invoice to soft delete
+        hospital_id: UUID of hospital
+        current_user_id: User performing the deletion
+        session: Optional database session
+
+    Returns:
+        Dict with success status and message
+    """
+    logger.info(f"Soft deleting supplier invoice {invoice_id}")
+
+    if session is not None:
+        return _soft_delete_supplier_invoice(session, invoice_id, hospital_id, current_user_id)
+
+    with get_db_session() as new_session:
+        result = _soft_delete_supplier_invoice(new_session, invoice_id, hospital_id, current_user_id)
+        new_session.commit()
+        logger.info(f"Successfully soft deleted invoice {invoice_id}")
+        return result
+
+
+def _soft_delete_supplier_invoice(
+    session: Session,
+    invoice_id: uuid.UUID,
+    hospital_id: uuid.UUID,
+    current_user_id: Optional[str] = None
+) -> Dict:
+    """Internal function to soft delete supplier invoice"""
+    from app.models.transaction import SupplierInvoice
+    from datetime import datetime, timezone
+
+    try:
+        # Get invoice
+        invoice = session.query(SupplierInvoice).filter_by(
+            invoice_id=invoice_id,
+            hospital_id=hospital_id
+        ).first()
+
+        if not invoice:
+            raise ValueError(f"Supplier invoice with ID {invoice_id} not found")
+
+        # Check if already deleted
+        if invoice.is_deleted:
+            raise ValueError(f"Invoice {invoice.supplier_invoice_number} is already deleted")
+
+        # Business Rule: Cannot delete paid or partially paid invoices
+        if invoice.payment_status in ['paid', 'partial']:
+            raise ValueError(
+                f"Cannot delete invoice {invoice.supplier_invoice_number} with status '{invoice.payment_status}'. "
+                f"Only unpaid invoices can be deleted."
+            )
+
+        logger.info(f"Soft deleting invoice {invoice.supplier_invoice_number} (Status: {invoice.payment_status})")
+
+        # Set soft delete flags (from SoftDeleteMixin)
+        invoice.is_deleted = True
+        invoice.deleted_at = datetime.now(timezone.utc)
+        invoice.deleted_by = current_user_id
+
+        session.flush()
+
+        logger.info(f"Successfully soft deleted invoice {invoice.supplier_invoice_number}")
+
+        return {
+            'success': True,
+            'message': f"Invoice {invoice.supplier_invoice_number} has been deleted",
+            'invoice_id': str(invoice_id),
+            'invoice_number': invoice.supplier_invoice_number,
+            'deleted_at': invoice.deleted_at.isoformat(),
+            'deleted_by': current_user_id
+        }
+
+    except Exception as e:
+        logger.error(f"Error soft deleting invoice: {str(e)}")
+        raise
+
+
+def undelete_supplier_invoice(
+    invoice_id: uuid.UUID,
+    hospital_id: uuid.UUID,
+    current_user_id: Optional[str] = None,
+    session: Optional[Session] = None
+) -> Dict:
+    """
+    Undelete (restore) a soft-deleted supplier invoice
+
+    Args:
+        invoice_id: UUID of invoice to restore
+        hospital_id: UUID of hospital
+        current_user_id: User performing the restoration
+        session: Optional database session
+
+    Returns:
+        Dict with success status and message
+    """
+    logger.info(f"Undeleting supplier invoice {invoice_id}")
+
+    if session is not None:
+        return _undelete_supplier_invoice(session, invoice_id, hospital_id, current_user_id)
+
+    with get_db_session() as new_session:
+        result = _undelete_supplier_invoice(new_session, invoice_id, hospital_id, current_user_id)
+        new_session.commit()
+        logger.info(f"Successfully undeleted invoice {invoice_id}")
+        return result
+
+
+def _undelete_supplier_invoice(
+    session: Session,
+    invoice_id: uuid.UUID,
+    hospital_id: uuid.UUID,
+    current_user_id: Optional[str] = None
+) -> Dict:
+    """Internal function to undelete supplier invoice"""
+    from app.models.transaction import SupplierInvoice
+
+    try:
+        # Get invoice
+        invoice = session.query(SupplierInvoice).filter_by(
+            invoice_id=invoice_id,
+            hospital_id=hospital_id
+        ).first()
+
+        if not invoice:
+            raise ValueError(f"Supplier invoice with ID {invoice_id} not found")
+
+        # Check if actually deleted
+        if not invoice.is_deleted:
+            raise ValueError(f"Invoice {invoice.supplier_invoice_number} is not deleted")
+
+        logger.info(f"Undeleting invoice {invoice.supplier_invoice_number}")
+
+        # Clear soft delete flags (from SoftDeleteMixin)
+        invoice.is_deleted = False
+        invoice.deleted_at = None
+        invoice.deleted_by = None
+
+        session.flush()
+
+        logger.info(f"Successfully undeleted invoice {invoice.supplier_invoice_number}")
+
+        return {
+            'success': True,
+            'message': f"Invoice {invoice.supplier_invoice_number} has been restored",
+            'invoice_id': str(invoice_id),
+            'invoice_number': invoice.supplier_invoice_number,
+            'restored_by': current_user_id
+        }
+
+    except Exception as e:
+        logger.error(f"Error undeleting invoice: {str(e)}")
         raise
 
 # ===================================================================

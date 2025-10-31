@@ -1949,27 +1949,85 @@ class SupplierInvoiceEditController(FormController):
                 
                 # Add medicines to context for template
                 context['medicines'] = medicines
-                
+
+                # Add INDIAN_STATES for Place of Supply dropdown
+                from app.config.core_definitions import INDIAN_STATES
+                context['INDIAN_STATES'] = INDIAN_STATES
+
+                # Add hospital state code for interstate calculation
+                from app.models.master import Hospital
+                hospital = session.query(Hospital).filter_by(
+                    hospital_id=current_user.hospital_id
+                ).first()
+                context['hospital_state_code'] = hospital.state_code if hospital else '29'
+
+                # Add current date for display
+                from datetime import date
+                context['current_date'] = date.today()
+                context['today'] = date.today()
+
+                # Add invoice_id for template
+                context['invoice_id'] = self.invoice_id
+
+                # Get invoice status for badge display
+                try:
+                    from app.services.supplier_service import get_supplier_invoice_by_id
+                    invoice = get_supplier_invoice_by_id(
+                        invoice_id=uuid.UUID(self.invoice_id),
+                        hospital_id=current_user.hospital_id
+                    )
+                    context['invoice_status'] = invoice.get('payment_status', 'unpaid') if invoice else 'unpaid'
+                except Exception as e:
+                    current_app.logger.warning(f"Could not get invoice status: {str(e)}")
+                    context['invoice_status'] = 'unpaid'
+
         except Exception as e:
             current_app.logger.error(f"Error getting context: {str(e)}")
+            from datetime import date
             context.update({
                 'suppliers': [],
                 'medicines': [],
-                'branch_context': {'accessible_branches': [], 'can_cross_branch': False}
+                'branch_context': {'accessible_branches': [], 'can_cross_branch': False},
+                'INDIAN_STATES': [],
+                'hospital_state_code': '29',
+                'current_date': date.today(),
+                'today': date.today(),
+                'invoice_id': self.invoice_id,
+                'invoice_status': 'unpaid'
             })
-        
+
         return context
     
     def get_form(self, *args, **kwargs):
         """Get form with populated data - FIXED choices initialization"""
         form = super().get_form(*args, **kwargs)
-        
-        # CRITICAL FIX: Always set choices before any other operations
+
+        # CRITICAL: For edit, pre-populate supplier_id before setting choices
+        # This allows _set_form_choices to filter POs by supplier
+        if self.invoice_id:
+            try:
+                from app.services.supplier_service import get_supplier_invoice_by_id
+                from flask_login import current_user
+                import uuid
+
+                invoice = get_supplier_invoice_by_id(
+                    invoice_id=uuid.UUID(self.invoice_id),
+                    hospital_id=current_user.hospital_id,
+                    include_payments=False
+                )
+
+                if invoice:
+                    # Pre-set supplier_id so PO filtering works
+                    form.supplier_id.data = str(invoice.get('supplier_id'))
+            except Exception as e:
+                current_app.logger.warning(f"Could not pre-populate supplier_id: {str(e)}")
+
+        # Set choices (will now filter POs by the pre-populated supplier)
         self._set_form_choices(form)
-        
-        # Populate with existing invoice data
+
+        # Populate with all invoice data (including line items)
         self._populate_form_with_invoice_data(form)
-        
+
         return form
     
     def _set_form_choices(self, form):
@@ -1999,15 +2057,30 @@ class SupplierInvoiceEditController(FormController):
             
             # Set PO choices - filtered by current supplier if selected
             form.po_id.choices = [('', 'Select Purchase Order (Optional)')]
-            
+
             # Get current supplier from form data
             current_supplier_id = form.supplier_id.data
-            
+
+            # CRITICAL: For edit mode, ensure the linked PO is always included
+            linked_po_id = None
+            if hasattr(self, 'invoice_id') and self.invoice_id:
+                try:
+                    from app.services.supplier_service import get_supplier_invoice_by_id
+                    invoice = get_supplier_invoice_by_id(
+                        invoice_id=uuid.UUID(self.invoice_id),
+                        hospital_id=current_user.hospital_id,
+                        include_payments=False
+                    )
+                    if invoice and invoice.get('po_id'):
+                        linked_po_id = str(invoice.get('po_id'))
+                except Exception as e:
+                    current_app.logger.warning(f"Could not fetch linked PO: {str(e)}")
+
             if current_supplier_id:
                 try:
                     # Get user's branch for filtering
                     user_branch_id = get_user_branch_id(current_user.user_id, current_user.hospital_id)
-                    
+
                     # Search for approved POs for this supplier
                     po_results = search_purchase_orders(
                         hospital_id=current_user.hospital_id,
@@ -2017,13 +2090,16 @@ class SupplierInvoiceEditController(FormController):
                         page=1,
                         per_page=100
                     )
-                    
+
+                    # Collect PO choices
+                    po_choices_added = set()
+
                     # Filter out fully invoiced POs
                     with get_db_session() as session:
                         for po in po_results.get('results', []):
                             po_id = po.get('po_id')
                             po_total = float(po.get('total_amount', 0))
-                            
+
                             # Calculate total already invoiced against this PO
                             invoiced_total = session.query(func.sum(SupplierInvoice.total_amount))\
                                 .filter(
@@ -2031,15 +2107,15 @@ class SupplierInvoiceEditController(FormController):
                                     SupplierInvoice.hospital_id == current_user.hospital_id,
                                     SupplierInvoice.payment_status != 'cancelled'
                                 ).scalar() or 0
-                            
+
                             invoiced_total = float(invoiced_total)
                             remaining = po_total - invoiced_total
-                            
-                            # Only include if there's remaining amount (with tolerance for rounding)
-                            if remaining > 0.01:
+
+                            # Include if there's remaining amount OR if it's the linked PO
+                            if remaining > 0.01 or str(po_id) == linked_po_id:
                                 po_number = po.get('po_number', 'Unknown')
                                 po_date = po.get('po_date')
-                                
+
                                 # Format date
                                 date_str = ''
                                 if po_date:
@@ -2047,13 +2123,32 @@ class SupplierInvoiceEditController(FormController):
                                         date_str = po_date[:10]
                                     else:
                                         date_str = po_date.strftime('%Y-%m-%d')
-                                
+
                                 # Create label with remaining amount
-                                po_label = f"{po_number} - {date_str} (₹{remaining:,.2f} remaining)"
+                                if str(po_id) == linked_po_id:
+                                    po_label = f"{po_number} - {date_str} (Linked)"
+                                else:
+                                    po_label = f"{po_number} - {date_str} (₹{remaining:,.2f} remaining)"
+
                                 form.po_id.choices.append((str(po_id), po_label))
-                    
+                                po_choices_added.add(str(po_id))
+
+                        # CRITICAL: If linked PO not found in results, fetch it directly
+                        if linked_po_id and linked_po_id not in po_choices_added:
+                            from app.models.transaction import PurchaseOrderHeader
+                            linked_po = session.query(PurchaseOrderHeader).filter_by(
+                                po_id=uuid.UUID(linked_po_id),
+                                hospital_id=current_user.hospital_id
+                            ).first()
+
+                            if linked_po:
+                                po_date_str = linked_po.po_date.strftime('%Y-%m-%d') if linked_po.po_date else ''
+                                po_label = f"{linked_po.po_number} - {po_date_str} (Linked)"
+                                form.po_id.choices.append((linked_po_id, po_label))
+                                current_app.logger.info(f"Added linked PO {linked_po.po_number} to choices")
+
                     current_app.logger.info(f"Set {len(form.po_id.choices) - 1} available PO choices for supplier {current_supplier_id}")
-                    
+
                 except Exception as po_error:
                     current_app.logger.warning(f"Error filtering POs: {str(po_error)}")
                     # Fallback - keep empty PO list
@@ -2091,8 +2186,33 @@ class SupplierInvoiceEditController(FormController):
             form.supplier_invoice_number.data = invoice.get('supplier_invoice_number')
             form.invoice_date.data = invoice.get('invoice_date')
             form.supplier_id.data = str(invoice.get('supplier_id'))
-            form.po_id.data = str(invoice.get('po_id')) if invoice.get('po_id') else ''
-            form.supplier_gstin.data = invoice.get('supplier_gstin')
+
+            # Fetch related data from database (supplier GSTIN and PO number)
+            try:
+                from app.services.database_service import get_db_session
+                from app.models.master import Supplier
+                from app.models.transaction import PurchaseOrderHeader
+
+                with get_db_session(read_only=True) as session:
+                    # Fetch supplier GSTIN
+                    supplier_gstin = invoice.get('supplier_gstin')
+                    if not supplier_gstin and invoice.get('supplier_id'):
+                        supplier = session.query(Supplier).filter_by(
+                            supplier_id=invoice.get('supplier_id'),
+                            hospital_id=current_user.hospital_id
+                        ).first()
+                        if supplier:
+                            supplier_gstin = supplier.gst_registration_number
+
+                    form.supplier_gstin.data = supplier_gstin
+
+                    # Set PO ID in form (for form choices to match)
+                    form.po_id.data = str(invoice.get('po_id')) if invoice.get('po_id') else ''
+
+            except Exception as e:
+                current_app.logger.warning(f"Could not fetch related data: {str(e)}")
+                form.supplier_gstin.data = invoice.get('supplier_gstin')
+                form.po_id.data = str(invoice.get('po_id')) if invoice.get('po_id') else ''
             form.place_of_supply.data = invoice.get('place_of_supply')
             form.due_date.data = invoice.get('due_date')
             form.reverse_charge.data = invoice.get('reverse_charge', False)
@@ -2280,9 +2400,9 @@ class SupplierInvoiceEditController(FormController):
                 'line_items': []
             }
             
-            # Extract line items directly from request (bypass WTForms validation)
-            line_items_data = self._extract_line_items_from_request(request.form)
-            
+            # Extract line items from hidden comma-separated fields
+            line_items_data = self._extract_line_items_from_hidden_fields(form)
+
             # Custom validation
             self.validate_line_items(line_items_data)
             
@@ -2338,7 +2458,7 @@ class SupplierInvoiceEditController(FormController):
                     # Redirect to appropriate list view
                     try:
                         from flask import url_for
-                        redirect_url = url_for('supplier_views.supplier_invoice_list')
+                        redirect_url = url_for('universal_views.universal_list_view', entity_type='supplier_invoices')
                     except Exception:
                         redirect_url = '/'
                     return redirect(redirect_url)
@@ -2349,7 +2469,7 @@ class SupplierInvoiceEditController(FormController):
                         flash("Access denied to the requested item.", "warning")
                         try:
                             from flask import url_for
-                            return redirect(url_for('supplier_views.supplier_invoice_list'))
+                            return redirect(url_for('universal_views.universal_list_view', entity_type='supplier_invoices'))
                         except Exception:
                             return redirect('/')
                     else:
@@ -2371,7 +2491,7 @@ class SupplierInvoiceEditController(FormController):
             flash(f"Access denied: {str(pe)}", "warning")
             try:
                 from flask import url_for
-                return redirect(url_for('supplier_views.supplier_invoice_list'))
+                return redirect(url_for('universal_views.universal_list_view', entity_type='supplier_invoices'))
             except Exception:
                 return redirect('/')
         except Exception as e:
@@ -2380,10 +2500,81 @@ class SupplierInvoiceEditController(FormController):
             flash(f"Error: {str(e)}", "error")
             try:
                 from flask import url_for
-                return redirect(url_for('supplier_views.supplier_invoice_list'))
+                return redirect(url_for('universal_views.universal_list_view', entity_type='supplier_invoices'))
             except Exception:
                 return redirect('/')
-    
+
+    def _extract_line_items_from_hidden_fields(self, form):
+        """
+        Extract line items from comma-separated hidden fields (JavaScript approach)
+        This is used by the edit template where JavaScript populates hidden fields
+        """
+        from datetime import datetime
+
+        line_items = []
+
+        # Get all the comma-separated values
+        medicine_ids = form.medicine_ids.data.split(',') if form.medicine_ids.data else []
+        medicine_names = form.medicine_names.data.split(',') if form.medicine_names.data else []
+        quantities = form.quantities.data.split(',') if form.quantities.data else []
+        batch_numbers = form.batch_numbers.data.split(',') if form.batch_numbers.data else []
+        expiry_dates = form.expiry_dates.data.split(',') if form.expiry_dates.data else []
+        pack_purchase_prices = form.pack_purchase_prices.data.split(',') if form.pack_purchase_prices.data else []
+        pack_mrps = form.pack_mrps.data.split(',') if form.pack_mrps.data else []
+        units_per_packs = form.units_per_packs.data.split(',') if form.units_per_packs.data else []
+        hsn_codes = form.hsn_codes.data.split(',') if form.hsn_codes.data else []
+        gst_rates = form.gst_rates.data.split(',') if form.gst_rates.data else []
+        discount_percents = form.discount_percents.data.split(',') if form.discount_percents.data else []
+        is_free_items = form.is_free_items.data.split(',') if form.is_free_items.data else []
+
+        # Process each line item
+        num_items = len(medicine_ids)
+        current_app.logger.info(f"Extracting {num_items} line items from hidden fields")
+
+        for i in range(num_items):
+            try:
+                medicine_id = medicine_ids[i].strip()
+                if not medicine_id:
+                    continue
+
+                # Parse expiry date
+                expiry_date_str = expiry_dates[i].strip() if i < len(expiry_dates) else ''
+                expiry_date = datetime.strptime(expiry_date_str, '%Y-%m-%d').date() if expiry_date_str else None
+
+                # Check if free item
+                is_free = is_free_items[i].strip().lower() == 'true' if i < len(is_free_items) else False
+
+                quantity = float(quantities[i]) if i < len(quantities) else 0
+                price = float(pack_purchase_prices[i]) if i < len(pack_purchase_prices) else 0
+
+                # Force price to 0 for free items
+                if is_free:
+                    price = 0.0
+
+                line_data = {
+                    'medicine_id': uuid.UUID(medicine_id),
+                    'units': quantity,
+                    'batch_number': batch_numbers[i].strip() if i < len(batch_numbers) else '',
+                    'expiry_date': expiry_date,
+                    'pack_purchase_price': price,
+                    'pack_mrp': float(pack_mrps[i]) if i < len(pack_mrps) else 0,
+                    'units_per_pack': float(units_per_packs[i]) if i < len(units_per_packs) else 1,
+                    'discount_percent': 0.0 if is_free else (float(discount_percents[i]) if i < len(discount_percents) else 0),
+                    'is_free_item': is_free,
+                    'hsn_code': hsn_codes[i].strip() if i < len(hsn_codes) else '',
+                    'gst_rate': float(gst_rates[i]) if i < len(gst_rates) else 0
+                }
+
+                line_items.append(line_data)
+                current_app.logger.debug(f"Extracted line item {i+1}: {medicine_names[i] if i < len(medicine_names) else 'Unknown'}")
+
+            except Exception as e:
+                current_app.logger.error(f"Error parsing line item {i+1}: {str(e)}")
+                continue
+
+        current_app.logger.info(f"Successfully extracted {len(line_items)} valid line items")
+        return line_items
+
     def _extract_line_items_from_request(self, form_data):
         """Extract line items directly from request.form data - UPDATED for hybrid approach"""
         line_items = []

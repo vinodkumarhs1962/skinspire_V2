@@ -181,13 +181,18 @@ class SupplierInvoiceView(Base):
     days_overdue = Column(Integer)
     aging_status = Column(String(20))
     aging_bucket = Column(String(20))
-    
+
     # Audit fields
     created_at = Column(DateTime(timezone=True))
     created_by = Column(String(50))
     updated_at = Column(DateTime(timezone=True))
     updated_by = Column(String(50))
-    
+
+    # Soft delete fields (from SoftDeleteMixin in SupplierInvoice)
+    is_deleted = Column(Boolean, default=False)
+    deleted_at = Column(DateTime(timezone=True))
+    deleted_by = Column(String(50))
+
     # Search helper
     search_text = Column(Text)
 

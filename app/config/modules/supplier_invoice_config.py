@@ -509,6 +509,45 @@ SUPPLIER_INVOICE_FIELDS = [
         view_order=93
     ),
 
+    # === SOFT DELETE TRACKING FIELDS ===
+    FieldDefinition(
+        name="is_deleted",
+        label="Is Deleted",
+        field_type=FieldType.BOOLEAN,
+        show_in_list=False,
+        show_in_detail=False,  # Hidden from UI
+        show_in_form=False,
+        readonly=True,
+        filterable=True,  # Allow admin filtering
+    ),
+
+    FieldDefinition(
+        name="deleted_at",
+        label="Deleted At",
+        field_type=FieldType.DATETIME,
+        show_in_list=False,
+        show_in_detail=True,  # Show for audit
+        show_in_form=False,
+        readonly=True,
+        format_pattern="%d/%b/%Y at %H:%M",
+        tab_group="system_info",
+        section="audit",
+        view_order=94
+    ),
+
+    FieldDefinition(
+        name="deleted_by",
+        label="Deleted By",
+        field_type=FieldType.TEXT,
+        show_in_list=False,
+        show_in_detail=True,  # Show for audit
+        show_in_form=False,
+        readonly=True,
+        tab_group="system_info",
+        section="audit",
+        view_order=95
+    ),
+
     # Payment History Display - matching PO format
     FieldDefinition(
         name="payment_history_display",
@@ -867,7 +906,24 @@ SUPPLIER_INVOICE_ACTIONS = [
         order=3
     ),
     
-    # === DETAIL VIEW ACTIONS - DROPDOWN (Navigation only, no modifications) ===
+    # === DETAIL VIEW ACTIONS - DROPDOWN ===
+    ActionDefinition(
+        id="edit_invoice",
+        label="Edit Invoice",
+        icon="fas fa-edit",
+        button_type=ButtonType.WARNING,
+        route_name="supplier_views.edit_supplier_invoice",
+        route_params={"invoice_id": "{invoice_id}"},
+        show_in_list=False,
+        show_in_detail=True,
+        display_type=ActionDisplayType.DROPDOWN_ITEM,
+        permission="supplier_invoice_edit",
+        order=3.5,
+        conditions={
+            "payment_status": ["unpaid", "partial"]
+        }
+    ),
+
     ActionDefinition(
         id="view_supplier",
         label="View Supplier",
@@ -921,6 +977,44 @@ SUPPLIER_INVOICE_ACTIONS = [
         display_type=ActionDisplayType.DROPDOWN_ITEM,
         permission="supplier_invoice_document",
         order=7
+    ),
+
+    # === SOFT DELETE AND RESTORE ===
+    ActionDefinition(
+        id="delete",
+        label="Delete",
+        icon="fas fa-trash",
+        button_type=ButtonType.DANGER,
+        url_pattern="/supplier/invoice/delete/{invoice_id}",
+        show_in_list=False,
+        show_in_detail=True,
+        display_type=ActionDisplayType.DROPDOWN_ITEM,
+        permission="supplier_invoice_delete",
+        order=8,
+        conditions={
+            "payment_status": ["unpaid"],  # Only unpaid invoices
+            "is_deleted": [False, None]  # Not already deleted
+        },
+        confirmation_required=True,
+        confirmation_message="Are you sure you want to delete this invoice? This action can be undone."
+    ),
+
+    ActionDefinition(
+        id="restore",
+        label="Restore",
+        icon="fas fa-undo",
+        button_type=ButtonType.SUCCESS,
+        url_pattern="/supplier/invoice/undelete/{invoice_id}",
+        show_in_list=False,
+        show_in_detail=True,
+        display_type=ActionDisplayType.DROPDOWN_ITEM,
+        permission="supplier_invoice_delete",
+        order=9,
+        conditions={
+            "is_deleted": [True]  # Only show for deleted invoices
+        },
+        confirmation_required=True,
+        confirmation_message="Are you sure you want to restore this invoice?"
     )
 ]
 # =============================================================================
@@ -1128,10 +1222,14 @@ SUPPLIER_INVOICE_DOCUMENT_CONFIGS = {
 SUPPLIER_INVOICE_PERMISSIONS = {
     "list": "supplier_invoice_list",
     "view": "supplier_invoice_view",
+    "edit": "supplier_invoice_edit",
+    "delete": "supplier_invoice_delete",
     "export": "supplier_invoice_export",
     "print": "supplier_invoice_print",
     "document": "supplier_invoice_document"
-    # REMOVED: create, edit, delete, cancel, email - transaction entities are read-only
+    # Note: edit is allowed for unpaid/partial invoices only
+    # Note: delete (soft delete) is allowed for unpaid invoices only
+    # REMOVED: create, cancel, email - transaction entities managed via dedicated routes
 }
 
 # =============================================================================
@@ -1281,10 +1379,15 @@ SUPPLIER_INVOICE_CONFIG = EntityConfiguration(
     
     # === FEATURE FLAGS ===
     enable_audit_trail=True,
-    enable_soft_delete=False,
+    enable_soft_delete=True,  # Enable soft delete support
     enable_bulk_operations=False,
     enable_saved_filter_suggestions=True,
     enable_auto_submit=False,
+
+    # === SOFT DELETE CONFIGURATION ===
+    soft_delete_field="is_deleted",  # Standard SoftDeleteMixin field
+    cascade_delete=[],  # No cascade needed - line items handled by service
+    delete_confirmation_message="Are you sure you want to delete this invoice? This action can be undone.",
     
     # === ENTITY CATEGORY ===
     entity_category=EntityCategory.TRANSACTION,

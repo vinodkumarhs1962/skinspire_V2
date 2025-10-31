@@ -21,5 +21,17 @@
     ],
     "python.defaultInterpreterPath": "C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe",
     "python.pythonPath": "C:\\Users\\vinod\\AppData\\Local\\Programs\\Skinspire Repository\\skinspire_v2\\skinspire_v2_env\\Scripts\\python.exe",
-    "python-envs.pythonProjects": []
+    "python-envs.pythonProjects": [],
+
+    // Claude Code Settings - Tool Confirmation
+    "claudeCode.toolConfirmation": {
+        "Read": "never",           // Never ask for confirmation when reading files
+        "Glob": "never",           // Never ask for confirmation when searching files by pattern
+        "Grep": "never",           // Never ask for confirmation when searching file contents
+        "Edit": "always",          // Always ask before editing files
+        "Write": "always",         // Always ask before writing new files
+        "Bash": "risky",           // Ask only for risky bash commands
+        "WebSearch": "never",      // Never ask for web searches
+        "WebFetch": "never"        // Never ask for web fetches
+    }
 }

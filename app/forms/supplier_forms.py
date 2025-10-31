@@ -508,30 +508,50 @@ class SupplierInvoiceEditForm(FlaskForm):
     # Header fields
     supplier_invoice_number = StringField('Invoice Number', validators=[DataRequired()])
     invoice_date = DateField('Invoice Date', validators=[DataRequired()])
-    
+
+    # Branch field
+    branch_id = HiddenField('Branch ID')
+
     # CRITICAL FIX: Set default choices to prevent None error
-    supplier_id = SelectField('Supplier', validators=[DataRequired()], 
+    supplier_id = SelectField('Supplier', validators=[DataRequired()],
                              choices=[('', 'Select Supplier')], coerce=str)
-    
+
     # FIXED: All optional fields - no validators where not required
-    po_id = SelectField('Purchase Order', validators=[Optional()], 
+    po_id = SelectField('Purchase Order', validators=[Optional()],
                        choices=[('', 'Select Purchase Order (Optional)')], coerce=str)
     supplier_gstin = StringField('Supplier GSTIN', validators=[Optional()])
     place_of_supply = StringField('Place of Supply', validators=[DataRequired()])
     due_date = DateField('Due Date', validators=[Optional()])
-    
+
     # Checkboxes with defaults
     reverse_charge = BooleanField('Reverse Charge', default=False)
     is_interstate = BooleanField('Interstate', default=False)
     itc_eligible = BooleanField('ITC Eligible', default=True)
-    
+
     # CRITICAL FIX: Set default choices for currency
-    currency_code = SelectField('Currency', 
-                                choices=[('INR', 'INR'), ('USD', 'USD'), ('EUR', 'EUR')], 
+    currency_code = SelectField('Currency',
+                                choices=[('INR', 'INR'), ('USD', 'USD'), ('EUR', 'EUR')],
                                 default='INR', coerce=str)
     exchange_rate = DecimalField('Exchange Rate', default=1.0, validators=[NumberRange(min=0.000001)])
     notes = TextAreaField('Notes', validators=[Optional()])
-    
+
+    # Hidden fields for line items (JavaScript approach - comma-separated values)
+    medicine_ids = HiddenField('Medicine IDs')
+    medicine_names = HiddenField('Medicine Names')
+    quantities = HiddenField('Quantities')
+    pack_purchase_prices = HiddenField('Pack Purchase Prices')
+    pack_mrps = HiddenField('Pack MRPs')
+    units_per_packs = HiddenField('Units Per Pack')
+    hsn_codes = HiddenField('HSN Codes')
+    gst_rates = HiddenField('GST Rates')
+    cgst_rates = HiddenField('CGST Rates')
+    sgst_rates = HiddenField('SGST Rates')
+    igst_rates = HiddenField('IGST Rates')
+    discount_percents = HiddenField('Discount Percentages')
+    is_free_items = HiddenField('Is Free Items')
+    batch_numbers = HiddenField('Batch Numbers')
+    expiry_dates = HiddenField('Expiry Dates')
+
     # Line items - no min_entries to avoid validation issues
     line_items = FieldList(FormField(SupplierInvoiceEditLineForm), min_entries=0)
 
