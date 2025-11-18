@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(PGPASSWORD='Skinspire123$' psql:*)",
+      "Bash(lsof:*)",
+      "Bash(curl:*)",
+      "Bash(find:*)",
+      "Bash(timeout 12 python:*)",
+      "Bash(psql:*)",
+      "Bash(timeout 30 psql:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

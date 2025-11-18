@@ -8,7 +8,7 @@
    All button variants and states for healthcare application
    ========================================== */
 
-/* PRIMARY BUTTON - Blue - Main actions (Save, Create, Submit) */
+/* PRIMARY BUTTON - Medical Blue - Main actions (Save, Create, Submit) */
 .btn-primary {
     display: inline-flex !important;
     align-items: center !important;
@@ -24,22 +24,70 @@
     cursor: pointer !important;
     text-decoration: none !important;
     min-height: 2.5rem !important;
-    background-color: rgb(59 130 246) !important; /* blue-500 */
+    background-color: #2563eb !important; /* Medical Blue */
     color: white !important;
-    border-color: rgb(59 130 246) !important;
+    border-color: #2563eb !important;
 }
 
 .btn-primary:hover {
-    background-color: rgb(37 99 235) !important; /* blue-600 */
-    border-color: rgb(37 99 235) !important;
+    background-color: #1d4ed8 !important; /* Medical Blue - darker */
+    border-color: #1d4ed8 !important;
 }
 
 .btn-primary:focus {
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3) !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3) !important;
     outline: none !important;
 }
 
-/* SECONDARY BUTTON - Indigo - Navigation (Back, Lists, View) */
+/* BACK BUTTON - Gray - Standard navigation back button (Always first button) */
+.btn-back {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0.75rem 1.5rem !important;
+    border-radius: 0.375rem !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    line-height: 1.25rem !important;
+    transition: all 0.15s ease-in-out !important;
+    white-space: nowrap !important;
+    border: 1px solid transparent !important;
+    cursor: pointer !important;
+    text-decoration: none !important;
+    min-height: 2.5rem !important;
+    background-color: rgb(75 85 99) !important; /* gray-600 */
+    color: white !important;
+    border-color: rgb(75 85 99) !important;
+}
+
+.btn-back:hover {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+    border-color: rgb(55 65 81) !important;
+}
+
+.btn-back:focus {
+    box-shadow: 0 0 0 3px rgba(75, 85, 99, 0.3) !important;
+    outline: none !important;
+}
+
+/* Back button icon styling */
+.btn-back .icon-left {
+    margin-right: 0.5rem !important;
+    font-size: 0.875rem !important;
+}
+
+/* Dark mode support for back button */
+.dark .btn-back {
+    background-color: rgb(55 65 81) !important; /* gray-700 in dark mode */
+    border-color: rgb(55 65 81) !important;
+}
+
+.dark .btn-back:hover {
+    background-color: rgb(31 41 55) !important; /* gray-800 in dark mode */
+    border-color: rgb(31 41 55) !important;
+}
+
+/* SECONDARY BUTTON - Indigo - Navigation (Lists, View) */
 .btn-secondary {
     display: inline-flex !important;
     align-items: center !important;
@@ -101,7 +149,7 @@
     outline: none !important;
 }
 
-/* WARNING BUTTON - Orange - Edit actions (Edit, Modify) */
+/* WARNING BUTTON - Medical Orange - Edit actions (Edit, Modify) */
 .btn-warning {
     display: inline-flex !important;
     align-items: center !important;
@@ -117,22 +165,22 @@
     cursor: pointer !important;
     text-decoration: none !important;
     min-height: 2.5rem !important;
-    background-color: rgb(245 158 11) !important; /* amber-500 */
+    background-color: #ea580c !important; /* Medical Orange */
     color: white !important;
-    border-color: rgb(245 158 11) !important;
+    border-color: #ea580c !important;
 }
 
 .btn-warning:hover {
-    background-color: rgb(217 119 6) !important; /* amber-600 */
-    border-color: rgb(217 119 6) !important;
+    background-color: #c2410c !important; /* Medical Orange - darker */
+    border-color: #c2410c !important;
 }
 
 .btn-warning:focus {
-    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.3) !important;
+    box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.3) !important;
     outline: none !important;
 }
 
-/* DANGER BUTTON - Red - Destructive (Delete, Cancel) */
+/* DANGER BUTTON - Medical Red - Destructive (Delete, Cancel) */
 .btn-danger {
     display: inline-flex !important;
     align-items: center !important;
@@ -148,22 +196,22 @@
     cursor: pointer !important;
     text-decoration: none !important;
     min-height: 2.5rem !important;
-    background-color: rgb(239 68 68) !important; /* red-500 */
+    background-color: #dc2626 !important; /* Medical Red */
     color: white !important;
-    border-color: rgb(239 68 68) !important;
+    border-color: #dc2626 !important;
 }
 
 .btn-danger:hover {
-    background-color: rgb(220 38 38) !important; /* red-600 */
-    border-color: rgb(220 38 38) !important;
+    background-color: #b91c1c !important; /* Medical Red - darker */
+    border-color: #b91c1c !important;
 }
 
 .btn-danger:focus {
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3) !important;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.3) !important;
     outline: none !important;
 }
 
-/* SUCCESS BUTTON - Green - Positive (Approve, Payment) */
+/* SUCCESS BUTTON - Medical Green - Positive (Approve, Payment) */
 .btn-success {
     display: inline-flex !important;
     align-items: center !important;
@@ -179,18 +227,18 @@
     cursor: pointer !important;
     text-decoration: none !important;
     min-height: 2.5rem !important;
-    background-color: rgb(34 197 94) !important; /* green-500 */
+    background-color: #047857 !important; /* Medical Dark Green */
     color: white !important;
-    border-color: rgb(34 197 94) !important;
+    border-color: #047857 !important;
 }
 
 .btn-success:hover {
-    background-color: rgb(22 163 74) !important; /* green-600 */
-    border-color: rgb(22 163 74) !important;
+    background-color: #065f46 !important; /* Medical Dark Green - darker */
+    border-color: #065f46 !important;
 }
 
 .btn-success:focus {
-    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.3) !important;
+    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.3) !important;
     outline: none !important;
 }
 
@@ -235,13 +283,13 @@
    ========================================== */
 
 .dark .btn-primary {
-    background-color: rgb(59 130 246) !important;
-    border-color: rgb(59 130 246) !important;
+    background-color: #2563eb !important; /* Medical Blue */
+    border-color: #2563eb !important;
 }
 
 .dark .btn-primary:hover {
-    background-color: rgb(37 99 235) !important;
-    border-color: rgb(37 99 235) !important;
+    background-color: #1d4ed8 !important;
+    border-color: #1d4ed8 !important;
 }
 
 .dark .btn-secondary {
@@ -265,13 +313,33 @@
 }
 
 .dark .btn-warning {
-    background-color: rgb(245 158 11) !important;
-    border-color: rgb(245 158 11) !important;
+    background-color: #ea580c !important; /* Medical Orange */
+    border-color: #ea580c !important;
 }
 
 .dark .btn-warning:hover {
-    background-color: rgb(217 119 6) !important;
-    border-color: rgb(217 119 6) !important;
+    background-color: #c2410c !important;
+    border-color: #c2410c !important;
+}
+
+.dark .btn-danger {
+    background-color: #dc2626 !important; /* Medical Red */
+    border-color: #dc2626 !important;
+}
+
+.dark .btn-danger:hover {
+    background-color: #b91c1c !important;
+    border-color: #b91c1c !important;
+}
+
+.dark .btn-success {
+    background-color: #047857 !important; /* Medical Dark Green */
+    border-color: #047857 !important;
+}
+
+.dark .btn-success:hover {
+    background-color: #065f46 !important;
+    border-color: #065f46 !important;
 }
 
 /* ==========================================

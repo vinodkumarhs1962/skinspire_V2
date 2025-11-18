@@ -2,7 +2,7 @@
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, current_app, g
 from flask_login import login_required, current_user
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 from app.utils.unicode_logging import get_unicode_safe_logger
@@ -591,10 +591,10 @@ def view_supplier_invoice(invoice_id):
             'taxable_value_sum': taxable_value_sum,
             'po_data': po_data,
             'branch_context': getattr(g, 'branch_context', None),
-            
+
             # Payment integration context (uses authoritative values)
             'can_create_payment': invoice.get('payment_status') != 'paid',
-            'payment_url': url_for('supplier_views.record_payment', invoice_id=invoice.get('invoice_id')),
+            'payment_url': url_for('universal_views.universal_create_view', entity_type='supplier_payments', invoice_id=invoice.get('invoice_id')),
             'payment_config': PAYMENT_CONFIG,
             'pending_amount': float(invoice.get('balance_due', 0))
         }
@@ -1815,28 +1815,43 @@ def pending_invoices():
 @login_required
 @require_web_branch_permission('payment', 'add')
 def create_payment():
-    """Record new supplier payment with multi-method support"""
+    """Record new supplier payment - ALWAYS uses SupplierPaymentController"""
     try:
-        controller = SupplierPaymentController()
+        # Get invoice_id from query params if coming from invoice page
+        invoice_id = request.args.get('invoice_id')
+
+        # CRITICAL FIX: ALWAYS use SupplierPaymentController (with or without invoice_id)
+        # This ensures dropdowns are properly populated in all cases
+        logger.info(f"create_payment called with invoice_id={invoice_id or 'None'}, delegating to SupplierPaymentController")
+        from app.controllers.supplier_controller import SupplierPaymentController
+
+        # Create controller (with or without invoice context)
+        controller = SupplierPaymentController(invoice_id=invoice_id)
         return controller.handle_request()
+
     except Exception as e:
-        current_app.logger.error(f"Error in record_payment: {str(e)}", exc_info=True)
+        logger.error(f"Error in create_payment: {str(e)}", exc_info=True)
         flash(f"Error recording payment: {str(e)}", "error")
-        return redirect(url_for('supplier_views.supplier_list'))
+        return redirect(url_for('supplier_views.payment_list'))
 
 
 @supplier_views_bp.route('/payment/edit/<payment_id>', methods=['GET', 'POST'])
 @login_required
 @require_web_branch_permission('payment', 'edit', branch_source='entity')
 def edit_payment(payment_id):
-    """Edit existing payment"""
+    """Edit existing payment - ALWAYS uses SupplierPaymentController"""
     try:
+        logger.info(f"edit_payment called for payment_id={payment_id}, delegating to SupplierPaymentController")
+        from app.controllers.supplier_controller import SupplierPaymentController
+
+        # Create controller in edit mode
         controller = SupplierPaymentController(payment_id=payment_id)
         return controller.handle_request()
+
     except Exception as e:
-        current_app.logger.error(f"Error in edit_payment: {str(e)}", exc_info=True)
+        logger.error(f"Error in edit_payment: {str(e)}", exc_info=True)
         flash(f"Error editing payment: {str(e)}", "error")
-        return redirect(url_for('supplier_views.payment_list'))
+        return redirect(url_for('universal_views.universal_list_view', entity_type='supplier_payments'))
 
 
 @supplier_views_bp.route('/payment/list', methods=['GET'])
@@ -2248,18 +2263,19 @@ def download_payment_document(payment_id, document_id):
         return redirect(url_for('supplier_views.view_payment', payment_id=payment_id))
 
 
-@supplier_views_bp.route('/payment/approve/<payment_id>', methods=['GET', 'POST'])
-@login_required
-@require_web_branch_permission('payment', 'approve', branch_source='entity')
-def approve_payment(payment_id):
-    """Approve or reject pending payment"""
-    try:
-        controller = PaymentApprovalController(payment_id)
-        return controller.handle_approval()
-    except Exception as e:
-        current_app.logger.error(f"Error in approve_payment: {str(e)}", exc_info=True)
-        flash(f"Error processing approval: {str(e)}", "error")
-        return redirect(url_for('supplier_views.payment_list'))
+# OLD ROUTE - DEPRECATED - Using new service layer approach below
+# @supplier_views_bp.route('/payment/approve/<payment_id>', methods=['GET', 'POST'])
+# @login_required
+# @require_web_branch_permission('payment', 'approve', branch_source='entity')
+# def approve_payment_old(payment_id):
+#     """Approve or reject pending payment"""
+#     try:
+#         controller = PaymentApprovalController(payment_id)
+#         return controller.handle_approval()
+#     except Exception as e:
+#         current_app.logger.error(f"Error in approve_payment: {str(e)}", exc_info=True)
+#         flash(f"Error processing approval: {str(e)}", "error")
+#         return redirect(url_for('supplier_views.payment_list'))
 
 @supplier_views_bp.route('/payment/export', methods=['GET'])
 @login_required
@@ -3406,18 +3422,422 @@ def reject_payment_universal(payment_id):
     # Use existing reject_supplier_payment service
     # Redirect to universal_views.universal_detail_view
 
+@supplier_views_bp.route('/payment/approve/<payment_id>', methods=['GET', 'POST'])
+@login_required
+@require_web_branch_permission('payment', 'approve', branch_source='entity')
+def approve_payment(payment_id):
+    """Approve or reject payment - with simple popup confirmation"""
+    try:
+        from app import db
+        from app.models.transaction import SupplierPayment
+        from app.services.gl_service import create_supplier_payment_gl_entries
+        from decimal import Decimal
+        from sqlalchemy.orm import joinedload
+
+        # ✅ FIX: Use db.session directly + eager load relationships
+        payment = db.session.query(SupplierPayment).options(
+            joinedload(SupplierPayment.supplier)
+        ).filter_by(
+            payment_id=uuid.UUID(payment_id),
+            hospital_id=current_user.hospital_id
+        ).first()
+
+        if not payment:
+            flash("Payment not found", "error")
+            return redirect(url_for('universal_views.universal_list_view',
+                                  entity_type='supplier_payments'))
+
+        if payment.workflow_status != 'pending_approval':
+            flash(f"Payment cannot be approved (current status: {payment.workflow_status})", "error")
+            # Check if request came from list view
+            if request.referrer and '/list' in request.referrer:
+                return redirect(url_for('universal_views.universal_list_view',
+                                    entity_type='supplier_payments'))
+            else:
+                return redirect(url_for('universal_views.universal_detail_view',
+                                    entity_type='supplier_payments', item_id=payment_id))
+
+        # GET request - show simple popup
+        if request.method == 'GET':
+            payment_dict = {
+                'payment_id': str(payment.payment_id),
+                'reference_no': payment.reference_no or 'N/A',
+                'amount': float(payment.amount),
+                'supplier_name': payment.supplier.supplier_name if payment.supplier else 'Unknown',
+                'workflow_status': payment.workflow_status
+            }
+            return render_template(
+                'supplier/payment_approval_popup.html',
+                payment=payment_dict
+            )
+
+        # POST request - process approval or rejection
+        action = request.form.get('action')  # 'approve' or 'reject'
+        notes = request.form.get('notes', '')
+
+        if action == 'reject':
+            # Reject payment
+            payment.workflow_status = 'rejected'
+            payment.rejection_reason = notes or 'Rejected by approver'
+            payment.rejected_by = current_user.user_id
+            payment.rejected_at = datetime.now(timezone.utc)
+
+            db.session.commit()
+            flash('Payment rejected successfully', 'warning')
+
+            # Invalidate cache
+            from app.engine.universal_service_cache import invalidate_service_cache_for_entity
+            invalidate_service_cache_for_entity('supplier_payments', cascade=False)
+
+            return redirect(url_for('universal_views.universal_detail_view',
+                                  entity_type='supplier_payments', item_id=payment_id))
+
+        # Approve payment
+        # ✅ APPROVAL THRESHOLD CHECK: Only users with approval permission can approve payments >= 10,000
+        APPROVAL_THRESHOLD = Decimal('10000.00')
+        if payment.amount >= APPROVAL_THRESHOLD:
+            # Already passed permission check decorator, so user has approval rights
+            logger.info(f"Payment {payment_id} amount {payment.amount} >= threshold {APPROVAL_THRESHOLD}, approving with user permission")
+
+        # ✅ USE APPROVALMIXIN: Sets approved_by, approved_at, updated audit fields
+        payment.approve(
+            approver_id=current_user.user_id,
+            notes="Payment approved via web interface"
+        )
+
+        # ✅ CRITICAL FIX: Explicitly set workflow_status to 'approved'
+        # ApprovalMixin sets 'status' field, but SupplierPayment uses 'workflow_status'
+        payment.workflow_status = 'approved'
+        logger.info(f"Set workflow_status='approved' for payment {payment_id}")
+
+        # ✅ PREVENT DUPLICATE GL POSTING: Check if already posted
+        if payment.gl_posted:
+            logger.warning(f"GL entries already posted for payment {payment_id}, skipping")
+        else:
+            # Post GL entries
+            gl_result = create_supplier_payment_gl_entries(
+                payment.payment_id, current_user.user_id, db.session
+            )
+            payment.gl_posted = True
+            payment.gl_entry_id = gl_result.get('transaction_id')
+            payment.posting_date = datetime.now(timezone.utc)
+            logger.info(f"GL entries posted for payment {payment_id}")
+
+        # Update invoice payment status if applicable
+        invoice_id_cached = payment.invoice_id  # Cache before session closes
+        if invoice_id_cached:
+            from app.services.supplier_invoice_service import SupplierInvoiceService
+            invoice_service = SupplierInvoiceService()
+            invoice_service.update_payment_status(invoice_id_cached, db.session)
+
+        # ✅ CRITICAL FIX: Explicitly commit to persist changes
+        db.session.commit()
+        logger.info(f"✅ Payment {payment_id} (amount: {payment.amount}) approved and committed successfully")
+
+        flash('Payment approved and GL entries posted successfully', 'success')
+
+        # Invalidate caches AFTER transaction commits
+        from app.engine.universal_service_cache import invalidate_service_cache_for_entity
+        invalidate_service_cache_for_entity('supplier_payments', cascade=False)
+        if invoice_id_cached:
+            invalidate_service_cache_for_entity('supplier_invoices', cascade=False)
+
+        # Redirect back based on referrer
+        if request.referrer and '/list' in request.referrer:
+            return redirect(url_for('universal_views.universal_list_view',
+                                entity_type='supplier_payments'))
+        else:
+            return redirect(url_for('universal_views.universal_detail_view',
+                                entity_type='supplier_payments', item_id=payment_id))
+
+    except Exception as e:
+        # Rollback on error
+        from app import db
+        db.session.rollback()
+        logger.error(f"Error approving payment: {str(e)}", exc_info=True)
+        flash(f"Error approving payment: {str(e)}", "error")
+        return redirect(url_for('universal_views.universal_detail_view',
+                            entity_type='supplier_payments', item_id=payment_id))
+
+
 @supplier_views_bp.route('/payment/reject/<payment_id>', methods=['GET', 'POST'])
 @login_required
 @require_web_branch_permission('payment', 'approve', branch_source='entity')
 def reject_payment(payment_id):
-    """Reject payment"""
+    """Reject payment - using new service layer"""
     try:
-        controller = PaymentApprovalController(payment_id=payment_id, action='reject')
-        return controller.handle_request()
+        from app.services.supplier_payment_service import SupplierPaymentService
+
+        payment_service = SupplierPaymentService()
+
+        if request.method == 'POST':
+            # Get rejection reason from form
+            reason = request.form.get('rejection_reason', '')
+
+            if not reason:
+                flash('Rejection reason is required', 'error')
+                return redirect(url_for('supplier_views.reject_payment', payment_id=payment_id))
+
+            # Call service to reject payment
+            result = payment_service.reject_payment(
+                payment_id=payment_id,
+                rejector_id=current_user.user_id,
+                reason=reason
+            )
+
+            if result['success']:
+                flash(result['message'], 'success')
+            else:
+                flash(result['error'], 'error')
+
+            return redirect(url_for('universal_views.universal_detail_view',
+                                  entity_type='supplier_payments', item_id=payment_id))
+
+        # GET request - show rejection form
+        payment_dict = payment_service.get_by_id(
+            payment_id,
+            hospital_id=str(current_user.hospital_id)
+        )
+
+        if not payment_dict:
+            flash('Payment not found', 'error')
+            return redirect(url_for('supplier_views.payment_list'))
+
+        return render_template(
+            'supplier/payment_approval_new.html',
+            payment=payment_dict,
+            action='reject',
+            title=f'Reject Payment {payment_dict.get("reference_no", "")}'
+        )
+
     except Exception as e:
-        current_app.logger.error(f"Error in reject_payment: {str(e)}", exc_info=True)
+        logger.error(f"Error in reject_payment: {str(e)}", exc_info=True)
         flash(f"Error rejecting payment: {str(e)}", "error")
         return redirect(url_for('supplier_views.view_payment', payment_id=payment_id))
+
+
+@supplier_views_bp.route('/payment/delete/<payment_id>', methods=['GET', 'POST'])
+@login_required
+@require_web_branch_permission('payment', 'delete', branch_source='entity')
+def delete_payment(payment_id):
+    """Delete payment (soft delete) - using new service layer"""
+    try:
+        from app.services.supplier_payment_service import SupplierPaymentService
+
+        payment_service = SupplierPaymentService()
+
+        if request.method == 'POST':
+            # Get deletion reason and reversal type from form
+            reason = request.form.get('deletion_reason', 'Deleted by user')
+            reversal_type = request.form.get('reversal_type', 'entry_error')
+
+            # Call service to delete payment
+            result = payment_service.delete_payment(
+                payment_id=payment_id,
+                user_id=current_user.user_id,
+                reason=reason,
+                reversal_type=reversal_type
+            )
+
+            if result['success']:
+                flash(result['message'], 'success')
+                return redirect(url_for('universal_views.universal_detail_view',
+                                      entity_type='supplier_payments', item_id=payment_id))
+            else:
+                flash(result['error'], 'error')
+                return redirect(url_for('universal_views.universal_detail_view',
+                                      entity_type='supplier_payments', item_id=payment_id))
+
+        # GET request - show confirmation page
+        payment_dict = payment_service.get_by_id(
+            payment_id,
+            hospital_id=str(current_user.hospital_id)
+        )
+
+        if not payment_dict:
+            flash('Payment not found', 'error')
+            return redirect(url_for('supplier_views.payment_list'))
+
+        return render_template(
+            'supplier/payment_delete_confirm.html',
+            payment=payment_dict,
+            title=f'Delete Payment {payment_dict.get("reference_no", "")}'
+        )
+
+    except Exception as e:
+        logger.error(f"Error in delete_payment: {str(e)}", exc_info=True)
+        flash(f"Error deleting payment: {str(e)}", "error")
+        return redirect(url_for('universal_views.universal_detail_view',
+                              entity_type='supplier_payments', item_id=payment_id))
+
+
+@supplier_views_bp.route('/payment/restore/<payment_id>', methods=['GET', 'POST'])
+@login_required
+@require_web_branch_permission('payment', 'delete', branch_source='entity')
+def restore_payment(payment_id):
+    """Restore deleted payment - using new service layer"""
+    try:
+        from app.services.supplier_payment_service import SupplierPaymentService
+
+        payment_service = SupplierPaymentService()
+
+        # Call service to restore payment
+        result = payment_service.restore_payment(
+            payment_id=payment_id,
+            user_id=current_user.user_id
+        )
+
+        if result['success']:
+            flash(result['message'], 'success')
+        else:
+            flash(result['error'], 'error')
+
+        return redirect(url_for('universal_views.universal_detail_view',
+                              entity_type='supplier_payments', item_id=payment_id))
+
+    except Exception as e:
+        logger.error(f"Error in restore_payment: {str(e)}", exc_info=True)
+        flash(f"Error restoring payment: {str(e)}", "error")
+        return redirect(url_for('universal_views.universal_detail_view',
+                              entity_type='supplier_payments', item_id=payment_id))
+
+
+@supplier_views_bp.route('/payment/reverse/<payment_id>', methods=['GET', 'POST'])
+@login_required
+@require_web_branch_permission('payment', 'approve', branch_source='entity')
+def reverse_payment(payment_id):
+    """
+    Reverse approved payment - Creates supplier advance
+    Uses user profile approval limits (bypass for 7777777777)
+    """
+    try:
+        from app import db
+        from app.models.transaction import SupplierPayment
+        from app.services.gl_service import reverse_supplier_payment_gl_entries
+        from app.models.transaction import SupplierAdvanceAdjustment
+        from datetime import datetime, timezone
+        from decimal import Decimal
+
+        # Check user bypass
+        BYPASS_USER = '7777777777'
+        is_bypass = current_user.user_id == BYPASS_USER
+
+        # Get payment with supplier relationship
+        from sqlalchemy.orm import joinedload
+        payment = db.session.query(SupplierPayment).options(
+            joinedload(SupplierPayment.supplier)
+        ).filter_by(
+            payment_id=uuid.UUID(payment_id),
+            hospital_id=current_user.hospital_id
+        ).first()
+
+        if not payment:
+            flash("Payment not found", "error")
+            return redirect(url_for('universal_views.universal_list_view',
+                                  entity_type='supplier_payments'))
+
+        # Validate status
+        if payment.workflow_status != 'approved':
+            flash(f"Only approved payments can be reversed (current status: {payment.workflow_status})", "error")
+            return redirect(url_for('universal_views.universal_detail_view',
+                                  entity_type='supplier_payments', item_id=payment_id))
+
+        if payment.is_deleted:
+            flash("Cannot reverse deleted payment", "error")
+            return redirect(url_for('universal_views.universal_detail_view',
+                                  entity_type='supplier_payments', item_id=payment_id))
+
+        # Check user approval limits (unless bypass user)
+        if not is_bypass:
+            # TODO: Implement user profile approval limit check here
+            # Similar to PO approval logic
+            # For now, allow if they have approve permission
+            logger.info(f"User {current_user.user_id} reversing payment {payment_id}, amount: {payment.amount}")
+
+        if request.method == 'POST':
+            # Get reversal reason and type
+            reason = request.form.get('reversal_reason', 'Payment reversed')
+            create_advance = request.form.get('create_advance') == 'yes'
+
+            # Reverse GL entries
+            if payment.gl_posted and payment.gl_entry_id:
+                reverse_supplier_payment_gl_entries(
+                    payment.payment_id, current_user.user_id, db.session
+                )
+                logger.info(f"GL entries reversed for payment {payment_id}")
+
+            # Create supplier advance if money was physically transferred
+            if create_advance:
+                advance_entry = SupplierAdvanceAdjustment(
+                    adjustment_id=uuid.uuid4(),
+                    hospital_id=payment.hospital_id,
+                    branch_id=payment.branch_id,
+                    source_payment_id=payment.payment_id,
+                    target_payment_id=None,
+                    invoice_id=payment.invoice_id if payment.invoice_id else None,
+                    supplier_id=payment.supplier_id,
+                    amount=payment.amount,
+                    adjustment_date=datetime.now(timezone.utc),
+                    adjustment_type='reversal',  # ✅ FIXED: Use 'reversal' not 'payment_reversal'
+                    notes=f"Payment reversal - Money with supplier: {reason}. Original payment: {payment.reference_no or payment.payment_id}",
+                    created_by=current_user.user_id,
+                    updated_by=current_user.user_id
+                )
+                db.session.add(advance_entry)
+                logger.info(f"Created supplier advance from payment reversal: ₹{payment.amount}")
+
+            # Update payment status
+            payment.workflow_status = 'reversed'
+            payment.is_reversed = True  # ✅ Set is_reversed flag as requested
+            payment.gl_posted = False
+            payment.reversed_by = current_user.user_id
+            payment.reversed_at = datetime.now(timezone.utc)
+            payment.reversal_reason = reason
+
+            # Update invoice payment status if applicable
+            if payment.invoice_id:
+                from app.services.supplier_invoice_service import SupplierInvoiceService
+                invoice_service = SupplierInvoiceService()
+                invoice_service.update_payment_status(payment.invoice_id, db.session)
+
+            db.session.commit()
+
+            # Invalidate caches
+            from app.engine.universal_service_cache import invalidate_service_cache_for_entity
+            invalidate_service_cache_for_entity('supplier_payments', cascade=False)
+            if payment.invoice_id:
+                invalidate_service_cache_for_entity('supplier_invoices', cascade=False)
+
+            success_msg = f'Payment reversed successfully. '
+            if create_advance:
+                success_msg += f'Supplier advance of ₹{payment.amount} created for future adjustment.'
+
+            flash(success_msg, 'success')
+            return redirect(url_for('universal_views.universal_detail_view',
+                                  entity_type='supplier_payments', item_id=payment_id))
+
+        # GET request - show simple popup confirmation
+        # Simplified: Use payment object directly instead of fetching again
+        payment_dict = {
+            'payment_id': str(payment.payment_id),
+            'reference_no': payment.reference_no or 'N/A',
+            'amount': float(payment.amount),
+            'supplier_name': payment.supplier.supplier_name if payment.supplier else 'Unknown',
+            'workflow_status': payment.workflow_status
+        }
+
+        return render_template(
+            'supplier/payment_reverse_confirm.html',
+            payment=payment_dict,
+            is_bypass=is_bypass
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error in reverse_payment: {str(e)}", exc_info=True)
+        flash(f"Error reversing payment: {str(e)}", "error")
+        return redirect(url_for('universal_views.universal_detail_view',
+                            entity_type='supplier_payments', item_id=payment_id))
 
 
 @supplier_views_bp.route('/payment/universal_test')

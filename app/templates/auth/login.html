@@ -7,20 +7,31 @@
 <div class="min-h-[85vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
     <div class="max-w-md w-full space-y-8">
         <div class="text-center">
-            <!-- Logo Rendering with Backward Compatibility -->
-            {% if hospital and hospital.logo and hospital.logo.variants %}
-                <img 
-                    src="{{ url_for('static', filename='uploads/hospital_logos/' + hospital.hospital_id|string + '/' + hospital.logo.variants.medium.filename) }}" 
-                    alt="{{ hospital.name }} Logo" 
-                    class="mx-auto h-36 w-60 md:h-48 md:w-48 mb-4 object-contain"
+            <!-- Logo Rendering with Enhanced Fallback -->
+            {% set logo_filename = hospital.logo.variants.medium.filename if (hospital and hospital.logo and 'variants' in hospital.logo and 'medium' in hospital.logo.variants and 'filename' in hospital.logo.variants.medium) else none %}
+
+            {% if logo_filename %}
+                <!-- Hospital logo from database -->
+                <img
+                    src="{{ url_for('static', filename='uploads/hospital_logos/' + (hospital.hospital_id|string) + '/' + logo_filename) }}"
+                    alt="{{ hospital.name }} Logo"
+                    class="mx-auto h-32 w-auto md:h-40 md:w-auto mb-4 object-contain"
+                    onerror="this.onerror=null; this.src='{{ url_for('static', filename='images/logo.svg') }}'; this.classList.remove('h-32', 'md:h-40'); this.classList.add('h-24', 'md:h-32');"
                 >
             {% else %}
-                <div class="mx-auto h-16 w-16 md:h-24 md:w-24 bg-blue-600 rounded-full flex items-center justify-center text-white text-xl font-bold mb-4">
+                <!-- Fallback to static SVG logo -->
+                <img
+                    src="{{ url_for('static', filename='images/logo.svg') }}"
+                    alt="Skinspire Clinic Logo"
+                    class="mx-auto h-24 w-auto md:h-32 md:w-auto mb-4 object-contain"
+                    onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='flex';"
+                >
+                <!-- Ultimate fallback: initials in circle -->
+                <div id="logo-fallback" class="mx-auto h-16 w-16 md:h-24 md:w-24 bg-blue-600 rounded-full items-center justify-center text-white text-xl font-bold mb-4" style="display:none;">
                     SK
                 </div>
             {% endif %}
-            Welcome!
-            <h2 class="text-center text-3xl font-extrabold text-gray-900 dark:text-white">
+            <h2 class="text-center text-3xl font-extrabold text-gray-900 dark:text-white mt-4">
                 Sign in to Skinspire Clinic
             </h2>
             <p class="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">

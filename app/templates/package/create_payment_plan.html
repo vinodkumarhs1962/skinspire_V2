@@ -1,0 +1,270 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}Create Package Payment Plan{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Page Header -->
+    <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+        <div class="flex justify-between items-start mb-3">
+            <div style="max-width: 60%;">
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    <i class="fas fa-calendar-alt text-blue-500"></i>
+                    <span class="ml-2">Create Package Plan</span>
+                </h1>
+                <p class="text-gray-600 dark:text-gray-400 mt-1" style="font-style: italic; font-size: 1.125rem; padding-left: 2.5rem;">
+                    Setup installment schedule for package purchase
+                </p>
+            </div>
+            <div class="text-right">
+                <div class="text-gray-600 dark:text-gray-400">
+                    <i class="fas fa-calendar text-gray-500"></i>
+                    <span class="ml-1 font-bold text-base">{{ now().strftime('%d %b %Y') }}</span>
+                </div>
+                <div class="text-gray-500 dark:text-gray-400 mt-1 font-bold text-sm">
+                    {{ now().strftime('%A') }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Breadcrumb -->
+        <div>
+            <nav class="flex items-center space-x-1 text-sm text-gray-500">
+                <a href="{{ url_for('auth_views.dashboard') }}" class="hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
+                    Dashboard
+                </a>
+                <span class="text-gray-400 mx-2">/</span>
+                <a href="{{ url_for('universal_views.universal_list_view', entity_type='package_payment_plans') }}" class="hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
+                    Package Payment Plans
+                </a>
+                <span class="text-gray-400 mx-2">/</span>
+                <span class="text-gray-700 dark:text-gray-300">Create</span>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Main Form -->
+    <form id="payment-plan-form" method="POST" action="{{ url_for('package_views.create_payment_plan') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" id="patient_id" name="patient_id">
+        <input type="hidden" id="invoice_id" name="invoice_id">
+        <input type="hidden" id="package_id" name="package_id">
+
+        <!-- Step 1: Patient Selection -->
+        <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">
+                <i class="fas fa-user-circle text-blue-500 mr-2"></i>
+                Step 1: Select Patient
+            </h2>
+
+            <!-- Patient Search/Autocomplete -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Search Patient <span class="text-red-500">*</span>
+                </label>
+                <div class="relative">
+                    <input type="text"
+                           id="patient-search"
+                           class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                           placeholder="Type patient name, MRN, or phone number..."
+                           autocomplete="off">
+                    <i class="fas fa-search absolute right-4 top-4 text-gray-400"></i>
+                </div>
+
+                <!-- Search Results Dropdown -->
+                <div id="patient-results" class="hidden absolute z-10 mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-96 overflow-y-auto" style="width: calc(100% - 3rem);">
+                    <!-- Results will be populated by JavaScript -->
+                </div>
+
+                <!-- Loading Indicator -->
+                <div id="patient-loading" class="hidden absolute right-12 top-4">
+                    <i class="fas fa-spinner fa-spin text-blue-500"></i>
+                </div>
+            </div>
+
+            <!-- Selected Patient Display -->
+            <div id="selected-patient-card" class="hidden bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded p-5">
+                <div class="flex items-start justify-between">
+                    <div class="flex items-start flex-1">
+                        <i class="fas fa-user-circle text-blue-500 text-3xl mr-4 mt-1"></i>
+                        <div class="flex-1">
+                            <div class="font-bold text-xl text-gray-900 dark:text-white mb-2" id="selected-patient-name"></div>
+                            <div class="grid grid-cols-3 gap-4 text-base text-gray-600 dark:text-gray-400">
+                                <div>
+                                    <strong class="text-gray-700 dark:text-gray-300">MRN:</strong> <span id="selected-patient-mrn"></span>
+                                </div>
+                                <div id="selected-patient-phone-container" class="hidden">
+                                    <i class="fas fa-phone mr-1.5"></i><span id="selected-patient-phone"></span>
+                                </div>
+                                <div id="selected-patient-email-container" class="hidden">
+                                    <i class="fas fa-envelope mr-1.5"></i><span id="selected-patient-email"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" id="clear-patient" class="ml-4 px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors">
+                        <i class="fas fa-times mr-1"></i>
+                        Clear
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Invoice Selection (Hidden until patient selected) -->
+        <div id="invoice-selection-section" class="hidden bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">
+                <i class="fas fa-file-invoice text-green-500 mr-2"></i>
+                Step 2: Select Invoice with Package
+            </h2>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Invoice <span class="text-red-500">*</span>
+                </label>
+                <select id="invoice-select"
+                        class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white">
+                    <option value="">Select invoice with package...</option>
+                </select>
+            </div>
+
+            <!-- Loading Indicator for Invoices -->
+            <div id="invoice-loading" class="hidden flex items-center justify-center py-4">
+                <i class="fas fa-spinner fa-spin text-blue-500 mr-2"></i>
+                <span class="text-gray-600 dark:text-gray-400">Loading invoices...</span>
+            </div>
+
+            <!-- No Invoices Message -->
+            <div id="no-invoices-message" class="hidden bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 rounded p-4">
+                <div class="flex items-start">
+                    <i class="fas fa-exclamation-triangle text-yellow-500 mr-3 mt-1"></i>
+                    <div>
+                        <p class="font-semibold text-gray-900 dark:text-white">No invoices with packages found</p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                            This patient has no approved invoices containing package items. Please create an invoice with a package first.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Plan Details (Hidden until invoice selected) -->
+        <div id="plan-details-section" class="hidden bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">
+                <i class="fas fa-cog text-purple-500 mr-2"></i>
+                Step 3: Configure Payment Plan
+            </h2>
+
+            <!-- Package Info (Auto-populated, Read-only) -->
+            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6">
+                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Package Information</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Package Name</label>
+                        <input type="text" id="package_name_display" readonly
+                               class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded text-gray-800 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Total Amount</label>
+                        <input type="text" id="total_amount_display" readonly
+                               class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded text-gray-800 dark:text-white">
+                        <input type="hidden" id="total_amount" name="total_amount">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Session Configuration -->
+            <div class="grid grid-cols-2 gap-6 mb-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Total Sessions <span class="text-red-500">*</span>
+                    </label>
+                    <input type="number" id="total_sessions" name="total_sessions" min="1" required
+                           class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                           placeholder="e.g., 5">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Number of service sessions included in the package</p>
+                </div>
+            </div>
+
+            <!-- Installment Configuration -->
+            <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 mt-6">Installment Schedule</h3>
+            <div class="grid grid-cols-3 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Number of Installments <span class="text-red-500">*</span>
+                    </label>
+                    <input type="number" id="installment_count" name="installment_count" min="1" max="12" required
+                           class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                           placeholder="e.g., 3">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Split payment into installments (max 12)</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Frequency <span class="text-red-500">*</span>
+                    </label>
+                    <select id="installment_frequency" name="installment_frequency" required
+                            class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white">
+                        <option value="monthly">Monthly</option>
+                        <option value="biweekly">Bi-weekly</option>
+                        <option value="weekly">Weekly</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        First Installment Date <span class="text-red-500">*</span>
+                    </label>
+                    <input type="date" id="first_installment_date" name="first_installment_date" required
+                           class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white">
+                </div>
+            </div>
+
+            <!-- Notes (Optional) -->
+            <div class="mt-6">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Notes (Optional)
+                </label>
+                <textarea id="notes" name="notes" rows="3"
+                          class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                          placeholder="Additional notes or special instructions..."></textarea>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex justify-between items-center bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+            <a href="{{ url_for('universal_views.universal_list_view', entity_type='package_payment_plans') }}"
+               class="px-6 py-3 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition-colors">
+                <i class="fas fa-times mr-2"></i>
+                Cancel
+            </a>
+            <button type="submit" id="submit-button" disabled
+                    class="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed">
+                <i class="fas fa-save mr-2"></i>
+                Create Payment Plan
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Error Modal -->
+<div id="error-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md mx-4">
+        <div class="flex items-start mb-4">
+            <i class="fas fa-exclamation-circle text-red-500 text-2xl mr-3"></i>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Error</h3>
+                <p id="error-message" class="text-gray-600 dark:text-gray-400"></p>
+            </div>
+        </div>
+        <div class="flex justify-end">
+            <button id="close-error-modal" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors">
+                OK
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/package_payment_plan_create.js') }}"></script>
+{% endblock %}

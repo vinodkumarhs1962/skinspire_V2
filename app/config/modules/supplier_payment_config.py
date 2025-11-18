@@ -147,6 +147,48 @@ SUPPLIER_PAYMENT_FIELDS = [
         complex_display_type=ComplexDisplayType.ENTITY_REFERENCE
     ),
 
+    # Supplier Contact Person
+    FieldDefinition(
+        name="supplier_contact_person",
+        label="Contact Person",
+        field_type=FieldType.TEXT,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=False,
+        readonly=True,
+        tab_group="payment_details",
+        section="supplier_info",
+        view_order=6
+    ),
+
+    # Supplier Phone
+    FieldDefinition(
+        name="supplier_phone",
+        label="Phone",
+        field_type=FieldType.TEXT,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=False,
+        readonly=True,
+        tab_group="payment_details",
+        section="supplier_info",
+        view_order=7
+    ),
+
+    # Supplier Email
+    FieldDefinition(
+        name="supplier_email",
+        label="Email",
+        field_type=FieldType.TEXT,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=False,
+        readonly=True,
+        tab_group="payment_details",
+        section="supplier_info",
+        view_order=8
+    ),
+
     FieldDefinition(
         name="supplier_invoice_no",
         label="Invoice Number",
@@ -224,6 +266,7 @@ SUPPLIER_PAYMENT_FIELDS = [
             {"value": "cheque", "label": "Cheque"},
             {"value": "bank_transfer", "label": "Bank Transfer"},
             {"value": "upi", "label": "UPI"},
+            {"value": "advance", "label": "Advance"},
             {"value": "mixed", "label": "Mixed"}
         ],
         default_value="", 
@@ -346,7 +389,21 @@ SUPPLIER_PAYMENT_FIELDS = [
         view_order=9,
         conditional_display="item.upi_reference"
     ),
-    
+
+    # Advance Payment Field
+    FieldDefinition(
+        name="advance_amount",
+        label="Advance Amount",
+        field_type=FieldType.CURRENCY,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=True,
+        tab_group="payment_details",
+        section="advance_payment",
+        view_order=10,
+        conditional_display="item.advance_amount and item.advance_amount > 0"
+    ),
+
     FieldDefinition(
         name="total_invoice_amount",
         label="Total Invoice Amount",
@@ -423,19 +480,21 @@ SUPPLIER_PAYMENT_FIELDS = [
 
     # Workflow Fields
     FieldDefinition(
-        name="payment_status",
+        name="workflow_status",
         label="Status",
         field_type=FieldType.STATUS_BADGE,
-        db_column="payment_status",  # Explicitly map to database column
-        filter_aliases=["workflow_status","status", "payment_status"],  # Support multiple filter names
+        db_column="workflow_status",  # Map to actual database column
+        filter_aliases=["status", "payment_status"],  # Support multiple filter names
         filter_operator=FilterOperator.EQUALS,
         options=[
             {"value": "", "label": "All Status"},
-            {"value": "pending", "label": "Pending"},
-            {"value": "pending_approval", "label": "Pending Approval"},
-            {"value": "approved", "label": "Approved"},
-            {"value": "rejected", "label": "Rejected"},
-            {"value": "completed", "label": "Completed"}
+            {"value": "draft", "label": "Draft", "css_class": "status-draft"},
+            {"value": "pending", "label": "Pending", "css_class": "status-pending"},
+            {"value": "pending_approval", "label": "Pending Approval", "css_class": "status-pending"},
+            {"value": "approved", "label": "Approved", "css_class": "status-approved"},
+            {"value": "rejected", "label": "Rejected", "css_class": "status-rejected"},
+            {"value": "reversed", "label": "Reversed", "css_class": "status-reversed"},
+            {"value": "completed", "label": "Completed", "css_class": "status-completed"}
         ],
         show_in_list=True,
         show_in_detail=True,
@@ -764,23 +823,25 @@ SUPPLIER_PAYMENT_FIELDS = [
         )
     ),
 
-    # payment breakdown
+    # payment breakdown - DISABLED (causing template iteration error)
     FieldDefinition(
         name="payment_breakdown_display",
         label="Payment Breakdown",
         field_type=FieldType.CUSTOM,
         show_in_list=False,
-        show_in_detail=True,
+        show_in_detail=False,  # ✅ DISABLED - Hidden from detail view
         show_in_form=False,
         readonly=True,
         virtual=True,
         tab_group="payment_details",
         section="payment_summary",
         view_order=20
+        # custom_renderer disabled - was causing template errors
         # custom_renderer=CustomRenderer(
-        #     template="components/business/payment_breakdown.html",
+        #     template="engine/business/payment_breakdown_summary.html",
+        #     context_function="get_payment_items_display",
         #     css_classes="payment-breakdown-widget"
-        #)
+        # )
     ),
     # Cash Payment Details
     FieldDefinition(
@@ -872,7 +933,7 @@ SUPPLIER_PAYMENT_FIELDS = [
         section="invoice_items",
         view_order=10,
         custom_renderer=CustomRenderer(
-            template="components/business/universal_line_items_table.html",  # Universal template
+            template="engine/business/universal_line_items_table.html",  # ✅ FIX: Correct template path
             context_function="get_invoice_items_for_payment",
             css_classes="w-100"
         )
@@ -1203,13 +1264,6 @@ SUPPLIER_PAYMENT_TABS = {
                 columns=2,
                 order=0
             ),
-            'balance_calculations': SectionDefinition(
-                key='balance_calculations',
-                title='Balance & Calculations',
-                icon='fas fa-balance-scale',
-                columns=2,
-                order=1
-            ),
                     
             'cash_payment': SectionDefinition(
                 key='cash_payment',
@@ -1243,12 +1297,20 @@ SUPPLIER_PAYMENT_TABS = {
                 order=5,
                 conditional_display="item.payment_method == 'upi' or (item.payment_method == 'mixed' and item.upi_amount > 0)"
             ),
+            'advance_payment': SectionDefinition(
+                key='advance_payment',
+                title='Advance Payment Details',
+                icon='fas fa-hand-holding-usd',
+                columns=2,
+                order=6,
+                conditional_display="item.advance_amount and item.advance_amount > 0"
+            ),
             'documents': SectionDefinition(
                 key='documents',
                 title='Payment Documents',
                 icon='fas fa-paperclip',
                 columns=1,
-                order=6,
+                order=7,
                 conditional_display="item.receipt_document_path or item.bank_statement_path or item.authorization_document_path"
             )
         },
@@ -1420,225 +1482,319 @@ SUPPLIER_PAYMENT_VIEW_LAYOUT = ViewLayoutConfiguration(
 # =============================================================================
 
 SUPPLIER_PAYMENT_ACTIONS = [
+
+    # =============================================================================
+    # LIST PAGE - TOOLBAR ACTIONS (Navigation to other lists, create)
+    # =============================================================================
+
     ActionDefinition(
-        id="create",
-        label="New Payment",
-        icon="fas fa-plus",
-        route_name="supplier_views.create_payment",
-        button_type=ButtonType.PRIMARY,
-        permission="supplier_payments_create",
-        show_in_list=True,
-        show_in_detail=False,
-        show_in_toolbar=True,
+        id="goto_suppliers_list",
+        label="Suppliers",
+        icon="fas fa-building",
+        button_type=ButtonType.SECONDARY,
+        route_name="universal_views.universal_list_view",
+        route_params={"entity_type": "suppliers"},
+        show_in_list=False,
+        show_in_list_toolbar=True,
+        show_in_detail_toolbar=False,
         display_type=ActionDisplayType.BUTTON,
+        permission="suppliers_view",
         order=1
     ),
 
-    # Edit action (verified route exists)
     ActionDefinition(
-        id="edit",
-        label="Edit Payment",
-        icon="fas fa-edit",
-        route_name="supplier_views.edit_payment",
-        route_params={"payment_id": "{payment_id}"},
-        button_type=ButtonType.PRIMARY,
-        permission="supplier_payments_edit",
-        show_in_list=False,
-        show_in_detail=True,
-        display_type=ActionDisplayType.DROPDOWN_ITEM,
-        order=100,
-        conditions={
-            "workflow_status": ["draft", "pending"]
-        }
-    ),
-    
-    # View invoice action (verified route exists)
-    ActionDefinition(
-        id="view_invoice",
-        label="View Invoice",
+        id="goto_supplier_invoices_list",
+        label="Supplier Invoices",
         icon="fas fa-file-invoice",
-        route_name="supplier_views.view_supplier_invoice",
-        route_params={"invoice_id": "{invoice_id}"},
-        button_type=ButtonType.INFO,
-        permission="supplier_payments_view",
-        show_in_list=False,
-        show_in_detail=True,
-        display_type=ActionDisplayType.BUTTON,
-        button_group="related_docs",
-        order=20
-        # conditional_display="item.invoice_id"
-    ),
-    
-    # Payment list navigation (verified route exists)
-    ActionDefinition(
-        id="payment_list",
-        label="Payment List",
-        icon="fas fa-list",
-        route_name="supplier_views.payment_list",
-        button_type=ButtonType.OUTLINE,
-        permission="supplier_payments_view",
-        show_in_list=False,
-        show_in_detail=True
-    ),
-    
-    # Invoice list navigation
-    ActionDefinition(
-        id="invoice_list",
-        label="Invoice List",
-        icon="fas fa-file-invoice",
-        route_name="supplier_views.supplier_invoice_list",
-        button_type=ButtonType.OUTLINE,
-        permission="supplier_payments_view",
-        show_in_list=False,
-        show_in_detail=True
-    ),
-    
-    # Workflow actions (using url_pattern as in existing config)
-    ActionDefinition(
-        id="approve",
-        label="Approve",
-        icon="fas fa-check",
-        url_pattern="/api/{entity_type}/{id}/approve",
-        button_type=ButtonType.SUCCESS,
-        permission="supplier_payments_approve",
-        show_in_list=False,
-        show_in_detail=True,
-        display_type=ActionDisplayType.DROPDOWN_ITEM,
-        order=110,
-        conditions={
-            "workflow_status": ["pending"]
-        },
-        confirmation_required=True,
-        confirmation_message="Are you sure you want to approve this payment?"
-    ),
-    ActionDefinition(
-        id="reject",
-        label="Reject",
-        icon="fas fa-times",
-        url_pattern="/api/{entity_type}/{id}/reject",
-        button_type=ButtonType.DANGER,
-        permission="supplier_payments_approve",
-        show_in_list=False,
-        show_in_detail=True,
-        display_type=ActionDisplayType.DROPDOWN_ITEM,
-        order=120,
-        conditions={
-            "workflow_status": ["pending_approval"]
-        },
-        confirmation_required=True,
-        confirmation_message="Are you sure you want to reject this payment?"
-    ),
-    
-    # View PO - only show if PO exists (through invoice)
-    ActionDefinition(
-        id="view_po",
-        label="View PO",
-        icon="fas fa-file-contract",
-        route_name="supplier_views.view_purchase_order",
-        route_params={"po_id": "{po_id}"},
-        button_type=ButtonType.INFO,
-        permission="supplier_payments_view",
-        show_in_list=False,
-        show_in_detail=True,
-        display_type=ActionDisplayType.BUTTON,
-        button_group="related_docs",
-        order=10
-        # conditional_display="item.po_id or (item.invoice and item.invoice.po_id)"  # ✅ Check both direct and through invoice
-    ),
-    
-    # Delete - complex condition
-    ActionDefinition(
-        id="delete",
-        label="Delete",
-        icon="fas fa-trash",
-        route_name="supplier_views.delete_payment",
-        route_params={"payment_id": "{payment_id}"},
-        button_type=ButtonType.DANGER,
-        permission="supplier_payments_delete",
-        show_in_list=False,
-        show_in_detail=True,
-        display_type=ActionDisplayType.DROPDOWN_ITEM,
-        order=200,
-        confirmation_required=True,
-        confirmation_message="Are you sure you want to delete this payment?",
-        conditions={
-            "workflow_status": ["draft", "pending", "rejected"]  # Keep for exact matching
-        }
-        # conditional_display="item.workflow_status != 'approved' and not item.has_credit_notes"  # ✅ Additional complex logic
-    ),
-    
-    # Create credit note - complex business rules
-    ActionDefinition(
-        id="credit_note",
-        label="Create Credit Note",
-        icon="fas fa-file-invoice-dollar",
-        route_name="supplier_views.create_credit_note",
-        route_params={"payment_id": "{payment_id}"},
-        button_type=ButtonType.WARNING,
-        permission="supplier_payments_edit",
-        show_in_list=False,
-        show_in_detail=True,
-        display_type=ActionDisplayType.DROPDOWN_ITEM,
-        order=140,
-        conditions={
-            "workflow_status": ["approved", "completed"]
-        }
-        #conditional_display="not item.is_credit_note and not item.has_credit_notes"  # ✅ Complex business logic
-    ),
-    
-    # Print - only for approved/completed payments
-    ActionDefinition(
-        id="print",
-        label="Print Receipt",
-        icon="fas fa-print",
-        route_name="universal_views.universal_document_view",  # ✅ Use route name
-        route_params={  # ✅ Correct parameter order: entity_type, item_id, doc_type
-            "entity_type": "supplier_payments",
-            "item_id": "{payment_id}",  # ✅ item_id comes BEFORE doc_type
-            "doc_type": "receipt"
-        },
-        # url_pattern="/universal/supplier_payments/document/receipt/{payment_id}?auto_print=true",
         button_type=ButtonType.SECONDARY,
-        permission="supplier_payments_view",
+        route_name="universal_views.universal_list_view",
+        route_params={"entity_type": "supplier_invoices"},
         show_in_list=False,
-        show_in_detail=True,
+        show_in_list_toolbar=True,
+        show_in_detail_toolbar=False,
         display_type=ActionDisplayType.BUTTON,
-        button_group="document_ops",
-        order=30
-        # conditions={
-        #     "workflow_status": ["approved", "completed"]
-        # }
-        # conditional_display="item.workflow_status in ['approved', 'completed']"  # ✅ Status check
-    ),
-    
-    # View action for list (keep existing)
-    ActionDefinition(
-        id="view",
-        label="View",
-        icon="fas fa-eye",
-        route_name="universal_views.universal_detail_view",
-        route_params={
-            "entity_type": "supplier_payments",
-            "item_id": "{payment_id}"
-        },
-        button_type=ButtonType.INFO,
-        permission="supplier_payments_view",
-        show_in_list=True,
-        show_in_detail=False,
-        display_type=ActionDisplayType.BUTTON,
+        permission="supplier_invoice_view",
         order=2
     ),
-    
-    # Export action
+
     ActionDefinition(
-        id="export",
-        label="Export",
-        icon="fas fa-download",
-        url_pattern="/universal/{entity_type}/export",
-        button_type=ButtonType.OUTLINE,
-        permission="supplier_payments_export",
+        id="goto_purchase_orders_list",
+        label="Purchase Orders",
+        icon="fas fa-file-contract",
+        button_type=ButtonType.SECONDARY,
+        route_name="universal_views.universal_list_view",
+        route_params={"entity_type": "purchase_orders"},
+        show_in_list=False,
+        show_in_list_toolbar=True,
+        show_in_detail_toolbar=False,
+        display_type=ActionDisplayType.BUTTON,
+        permission="purchase_order_view",
+        order=3
+    ),
+
+    ActionDefinition(
+        id="create_payment",
+        label="Create Payment",
+        icon="fas fa-plus",
+        button_type=ButtonType.PRIMARY,
+        route_name="supplier_views.create_payment",
+        show_in_list=False,
+        show_in_list_toolbar=True,
+        show_in_detail_toolbar=False,
+        display_type=ActionDisplayType.BUTTON,
+        permission="supplier_payments_create",
+        order=4
+    ),
+
+    # =============================================================================
+    # LIST PAGE - ROW ACTIONS (Per-record actions in table)
+    # =============================================================================
+
+    ActionDefinition(
+        id="view_row",
+        label="View",
+        icon="fas fa-eye",
+        button_type=ButtonType.INFO,
+        route_name="universal_views.universal_detail_view",
+        route_params={"entity_type": "supplier_payments", "item_id": "{payment_id}"},
         show_in_list=True,
-        show_in_detail=False
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=False,
+        display_type=ActionDisplayType.BUTTON,
+        permission="supplier_payments_view",
+        order=1
+    ),
+
+    ActionDefinition(
+        id="approve_row",
+        label="Approve",
+        icon="fas fa-check-circle",
+        button_type=ButtonType.SUCCESS,
+        route_name="supplier_views.approve_payment",
+        route_params={"payment_id": "{payment_id}"},
+        show_in_list=True,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=False,
+        display_type=ActionDisplayType.BUTTON,
+        conditions={
+            "workflow_status": ["pending_approval"],
+            "is_deleted": [False]
+        },
+        permission="supplier_payments_approve",
+        order=2,
+        confirmation_required=True,
+        confirmation_message="Are you sure you want to approve this payment? GL entries will be posted."
+    ),
+
+    ActionDefinition(
+        id="delete_row",
+        label="Delete",
+        icon="fas fa-trash",
+        button_type=ButtonType.DANGER,
+        route_name="supplier_views.delete_payment",
+        route_params={"payment_id": "{payment_id}"},
+        show_in_list=True,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=False,
+        display_type=ActionDisplayType.BUTTON,
+        conditions={
+            "workflow_status": ["draft", "rejected"],
+            "is_deleted": [False]
+        },
+        permission="supplier_payments_delete",
+        order=3,
+        confirmation_required=True,
+        confirmation_message="Are you sure you want to delete this payment?"
+    ),
+
+    # =============================================================================
+    # DETAIL/VIEW PAGE - TOOLBAR ACTIONS (Navigation buttons)
+    # =============================================================================
+
+    ActionDefinition(
+        id="goto_payments_list",
+        label="Supplier Payments",
+        icon="fas fa-money-bill",
+        button_type=ButtonType.SECONDARY,
+        route_name="universal_views.universal_list_view",
+        route_params={"entity_type": "supplier_payments"},
+        show_in_list=False,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
+        display_type=ActionDisplayType.BUTTON,
+        permission="supplier_payments_view",
+        order=1
+    ),
+
+    ActionDefinition(
+        id="goto_suppliers_detail",
+        label="Suppliers",
+        icon="fas fa-building",
+        button_type=ButtonType.SECONDARY,
+        route_name="universal_views.universal_list_view",
+        route_params={"entity_type": "suppliers"},
+        show_in_list=False,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
+        display_type=ActionDisplayType.BUTTON,
+        permission="suppliers_view",
+        order=2
+    ),
+
+    ActionDefinition(
+        id="goto_invoices_detail",
+        label="Supplier Invoices",
+        icon="fas fa-file-invoice",
+        button_type=ButtonType.SECONDARY,
+        route_name="universal_views.universal_list_view",
+        route_params={"entity_type": "supplier_invoices"},
+        show_in_list=False,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
+        display_type=ActionDisplayType.BUTTON,
+        permission="supplier_invoice_view",
+        order=3
+    ),
+
+    ActionDefinition(
+        id="goto_pos_detail",
+        label="Purchase Orders",
+        icon="fas fa-file-contract",
+        button_type=ButtonType.SECONDARY,
+        route_name="universal_views.universal_list_view",
+        route_params={"entity_type": "purchase_orders"},
+        show_in_list=False,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
+        display_type=ActionDisplayType.BUTTON,
+        permission="purchase_order_view",
+        order=4
+    ),
+
+    ActionDefinition(
+        id="print_payment",
+        label="Print Payment",
+        icon="fas fa-print",
+        button_type=ButtonType.INFO,
+        route_name="universal_views.universal_document_view",
+        route_params={
+            "entity_type": "supplier_payments",
+            "item_id": "{payment_id}",
+            "doc_type": "receipt"
+        },
+        show_in_list=False,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
+        display_type=ActionDisplayType.BUTTON,
+        permission="supplier_payments_view",
+        order=5
+    ),
+
+    # =============================================================================
+    # DETAIL/VIEW PAGE - DROPDOWN ACTIONS (Edit, Delete, Approve, Reverse)
+    # =============================================================================
+
+    ActionDefinition(
+        id="edit_payment",
+        label="Edit Payment",
+        icon="fas fa-edit",
+        button_type=ButtonType.WARNING,
+        route_name="supplier_views.edit_payment",
+        route_params={"payment_id": "{payment_id}"},
+        show_in_list=False,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
+        display_type=ActionDisplayType.DROPDOWN_ITEM,
+        conditions={
+            "workflow_status": ["draft", "rejected"],
+            "is_deleted": [False]
+        },
+        permission="supplier_payments_edit",
+        order=1
+    ),
+
+    ActionDefinition(
+        id="delete_payment",
+        label="Delete Payment",
+        icon="fas fa-trash",
+        button_type=ButtonType.DANGER,
+        route_name="supplier_views.delete_payment",
+        route_params={"payment_id": "{payment_id}"},
+        show_in_list=False,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
+        display_type=ActionDisplayType.DROPDOWN_ITEM,
+        conditions={
+            "workflow_status": ["draft", "rejected"],
+            "is_deleted": [False]
+        },
+        permission="supplier_payments_delete",
+        order=2,
+        confirmation_required=True,
+        confirmation_message="Are you sure you want to delete this payment?"
+    ),
+
+    ActionDefinition(
+        id="approve_payment",
+        label="Approve Payment",
+        icon="fas fa-check-circle",
+        button_type=ButtonType.SUCCESS,
+        route_name="supplier_views.approve_payment",
+        route_params={"payment_id": "{payment_id}"},
+        show_in_list=False,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
+        display_type=ActionDisplayType.DROPDOWN_ITEM,
+        conditions={
+            "workflow_status": ["pending_approval"],
+            "is_deleted": [False]
+        },
+        permission="supplier_payments_approve",
+        order=3,
+        confirmation_required=True,
+        confirmation_message="Are you sure you want to approve this payment? GL entries will be posted."
+    ),
+
+    ActionDefinition(
+        id="reverse_payment",
+        label="Reverse Payment",
+        icon="fas fa-exchange-alt",
+        button_type=ButtonType.DANGER,
+        route_name="supplier_views.reverse_payment",
+        route_params={"payment_id": "{payment_id}"},
+        show_in_list=False,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
+        display_type=ActionDisplayType.DROPDOWN_ITEM,
+        conditions={
+            "workflow_status": ["approved"],
+            "is_deleted": [False],
+            "gl_posted": [True]
+        },
+        permission="supplier_payments_approve",
+        order=4,
+        confirmation_required=True,
+        confirmation_message="Are you sure you want to reverse this approved payment?"
+    ),
+
+    ActionDefinition(
+        id="restore_payment",
+        label="Restore Payment",
+        icon="fas fa-undo",
+        button_type=ButtonType.SUCCESS,
+        route_name="supplier_views.restore_payment",
+        route_params={"payment_id": "{payment_id}"},
+        show_in_list=False,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
+        display_type=ActionDisplayType.DROPDOWN_ITEM,
+        conditions={
+            "is_deleted": [True]
+        },
+        permission="supplier_payments_delete",
+        order=5,
+        confirmation_required=True,
+        confirmation_message="Are you sure you want to restore this deleted payment?"
     )
 ]
 
@@ -1786,6 +1942,11 @@ SUPPLIER_PAYMENT_SUMMARY_CARDS = [
                 "label": "UPI",
                 "icon": "fas fa-mobile-alt",
                 "color": "text-orange-600"
+            },
+            "advance_amount": {
+                "label": "Advance",
+                "icon": "fas fa-hand-holding-usd",
+                "color": "text-indigo-600"
             }
         }
     },
@@ -1815,7 +1976,14 @@ SUPPLIER_PAYMENT_SUMMARY_CARDS = [
     {
         "id": "upi_amount_total",
         "field": "upi_amount",  # This matches the view column name
-        "label": "UPI Total", 
+        "label": "UPI Total",
+        "type": "currency",  # This triggers SUM calculation
+        "visible": False  # Hidden - just for calculation
+    },
+    {
+        "id": "advance_amount_total",
+        "field": "advance_amount",  # This matches the view column name
+        "label": "Advance Total",
         "type": "currency",  # This triggers SUM calculation
         "visible": False  # Hidden - just for calculation
     }
@@ -2152,7 +2320,6 @@ SUPPLIER_PAYMENT_SUMMARY_CONFIG = DocumentConfiguration(
     
     # Show only payment summary section
     hidden_sections=[
-        "balance_calculations",
         "cash_payment",
         "bank_payment",
         "cheque_payment",

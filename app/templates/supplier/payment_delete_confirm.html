@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Delete Payment</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-gray-100">
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full">
+            <!-- Header -->
+            <div class="text-center mb-6">
+                <i class="fas fa-trash-alt text-4xl text-red-500 mb-3"></i>
+                <h2 class="text-xl font-bold text-gray-900">Delete Payment</h2>
+                <p class="text-sm text-gray-600 mt-2">Payment: {{ payment.get('reference_no', 'N/A') }}</p>
+                <p class="text-sm text-gray-600">Supplier: {{ payment.get('supplier_name', 'Unknown') }}</p>
+                <p class="text-sm text-gray-600">Amount: <span class="font-semibold text-red-600">₹{{ "%.2f"|format(payment.get('amount', 0)) }}</span></p>
+                <p class="text-sm text-gray-600">Status: <span class="font-semibold">{{ payment.get('workflow_status', 'Unknown')|title }}</span></p>
+            </div>
+
+            <!-- Form -->
+            <form method="POST" action="{{ url_for('supplier_views.delete_payment', payment_id=payment.get('payment_id')) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                {% if payment.get('workflow_status') == 'draft' %}
+                    <!-- DRAFT PAYMENT: Simple confirmation -->
+                    <input type="hidden" name="reversal_type" value="entry_error"/>
+
+                    <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-info-circle text-blue-500"></i>
+                            </div>
+                            <div class="ml-3">
+                                <h3 class="text-sm font-medium text-blue-800">Are you sure?</h3>
+                                <p class="text-sm text-blue-700 mt-1">
+                                    This draft payment will be soft deleted. You can restore it later if needed.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                {% else %}
+                    <!-- REJECTED PAYMENT: Ask about reversal type -->
+                    <div class="bg-yellow-50 border-l-4 border-yellow-500 p-3 mb-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-exclamation-triangle text-yellow-500"></i>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm text-yellow-700">
+                                    This rejected payment will be deleted. If money was already transferred, we'll create a supplier advance.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-3">Was money transferred to supplier before rejection?</label>
+
+                        <div class="space-y-2">
+                            <label class="flex items-start p-3 border rounded cursor-pointer hover:bg-gray-50">
+                                <input type="radio" name="reversal_type" value="entry_error" checked class="mt-1 mr-3">
+                                <div class="flex-1">
+                                    <span class="font-medium">No - Entry Error</span>
+                                    <p class="text-xs text-gray-600">Simple mistake, money NOT transferred to supplier</p>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start p-3 border rounded cursor-pointer hover:bg-gray-50">
+                                <input type="radio" name="reversal_type" value="overpayment" class="mt-1 mr-3">
+                                <div class="flex-1">
+                                    <span class="font-medium">Yes - Overpayment</span>
+                                    <p class="text-xs text-gray-600">Wrong amount paid, money ALREADY with supplier (creates advance)</p>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start p-3 border rounded cursor-pointer hover:bg-gray-50">
+                                <input type="radio" name="reversal_type" value="duplicate" class="mt-1 mr-3">
+                                <div class="flex-1">
+                                    <span class="font-medium">Yes - Duplicate Payment</span>
+                                    <p class="text-xs text-gray-600">Payment made twice, money ALREADY with supplier (creates advance)</p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                {% endif %}
+
+                <!-- Deletion Reason -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Reason (optional)</label>
+                    <textarea
+                        name="deletion_reason"
+                        rows="2"
+                        class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Enter deletion reason..."></textarea>
+                </div>
+
+                <!-- Buttons -->
+                <div class="flex gap-2">
+                    <a href="{{ url_for('universal_views.universal_detail_view', entity_type='supplier_payments', item_id=payment.get('payment_id')) }}"
+                       class="flex-1 px-4 py-2 text-center border border-gray-300 rounded text-gray-700 hover:bg-gray-50">
+                        Cancel
+                    </a>
+                    <button type="submit"
+                            class="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+                        <i class="fas fa-trash mr-1"></i> Delete Payment
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

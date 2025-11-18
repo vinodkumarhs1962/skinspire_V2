@@ -499,7 +499,7 @@ class EnhancedUniversalSupplierService:
                     supplier = session_scope.query(Supplier).filter_by(supplier_id=payment.supplier_id).first()
                     if supplier:
                         payment_dict['supplier_name'] = supplier.supplier_name
-                        payment_dict['supplier_code'] = getattr(supplier, supplier.supplier_id)
+                        payment_dict['supplier_code'] = getattr(supplier, 'supplier_code', '')
                     else:
                         payment_dict['supplier_name'] = 'N/A'
                         payment_dict['supplier_code'] = 'N/A'

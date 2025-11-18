@@ -1,0 +1,341 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block styles %}
+<style>
+/* Custom styles for entity info card to override default card styles */
+.entity-info-card {
+    background: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+    border: 1px solid rgb(229 231 235) !important;
+    overflow: hidden !important;
+    margin-bottom: 1.5rem !important;
+}
+
+.dark .entity-info-card {
+    background: rgb(31 41 55) !important;
+    border-color: rgb(75 85 99) !important;
+}
+
+.entity-info-card-body {
+    padding: 3rem !important;
+}
+
+/* Name section - large and prominent */
+.entity-info-name-section {
+    margin-bottom: 3rem !important;
+    padding-bottom: 2.5rem !important;
+    border-bottom: 2px solid rgb(229 231 235) !important;
+}
+
+.dark .entity-info-name-section {
+    border-color: rgb(75 85 99) !important;
+}
+
+.entity-info-name {
+    font-size: 3rem !important;
+    font-weight: 700 !important;
+    color: rgb(17 24 39) !important;
+    line-height: 1.2 !important;
+    margin: 0 !important;
+}
+
+.dark .entity-info-name {
+    color: rgb(243 244 246) !important;
+}
+
+/* Fields grid - all fields in clean 2-column layout */
+.entity-info-grid {
+    display: grid !important;
+    grid-template-columns: repeat(1, 1fr) !important;
+    gap: 3rem !important;
+}
+
+@media (min-width: 768px) {
+    .entity-info-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+@media (min-width: 1280px) {
+    .entity-info-grid {
+        grid-template-columns: repeat(3, 1fr) !important;
+    }
+}
+
+/* Mobile adjustments */
+@media (max-width: 767px) {
+    .entity-info-card-body {
+        padding: 2rem !important;
+    }
+
+    .entity-info-name {
+        font-size: 2.25rem !important;
+    }
+
+    .entity-info-grid {
+        gap: 2rem !important;
+    }
+}
+
+.entity-info-field {
+    display: flex !important;
+    align-items: flex-start !important;
+    gap: 1.75rem !important;
+    padding: 2rem !important;
+    background: rgb(249 250 251) !important;
+    border-radius: 0.5rem !important;
+}
+
+.dark .entity-info-field {
+    background: rgb(55 65 81) !important;
+}
+
+.entity-info-field-icon {
+    flex-shrink: 0 !important;
+    font-size: 2rem !important;
+    margin-top: 0.5rem !important;
+}
+
+.entity-info-field-content {
+    flex-grow: 1 !important;
+    min-width: 0 !important;
+}
+
+.entity-info-field-label {
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+    color: rgb(107 114 128) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    margin-bottom: 0.75rem !important;
+}
+
+.dark .entity-info-field-label {
+    color: rgb(156 163 175) !important;
+}
+
+.entity-info-field-value {
+    font-size: 1.5rem !important;
+    font-weight: 600 !important;
+    color: rgb(17 24 39) !important;
+    line-height: 1.5 !important;
+    word-break: break-word !important;
+}
+
+.dark .entity-info-field-value {
+    color: rgb(243 244 246) !important;
+}
+
+.entity-info-address {
+    grid-column: 1 / -1 !important;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6" data-entity-type="{{ assembled_data.entity_config.entity_type if assembled_data and assembled_data.entity_config and assembled_data.entity_config.entity_type else 'consolidated_invoice_detail' }}">
+
+    <!-- Page Header -->
+    <div class="flex flex-col md:flex-row items-start md:items-center justify-between mb-6">
+        <div>
+            <div class="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+                {% if assembled_data and assembled_data.get('hospital_name') and assembled_data.get('branch_name') %}
+                    {{ assembled_data.hospital_name }} <span class="mx-3">•</span> {{ assembled_data.branch_name }}
+                {% endif %}
+            </div>
+
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">
+                <i class="{{ assembled_data.entity_config.icon if assembled_data and assembled_data.entity_config and assembled_data.entity_config.icon else 'fas fa-layer-group' }} text-blue-600"></i>
+                {{ assembled_data.entity_config.page_title if assembled_data and assembled_data.entity_config and assembled_data.entity_config.page_title else 'Invoice Breakdown' }}
+            </h1>
+
+            <p class="text-gray-600 dark:text-gray-400">
+                {{ assembled_data.entity_config.description if assembled_data and assembled_data.entity_config and assembled_data.entity_config.description else 'Individual invoices in consolidated group' }}
+            </p>
+        </div>
+
+        <!-- Toolbar Actions -->
+        <div class="flex space-x-2 mt-4 md:mt-0">
+            {% if assembled_data and assembled_data.entity_config and assembled_data.entity_config.actions %}
+                {% for action in assembled_data.entity_config.actions %}
+                    {% if action.show_in_toolbar %}
+                        <a href="{{ action.get_url({}, assembled_data.entity_config) }}"
+                        class="{{ action.button_type.value }}">
+                            <i class="{{ action.icon }} icon-left"></i>{{ action.label }}
+                        </a>
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Entity Information Header Card (Generic - works for patient, supplier, etc.) -->
+    {% if assembled_data and assembled_data.entity_info %}
+    <div class="entity-info-card">
+        <div class="entity-info-card-body">
+            <!-- Name Section -->
+            <div class="entity-info-name-section">
+                <h3 class="entity-info-name">
+                    {{ assembled_data.entity_info.name }}
+                </h3>
+            </div>
+
+            <!-- Fields Grid: All fields in clean 2-3 column layout -->
+            <div class="entity-info-grid">
+                <!-- Identifier (MRN, Code, ID, etc.) -->
+                {% if assembled_data.entity_info.identifier %}
+                <div class="entity-info-field">
+                    <div class="entity-info-field-icon">
+                        <i class="fas fa-id-card text-blue-600 dark:text-blue-400"></i>
+                    </div>
+                    <div class="entity-info-field-content">
+                        <div class="entity-info-field-label">
+                            {{ assembled_data.entity_info.identifier.label }}
+                        </div>
+                        <div class="entity-info-field-value">
+                            {{ assembled_data.entity_info.identifier.value }}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Phone -->
+                {% if assembled_data.entity_info.contact and assembled_data.entity_info.contact.phone %}
+                <div class="entity-info-field">
+                    <div class="entity-info-field-icon">
+                        <i class="fas fa-phone text-green-600 dark:text-green-400"></i>
+                    </div>
+                    <div class="entity-info-field-content">
+                        <div class="entity-info-field-label">
+                            Phone
+                        </div>
+                        <div class="entity-info-field-value">
+                            {{ assembled_data.entity_info.contact.phone }}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Email -->
+                {% if assembled_data.entity_info.contact and assembled_data.entity_info.contact.email %}
+                <div class="entity-info-field">
+                    <div class="entity-info-field-icon">
+                        <i class="fas fa-envelope text-purple-600 dark:text-purple-400"></i>
+                    </div>
+                    <div class="entity-info-field-content">
+                        <div class="entity-info-field-label">
+                            Email
+                        </div>
+                        <div class="entity-info-field-value">
+                            {{ assembled_data.entity_info.contact.email }}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Address (spans full width) -->
+                {% if assembled_data.entity_info.address %}
+                <div class="entity-info-field entity-info-address">
+                    <div class="entity-info-field-icon">
+                        <i class="fas fa-map-marker-alt text-red-600 dark:text-red-400"></i>
+                    </div>
+                    <div class="entity-info-field-content">
+                        <div class="entity-info-field-label">
+                            Address
+                        </div>
+                        <div class="entity-info-field-value">
+                            {{ assembled_data.entity_info.address }}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Summary Cards -->
+    {% if assembled_data and assembled_data.summary_cards %}
+        <div class="card-grid cols-4 mb-6">
+            {% for card in assembled_data.summary_cards %}
+            {% set current_summary = assembled_data.get('summary', {}) %}
+            {% set card_value = current_summary.get(card.get('field', ''), card.get('raw_value', 0)) %}
+            {% set formatted_value = ("Rs.{:,.2f}".format(card_value|float) if card.get('type') == 'currency' else "{:,}".format(card_value|int if card_value else 0)) %}
+
+            <div class="stat-card">
+                <div class="{{ card.get('icon_css_class', 'stat-card-icon info') }}">
+                    <i class="{{ card.icon }}"></i>
+                </div>
+                <div class="stat-card-value">{{ formatted_value if card.get('field') else card.value }}</div>
+                <div class="stat-card-label">{{ card.label }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <!-- Data Table -->
+    {% if assembled_data and assembled_data.items %}
+    <div class="universal-data-card shadow-sm">
+        <div class="table-responsive">
+            <table class="universal-data-table">
+                <thead>
+                    <tr>
+                        {% if assembled_data.fields %}
+                            {% for field in assembled_data.fields %}
+                                {% if field.show_in_list %}
+                                    <th class="{{ field.get('alignment_class', 'text-left') }}">
+                                        {{ field.label }}
+                                    </th>
+                                {% endif %}
+                            {% endfor %}
+                            <th class="text-center" style="width: 120px;">Actions</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in assembled_data.items %}
+                    <tr>
+                        {% for field in assembled_data.fields %}
+                            {% if field.show_in_list %}
+                                <td class="{{ field.get('alignment_class', 'text-left') }}">
+                                    {{ field.get_display_value(item) if field.get_display_value else item.get(field.name, '') }}
+                                </td>
+                            {% endif %}
+                        {% endfor %}
+                        <td class="text-center">
+                            <div class="btn-group btn-group-sm" role="group">
+                                {% if assembled_data.entity_config and assembled_data.entity_config.actions %}
+                                    {% for action in assembled_data.entity_config.actions %}
+                                        {% if action.show_in_list %}
+                                            <a href="{{ action.get_url(item, assembled_data.entity_config) }}"
+                                               class="{{ action.button_type.value if action.display_type.value == 'button' else action.button_type.value + ' btn-sm' }}"
+                                               title="{{ action.label }}"
+                                               {% if action.confirmation_required %}
+                                               onclick="return confirm('{{ action.confirmation_message }}');"
+                                               {% endif %}>
+                                                {% if action.display_type.value == 'icon' %}
+                                                    <i class="{{ action.icon }}"></i>
+                                                {% else %}
+                                                    <i class="{{ action.icon }} icon-left"></i>{{ action.label }}
+                                                {% endif %}
+                                            </a>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+        <i class="fas fa-inbox text-4xl mb-3"></i>
+        <p>No invoices found</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

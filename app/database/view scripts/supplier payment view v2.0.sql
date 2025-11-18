@@ -68,7 +68,8 @@ SELECT
     COALESCE(sp.cheque_amount, 0) AS cheque_amount,
     COALESCE(sp.bank_transfer_amount, 0) AS bank_transfer_amount,
     COALESCE(sp.upi_amount, 0) AS upi_amount,
-    
+    COALESCE(sp.advance_amount, 0) AS advance_amount,
+
     -- Cheque details - PRESERVED
     sp.cheque_number,
     sp.cheque_date,
@@ -113,12 +114,13 @@ SELECT
     sp.approval_level,
     
     -- Payment method grouping for reports - PRESERVED
-    CASE 
+    CASE
         WHEN sp.payment_method IN ('cash', 'Cash') THEN 'Cash'
         WHEN sp.payment_method IN ('cheque', 'Cheque', 'check') THEN 'Cheque'
         WHEN sp.payment_method IN ('bank_transfer', 'NEFT', 'RTGS', 'IMPS') THEN 'Electronic'
         WHEN sp.payment_method IN ('UPI', 'upi') THEN 'UPI'
         WHEN sp.payment_method IN ('credit_card', 'debit_card', 'card') THEN 'Card'
+        WHEN sp.payment_method = 'advance' THEN 'Advance'
         ELSE 'Other'
     END AS payment_method_group,
     
@@ -156,6 +158,11 @@ SELECT
     sp.created_by,
     sp.updated_at,
     sp.updated_by,
+    
+    -- Soft delete fields - CRITICAL for delete functionality
+    sp.is_deleted,
+    sp.deleted_at,
+    sp.deleted_by,
     
     -- Search helper field - PRESERVED
     LOWER(

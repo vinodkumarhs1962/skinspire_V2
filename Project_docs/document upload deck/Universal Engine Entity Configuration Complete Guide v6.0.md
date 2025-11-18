@@ -816,6 +816,205 @@ if hasattr(Supplier, 'supplier_name'):
 
 ---
 
+## **18A. CRITICAL: Configuration Validation Rules** ⚠️
+
+### **MANDATORY: Test Config Before Committing**
+
+**ALWAYS** run this test before completing any configuration changes:
+
+```bash
+cd "/path/to/project"
+python -c "from app.config.modules.MODULE_NAME import config, filter_config, search_config; print('Config OK')"
+```
+
+**If this test fails, the configuration is BROKEN. Fix immediately before proceeding.**
+
+---
+
+### **Rule 1: Verify Parameters Against core_definitions.py**
+
+**Before adding ANY parameter to a dataclass**, verify it exists in `core_definitions.py`:
+
+#### ❌ **Common Mistakes**
+
+```python
+# WRONG - 'target' parameter does not exist in ActionDefinition
+ActionDefinition(
+    id="print",
+    target="_blank"  # ERROR!
+)
+
+# WRONG - 'display_condition' does not exist in SectionDefinition
+SectionDefinition(
+    conditional_display=True,
+    display_condition="field > 0"  # ERROR!
+)
+
+# WRONG - ComplexDisplayType.BADGE does not exist
+custom_renderer=CustomRenderer(
+    type=ComplexDisplayType.BADGE  # ERROR!
+)
+```
+
+#### ✅ **Correct Usage**
+
+```python
+# CORRECT - No target parameter needed
+ActionDefinition(
+    id="print"
+)
+
+# CORRECT - conditional_display takes the condition string directly
+SectionDefinition(
+    conditional_display="field > 0"  # String, not boolean!
+)
+
+# CORRECT - Use FieldType.STATUS_BADGE for badges
+field_type=FieldType.STATUS_BADGE,
+options=[
+    {"value": "true", "label": "Active", "color": "success"}
+]
+```
+
+---
+
+### **Rule 2: CustomRenderer Requirements**
+
+**CustomRenderer ALWAYS requires a 'template' parameter** - it is NOT optional:
+
+#### ❌ **WRONG**
+```python
+custom_renderer=CustomRenderer(
+    context_function="get_data"  # Missing template!
+)
+```
+
+#### ✅ **CORRECT**
+```python
+custom_renderer=CustomRenderer(
+    template="components/fields/text_display.html",  # Required!
+    context_function="get_data"
+)
+```
+
+---
+
+### **Rule 3: Valid ComplexDisplayType Values**
+
+**ComplexDisplayType** enum only has these values (from `core_definitions.py`):
+
+```python
+class ComplexDisplayType(Enum):
+    MULTI_METHOD_PAYMENT = "multi_method_payment"
+    BREAKDOWN_AMOUNTS = "breakdown_amounts"
+    CONDITIONAL_DISPLAY = "conditional_display"
+    DYNAMIC_CONTENT = "dynamic_content"
+    ENTITY_REFERENCE = "entity_reference"
+```
+
+**There is NO `BADGE` type!** Use `FieldType.STATUS_BADGE` instead.
+
+---
+
+### **Rule 4: SectionDefinition Parameters**
+
+**Valid parameters** for `SectionDefinition`:
+
+```python
+SectionDefinition(
+    key: str,                          # Required - unique identifier
+    title: str,                        # Required - display title
+    icon: str,                         # Required - FontAwesome icon
+    columns: int = 2,                  # Number of columns (default: 2)
+    order: int = 0,                    # Display order
+    css_class: Optional[str] = None,   # Custom CSS class
+    collapsible: bool = False,         # Can collapse
+    default_collapsed: bool = False,   # Start collapsed
+    show_divider: bool = True,         # Show bottom divider
+    conditional_display: Optional[str] = None  # Condition STRING (not boolean!)
+)
+```
+
+**Key Point**: `conditional_display` takes the condition string directly:
+```python
+# WRONG
+conditional_display=True,
+display_condition="field > 0"
+
+# CORRECT
+conditional_display="field > 0"
+```
+
+---
+
+### **Rule 5: Mandatory Module Exports**
+
+**EVERY entity config module MUST export THREE objects:**
+
+```python
+# =============================================================================
+# EXPORT MAIN CONFIGURATION (at end of file)
+# =============================================================================
+
+config = ENTITY_CONFIG                    # Main configuration
+filter_config = ENTITY_FILTER_CONFIG      # REQUIRED for filters!
+search_config = ENTITY_SEARCH_CONFIG      # REQUIRED for search!
+```
+
+**Missing exports = Silent failures** (no errors, just broken filters/search)
+
+---
+
+### **Rule 6: Field Type Selection for Display**
+
+#### Date/DateTime Formatting
+
+```python
+# WRONG - FieldType.DATETIME with date-only format doesn't work
+FieldDefinition(
+    field_type=FieldType.DATETIME,
+    format_pattern="%d/%b"  # Ignored!
+)
+
+# CORRECT - Use FieldType.DATE for date-only display
+FieldDefinition(
+    field_type=FieldType.DATE,
+    format_pattern="%d/%b"  # Works!
+)
+```
+
+#### Boolean to Badge Display
+
+```python
+# WRONG - Shows "true"/"false"
+field_type=FieldType.BOOLEAN
+
+# CORRECT - Shows "Active"/"Inactive" with badges
+field_type=FieldType.STATUS_BADGE,
+options=[
+    {"value": "true", "label": "Active", "color": "success"},
+    {"value": "false", "label": "Inactive", "color": "secondary"},
+    {"value": True, "label": "Active", "color": "success"},    # Handle bool type
+    {"value": False, "label": "Inactive", "color": "secondary"}
+]
+```
+
+---
+
+### **Validation Checklist**
+
+Before completing configuration work:
+
+- [ ] Ran `python -c "from app.config.modules.MODULE import config, filter_config, search_config; print('OK')"`
+- [ ] Verified all parameters exist in `core_definitions.py`
+- [ ] CustomRenderer includes `template` parameter
+- [ ] Used `FieldType.STATUS_BADGE` not `ComplexDisplayType.BADGE`
+- [ ] `conditional_display` is a string, not a boolean
+- [ ] All three exports present: `config`, `filter_config`, `search_config`
+- [ ] Field types match intended formatting (DATE vs DATETIME)
+
+---
+
 ## **19. Migration Guide**
 
 ### **Migrating from Static Dropdowns to Entity Dropdowns**

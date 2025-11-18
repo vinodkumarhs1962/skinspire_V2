@@ -598,10 +598,10 @@ class SupplierPaymentForm(FlaskForm):
                                 ],coerce=str)  # 🔧 CRITICAL FIX
     
     # === MULTI-METHOD AMOUNTS (EXISTING) ===
-    cash_amount = DecimalField('Cash Amount', validators=[Optional()], default=0)
-    cheque_amount = DecimalField('Cheque Amount', validators=[Optional()], default=0)
-    bank_transfer_amount = DecimalField('Bank Transfer Amount', validators=[Optional()], default=0)
-    upi_amount = DecimalField('UPI Amount', validators=[Optional()], default=0)
+    cash_amount = DecimalField('Cash Amount', validators=[Optional()])
+    cheque_amount = DecimalField('Cheque Amount', validators=[Optional()])
+    bank_transfer_amount = DecimalField('Bank Transfer Amount', validators=[Optional()])
+    upi_amount = DecimalField('UPI Amount', validators=[Optional()])
     
     # === CHEQUE DETAILS (EXISTING) ===
     cheque_number = StringField('Cheque Number', validators=[Optional()])
@@ -736,20 +736,37 @@ class SupplierPaymentForm(FlaskForm):
         """Enhanced validation with all existing rules + new multi-method rules"""
         if not super().validate(extra_validators):
             return False
-        
+
         # === EXISTING VALIDATION: Multi-method amount validation ===
+        # Note: advance_allocation_amount is not a form field, it comes from request.form
+        # We need to check if it exists in the request to include it in validation
+        from flask import request
+        from decimal import Decimal
+
+        advance_allocation = Decimal('0')
+        if request and request.form:
+            try:
+                advance_allocation = Decimal(str(request.form.get('advance_allocation_amount', 0) or 0))
+            except (ValueError, TypeError, Exception):
+                advance_allocation = Decimal('0')
+
+        # Convert all values to Decimal to avoid float + Decimal TypeError
         method_total = (
-            (self.cash_amount.data or 0) +
-            (self.cheque_amount.data or 0) +
-            (self.bank_transfer_amount.data or 0) +
-            (self.upi_amount.data or 0)
+            advance_allocation +
+            Decimal(str(self.cash_amount.data or 0)) +
+            Decimal(str(self.cheque_amount.data or 0)) +
+            Decimal(str(self.bank_transfer_amount.data or 0)) +
+            Decimal(str(self.upi_amount.data or 0))
         )
-        
+
         # Allow either traditional single-method or multi-method
         if method_total > 0:
             if abs(float(self.amount.data) - float(method_total)) > 0.01:
                 self.amount.errors.append(
-                    f'Total amount ({self.amount.data}) must equal sum of payment methods ({method_total})'
+                    f'Total amount ({self.amount.data}) must equal sum of payment methods ({method_total}). '
+                    f'Breakdown: Advance: {advance_allocation}, Cash: {self.cash_amount.data or 0}, '
+                    f'Cheque: {self.cheque_amount.data or 0}, Bank: {self.bank_transfer_amount.data or 0}, '
+                    f'UPI: {self.upi_amount.data or 0}'
                 )
                 return False
         

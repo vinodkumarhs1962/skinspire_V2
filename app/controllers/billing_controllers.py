@@ -206,7 +206,11 @@ class PaymentFormController(FormController):
         
         # Show multi-invoice UI if pay_all is true OR there's advance available AND related invoices
         show_multi_invoice = pay_all or (has_advance and has_related_invoices)
-        
+
+        # Get approval threshold from config
+        from flask import current_app
+        approval_threshold = float(current_app.config.get('APPROVAL_THRESHOLD_L1', '100000.00'))
+
         context = {
             'invoice': invoice,
             'patient': patient,
@@ -218,6 +222,7 @@ class PaymentFormController(FormController):
             'show_multi_invoice': show_multi_invoice,  # New flag for UI
             'has_advance': has_advance,
             'advance_balance': advance_balance,
+            'approval_threshold': approval_threshold,  # Add approval threshold for UI
             'menu_items': get_menu_items(current_user)
         }
         
@@ -270,9 +275,16 @@ class PaymentFormController(FormController):
             }
         else:
             # Regular single invoice payment
+            # Get approval threshold from config (default: ₹100,000)
+            from flask import current_app
+            approval_threshold = Decimal(str(current_app.config.get('APPROVAL_THRESHOLD_L1', '100000.00')))
+
+            # Check if user requested to save as draft
+            save_as_draft = request.form.get('save_as_draft') == 'true'
+
             result = record_payment(
                 hospital_id=current_user.hospital_id,
-                invoice_id=invoice_id, 
+                invoice_id=invoice_id,
                 payment_date=payment_date,
                 cash_amount=cash_amount,
                 credit_card_amount=credit_card_amount,
@@ -283,7 +295,9 @@ class PaymentFormController(FormController):
                 upi_id=upi_id,
                 reference_number=reference_number,
                 handle_excess=True,
-                recorded_by=current_user.user_id
+                recorded_by=current_user.user_id,
+                save_as_draft=save_as_draft,
+                approval_threshold=approval_threshold
             )
             
             return {

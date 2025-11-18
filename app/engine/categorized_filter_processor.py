@@ -149,7 +149,31 @@ class CategorizedFilterProcessor:
                     
                     # ⭐ IMPORTANT: Skip normal field processing for entity dropdowns
                     continue
-                
+
+                # ⭐ NEW: Handle autocomplete filter type
+                if (hasattr(field, 'filter_type') and
+                    field.filter_type == FilterType.AUTOCOMPLETE and
+                    hasattr(field, 'autocomplete_config')):
+
+                    config_dict = field.autocomplete_config
+                    value_field = config_dict.get('value_field', field_name)
+                    current_value = current_filters.get(value_field, '')
+
+                    filter_fields.append({
+                        'name': value_field,
+                        'display_name': field_name,  # For display in search input
+                        'label': base_label,
+                        'type': 'autocomplete',
+                        'value': current_value,
+                        'placeholder': config_dict.get('placeholder', f"Search {base_label}..."),
+                        'required': False,
+                        'options': [],
+                        'autocomplete_config': config_dict
+                    })
+
+                    # Skip normal field processing
+                    continue
+
                 # Process as normal field (not entity dropdown)
                 filter_operator = getattr(field, 'filter_operator', FilterOperator.EQUALS)
                 enhanced_label = self._enhance_label_with_operator(base_label, filter_operator, field.field_type)
@@ -293,6 +317,8 @@ class CategorizedFilterProcessor:
             # Direct enum comparison - no string conversion needed
             if field.filter_type == FilterType.ENTITY_DROPDOWN:
                 return 'entity_dropdown'
+            elif field.filter_type == FilterType.AUTOCOMPLETE:
+                return 'autocomplete'
             elif field.filter_type == FilterType.DATE_RANGE:
                 return 'date_range'
             elif field.filter_type == FilterType.SELECT:

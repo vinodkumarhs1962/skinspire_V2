@@ -1,0 +1,57 @@
+{#
+    Patient Info Header Component
+
+    Reusable component for displaying patient information in a consistent header format
+    across all patient-related pages (invoices, payments, appointments, etc.)
+
+    Usage:
+        {% from 'components/patient_info_header.jinja' import patient_info_header %}
+
+        {{ patient_info_header(
+            title='Record Payment',
+            icon='fas fa-money-check-alt',
+            patient=patient,
+            back_url=url_for('billing_views.view_invoice', invoice_id=invoice.invoice_id),
+            back_text='Back to Invoice'
+        ) }}
+
+    Parameters:
+        - title: Page title to display (e.g., 'Record Payment', 'Invoice Details')
+        - icon: FontAwesome icon class (e.g., 'fas fa-money-check-alt')
+        - patient: Patient object/dict with keys:
+                   Patient object: full_name, first_name, last_name, mrn, contact_info.phone, contact_info.email
+                   OR Invoice dict: patient_name, patient_mrn, patient_phone, patient_email
+        - back_url: URL for the back button
+        - back_text: Text for the back button (default: 'Back')
+#}
+
+{% macro patient_info_header(title, icon, patient, back_url, back_text='Back') %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="text-primary mb-1">
+            <i class="{{ icon }} me-2"></i>{{ title }}
+        </h2>
+        <p class="text-muted mb-0">
+            <strong>Patient:</strong>
+            {# Handle both patient object (full_name) and invoice dict (patient_name) #}
+            {{ patient.patient_name or patient.full_name or (patient.first_name ~ ' ' ~ patient.last_name) or 'N/A' }}
+            (MRN: {{ patient.patient_mrn or patient.mrn or 'N/A' }})
+            {# Handle both patient object (contact_info.phone) and invoice dict (patient_phone) #}
+            {% set phone = patient.patient_phone or (patient.contact_info.phone if patient.contact_info else None) %}
+            {% if phone %}
+            | <i class="fas fa-phone me-1"></i>{{ phone }}
+            {% endif %}
+            {# Handle both patient object (contact_info.email) and invoice dict (patient_email) #}
+            {% set email = patient.patient_email or (patient.contact_info.email if patient.contact_info else None) %}
+            {% if email %}
+            | <i class="fas fa-envelope me-1"></i>{{ email }}
+            {% endif %}
+        </p>
+    </div>
+    <div>
+        <a href="{{ back_url }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-1"></i> {{ back_text }}
+        </a>
+    </div>
+</div>
+{% endmacro %}

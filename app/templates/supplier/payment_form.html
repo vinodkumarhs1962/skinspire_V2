@@ -1,742 +1,1193 @@
 {% extends "layouts/dashboard.html" %}
-{% from "components/forms.html" import input_field, select_field, date_field, textarea_field, checkbox_field %}
-{% from "components/alerts.html" import alert %}
 
 {% block title %}{{ title or "Record Payment" }}{% endblock %}
 
+{% block styles %}
+{{ super() }}
+<!-- Payment Form Enhanced Styles (following PO pattern) -->
+<style>
+    /* Container and Layout */
+    .payment-enhanced-container {
+        background: #f3f4f6;
+        min-height: 100vh;
+        padding: 0;
+        margin: -1.5rem;
+    }
+
+    .dark .payment-enhanced-container {
+        background: #0f172a;
+    }
+
+    /* Header styling following PO pattern */
+    .payment-header {
+        background: white;
+        padding: 1.5rem;
+        margin-bottom: 0;
+        position: relative;
+    }
+
+    .dark .payment-header {
+        background: rgb(31 41 55);
+    }
+
+    .payment-header-right {
+        position: absolute;
+        top: 1.5rem;
+        right: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.5rem;
+        padding: 0.75rem;
+        background: rgba(255, 255, 255, 0.5);
+        border-radius: 0.5rem;
+    }
+
+    .dark .payment-header-right {
+        background: rgba(31, 41, 55, 0.5);
+    }
+
+    /* Badge styling */
+    .badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.75rem;
+        border-radius: 0.375rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+    }
+
+    .badge-unpaid {
+        background-color: rgb(254 226 226);
+        color: rgb(185 28 28);
+        border: 1px solid rgb(252 165 165);
+    }
+
+    .badge-partial {
+        background-color: rgb(254 243 199);
+        color: rgb(180 83 9);
+        border: 1px solid rgb(253 224 71);
+    }
+
+    .badge-paid {
+        background-color: rgb(220 252 231);
+        color: rgb(21 128 61);
+        border: 1px solid rgb(134 239 172);
+    }
+
+    .badge-draft {
+        background-color: rgb(229 231 235);
+        color: rgb(55 65 81);
+        border: 1px solid rgb(209 213 219);
+    }
+
+    /* Quick actions bar */
+    .quick-actions-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 1rem 1.5rem;
+        background: white;
+        border-bottom: 1px solid #e5e7eb;
+        margin-bottom: 1rem;
+    }
+
+    .dark .quick-actions-bar {
+        background: rgb(31 41 55);
+        border-bottom-color: rgb(55 65 81);
+    }
+
+    .quick-actions-left {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    /* Two-column grid */
+    .payment-two-column-grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 1rem !important;
+        width: 100% !important;
+    }
+
+    @media (max-width: 768px) {
+        .payment-two-column-grid {
+            grid-template-columns: 1fr !important;
+        }
+    }
+
+    /* Bottom action buttons */
+    .bottom-actions {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        padding: 1.5rem;
+        background: white;
+        border-radius: 0.5rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        margin-bottom: 1.5rem;
+        gap: 0.75rem;
+    }
+
+    .dark .bottom-actions {
+        background: rgb(31 41 55);
+    }
+
+    /* Advance info section - conditional display */
+    .advance-info-section {
+        background: linear-gradient(135deg, rgb(239 246 255) 0%, rgb(219 234 254) 100%);
+        border-left: 4px solid rgb(59 130 246);
+    }
+
+    .dark .advance-info-section {
+        background: linear-gradient(135deg, rgba(30, 58, 138, 0.3) 0%, rgba(59, 130, 246, 0.2) 100%);
+    }
+
+    /* Invoice line items table */
+    .invoice-items-table {
+        width: 100%;
+        font-size: 0.875rem;
+    }
+
+    .invoice-items-table th {
+        background: #f9fafb;
+        padding: 0.75rem;
+        text-align: left;
+        font-weight: 600;
+        border-bottom: 2px solid #e5e7eb;
+    }
+
+    .dark .invoice-items-table th {
+        background: rgb(55 65 81);
+        border-bottom-color: rgb(75 85 99);
+    }
+
+    .invoice-items-table td {
+        padding: 0.75rem;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .dark .invoice-items-table td {
+        border-bottom-color: rgb(75 85 99);
+    }
+
+    /* Payment method fields - green highlight for advance */
+    .advance-allocation-field {
+        background: rgb(240 253 244) !important;
+        border: 2px solid rgb(134 239 172) !important;
+    }
+
+    .dark .advance-allocation-field {
+        background: rgba(34, 197, 94, 0.1) !important;
+        border-color: rgb(34 197 94) !important;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container mx-auto px-4 py-6">
-    <!-- Header Section -->
-    <div class="flex flex-col md:flex-row items-start justify-between mb-6">
-        <div>
-            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">{{ title or "Record Payment" }}</h1>
-            <p class="text-gray-600 dark:text-gray-400 mt-1">
-                Record supplier payment with multiple payment methods
-            </p>
-        </div>
-        <div class="mt-4 md:mt-0">
-            <a href="{{ url_for('supplier_views.supplier_invoice_list') }}" class="btn-secondary">
-                <i class="fas fa-arrow-left mr-2"></i> Back to Payments
-            </a>
+<div class="payment-enhanced-container">
+    <!-- Page Header following PO pattern -->
+    <div class="payment-header">
+        <div class="info-card" style="box-shadow: none; border: none; margin: 0;">
+            <div class="card-body" style="padding: 0; background: transparent;">
+                <!-- Row 1: Title and Date/Status -->
+                <div class="flex justify-between items-start mb-3">
+                    <div style="max-width: 60%;">
+                        <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                            <i class="fas fa-money-bill-wave text-green-500"></i>
+                            <span class="ml-2">{{ title or "Record Payment" }}</span>
+                        </h1>
+                        <p class="text-gray-600 dark:text-gray-400 mt-1" style="font-style: italic; font-size: 1.125rem; padding-left: 2.5rem;">
+                            {% if invoice %}
+                                Record payment against invoice {{ invoice.supplier_invoice_number }}
+                            {% else %}
+                                Record advance payment for supplier
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="payment-header-right">
+                        {% if invoice %}
+                            {% if invoice.payment_status == 'unpaid' %}
+                                <span id="payment-status-badge" class="badge badge-unpaid">Unpaid</span>
+                            {% elif invoice.payment_status == 'partial' %}
+                                <span id="payment-status-badge" class="badge badge-partial">Partially Paid</span>
+                            {% elif invoice.payment_status == 'paid' %}
+                                <span id="payment-status-badge" class="badge badge-paid">Paid</span>
+                            {% endif %}
+                        {% else %}
+                            <span id="payment-status-badge" class="badge badge-draft">New Payment</span>
+                        {% endif %}
+                        <div style="text-align: right;">
+                            <div class="text-gray-600 dark:text-gray-400">
+                                <i class="fas fa-calendar text-gray-500"></i>
+                                <span class="ml-1 font-bold text-base">{{ now().strftime('%d %b %Y') }}</span>
+                            </div>
+                            <div class="text-gray-500 dark:text-gray-400 mt-1 font-bold text-sm">
+                                {{ now().strftime('%A') }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 2: Breadcrumb -->
+                <div class="mb-3">
+                    <nav class="flex items-center space-x-1 text-sm text-gray-500">
+                        <a href="{{ url_for('auth_views.dashboard') }}" class="hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
+                            Dashboard
+                        </a>
+                        <span class="text-gray-400 mx-2">/</span>
+                        <a href="{{ url_for('universal_views.universal_list_view', entity_type='supplier_payments') }}" class="hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
+                            Payments
+                        </a>
+                        <span class="text-gray-400 mx-2">/</span>
+                        <span class="text-gray-700 dark:text-gray-300 font-medium">Record New</span>
+                    </nav>
+                </div>
+            </div>
         </div>
     </div>
-    
-    <!-- All Messages (Flash + Form Errors) -->
+
+    <!-- Quick Actions Bar -->
+    <div class="quick-actions-bar">
+        <div class="quick-actions-left">
+            <!-- Standard Back Button (Always First) -->
+            <button onclick="window.history.back()" type="button" class="btn-back">
+                <i class="fas fa-arrow-left icon-left"></i>Back
+            </button>
+            <a href="{{ url_for('universal_views.universal_list_view', entity_type='purchase_orders') }}" class="btn-outline">
+                <i class="fas fa-file-alt mr-2"></i>
+                Purchase Orders
+            </a>
+            <a href="{{ url_for('universal_views.universal_list_view', entity_type='supplier_invoices') }}" class="btn-outline">
+                <i class="fas fa-file-invoice mr-2"></i>
+                Supplier Invoices
+            </a>
+            <a href="{{ url_for('universal_views.universal_list_view', entity_type='supplier_payments') }}" class="btn-outline">
+                <i class="fas fa-money-bill mr-2"></i>
+                Payments
+            </a>
+        </div>
+        <button type="button" onclick="document.getElementById('payment-form').reset(); location.reload();" class="btn-outline">
+            <i class="fas fa-undo mr-2"></i>
+            Reset Form
+        </button>
+    </div>
+
+    <!-- Flash Messages -->
     {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages or form.errors %}
-            <div class="mb-6">
-                <!-- Flash messages from controller -->
+        {% if messages %}
+            <div class="px-6 mb-4">
                 {% for category, message in messages %}
-                    {% if category == 'error' %}
-                        {{ alert(message, "error") }}
-                    {% elif category == 'success' %}
-                        {{ alert(message, "success") }}
-                    {% elif category == 'warning' %}
-                        {{ alert(message, "warning") }}
-                    {% else %}
-                        {{ alert(message, "info") }}
-                    {% endif %}
+                    <div class="alert alert-{{ category }} mb-3">
+                        {{ message }}
+                    </div>
                 {% endfor %}
-                
-                <!-- Form field validation errors -->
-                {% if form.errors %}
-                    {{ alert("Please check the form fields below for errors.", "error") }}
-                {% endif %}
             </div>
         {% endif %}
     {% endwith %}
-    
-    <!-- Main Content Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Left Column (Payment Form) -->
-        <div class="lg:col-span-2">
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
-                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Payment Details</h2>
+
+    <div class="px-6">
+        <form id="payment-form" method="POST" enctype="multipart/form-data" class="space-y-6">
+            {{ form.csrf_token }}
+
+            <!-- Hidden branch field (always current user's branch) -->
+            <input type="hidden" name="branch_id" value="{{ current_user.branch_id if current_user.branch_id else '' }}">
+
+            <!-- Section 1: Basic Information -->
+            <div class="universal-filter-card">
+                <div class="universal-filter-card-header">
+                    <h3 class="universal-filter-card-title">
+                        <i class="fas fa-info-circle"></i>
+                        Basic Information
+                    </h3>
                 </div>
-                
-                <div class="p-6">
-                    <form method="POST" id="payment-form" enctype="multipart/form-data">
-                        {{ form.csrf_token }}
-                        
-                        <!-- Basic Payment Information -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                            <!-- FIX 1: Enhanced Supplier Field with Readonly Support -->
-                            <div class="md:col-span-2">
+
+                <div class="universal-filter-card-body">
+                    <div class="payment-two-column-grid">
+                        <!-- Left Column -->
+                        <div>
+                            <!-- Supplier -->
+                            <div class="universal-form-group">
+                                <label class="universal-form-label" for="{{ form.supplier_id.id }}">
+                                    Supplier <span class="text-red-500">*</span>
+                                </label>
                                 {% if readonly_fields and 'supplier_id' in readonly_fields %}
-                                    <!-- Readonly Supplier Display -->
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Supplier <span class="text-red-500">*</span>
-                                    </label>
                                     <div class="flex items-center p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md">
                                         <i class="fas fa-lock text-gray-400 mr-2"></i>
                                         <span class="text-gray-800 dark:text-gray-200 font-medium">
                                             {{ supplier_name or 'Loading supplier...' }}
                                         </span>
-                                        <span class="text-xs text-gray-500 dark:text-gray-400 ml-2">
-                                            (Set from invoice)
-                                        </span>
                                     </div>
-                                    <!-- Hidden field to preserve value -->
                                     {{ form.supplier_id(style="display: none;") }}
                                 {% else %}
-                                    <!-- Editable Supplier Dropdown -->
-                                    {{ select_field(form.supplier_id, "Supplier", required=true, class="form-select") }}
+                                    {{ form.supplier_id(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", required=true) }}
                                 {% endif %}
                             </div>
 
-                            <!-- Branch Field -->
-                            <div>
-                                {% if readonly_fields and 'branch_id' in readonly_fields %}
-                                    <!-- Readonly Branch Display -->
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Branch <span class="text-red-500">*</span>
-                                    </label>
-                                    <div class="flex items-center p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md">
-                                        <i class="fas fa-lock text-gray-400 mr-2"></i>
-                                        <span class="text-gray-800 dark:text-gray-200">
-                                            {{ invoice.branch_name if invoice else 'Branch from invoice' }}
-                                        </span>
-                                    </div>
-                                    {{ form.branch_id(style="display: none;") }}
-                                {% else %}
-                                    {{ select_field(form.branch_id, "Branch", required=true, class="form-select") }}
-                                {% endif %}
+                            <!-- Payment Date -->
+                            <div class="universal-form-group">
+                                <label class="universal-form-label" for="{{ form.payment_date.id }}">
+                                    Payment Date <span class="text-red-500">*</span>
+                                </label>
+                                {{ form.payment_date(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", required=true) }}
                             </div>
+                        </div>
 
-                            <!-- FIX 2: Enhanced Invoice Field -->
-                            <div>
+                        <!-- Right Column -->
+                        <div>
+                            <!-- Invoice (if applicable) -->
+                            <div class="universal-form-group">
+                                <label class="universal-form-label" for="{{ form.invoice_id.id }}">
+                                    Invoice {{ '(Optional - Leave blank for advance payment)' if not invoice else '' }}
+                                </label>
                                 {% if readonly_fields and 'invoice_id' in readonly_fields %}
-                                    <!-- Readonly Invoice Display -->
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Invoice
-                                    </label>
-                                    <div class="flex items-center p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md">
-                                        <i class="fas fa-file-invoice text-gray-400 mr-2"></i>
-                                        <div>
-                                            <span class="text-gray-800 dark:text-gray-200 font-medium">
-                                                {{ invoice_number or 'Invoice Number' }}
-                                            </span>
-                                            {% if invoice_balance is defined %}
-                                            <span class="text-sm text-gray-600 dark:text-gray-400 ml-2">
-                                                (Balance: ₹{{ "%.2f"|format(invoice_balance) }})
-                                            </span>
-                                            {% endif %}
-                                        </div>
+                                    <div class="flex items-center p-3 bg-blue-50 dark:bg-blue-900 border border-blue-300 dark:border-blue-600 rounded-md">
+                                        <i class="fas fa-file-invoice text-blue-500 mr-2"></i>
+                                        <span class="text-gray-800 dark:text-gray-200 font-medium">
+                                            {{ invoice.supplier_invoice_number if invoice else 'N/A' }}
+                                        </span>
                                     </div>
                                     {{ form.invoice_id(style="display: none;") }}
                                 {% else %}
-                                    {{ select_field(form.invoice_id, "Invoice (Optional)", class="form-select") }}
-                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Select supplier first to see invoices</p>
+                                    <select id="invoice_id" name="invoice_id"
+                                            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                                        <option value="">No Invoice (Advance Payment)</option>
+                                    </select>
                                 {% endif %}
                             </div>
-                            
-                            <!-- Payment Date -->
-                            <div>
-                                {{ date_field(form.payment_date, "Payment Date", required=true, class="form-input") }}
+
+                            <!-- Total Amount -->
+                            <div class="universal-form-group">
+                                <label class="universal-form-label" for="{{ form.amount.id }}">
+                                    Total Amount <span class="text-red-500">*</span>
+                                </label>
+                                {{ form.amount(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline font-bold text-lg", required=true, step="0.01") }}
                             </div>
-                            
-                            <!-- FIX 5: Total Amount and Currency in Same Row -->
-                            <div class="flex gap-4">
-                                <div class="flex-grow">
-                                    {{ input_field(form.amount, "Total Amount", type="number", step="0.01", required=true, class="form-input total-amount") }}
-                                </div>
-                                <div class="w-24">
-                                    {% if readonly_fields and 'currency_code' in readonly_fields %}
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Currency</label>
-                                        <div class="p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-center">
-                                            <span class="text-gray-800 dark:text-gray-200 font-medium">
-                                                {{ form.currency_code.data or 'INR' }}
-                                            </span>
-                                        </div>
-                                        {{ form.currency_code(style="display: none;") }}
-                                    {% else %}
-                                        {{ select_field(form.currency_code, "Currency", class="form-select") }}
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Payment Method Section -->
-                        <div class="border-t pt-6 mb-6">
-                            <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">Payment Method Distribution</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                {{ input_field(form.cash_amount, "Cash Amount", type="number", step="0.01", class="form-input method-amount") }}
-                                {{ input_field(form.cheque_amount, "Cheque Amount", type="number", step="0.01", class="form-input method-amount") }}
-                                {{ input_field(form.bank_transfer_amount, "Bank Transfer Amount", type="number", step="0.01", class="form-input method-amount") }}
-                                {{ input_field(form.upi_amount, "UPI Amount", type="number", step="0.01", class="form-input method-amount") }}
-                            </div>
-                            <div id="amount-validation" class="mt-2 text-sm"></div>
-                        </div>
-                        
-                        <!-- Method-Specific Details -->
-                        <div class="border-t pt-6 mb-6">
-                            <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">Payment Method Details</h3>
-                            
-                            <!-- Cheque Details -->
-                            <div id="cheque-details" class="mb-6" style="display: none;">
-                                <h4 class="text-md font-medium text-gray-600 dark:text-gray-400 mb-3">Cheque Details</h4>
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    {{ input_field(form.cheque_number, "Cheque Number", class="form-input") }}
-                                    {{ date_field(form.cheque_date, "Cheque Date", class="form-input") }}
-                                    {{ input_field(form.cheque_bank, "Bank Name", class="form-input") }}
-                                </div>
-                            </div>
-                            
-                            <!-- Bank Transfer Details -->
-                            <div id="bank-details" class="mb-6" style="display: none;">
-                                <h4 class="text-md font-medium text-gray-600 dark:text-gray-400 mb-3">Bank Transfer Details</h4>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {{ input_field(form.bank_account_name, "Account Holder Name", class="form-input") }}
-                                    {{ input_field(form.bank_reference_number, "Bank Reference Number", class="form-input") }}
-                                    {% if hasattr(form, 'ifsc_code') %}
-                                    {{ input_field(form.ifsc_code, "IFSC Code", class="form-input") }}
-                                    {% endif %}
-                                    {% if hasattr(form, 'transfer_mode') %}
-                                    {{ select_field(form.transfer_mode, "Transfer Mode", class="form-select") }}
-                                    {% endif %}
-                                </div>
-                            </div>
-                            
-                            <!-- UPI Details -->
-                            <div id="upi-details" class="mb-6" style="display: none;">
-                                <h4 class="text-md font-medium text-gray-600 dark:text-gray-400 mb-3">UPI Details</h4>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {{ input_field(form.upi_transaction_id, "UPI Transaction ID", class="form-input") }}
-                                    {{ select_field(form.upi_app_name, "UPI App", class="form-select") }}
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- FIX 3: Vertical Supporting Documents Layout -->
-                        <div class="border-t pt-6 mb-6">
-                            <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">Supporting Documents</h3>
-                            
-                            <!-- Vertical Layout for Documents -->
-                            <div class="space-y-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        <i class="fas fa-receipt mr-2"></i>Receipt Document
-                                    </label>
-                                    {{ form.receipt_document(class="form-input-file w-full") }}
-                                    {% if form.receipt_document.errors %}
-                                    <p class="mt-1 text-sm text-red-600">{{ form.receipt_document.errors[0] }}</p>
-                                    {% endif %}
-                                </div>
-                                
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        <i class="fas fa-university mr-2"></i>Bank Statement
-                                    </label>
-                                    {{ form.bank_statement(class="form-input-file w-full") }}
-                                    {% if form.bank_statement.errors %}
-                                    <p class="mt-1 text-sm text-red-600">{{ form.bank_statement.errors[0] }}</p>
-                                    {% endif %}
-                                </div>
-                                
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        <i class="fas fa-file-signature mr-2"></i>Authorization Document
-                                    </label>
-                                    {{ form.authorization_document(class="form-input-file w-full") }}
-                                    {% if form.authorization_document.errors %}
-                                    <p class="mt-1 text-sm text-red-600">{{ form.authorization_document.errors[0] }}</p>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- FIX 4: TDS Section with Corrected Checkbox -->
-                        <div class="border-t pt-6 mb-6">
-                            <div class="flex items-center mb-4">
-                                <div class="flex items-center">
-                                    {{ form.tds_applicable(class="form-checkbox", id="tds_applicable") }}
-                                    <label for="tds_applicable" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        TDS Applicable
-                                    </label>
-                                </div>
-                            </div>
-                            
-                            <div id="tds-details" class="grid grid-cols-1 md:grid-cols-3 gap-4" style="display: none;">
-                                {{ input_field(form.tds_rate, "TDS Rate (%)", type="number", step="0.01", class="form-input") }}
-                                {{ input_field(form.tds_amount, "TDS Amount", type="number", step="0.01", class="form-input") }}
-                                {{ input_field(form.tds_reference, "TDS Reference", class="form-input") }}
-                            </div>
-                        </div>
-                        
-                        <!-- Additional Information -->
-                        <div class="border-t pt-6 mb-6">
-                            <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">Additional Information</h3>
-                            <div class="grid grid-cols-1 gap-4">
-                                {{ input_field(form.reference_no, "Reference Number", class="form-input") }}
-                                <div class="mt-4">
-                                    {{ textarea_field(form.notes, "Notes", rows=3, class="form-textarea") }}
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Form Actions -->
-                        <div class="flex justify-end space-x-4 border-t pt-6">
-                            <button type="button" id="cancel-btn" class="btn-secondary">
-                                Cancel
-                            </button>
-                            <button type="submit" class="btn-primary">
-                                <i class="fas fa-save mr-2"></i> Record Payment
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Right Column (Summary & Help) -->
-        <div class="lg:col-span-1">
-            <!-- Payment Summary -->
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
-                <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Payment Summary</h2>
-                </div>
-                
-                <div class="p-6">
-                    <div id="payment-summary">
-                        <div class="text-center text-gray-500 dark:text-gray-400">
-                            <i class="fas fa-calculator text-2xl mb-2"></i>
-                            <p>Enter payment amounts to see summary</p>
                         </div>
                     </div>
                 </div>
             </div>
-            
-            <!-- Payment Configuration Info -->
-            <div class="bg-blue-50 dark:bg-blue-900 rounded-lg p-4">
-                <h3 class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">
-                    <i class="fas fa-info-circle mr-1"></i> Payment Guidelines
-                </h3>
-                <ul class="text-xs text-blue-700 dark:text-blue-300 space-y-1">
-                    <li>• Payments above ₹{{ "{:,.0f}".format(payment_config.APPROVAL_THRESHOLD_L1) }} require approval</li>
-                    <li>• Payments above ₹{{ "{:,.0f}".format(payment_config.APPROVAL_THRESHOLD_L2) }} require Level 2 approval</li>
-                    <li>• Multiple payment methods can be used for a single payment</li>
-                    <li>• Supporting documents are recommended for all payments</li>
-                    <li>• File types allowed: {{ payment_config.ALLOWED_FILE_TYPES|join(', ') }}</li>
-                </ul>
+
+            <!-- Section 2: Advance Information (Conditional - Shows before payment methods) -->
+            <div id="advance-balance-section" style="display: none;">
+                <div class="universal-filter-card advance-info-section">
+                    <div class="universal-filter-card-header">
+                        <h3 class="universal-filter-card-title">
+                            <i class="fas fa-piggy-bank"></i>
+                            Available Advance Balance
+                        </h3>
+                    </div>
+
+                    <div class="universal-filter-card-body">
+                        <div class="flex justify-between items-center mb-4">
+                            <div>
+                                <div class="text-sm text-gray-600 dark:text-gray-400">Available Balance</div>
+                                <div class="text-3xl font-bold text-green-600 dark:text-green-400">
+                                    ₹<span id="advance-balance-amount">0.00</span>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-sm text-gray-600 dark:text-gray-400">Advance Payments</div>
+                                <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                                    <span id="advance-payment-count">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            This balance represents unallocated advance payments. You can use this to pay against invoices.
+                        </p>
+                    </div>
+                </div>
             </div>
-        </div>
+
+            <!-- Section 3: Payment Details -->
+            <div class="universal-filter-card">
+                <div class="universal-filter-card-header">
+                    <h3 class="universal-filter-card-title">
+                        <i class="fas fa-credit-card"></i>
+                        Payment Method Distribution
+                    </h3>
+                </div>
+
+                <div class="universal-filter-card-body">
+                    <!-- Advance Allocation (conditional) -->
+                    <div id="advance-allocation-field" style="display: none;">
+                        <div class="universal-form-group">
+                            <label class="universal-form-label" for="advance_allocation_amount">
+                                <i class="fas fa-piggy-bank text-green-600"></i>
+                                Allocate from Advance Balance
+                            </label>
+                            <input type="number"
+                                   id="advance_allocation_amount"
+                                   name="advance_allocation_amount"
+                                   class="advance-allocation-field shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                                   step="0.01"
+                                   min="0"
+                                   value="">
+                            <p class="text-xs text-gray-500 mt-1">Amount to allocate from available advance balance</p>
+                        </div>
+                    </div>
+
+                    <div class="payment-two-column-grid">
+                        <!-- Cash Amount -->
+                        <div class="universal-form-group">
+                            <label class="universal-form-label" for="{{ form.cash_amount.id }}">
+                                <i class="fas fa-money-bill-wave text-green-600"></i>
+                                Cash Amount
+                            </label>
+                            {{ form.cash_amount(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", step="0.01") }}
+                        </div>
+
+                        <!-- Cheque Amount -->
+                        <div class="universal-form-group">
+                            <label class="universal-form-label" for="{{ form.cheque_amount.id }}">
+                                <i class="fas fa-money-check text-blue-600"></i>
+                                Cheque Amount
+                            </label>
+                            {{ form.cheque_amount(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", step="0.01") }}
+                        </div>
+
+                        <!-- Bank Transfer Amount -->
+                        <div class="universal-form-group">
+                            <label class="universal-form-label" for="{{ form.bank_transfer_amount.id }}">
+                                <i class="fas fa-university text-purple-600"></i>
+                                Bank Transfer Amount
+                            </label>
+                            {{ form.bank_transfer_amount(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", step="0.01") }}
+                        </div>
+
+                        <!-- UPI Amount -->
+                        <div class="universal-form-group">
+                            <label class="universal-form-label" for="{{ form.upi_amount.id }}">
+                                <i class="fas fa-mobile-alt text-orange-600"></i>
+                                UPI Amount
+                            </label>
+                            {{ form.upi_amount(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", step="0.01") }}
+                        </div>
+                    </div>
+
+                    <!-- Payment Method Details (Cheque, Bank, UPI) - Collapsible sections -->
+                    <div id="cheque-details" style="display: none;" class="mt-4 p-4 bg-blue-50 dark:bg-gray-700 rounded-lg">
+                        <h4 class="font-semibold mb-3 text-gray-700 dark:text-gray-300">Cheque Details</h4>
+                        <div class="payment-two-column-grid">
+                            <div class="universal-form-group">
+                                <label class="universal-form-label">Cheque Number</label>
+                                {{ form.cheque_number(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                            </div>
+                            <div class="universal-form-group">
+                                <label class="universal-form-label">Cheque Date</label>
+                                {{ form.cheque_date(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                            </div>
+                            <div class="universal-form-group">
+                                <label class="universal-form-label">Bank Name</label>
+                                {{ form.cheque_bank(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="bank-details" style="display: none;" class="mt-4 p-4 bg-purple-50 dark:bg-gray-700 rounded-lg">
+                        <h4 class="font-semibold mb-3 text-gray-700 dark:text-gray-300">Bank Transfer Details</h4>
+                        <div class="payment-two-column-grid">
+                            <div class="universal-form-group">
+                                <label class="universal-form-label">Account Holder Name</label>
+                                {{ form.bank_account_name(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                            </div>
+                            <div class="universal-form-group">
+                                <label class="universal-form-label">Reference Number</label>
+                                {{ form.bank_reference_number(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="upi-details" style="display: none;" class="mt-4 p-4 bg-orange-50 dark:bg-gray-700 rounded-lg">
+                        <h4 class="font-semibold mb-3 text-gray-700 dark:text-gray-300">UPI Details</h4>
+                        <div class="payment-two-column-grid">
+                            <div class="universal-form-group">
+                                <label class="universal-form-label">UPI Transaction ID</label>
+                                {{ form.upi_transaction_id(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                            </div>
+                            <div class="universal-form-group">
+                                <label class="universal-form-label">UPI App Name</label>
+                                {{ form.upi_app_name(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Validation Message -->
+                    <div id="validation-message" class="mt-4"></div>
+
+                    <!-- Payment Summary -->
+                    <div id="payment-summary" class="mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <h4 class="font-semibold mb-2 text-gray-700 dark:text-gray-300">Payment Summary</h4>
+                        <div id="summary-content"></div>
+                    </div>
+
+                    <!-- Reference and Notes -->
+                    <div class="payment-two-column-grid mt-4">
+                        <div class="universal-form-group">
+                            <label class="universal-form-label" for="{{ form.reference_no.id }}">
+                                Reference Number
+                            </label>
+                            {{ form.reference_no(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                        </div>
+                    </div>
+
+                    <div class="universal-form-group mt-4">
+                        <label class="universal-form-label" for="{{ form.notes.id }}">
+                            Notes
+                        </label>
+                        {{ form.notes(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline", rows=3) }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 4: Invoice Line Items (If invoice selected - Read-only) -->
+            <div id="invoice-items-section" style="display: none;">
+                <div class="universal-filter-card">
+                    <div class="universal-filter-card-header">
+                        <h3 class="universal-filter-card-title">
+                            <i class="fas fa-boxes"></i>
+                            Invoice Line Items
+                        </h3>
+                    </div>
+
+                    <div class="universal-filter-card-body" style="padding: 0;">
+                        <div class="overflow-x-auto">
+                            <table class="invoice-items-table">
+                                <thead>
+                                    <tr>
+                                        <th>Item</th>
+                                        <th class="text-right">Quantity</th>
+                                        <th class="text-right">Unit Price</th>
+                                        <th class="text-right">GST</th>
+                                        <th class="text-right">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="invoice-items-tbody">
+                                    <!-- Populated via JavaScript -->
+                                </tbody>
+                                <tfoot>
+                                    <tr class="font-bold bg-gray-50 dark:bg-gray-700">
+                                        <td colspan="4" class="text-right">Invoice Total:</td>
+                                        <td class="text-right" id="invoice-total">₹0.00</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 5: Supporting Documents -->
+            <div class="universal-filter-card">
+                <div class="universal-filter-card-header">
+                    <h3 class="universal-filter-card-title">
+                        <i class="fas fa-paperclip"></i>
+                        Supporting Documents
+                    </h3>
+                </div>
+
+                <div class="universal-filter-card-body">
+                    <div class="payment-two-column-grid">
+                        {% if form.receipt_document %}
+                        <div class="universal-form-group">
+                            <label class="universal-form-label">
+                                <i class="fas fa-receipt mr-1"></i>
+                                Receipt Document
+                            </label>
+                            {{ form.receipt_document(class="block w-full text-sm text-gray-700 dark:text-gray-300") }}
+                        </div>
+                        {% endif %}
+
+                        {% if form.bank_statement %}
+                        <div class="universal-form-group">
+                            <label class="universal-form-label">
+                                <i class="fas fa-file-invoice-dollar mr-1"></i>
+                                Bank Statement
+                            </label>
+                            {{ form.bank_statement(class="block w-full text-sm text-gray-700 dark:text-gray-300") }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Action Buttons -->
+            <div class="bottom-actions">
+                <a href="{{ url_for('universal_views.universal_list_view', entity_type='supplier_payments') }}" class="btn-secondary">
+                    <i class="fas fa-times mr-2"></i>
+                    Cancel
+                </a>
+                {% if not is_edit %}
+                    {# Only show "Save as Draft" for new payments, not when editing #}
+                    <button type="submit" name="save_as" value="draft" class="btn btn-outline-secondary">
+                        <i class="fas fa-save mr-2"></i>
+                        Save as Draft
+                    </button>
+                {% endif %}
+                <button type="submit" name="save_as" value="submit" class="btn-primary">
+                    <i class="fas fa-check mr-2"></i>
+                    {% if is_edit %}Update Payment{% else %}Record Payment{% endif %}
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 
-<!-- Enhanced CSS for readonly styling -->
-<style>
-.readonly-field {
-    background-color: #f9fafb !important;
-    color: #6b7280 !important;
-    cursor: not-allowed !important;
-}
-
-.dark .readonly-field {
-    background-color: #374151 !important;
-    color: #9ca3af !important;
-}
-
-.form-input-file {
-    display: block;
-    width: 100%;
-    padding: 0.5rem 0.75rem;
-    font-size: 0.875rem;
-    line-height: 1.25rem;
-    color: #1f2937;
-    background-color: #ffffff;
-    background-image: none;
-    border: 1px solid #d1d5db;
-    border-radius: 0.375rem;
-    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-}
-
-.form-input-file:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.dark .form-input-file {
-    color: #f9fafb;
-    background-color: #374151;
-    border-color: #4b5563;
-}
-
-.dark .form-input-file:focus {
-    border-color: #60a5fa;
-    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
-}
-</style>
-{% endblock %}
-
-{% block scripts %}
 <script>
+// Store form field references
+const form = document.getElementById('payment-form');
+const supplierField = document.getElementById('supplier_id');
+const invoiceField = document.getElementById('invoice_id');
+const totalField = document.getElementById('{{ form.amount.id }}');
+const cashField = document.getElementById('{{ form.cash_amount.id }}');
+const chequeField = document.getElementById('{{ form.cheque_amount.id }}');
+const bankField = document.getElementById('{{ form.bank_transfer_amount.id }}');
+const upiField = document.getElementById('{{ form.upi_amount.id }}');
+const validationDiv = document.getElementById('validation-message');
+const summaryDiv = document.getElementById('summary-content');
+
+// For cheque/bank/UPI details
+const chequeNumber = document.getElementById('{{ form.cheque_number.id }}');
+const chequeDetails = document.getElementById('cheque-details');
+const bankDetails = document.getElementById('bank-details');
+const upiDetails = document.getElementById('upi-details');
+
+// Store current supplier's advance balance
+let currentSupplierAdvanceBalance = 0;
+
+// Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Payment form JavaScript loading...');
-    
-    // Find all required elements
-    const form = document.getElementById('payment-form');
-    const totalField = document.getElementById('amount');
-    const cashField = document.getElementById('cash_amount');
-    const chequeField = document.getElementById('cheque_amount');
-    const bankField = document.getElementById('bank_transfer_amount');
-    const upiField = document.getElementById('upi_amount');
-    
-    // Method detail containers
-    const chequeDetails = document.getElementById('cheque-details');
-    const bankDetails = document.getElementById('bank-details');
-    const upiDetails = document.getElementById('upi-details');
-    
-    // Method-specific fields
-    const chequeNumber = document.getElementById('cheque_number');
-    const chequeBank = document.getElementById('cheque_bank');
-    const bankReference = document.getElementById('bank_reference_number');
-    const bankAccount = document.getElementById('bank_account_name');
-    const upiTransaction = document.getElementById('upi_transaction_id');
-    
-    // Validation and summary elements
-    const validationDiv = document.getElementById('amount-validation');
-    const summaryDiv = document.getElementById('payment-summary');
-    
-    // TDS elements
-    const tdsCheckbox = document.getElementById('tds_applicable');
-    const tdsDetails = document.getElementById('tds-details');
-    
-    // Debug: Log which elements were found
-    console.log('Elements found:', {
-        form: !!form,
-        totalField: !!totalField,
-        cashField: !!cashField,
-        chequeField: !!chequeField,
-        bankField: !!bankField,
-        upiField: !!upiField,
-        chequeDetails: !!chequeDetails,
-        bankDetails: !!bankDetails,
-        upiDetails: !!upiDetails
-    });
-    
-    // Check if required elements exist
-    if (!form || !totalField || !cashField || !chequeField || !bankField || !upiField) {
-        console.error('Required form elements not found!');
-        return;
+    console.log('Payment form initialized');
+
+    // Set up event listeners
+    if (supplierField) {
+        supplierField.addEventListener('change', handleSupplierChange);
     }
-    
-    if (!chequeDetails || !bankDetails || !upiDetails) {
-        console.error('Method detail containers not found!');
-        return;
+
+    if (invoiceField) {
+        invoiceField.addEventListener('change', handleInvoiceChange);
     }
-    
-    // Note: Readonly fields are handled by controller and template conditionals
-    // No JavaScript validation needed for readonly fields
-    
-    // CORE FUNCTION: Show/hide method-specific detail fields
-    function toggleMethodDetails() {
-        const cashAmount = parseFloat(cashField.value) || 0;
-        const chequeAmount = parseFloat(chequeField.value) || 0;
-        const bankAmount = parseFloat(bankField.value) || 0;
-        const upiAmount = parseFloat(upiField.value) || 0;
-        
-        console.log('Toggling method details:', {
-            cash: cashAmount,
-            cheque: chequeAmount,
-            bank: bankAmount,
-            upi: upiAmount
-        });
-        
-        // Show/hide cheque details
-        if (chequeAmount > 0) {
-            chequeDetails.style.display = 'block';
-            if (chequeNumber) chequeNumber.required = true;
-            if (chequeBank) chequeBank.required = true;
-            console.log('Showing cheque details');
-        } else {
-            chequeDetails.style.display = 'none';
-            if (chequeNumber) {
-                chequeNumber.required = false;
-                chequeNumber.value = '';
-            }
-            if (chequeBank) {
-                chequeBank.required = false;
-                chequeBank.value = '';
-            }
-            console.log('Hiding cheque details');
-        }
-        
-        // Show/hide bank transfer details
-        if (bankAmount > 0) {
-            bankDetails.style.display = 'block';
-            if (bankReference) bankReference.required = true;
-            if (bankAccount) bankAccount.required = true;
-            console.log('Showing bank details');
-        } else {
-            bankDetails.style.display = 'none';
-            if (bankReference) {
-                bankReference.required = false;
-                bankReference.value = '';
-            }
-            if (bankAccount) {
-                bankAccount.required = false;
-                bankAccount.value = '';
-            }
-            console.log('Hiding bank details');
-        }
-        
-        // Show/hide UPI details
-        if (upiAmount > 0) {
-            upiDetails.style.display = 'block';
-            if (upiTransaction) upiTransaction.required = true;
-            console.log('Showing UPI details');
-        } else {
-            upiDetails.style.display = 'none';
-            if (upiTransaction) {
-                upiTransaction.required = false;
-                upiTransaction.value = '';
-            }
-            console.log('Hiding UPI details');
-        }
-    }
-    
-    // Enhanced TDS toggle functionality
-    function toggleTdsDetails() {
-        if (tdsCheckbox && tdsDetails) {
-            if (tdsCheckbox.checked) {
-                tdsDetails.style.display = 'grid';
-                // Make TDS fields required when enabled
-                const tdsFields = tdsDetails.querySelectorAll('input');
-                tdsFields.forEach(field => {
-                    if (field.name === 'tds_rate' || field.name === 'tds_amount') {
-                        field.setAttribute('required', true);
-                    }
-                });
-            } else {
-                tdsDetails.style.display = 'none';
-                // Remove required attribute when disabled
-                const tdsFields = tdsDetails.querySelectorAll('input');
-                tdsFields.forEach(field => {
-                    field.removeAttribute('required');
-                    field.value = ''; // Clear values
-                });
-            }
-        }
-    }
-    
-    // CORE FUNCTION: Update payment summary
-    function updateSummary() {
-        const cashAmount = parseFloat(cashField.value) || 0;
-        const chequeAmount = parseFloat(chequeField.value) || 0;
-        const bankAmount = parseFloat(bankField.value) || 0;
-        const upiAmount = parseFloat(upiField.value) || 0;
-        const totalAmount = parseFloat(totalField.value) || 0;
-        
-        const methodTotal = cashAmount + chequeAmount + bankAmount + upiAmount;
-        const difference = totalAmount - methodTotal;
-        
-        console.log('Updating summary:', {
-            total: totalAmount,
-            methodTotal: methodTotal,
-            difference: difference
-        });
-        
-        if (summaryDiv) {
-            let summaryHTML = '<div class="space-y-2">';
-            
-            if (cashAmount > 0) {
-                summaryHTML += `<div class="flex justify-between"><span>Cash:</span><span>₹${cashAmount.toFixed(2)}</span></div>`;
-            }
-            if (chequeAmount > 0) {
-                summaryHTML += `<div class="flex justify-between"><span>Cheque:</span><span>₹${chequeAmount.toFixed(2)}</span></div>`;
-            }
-            if (bankAmount > 0) {
-                summaryHTML += `<div class="flex justify-between"><span>Bank Transfer:</span><span>₹${bankAmount.toFixed(2)}</span></div>`;
-            }
-            if (upiAmount > 0) {
-                summaryHTML += `<div class="flex justify-between"><span>UPI:</span><span>₹${upiAmount.toFixed(2)}</span></div>`;
-            }
-            
-            summaryHTML += `<hr class="my-2">`;
-            summaryHTML += `<div class="flex justify-between font-semibold"><span>Method Total:</span><span>₹${methodTotal.toFixed(2)}</span></div>`;
-            summaryHTML += `<div class="flex justify-between font-semibold"><span>Payment Total:</span><span>₹${totalAmount.toFixed(2)}</span></div>`;
-            
-            if (Math.abs(difference) > 0.01) {
-                const diffClass = difference > 0 ? 'text-red-600' : 'text-green-600';
-                summaryHTML += `<div class="flex justify-between ${diffClass}"><span>Difference:</span><span>₹${difference.toFixed(2)}</span></div>`;
-            }
-            
-            summaryHTML += '</div>';
-            summaryDiv.innerHTML = summaryHTML;
-        }
-    }
-    
-    // CORE FUNCTION: Validate payment amounts
-    function validateAmounts() {
-        const cashAmount = parseFloat(cashField.value) || 0;
-        const chequeAmount = parseFloat(chequeField.value) || 0;
-        const bankAmount = parseFloat(bankField.value) || 0;
-        const upiAmount = parseFloat(upiField.value) || 0;
-        const totalAmount = parseFloat(totalField.value) || 0;
-        
-        const methodTotal = cashAmount + chequeAmount + bankAmount + upiAmount;
-        const difference = totalAmount - methodTotal;
-        
-        if (validationDiv) {
-            if (Math.abs(difference) > 0.01) {
-                const message = difference > 0 
-                    ? `Missing ₹${difference.toFixed(2)} in method distribution`
-                    : `Excess ₹${Math.abs(difference).toFixed(2)} in method distribution`;
-                validationDiv.innerHTML = `
-                    <div class="text-orange-600 dark:text-orange-400">
-                        <i class="fas fa-exclamation-triangle mr-1"></i> ${message}
-                        <button type="button" onclick="adjustTotal()" class="ml-2 text-blue-600 underline hover:text-blue-800">
-                            Fix by adjusting total
-                        </button>
-                    </div>`;
-            } else if (methodTotal > 0) {
-                validationDiv.innerHTML = `<div class="text-green-600 dark:text-green-400"><i class="fas fa-check-circle mr-1"></i> Amount distribution is correct</div>`;
-            } else {
-                validationDiv.innerHTML = '';
-            }
-        }
-    }
-    // Helper function for adjusting total (MISSING FUNCTION)
-    window.adjustTotal = function() {
-        const cash = parseFloat(cashField.value) || 0;
-        const cheque = parseFloat(chequeField.value) || 0;
-        const bank = parseFloat(bankField.value) || 0;
-        const upi = parseFloat(upiField.value) || 0;
-        
-        const methodTotal = cash + cheque + bank + upi;
-        totalField.value = methodTotal.toFixed(2);
-        validateAmounts();
-        updateSummary();
-    };
-    // Add event listeners
+
+    // Add event listeners for amount fields
     [cashField, chequeField, bankField, upiField].forEach(field => {
-        field.addEventListener('input', function() {
-            toggleMethodDetails();
+        if (field) {
+            field.addEventListener('input', function() {
+                toggleMethodDetails();
+                updateSummary();
+                validateAmounts();
+            });
+        }
+    });
+
+    // Add event listener for advance allocation field
+    const advanceAllocField = document.getElementById('advance_allocation_amount');
+    if (advanceAllocField) {
+        advanceAllocField.addEventListener('input', function() {
             updateSummary();
             validateAmounts();
         });
-    });
-    
-    totalField.addEventListener('input', function() {
-        updateSummary();
-        validateAmounts();
-    });
-    
-    // TDS event listener
-    if (tdsCheckbox) {
-        tdsCheckbox.addEventListener('change', toggleTdsDetails);
-        // Initial state
-        toggleTdsDetails();
     }
-    
-    // Form submission validation
-    if (form) {
-        form.addEventListener('submit', function(e) {
-            console.log('Form submission validation starting...');
-            
-            const totalAmount = parseFloat(totalField.value) || 0;
-            const cashAmount = parseFloat(cashField.value) || 0;
-            const chequeAmount = parseFloat(chequeField.value) || 0;
-            const bankAmount = parseFloat(bankField.value) || 0;
-            const upiAmount = parseFloat(upiField.value) || 0;
-            const methodTotal = cashAmount + chequeAmount + bankAmount + upiAmount;
-            
-            // Check if total amount is distributed
-            if (totalAmount > 0 && Math.abs(totalAmount - methodTotal) > 0.01) {
-                e.preventDefault();
-                alert('Please distribute the total amount across payment methods or adjust the total amount.');
-                return false;
-            }
-            
-            // Method-specific validation
-            if (chequeAmount > 0) {
-                if (!chequeNumber || !chequeNumber.value.trim()) {
-                    e.preventDefault();
-                    alert(`Cheque number is required for cheque amount of ₹${chequeAmount.toFixed(2)}`);
-                    if (chequeNumber) chequeNumber.focus();
-                    return false;
-                }
-                if (!chequeBank || !chequeBank.value.trim()) {
-                    e.preventDefault();
-                    alert(`Bank name is required for cheque amount of ₹${chequeAmount.toFixed(2)}`);
-                    if (chequeBank) chequeBank.focus();
-                    return false;
-                }
-            }
-            
-            if (bankAmount > 0) {
-                if (!bankReference || !bankReference.value.trim()) {
-                    e.preventDefault();
-                    alert(`Bank reference number is required for bank transfer of ₹${bankAmount.toFixed(2)}`);
-                    if (bankReference) bankReference.focus();
-                    return false;
-                }
-                if (!bankAccount || !bankAccount.value.trim()) {
-                    e.preventDefault();
-                    alert(`Account holder name is required for bank transfer of ₹${bankAmount.toFixed(2)}`);
-                    if (bankAccount) bankAccount.focus();
-                    return false;
-                }
-            }
-            
-            if (upiAmount > 0) {
-                if (!upiTransaction || !upiTransaction.value.trim()) {
-                    e.preventDefault();
-                    alert(`UPI transaction ID is required for UPI payment of ₹${upiAmount.toFixed(2)}`);
-                    if (upiTransaction) upiTransaction.focus();
-                    return false;
-                }
-            }
-            
-            console.log('Form validation passed');
-            return true;
+
+    if (totalField) {
+        totalField.addEventListener('input', function() {
+            updateSummary();
+            validateAmounts();
         });
     }
-    
-    // Cancel button
-    const cancelBtn = document.getElementById('cancel-btn');
-    if (cancelBtn) {
-        cancelBtn.addEventListener('click', function() {
-            if (confirm('Are you sure you want to cancel? Any unsaved changes will be lost.')) {
-                window.history.back();
-            }
-        });
-    }
-    
-    // Initial setup
-    console.log('Running initial setup...');
+
+    // Initial checks - ensure clean state on page load
+    // Always clear payment method fields unless they have values from validation errors
+    const hasValidationErrors = document.querySelector('.alert-error') !== null;
+
+    // No need to clear fields anymore since we removed default=0 from the form
+    // Fields will naturally be empty unless populated by user or validation error
+
+    // IMPORTANT: Always call toggle on page load to hide empty sections
+    // First, explicitly hide all detail cards
+    const chequeDetailsEl = document.getElementById('cheque-details');
+    const bankDetailsEl = document.getElementById('bank-details');
+    const upiDetailsEl = document.getElementById('upi-details');
+
+    if (chequeDetailsEl) chequeDetailsEl.style.setProperty('display', 'none', 'important');
+    if (bankDetailsEl) bankDetailsEl.style.setProperty('display', 'none', 'important');
+    if (upiDetailsEl) upiDetailsEl.style.setProperty('display', 'none', 'important');
+
+    console.log('[INIT] Payment detail cards explicitly hidden');
+
+    // Then call toggle which will show them if amounts exist
     toggleMethodDetails();
     updateSummary();
-    validateAmounts();
-    
-    console.log('Payment form JavaScript initialization complete!');
-});
-</script>
-<script>
-// Payment confirmation dialog
-document.addEventListener('DOMContentLoaded', function() {
-    const paymentForm = document.querySelector('form');
-    if (paymentForm) {
-        paymentForm.addEventListener('submit', function(e) {
-            const amount = document.querySelector('input[name="amount"]').value;
-            const supplierName = document.querySelector('select[name="supplier_id"] option:checked').text;
-            const invoiceNumber = document.querySelector('select[name="invoice_id"] option:checked').text;
-            
-            const confirmMessage = `Confirm Payment Details:\n\n` +
-                `Supplier: ${supplierName}\n` +
-                `Invoice: ${invoiceNumber}\n` +
-                `Amount: Rs. ${amount}\n\n` +
-                `⚠️ This action cannot be undone easily.\n` +
-                `Are you sure you want to record this payment?`;
-            
-            if (!confirm(confirmMessage)) {
-                e.preventDefault();
-                return false;
-            }
-        });
+
+    // Hide advance sections by default (will be shown if supplier has balance)
+    if (!hasValidationErrors) {
+        const advanceBalanceSection = document.getElementById('advance-balance-section');
+        const advanceAllocField = document.getElementById('advance-allocation-field');
+        if (advanceBalanceSection) {
+            advanceBalanceSection.style.setProperty('display', 'none', 'important');
+        }
+        if (advanceAllocField) {
+            advanceAllocField.style.setProperty('display', 'none', 'important');
+            console.log('[INIT] Advance allocation field explicitly hidden');
+        }
+    }
+
+    console.log('[INIT] Initial field values:', {
+        cash: cashField?.value,
+        cheque: chequeField?.value,
+        bank: bankField?.value,
+        upi: upiField?.value
+    });
+
+    // If supplier is pre-selected, load advance balance
+    if (supplierField && supplierField.value) {
+        fetchAdvanceBalance(supplierField.value);
+    }
+
+    // If invoice is pre-selected, load invoice data
+    if (invoiceField && invoiceField.value) {
+        fetchInvoiceData(invoiceField.value);
     }
 });
+
+// Handle supplier change
+function handleSupplierChange() {
+    const supplierId = supplierField.value;
+
+    if (!supplierId) {
+        // Clear invoice dropdown
+        invoiceField.innerHTML = '<option value="">No Invoice (Advance Payment)</option>';
+        hideAdvanceBalance();
+        hideInvoiceItems();
+        return;
+    }
+
+    // Fetch invoices for this supplier
+    fetchInvoicesForSupplier(supplierId);
+
+    // Fetch advance balance
+    fetchAdvanceBalance(supplierId);
+}
+
+// Fetch invoices for supplier
+function fetchInvoicesForSupplier(supplierId) {
+    fetch(`/api/supplier/${supplierId}/invoices?status=unpaid,partial`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.invoices) {
+                invoiceField.innerHTML = '<option value="">No Invoice (Advance Payment)</option>';
+                data.invoices.forEach(invoice => {
+                    const option = document.createElement('option');
+                    option.value = invoice.invoice_id;
+                    option.textContent = `${invoice.supplier_invoice_number} - ₹${invoice.balance_due.toFixed(2)} due`;
+                    option.dataset.balanceDue = invoice.balance_due;
+                    option.dataset.totalAmount = invoice.total_amount;
+                    option.dataset.paymentStatus = invoice.payment_status;
+                    invoiceField.appendChild(option);
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching invoices:', error);
+        });
+}
+
+// Update status badge dynamically
+function updateStatusBadge(status) {
+    console.log('[BADGE] updateStatusBadge called with status:', status);
+    const badge = document.getElementById('payment-status-badge');
+
+    if (!badge) {
+        console.error('[BADGE] Badge element not found!');
+        return;
+    }
+
+    // Remove all status classes
+    badge.classList.remove('badge-draft', 'badge-unpaid', 'badge-partial', 'badge-paid');
+
+    // Update badge based on status
+    switch(status) {
+        case 'unpaid':
+            badge.classList.add('badge-unpaid');
+            badge.textContent = 'Unpaid';
+            console.log('[BADGE] Set to Unpaid');
+            break;
+        case 'partial':
+            badge.classList.add('badge-partial');
+            badge.textContent = 'Partially Paid';
+            console.log('[BADGE] Set to Partially Paid');
+            break;
+        case 'paid':
+            badge.classList.add('badge-paid');
+            badge.textContent = 'Paid';
+            console.log('[BADGE] Set to Paid');
+            break;
+        default: // 'draft' or anything else
+            badge.classList.add('badge-draft');
+            badge.textContent = 'New Payment';
+            console.log('[BADGE] Set to New Payment (draft)');
+    }
+}
+
+// Fetch advance balance for supplier
+function fetchAdvanceBalance(supplierId) {
+    console.log('[ADVANCE] Fetching balance for supplier:', supplierId);
+    fetch(`/api/supplier/${supplierId}/advance-balance`)
+        .then(response => response.json())
+        .then(data => {
+            console.log('[ADVANCE] API response:', data);
+            if (data.success && data.advance_balance > 0) {
+                currentSupplierAdvanceBalance = data.advance_balance;
+                document.getElementById('advance-balance-amount').textContent = data.advance_balance.toFixed(2);
+                document.getElementById('advance-payment-count').textContent = data.payment_count;
+
+                // Show the advance balance section
+                const advanceBalanceSection = document.getElementById('advance-balance-section');
+                if (advanceBalanceSection) {
+                    advanceBalanceSection.style.setProperty('display', 'block', 'important');
+                }
+
+                // Show the advance allocation field in payment methods section
+                const advanceAllocField = document.getElementById('advance-allocation-field');
+                if (advanceAllocField) {
+                    advanceAllocField.style.setProperty('display', 'block', 'important');
+                    console.log('[ADVANCE] Allocation field SHOWN - Balance: ₹' + data.advance_balance.toFixed(2));
+                }
+            } else {
+                console.log('[ADVANCE] No balance or balance is 0 - hiding advance sections');
+                hideAdvanceBalance();
+            }
+        })
+        .catch(error => {
+            console.error('[ADVANCE] Error fetching balance:', error);
+            hideAdvanceBalance();
+        });
+}
+
+// Hide advance balance section
+function hideAdvanceBalance() {
+    console.log('[ADVANCE] Hiding advance sections');
+
+    const advanceBalanceSection = document.getElementById('advance-balance-section');
+    if (advanceBalanceSection) {
+        advanceBalanceSection.style.setProperty('display', 'none', 'important');
+    }
+
+    // Hide the advance allocation field
+    const advanceAllocField = document.getElementById('advance-allocation-field');
+    if (advanceAllocField) {
+        advanceAllocField.style.setProperty('display', 'none', 'important');
+        console.log('[ADVANCE] Allocation field HIDDEN');
+    }
+
+    // Reset the advance amount to empty string
+    const advanceField = document.getElementById('advance_allocation_amount');
+    if (advanceField) {
+        advanceField.value = '';
+    }
+
+    currentSupplierAdvanceBalance = 0;
+}
+
+// Handle invoice change
+function handleInvoiceChange() {
+    const invoiceId = invoiceField.value;
+
+    if (!invoiceId) {
+        hideInvoiceItems();
+        hideAdvanceAllocationField();
+        totalField.value = '';
+        // Reset badge to "New Payment"
+        updateStatusBadge('draft');
+        return;
+    }
+
+    // Get selected option
+    const selectedOption = invoiceField.options[invoiceField.selectedIndex];
+    const balanceDue = parseFloat(selectedOption.dataset.balanceDue || 0);
+    const paymentStatus = selectedOption.dataset.paymentStatus || 'unpaid';
+
+    console.log('[INVOICE] Selected invoice data:', {
+        invoiceId: invoiceId,
+        balanceDue: balanceDue,
+        paymentStatus: paymentStatus,
+        dataset: selectedOption.dataset
+    });
+
+    // Update status badge based on selected invoice
+    updateStatusBadge(paymentStatus);
+
+    // Set total amount to balance due
+    totalField.value = balanceDue.toFixed(2);
+
+    // Calculate advance allocation if available
+    if (currentSupplierAdvanceBalance > 0) {
+        showAdvanceAllocationField();
+
+        const advanceAllocation = Math.min(balanceDue, currentSupplierAdvanceBalance);
+        const cashPayment = Math.max(0, balanceDue - advanceAllocation);
+
+        document.getElementById('advance_allocation_amount').value = advanceAllocation.toFixed(2);
+        cashField.value = cashPayment.toFixed(2);
+
+        console.log(`Auto-allocated: Advance ₹${advanceAllocation}, Cash ₹${cashPayment}`);
+    } else {
+        // No advance, default to cash
+        cashField.value = balanceDue.toFixed(2);
+    }
+
+    // Fetch and display invoice items
+    fetchInvoiceData(invoiceId);
+
+    // Update summary
+    updateSummary();
+    validateAmounts();
+}
+
+// Show advance allocation field
+function showAdvanceAllocationField() {
+    const advanceAllocField = document.getElementById('advance-allocation-field');
+    if (advanceAllocField) {
+        advanceAllocField.style.setProperty('display', 'block', 'important');
+        console.log('[ADVANCE] Allocation field shown (via showAdvanceAllocationField)');
+    }
+}
+
+// Hide advance allocation field
+function hideAdvanceAllocationField() {
+    const advanceAllocField = document.getElementById('advance-allocation-field');
+    if (advanceAllocField) {
+        advanceAllocField.style.setProperty('display', 'none', 'important');
+        console.log('[ADVANCE] Allocation field hidden (via hideAdvanceAllocationField)');
+    }
+
+    const advanceField = document.getElementById('advance_allocation_amount');
+    if (advanceField) {
+        advanceField.value = '';
+    }
+}
+
+// Fetch invoice line items
+function fetchInvoiceData(invoiceId) {
+    // Show loading state
+    document.getElementById('invoice-items-section').style.display = 'block';
+    document.getElementById('invoice-items-tbody').innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
+
+    fetch(`/api/supplier-invoice/${invoiceId}/items`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.items) {
+                displayInvoiceItems(data.items, data.summary);
+            } else {
+                hideInvoiceItems();
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching invoice items:', error);
+            hideInvoiceItems();
+        });
+}
+
+// Display invoice line items
+function displayInvoiceItems(items, summary) {
+    const tbody = document.getElementById('invoice-items-tbody');
+    tbody.innerHTML = '';
+
+    items.forEach(item => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${item.medicine_name || item.item_name}</td>
+            <td class="text-right">${item.units || item.quantity}</td>
+            <td class="text-right">₹${(item.pack_purchase_price || item.unit_price || 0).toFixed(2)}</td>
+            <td class="text-right">₹${(item.total_gst || item.gst_amount || 0).toFixed(2)}</td>
+            <td class="text-right">₹${(item.line_total || item.total_amount || 0).toFixed(2)}</td>
+        `;
+        tbody.appendChild(row);
+    });
+
+    // Update total
+    if (summary) {
+        document.getElementById('invoice-total').textContent = `₹${summary.total_amount.toFixed(2)}`;
+    }
+}
+
+// Hide invoice items section
+function hideInvoiceItems() {
+    document.getElementById('invoice-items-section').style.display = 'none';
+}
+
+// Toggle method detail sections
+function toggleMethodDetails() {
+    const chequeAmount = parseFloat(chequeField.value) || 0;
+    const bankAmount = parseFloat(bankField.value) || 0;
+    const upiAmount = parseFloat(upiField.value) || 0;
+
+    // Use more explicit DOM manipulation
+    const chequeDetailsEl = document.getElementById('cheque-details');
+    const bankDetailsEl = document.getElementById('bank-details');
+    const upiDetailsEl = document.getElementById('upi-details');
+
+    console.log('[TOGGLE] Amounts:', { cheque: chequeAmount, bank: bankAmount, upi: upiAmount });
+
+    // Use setProperty with 'important' to override any CSS
+    if (chequeDetailsEl) {
+        const chequeDisplay = chequeAmount > 0 ? 'block' : 'none';
+        chequeDetailsEl.style.setProperty('display', chequeDisplay, 'important');
+        console.log('[TOGGLE] Cheque:', chequeAmount > 0 ? 'SHOW' : 'HIDE', '(display:', chequeDisplay + ')');
+    } else {
+        console.error('[TOGGLE] Cheque element not found!');
+    }
+
+    if (bankDetailsEl) {
+        const bankDisplay = bankAmount > 0 ? 'block' : 'none';
+        bankDetailsEl.style.setProperty('display', bankDisplay, 'important');
+        console.log('[TOGGLE] Bank:', bankAmount > 0 ? 'SHOW' : 'HIDE', '(display:', bankDisplay + ')');
+    } else {
+        console.error('[TOGGLE] Bank element not found!');
+    }
+
+    if (upiDetailsEl) {
+        const upiDisplay = upiAmount > 0 ? 'block' : 'none';
+        upiDetailsEl.style.setProperty('display', upiDisplay, 'important');
+        console.log('[TOGGLE] UPI:', upiAmount > 0 ? 'SHOW' : 'HIDE', '(display:', upiDisplay + ')');
+    } else {
+        console.error('[TOGGLE] UPI element not found!');
+    }
+}
+
+// Update payment summary
+function updateSummary() {
+    const cashAmount = parseFloat(cashField.value) || 0;
+    const chequeAmount = parseFloat(chequeField.value) || 0;
+    const bankAmount = parseFloat(bankField.value) || 0;
+    const upiAmount = parseFloat(upiField.value) || 0;
+    const totalAmount = parseFloat(totalField.value) || 0;
+
+    // Include advance allocation in method total
+    const advanceAllocField = document.getElementById('advance_allocation_amount');
+    const advanceAmount = advanceAllocField ? (parseFloat(advanceAllocField.value) || 0) : 0;
+
+    const methodTotal = advanceAmount + cashAmount + chequeAmount + bankAmount + upiAmount;
+    const difference = totalAmount - methodTotal;
+
+    if (summaryDiv) {
+        let summaryHTML = '<div class="space-y-2">';
+
+        if (advanceAmount > 0) {
+            summaryHTML += `<div class="flex justify-between text-green-600"><span>Advance Allocation:</span><span>₹${advanceAmount.toFixed(2)}</span></div>`;
+        }
+        if (cashAmount > 0) {
+            summaryHTML += `<div class="flex justify-between"><span>Cash:</span><span>₹${cashAmount.toFixed(2)}</span></div>`;
+        }
+        if (chequeAmount > 0) {
+            summaryHTML += `<div class="flex justify-between"><span>Cheque:</span><span>₹${chequeAmount.toFixed(2)}</span></div>`;
+        }
+        if (bankAmount > 0) {
+            summaryHTML += `<div class="flex justify-between"><span>Bank Transfer:</span><span>₹${bankAmount.toFixed(2)}</span></div>`;
+        }
+        if (upiAmount > 0) {
+            summaryHTML += `<div class="flex justify-between"><span>UPI:</span><span>₹${upiAmount.toFixed(2)}</span></div>`;
+        }
+
+        summaryHTML += `<hr class="my-2">`;
+        summaryHTML += `<div class="flex justify-between font-semibold"><span>Method Total:</span><span>₹${methodTotal.toFixed(2)}</span></div>`;
+        summaryHTML += `<div class="flex justify-between font-semibold"><span>Payment Total:</span><span>₹${totalAmount.toFixed(2)}</span></div>`;
+
+        if (Math.abs(difference) > 0.01) {
+            const diffClass = difference > 0 ? 'text-red-600' : 'text-green-600';
+            summaryHTML += `<div class="flex justify-between ${diffClass}"><span>Difference:</span><span>₹${difference.toFixed(2)}</span></div>`;
+        }
+
+        summaryHTML += '</div>';
+        summaryDiv.innerHTML = summaryHTML;
+    }
+}
+
+// Validate amounts
+function validateAmounts() {
+    const cashAmount = parseFloat(cashField.value) || 0;
+    const chequeAmount = parseFloat(chequeField.value) || 0;
+    const bankAmount = parseFloat(bankField.value) || 0;
+    const upiAmount = parseFloat(upiField.value) || 0;
+    const totalAmount = parseFloat(totalField.value) || 0;
+
+    // Include advance allocation in the calculation
+    const advanceAllocField = document.getElementById('advance_allocation_amount');
+    const advanceAmount = advanceAllocField ? (parseFloat(advanceAllocField.value) || 0) : 0;
+
+    const methodTotal = advanceAmount + cashAmount + chequeAmount + bankAmount + upiAmount;
+    const difference = totalAmount - methodTotal;
+
+    if (validationDiv) {
+        if (Math.abs(difference) > 0.01) {
+            const message = difference > 0
+                ? `Missing ₹${difference.toFixed(2)} in method distribution`
+                : `Excess ₹${Math.abs(difference).toFixed(2)} in method distribution`;
+            validationDiv.innerHTML = `
+                <div class="text-orange-600 dark:text-orange-400">
+                    <i class="fas fa-exclamation-triangle mr-1"></i> ${message}
+                    <button type="button" onclick="adjustTotal()" class="ml-2 text-blue-600 underline hover:text-blue-800">
+                        Fix by adjusting total
+                    </button>
+                </div>`;
+        } else if (methodTotal > 0) {
+            validationDiv.innerHTML = `<div class="text-green-600 dark:text-green-400"><i class="fas fa-check-circle mr-1"></i> Amount distribution is correct</div>`;
+        } else {
+            validationDiv.innerHTML = '';
+        }
+    }
+}
+
+// Helper function for adjusting total
+window.adjustTotal = function() {
+    const advance = parseFloat(document.getElementById('advance_allocation_amount')?.value) || 0;
+    const cash = parseFloat(cashField.value) || 0;
+    const cheque = parseFloat(chequeField.value) || 0;
+    const bank = parseFloat(bankField.value) || 0;
+    const upi = parseFloat(upiField.value) || 0;
+
+    const methodTotal = advance + cash + cheque + bank + upi;
+    totalField.value = methodTotal.toFixed(2);
+    validateAmounts();
+    updateSummary();
+};
+
+// Form submission validation
+if (form) {
+    form.addEventListener('submit', function(e) {
+        console.log('Form submission validation starting...');
+
+        const totalAmount = parseFloat(totalField.value) || 0;
+        const advanceAmount = parseFloat(document.getElementById('advance_allocation_amount')?.value) || 0;
+        const cashAmount = parseFloat(cashField.value) || 0;
+        const chequeAmount = parseFloat(chequeField.value) || 0;
+        const bankAmount = parseFloat(bankField.value) || 0;
+        const upiAmount = parseFloat(upiField.value) || 0;
+        const methodTotal = advanceAmount + cashAmount + chequeAmount + bankAmount + upiAmount;
+
+        // Check if total amount is distributed
+        if (totalAmount > 0 && Math.abs(totalAmount - methodTotal) > 0.01) {
+            e.preventDefault();
+            alert('Please distribute the total amount across payment methods or adjust the total amount.');
+            return false;
+        }
+
+        // Method-specific validation
+        if (chequeAmount > 0) {
+            if (!chequeNumber || !chequeNumber.value.trim()) {
+                e.preventDefault();
+                alert(`Cheque number is required for cheque amount of ₹${chequeAmount.toFixed(2)}`);
+                return false;
+            }
+        }
+
+        console.log('Form validation passed');
+    });
+}
 </script>
 {% endblock %}

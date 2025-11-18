@@ -1,0 +1,144 @@
+<!-- templates/components/business/patient_payment_history_table.html -->
+<!-- Patient Payment History - Last 6 months for the patient -->
+
+{% if data and data.get('has_payments') %}
+<div class="patient-payment-history-container" style="width: 100%;">
+
+    <!-- Summary Card - Compact -->
+    <div class="alert alert-info mb-3">
+        <i class="fas fa-user"></i>
+        <strong>Patient:</strong> {{ data.patient_name }}
+        | <strong>Period:</strong> {{ data.date_range }}
+        | <strong>Total Paid:</strong> ₹{{ "{:,.2f}".format(data.summary.total_paid) }}
+        | <strong>Payments:</strong> {{ data.summary.payment_count }}
+    </div>
+
+    <!-- Payment History Table - Same styling as invoice items -->
+    <div class="table-responsive" style="width: 100%;">
+        <table class="table table-bordered table-hover patient-payment-items-table table-sm" style="width: 100%; table-layout: fixed;">
+            <thead class="table-light">
+                <tr>
+                    <th width="5%" style="text-align: left !important;">#</th>
+                    <th width="12%" style="text-align: left !important;">Date</th>
+                    <th width="18%" style="text-align: left !important;">Receipt No.</th>
+                    <th width="18%" style="text-align: left !important;">Invoice</th>
+                    <th width="13%" class="text-end">Amount</th>
+                    <th width="16%" style="text-align: left !important;">Payment Mode</th>
+                    <th width="10%" style="text-align: center !important;">Status</th>
+                    <th width="8%" style="text-align: center !important;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for payment in data.payments %}
+                <tr>
+                    <td style="text-align: left !important;">{{ loop.index }}</td>
+                    <td>{{ payment.payment_date }}</td>
+                    <td><strong>{{ payment.receipt_number }}</strong></td>
+                    <td>
+                        {% if payment.invoice_id %}
+                            <a href="{{ url_for('universal_views.universal_detail_view', entity_type='patient_invoices', item_id=payment.invoice_id) }}"
+                               class="text-primary text-decoration-none"
+                               title="View Invoice">
+                                {{ payment.invoice_number }}
+                            </a>
+                        {% else %}
+                            <span class="text-muted">{{ payment.invoice_number }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end fw-bold">₹{{ "{:,.2f}".format(payment.amount) }}</td>
+                    <td>
+                        <span class="badge {% if payment.payment_mode|lower == 'cash' %}bg-success{% elif payment.payment_mode|lower in ['bank_transfer', 'upi', 'neft', 'rtgs'] %}bg-primary{% elif payment.payment_mode|lower == 'cheque' %}bg-warning{% else %}bg-secondary{% endif %}">
+                            {{ payment.payment_mode|title|replace('_', ' ') }}
+                        </span>
+                    </td>
+                    <td style="text-align: center !important;">
+                        <span class="badge {% if payment.status|lower in ['approved', 'completed'] %}bg-success{% elif payment.status|lower == 'pending' %}bg-warning{% elif payment.status|lower == 'reversed' %}bg-danger{% else %}bg-secondary{% endif %}">
+                            {{ payment.status|title }}
+                        </span>
+                    </td>
+                    <td style="text-align: center !important;">
+                        <a href="{{ url_for('universal_views.universal_detail_view', entity_type='patient_payments', item_id=payment.payment_id) }}"
+                           class="btn btn-sm btn-outline-primary"
+                           title="View Payment"
+                           target="_blank"
+                           rel="noopener noreferrer">
+                            <i class="fas fa-eye"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot class="table-light">
+                <tr class="table-primary">
+                    <td colspan="4" class="text-end"><strong>Total (Last 6 Months):</strong></td>
+                    <td class="text-end"><strong class="text-primary">₹{{ "{:,.2f}".format(data.summary.total_paid) }}</strong></td>
+                    <td colspan="3" class="text-center">{{ data.summary.payment_count }} payment{{ 's' if data.summary.payment_count != 1 else '' }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+{% else %}
+<!-- No Payments Message -->
+<div class="alert alert-info">
+    <i class="fas fa-info-circle"></i>
+    {% if data and data.get('message') %}
+        {{ data.message }}
+    {% else %}
+        No payment history found for this patient in the last 6 months.
+    {% endif %}
+    {% if data and data.get('patient_name') %}
+        <br><small><strong>Patient:</strong> {{ data.patient_name }} | <strong>Period:</strong> {{ data.get('date_range', 'Last 6 months') }}</small>
+    {% endif %}
+</div>
+{% endif %}
+
+<style>
+.patient-payment-items-table {
+    font-size: 0.9rem;
+    width: 100% !important;
+}
+
+.patient-payment-items-table thead th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.patient-payment-items-table th,
+.patient-payment-items-table td {
+    padding: 0.4rem 0.5rem !important;
+    vertical-align: middle;
+}
+
+.patient-payment-items-table tfoot td {
+    font-weight: 500;
+}
+
+.patient-payment-items-table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+.table-primary td {
+    background-color: #cfe2ff !important;
+}
+
+.fw-bold {
+    font-weight: bold !important;
+}
+
+.text-end {
+    text-align: right !important;
+}
+
+.badge {
+    font-size: 0.7rem !important;
+    padding: 0.2rem 0.4rem !important;
+}
+
+.btn-sm {
+    padding: 0.25rem 0.5rem !important;
+    font-size: 0.8rem !important;
+}
+</style>

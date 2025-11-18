@@ -1,0 +1,166 @@
+<!-- AR Statement Modal -->
+<!-- Follows Universal Engine design patterns for consistency -->
+<div id="arStatementModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+        <!-- Background overlay -->
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" onclick="closeARStatementModal()"></div>
+
+        <!-- Modal panel -->
+        <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-5xl sm:w-full">
+
+            <!-- Modal Header -->
+            <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <i class="fas fa-file-invoice-dollar text-white text-2xl mr-3"></i>
+                        <h3 class="text-xl font-semibold text-white" id="modal-title">Patient AR Statement</h3>
+                    </div>
+                    <button type="button" class="text-white hover:text-gray-200 transition-colors" onclick="closeARStatementModal()">
+                        <i class="fas fa-times text-2xl"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="px-6 py-4 max-h-[calc(100vh-200px)] overflow-y-auto">
+
+                <!-- Patient Info Section -->
+                <div class="info-card mb-6">
+                    <div class="card-body">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <span class="text-sm font-medium text-gray-500 dark:text-gray-400">Patient Name</span>
+                                <p class="text-base font-semibold text-gray-900 dark:text-gray-100" id="ar-patient-name">—</p>
+                            </div>
+                            <div>
+                                <span class="text-sm font-medium text-gray-500 dark:text-gray-400">Patient Number</span>
+                                <p class="text-base font-semibold text-gray-900 dark:text-gray-100" id="ar-patient-number">—</p>
+                            </div>
+                            <div>
+                                <span class="text-sm font-medium text-gray-500 dark:text-gray-400">As of Date</span>
+                                <p class="text-base font-semibold text-gray-900 dark:text-gray-100" id="ar-as-of-date">—</p>
+                            </div>
+                        </div>
+
+                        <!-- Current Balance - Prominent Display -->
+                        <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                            <div class="flex justify-between items-center">
+                                <span class="text-lg font-medium text-gray-700 dark:text-gray-300">Current Balance:</span>
+                                <span class="text-2xl font-bold" id="ar-current-balance">₹0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Transactions Table -->
+                <div class="info-card mb-6">
+                    <div class="card-header">
+                        <h4 class="card-title">Transaction History</h4>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="overflow-x-auto">
+                            <table class="universal-table w-full">
+                                <thead>
+                                    <tr>
+                                        <th class="px-4 py-3 text-left">Date</th>
+                                        <th class="px-4 py-3 text-left">Type</th>
+                                        <th class="px-4 py-3 text-left">Reference Number</th>
+                                        <th class="px-4 py-3 text-right">Debit (₹)</th>
+                                        <th class="px-4 py-3 text-right">Credit (₹)</th>
+                                        <th class="px-4 py-3 text-right">Balance (₹)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ar-transactions-body" class="divide-y divide-gray-200 dark:divide-gray-700">
+                                    <!-- Populated by JavaScript -->
+                                    <tr>
+                                        <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+                                            <i class="fas fa-spinner fa-spin mr-2"></i>Loading transactions...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                                <tfoot class="bg-gray-50 dark:bg-gray-900 border-t-2 border-gray-300 dark:border-gray-600">
+                                    <tr class="font-bold">
+                                        <td colspan="3" class="px-4 py-3 text-left">TOTALS</td>
+                                        <td class="px-4 py-3 text-right" id="ar-total-debit">₹0.00</td>
+                                        <td class="px-4 py-3 text-right" id="ar-total-credit">₹0.00</td>
+                                        <td class="px-4 py-3 text-right" id="ar-total-balance">₹0.00</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Section -->
+                <div class="info-card">
+                    <div class="card-header">
+                        <h4 class="card-title">Summary</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                                <span class="text-gray-700 dark:text-gray-300">Total Invoiced:</span>
+                                <span class="font-semibold text-gray-900 dark:text-gray-100" id="ar-summary-invoiced">₹0.00</span>
+                            </div>
+                            <div class="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                                <span class="text-gray-700 dark:text-gray-300">Total Paid:</span>
+                                <span class="font-semibold text-gray-900 dark:text-gray-100" id="ar-summary-paid">₹0.00</span>
+                            </div>
+                            <div class="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                                <span class="text-gray-700 dark:text-gray-300">Total Credit Notes:</span>
+                                <span class="font-semibold text-gray-900 dark:text-gray-100" id="ar-summary-credit-notes">₹0.00</span>
+                            </div>
+                            <div class="flex justify-between items-center py-2 border-b-2 border-gray-400 dark:border-gray-500">
+                                <span class="text-lg font-bold text-gray-800 dark:text-gray-200">Net Balance:</span>
+                                <span class="text-lg font-bold" id="ar-summary-balance">₹0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-gray-50 dark:bg-gray-900 px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
+                <div class="text-sm text-gray-600 dark:text-gray-400">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    <span>Negative balance indicates patient credit. Positive balance indicates amount due.</span>
+                </div>
+                <div class="flex gap-3">
+                    <button type="button" class="btn-secondary" onclick="closeARStatementModal()">
+                        <i class="fas fa-times mr-2"></i>Close
+                    </button>
+                    <button type="button" class="btn-primary" onclick="printARStatement()">
+                        <i class="fas fa-print mr-2"></i>Print Statement
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Print Styles for AR Statement -->
+<style media="print">
+    @media print {
+        body * {
+            visibility: hidden;
+        }
+        #arStatementModal,
+        #arStatementModal * {
+            visibility: visible;
+        }
+        #arStatementModal {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            background: white;
+        }
+        #arStatementModal .bg-gray-900,
+        #arStatementModal button {
+            display: none !important;
+        }
+        #arStatementModal .card-body {
+            padding: 1rem !important;
+        }
+    }
+</style>

@@ -1,0 +1,531 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+
+    <!-- Header Section with Actions -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-between">
+            <!-- Left: Payment Info -->
+            <div class="flex-grow">
+                <div class="flex items-center space-x-3 mb-3">
+                    <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                        Payment: {{ payment.reference_no or payment.payment_id[:8] }}
+                    </h1>
+                    <!-- Status Badge -->
+                    <span class="px-3 py-1 text-sm rounded-full
+                        {% if payment.workflow_status == 'approved' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                        {% elif payment.workflow_status == 'pending_approval' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
+                        {% elif payment.workflow_status == 'rejected' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                        {% elif payment.workflow_status == 'draft' %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300
+                        {% else %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
+                        {% endif %}">
+                        <i class="fas fa-circle text-xs mr-1"></i>
+                        {{ payment.workflow_status|replace('_', ' ')|title }}
+                    </span>
+                    {% if payment.is_deleted %}
+                    <span class="px-3 py-1 text-sm rounded-full bg-red-600 text-white">
+                        <i class="fas fa-trash text-xs mr-1"></i>DELETED
+                    </span>
+                    {% endif %}
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400">Supplier:</span>
+                        <span class="ml-2 font-medium text-gray-900 dark:text-gray-100">{{ payment.supplier_name }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400">Amount:</span>
+                        <span class="ml-2 font-bold text-lg text-gray-900 dark:text-gray-100">₹{{ "%.2f"|format(payment.amount) }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400">Payment Date:</span>
+                        <span class="ml-2 font-medium text-gray-900 dark:text-gray-100">
+                            {{ payment.payment_date.strftime('%d/%b/%Y') if payment.payment_date else 'N/A' }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Action Buttons -->
+            <div class="mt-4 md:mt-0 flex items-center space-x-4">
+                <a href="{{ url_for('supplier_views.payment_list') }}" class="btn-secondary">
+                    <i class="fas fa-arrow-left mr-2"></i>Back
+                </a>
+
+                <!-- Actions Dropdown -->
+                <div class="relative dropdown">
+                    <button class="btn-primary dropdown-toggle">
+                        <i class="fas fa-cog mr-2"></i>Actions
+                    </button>
+                    <div class="dropdown-menu">
+                        <!-- Edit -->
+                        {% if payment.workflow_status in ['draft', 'rejected'] and not payment.is_deleted %}
+                        <a href="{{ url_for('supplier_views.edit_payment', payment_id=payment.payment_id) }}"
+                           class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
+                            <i class="fas fa-edit mr-2"></i>Edit Payment
+                        </a>
+                        {% endif %}
+
+                        <!-- Approve -->
+                        {% if payment.workflow_status == 'pending_approval' and not payment.is_deleted %}
+                        <a href="{{ url_for('supplier_views.approve_payment', payment_id=payment.payment_id) }}"
+                           class="block px-4 py-2 text-sm text-green-700 hover:bg-green-50 dark:text-green-300 dark:hover:bg-green-900">
+                            <i class="fas fa-check-circle mr-2"></i>Approve Payment
+                        </a>
+                        {% endif %}
+
+                        <!-- Reject -->
+                        {% if payment.workflow_status == 'pending_approval' and not payment.is_deleted %}
+                        <a href="{{ url_for('supplier_views.reject_payment', payment_id=payment.payment_id) }}"
+                           class="block px-4 py-2 text-sm text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900">
+                            <i class="fas fa-times-circle mr-2"></i>Reject Payment
+                        </a>
+                        {% endif %}
+
+                        <!-- Delete -->
+                        {% if payment.workflow_status in ['draft', 'rejected'] and not payment.is_deleted %}
+                        <a href="{{ url_for('supplier_views.delete_payment', payment_id=payment.payment_id) }}"
+                           class="block px-4 py-2 text-sm text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900">
+                            <i class="fas fa-trash mr-2"></i>Delete Payment
+                        </a>
+                        {% endif %}
+
+                        <!-- Restore -->
+                        {% if payment.is_deleted %}
+                        <a href="{{ url_for('supplier_views.restore_payment', payment_id=payment.payment_id) }}"
+                           class="block px-4 py-2 text-sm text-yellow-700 hover:bg-yellow-50 dark:text-yellow-300 dark:hover:bg-yellow-900"
+                           onclick="return confirm('Are you sure you want to restore this payment?')">
+                            <i class="fas fa-undo mr-2"></i>Restore Payment
+                        </a>
+                        {% endif %}
+
+                        <!-- View Invoice -->
+                        {% if payment.invoice_id %}
+                        <a href="{{ url_for('supplier_views.view_supplier_invoice', invoice_id=payment.invoice_id) }}"
+                           class="block px-4 py-2 text-sm text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-900">
+                            <i class="fas fa-file-invoice mr-2"></i>View Invoice
+                        </a>
+                        {% endif %}
+
+                        <!-- Print Receipt -->
+                        {% if payment.workflow_status in ['approved', 'completed'] %}
+                        <a href="{{ url_for('universal_views.universal_document_view', entity_type='supplier_payments', item_id=payment.payment_id, doc_type='receipt') }}"
+                           class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                           target="_blank">
+                            <i class="fas fa-print mr-2"></i>Print Receipt
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Workflow Timeline Card -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+        <h2 class="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">
+            <i class="fas fa-tasks mr-2"></i>Workflow Status & Timeline
+        </h2>
+
+        <!-- Current Status Summary -->
+        <div class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <span class="text-gray-600 dark:text-gray-400 text-sm">Current Status:</span>
+                    <p class="font-semibold text-gray-900 dark:text-gray-100">{{ payment.workflow_status|replace('_', ' ')|title }}</p>
+                </div>
+                {% if payment.requires_approval %}
+                <div>
+                    <span class="text-gray-600 dark:text-gray-400 text-sm">Requires Approval:</span>
+                    <p class="font-semibold text-yellow-600">Yes (Amount ≥ ₹10,000)</p>
+                </div>
+                {% endif %}
+                {% if payment.gl_posted %}
+                <div>
+                    <span class="text-gray-600 dark:text-gray-400 text-sm">GL Posted:</span>
+                    <p class="font-semibold text-green-600"><i class="fas fa-check-circle"></i> Yes</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Timeline -->
+        <div class="relative">
+            <div class="border-l-2 border-gray-200 absolute h-full left-3"></div>
+            <ul class="space-y-12 relative z-10">
+                <!-- Created -->
+                <li class="ml-14">
+                    <span class="flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-blue-500 ring-8 ring-white dark:ring-gray-800">
+                        <i class="fas fa-plus-circle"></i>
+                    </span>
+                    <div class="ml-12 -mt-7">
+                        <h3 class="font-semibold text-gray-900 dark:text-gray-100">Payment Created</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            {{ payment.created_at.strftime('%d/%b/%Y %H:%M') if payment.created_at else 'N/A' }}
+                        </p>
+                        <p class="text-sm text-gray-600 dark:text-gray-300">by {{ payment.created_by or 'System' }}</p>
+                    </div>
+                </li>
+
+                <!-- Submitted for Approval -->
+                {% if payment.submitted_for_approval_at %}
+                <li class="ml-14">
+                    <span class="flex h-7 w-7 items-center justify-center rounded-full bg-orange-100 text-orange-500 ring-8 ring-white dark:ring-gray-800">
+                        <i class="fas fa-paper-plane"></i>
+                    </span>
+                    <div class="ml-12 -mt-7">
+                        <h3 class="font-semibold text-gray-900 dark:text-gray-100">Submitted for Approval</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            {{ payment.submitted_for_approval_at.strftime('%d/%b/%Y %H:%M') }}
+                        </p>
+                        <p class="text-sm text-gray-600 dark:text-gray-300">by {{ payment.submitted_by or payment.created_by }}</p>
+                    </div>
+                </li>
+                {% endif %}
+
+                <!-- Approved -->
+                {% if payment.approved_at %}
+                <li class="ml-14">
+                    <span class="flex h-7 w-7 items-center justify-center rounded-full bg-green-100 text-green-500 ring-8 ring-white dark:ring-gray-800">
+                        <i class="fas fa-check-circle"></i>
+                    </span>
+                    <div class="ml-12 -mt-7">
+                        <h3 class="font-semibold text-gray-900 dark:text-gray-100">Payment Approved</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            {{ payment.approved_at.strftime('%d/%b/%Y %H:%M') }}
+                        </p>
+                        <p class="text-sm text-gray-600 dark:text-gray-300">by {{ payment.approved_by }}</p>
+                        {% if payment.approval_notes %}
+                        <p class="text-sm text-gray-600 dark:text-gray-300 italic mt-1">Notes: {{ payment.approval_notes }}</p>
+                        {% endif %}
+                    </div>
+                </li>
+                {% elif payment.workflow_status == 'pending_approval' %}
+                <!-- Pending Approval -->
+                <li class="ml-14">
+                    <span class="flex h-7 w-7 items-center justify-center rounded-full bg-yellow-100 text-yellow-500 ring-8 ring-white dark:ring-gray-800">
+                        <i class="fas fa-clock"></i>
+                    </span>
+                    <div class="ml-12 -mt-7">
+                        <h3 class="font-semibold text-gray-900 dark:text-gray-100">Awaiting Approval</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Pending approval</p>
+                    </div>
+                </li>
+                {% endif %}
+
+                <!-- Rejected -->
+                {% if payment.rejected_at %}
+                <li class="ml-14">
+                    <span class="flex h-7 w-7 items-center justify-center rounded-full bg-red-100 text-red-500 ring-8 ring-white dark:ring-gray-800">
+                        <i class="fas fa-times-circle"></i>
+                    </span>
+                    <div class="ml-12 -mt-7">
+                        <h3 class="font-semibold text-gray-900 dark:text-gray-100">Payment Rejected</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            {{ payment.rejected_at.strftime('%d/%b/%Y %H:%M') }}
+                        </p>
+                        <p class="text-sm text-gray-600 dark:text-gray-300">by {{ payment.rejected_by }}</p>
+                        {% if payment.rejection_reason %}
+                        <p class="text-sm text-red-600 dark:text-red-400 font-medium mt-1">Reason: {{ payment.rejection_reason }}</p>
+                        {% endif %}
+                    </div>
+                </li>
+                {% endif %}
+
+                <!-- Deleted -->
+                {% if payment.is_deleted %}
+                <li class="ml-14">
+                    <span class="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-500 ring-8 ring-white dark:ring-gray-800">
+                        <i class="fas fa-trash"></i>
+                    </span>
+                    <div class="ml-12 -mt-7">
+                        <h3 class="font-semibold text-gray-900 dark:text-gray-100">Payment Deleted</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            {{ payment.deleted_at.strftime('%d/%b/%Y %H:%M') if payment.deleted_at else 'N/A' }}
+                        </p>
+                        <p class="text-sm text-gray-600 dark:text-gray-300">by {{ payment.deleted_by }}</p>
+                    </div>
+                </li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+
+    <!-- Payment Methods Breakdown -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+        <h2 class="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">
+            <i class="fas fa-wallet mr-2"></i>Payment Method Breakdown
+        </h2>
+
+        <div class="space-y-4">
+            {% if payment.cash_amount and payment.cash_amount > 0 %}
+            <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                <div class="flex justify-between items-center">
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                        <i class="fas fa-money-bill-wave mr-2"></i>Cash
+                    </span>
+                    <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">₹{{ "%.2f"|format(payment.cash_amount) }}</div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if payment.cheque_amount and payment.cheque_amount > 0 %}
+            <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                        <i class="fas fa-money-check mr-2"></i>Cheque
+                    </span>
+                    <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">₹{{ "%.2f"|format(payment.cheque_amount) }}</div>
+                </div>
+                <div class="grid grid-cols-3 gap-4 text-sm mt-3">
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400">Cheque No:</span>
+                        <span class="font-medium text-gray-900 dark:text-gray-100 ml-1">{{ payment.cheque_number }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400">Bank:</span>
+                        <span class="font-medium text-gray-900 dark:text-gray-100 ml-1">{{ payment.cheque_bank }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400">Date:</span>
+                        <span class="font-medium text-gray-900 dark:text-gray-100 ml-1">
+                            {{ payment.cheque_date.strftime('%d/%b/%Y') if payment.cheque_date else 'N/A' }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if payment.bank_transfer_amount and payment.bank_transfer_amount > 0 %}
+            <div class="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                        <i class="fas fa-university mr-2"></i>Bank Transfer
+                    </span>
+                    <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">₹{{ "%.2f"|format(payment.bank_transfer_amount) }}</div>
+                </div>
+                <div class="grid grid-cols-2 gap-4 text-sm mt-3">
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400">Bank:</span>
+                        <span class="font-medium text-gray-900 dark:text-gray-100 ml-1">{{ payment.bank_name or 'N/A' }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400">Reference:</span>
+                        <span class="font-medium text-gray-900 dark:text-gray-100 ml-1">{{ payment.bank_reference_number or 'N/A' }}</span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if payment.upi_amount and payment.upi_amount > 0 %}
+            <div class="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
+                        <i class="fas fa-mobile-alt mr-2"></i>UPI
+                    </span>
+                    <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">₹{{ "%.2f"|format(payment.upi_amount) }}</div>
+                </div>
+                <div class="grid grid-cols-2 gap-4 text-sm mt-3">
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400">UPI ID:</span>
+                        <span class="font-medium text-gray-900 dark:text-gray-100 ml-1">{{ payment.upi_id or 'N/A' }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400">Txn ID:</span>
+                        <span class="font-medium text-gray-900 dark:text-gray-100 ml-1">{{ payment.upi_transaction_id or 'N/A' }}</span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Gateway Payment (Preparation Hook) -->
+            {% if payment.payment_category == 'gateway' %}
+            <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-600 text-white">
+                        <i class="fas fa-credit-card mr-2"></i>Gateway Payment
+                    </span>
+                    <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">₹{{ "%.2f"|format(payment.amount) }}</div>
+                </div>
+                <div class="grid grid-cols-2 gap-4 text-sm mt-3">
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400">Gateway:</span>
+                        <span class="font-medium text-gray-900 dark:text-gray-100 ml-1">{{ payment.payment_source|title }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400">Payment ID:</span>
+                        <span class="font-medium text-gray-900 dark:text-gray-100 ml-1 font-mono text-xs">{{ payment.gateway_payment_id or 'N/A' }}</span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- GL Transaction Details (if posted) -->
+    {% if payment.gl_posted and payment.gl_entry_id %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+        <h2 class="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">
+            <i class="fas fa-book mr-2"></i>GL Transaction Details
+        </h2>
+
+        <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg mb-4">
+            <div class="flex items-center text-green-700 dark:text-green-300">
+                <i class="fas fa-check-circle text-xl mr-3"></i>
+                <div>
+                    <p class="font-semibold">GL Entries Posted Successfully</p>
+                    <p class="text-sm">Transaction ID: {{ payment.gl_entry_id }}</p>
+                    <p class="text-sm">Posted on: {{ payment.posting_date.strftime('%d/%b/%Y %H:%M') if payment.posting_date else 'N/A' }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-sm text-gray-600 dark:text-gray-400">
+            <p class="mb-2"><strong>Accounting Entries:</strong></p>
+            <ul class="list-disc list-inside space-y-1">
+                <li>DR: Accounts Payable - ₹{{ "%.2f"|format(payment.amount) }}</li>
+                <li>CR: {{ 'Cash' if payment.payment_method == 'cash' else 'Bank' }} - ₹{{ "%.2f"|format(payment.amount) }}</li>
+            </ul>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Additional Details -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+        <h2 class="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">
+            <i class="fas fa-info-circle mr-2"></i>Additional Information
+        </h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            {% if payment.notes %}
+            <div class="md:col-span-2">
+                <label class="block text-gray-600 dark:text-gray-400 mb-1">Notes:</label>
+                <p class="text-gray-900 dark:text-gray-100">{{ payment.notes }}</p>
+            </div>
+            {% endif %}
+
+            {% if payment.tds_applicable %}
+            <div>
+                <label class="block text-gray-600 dark:text-gray-400 mb-1">TDS Deducted:</label>
+                <p class="text-gray-900 dark:text-gray-100">₹{{ "%.2f"|format(payment.tds_amount or 0) }} @ {{ payment.tds_rate }}%</p>
+            </div>
+            {% endif %}
+
+            <div>
+                <label class="block text-gray-600 dark:text-gray-400 mb-1">Created:</label>
+                <p class="text-gray-900 dark:text-gray-100">
+                    {{ payment.created_at.strftime('%d/%b/%Y %H:%M') if payment.created_at else 'N/A' }} by {{ payment.created_by }}
+                </p>
+            </div>
+
+            <div>
+                <label class="block text-gray-600 dark:text-gray-400 mb-1">Last Updated:</label>
+                <p class="text-gray-900 dark:text-gray-100">
+                    {{ payment.updated_at.strftime('%d/%b/%Y %H:%M') if payment.updated_at else 'N/A' }}
+                </p>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Dropdown JavaScript -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dropdowns = document.querySelectorAll('.dropdown');
+
+    dropdowns.forEach(dropdown => {
+        const toggle = dropdown.querySelector('.dropdown-toggle');
+        const menu = dropdown.querySelector('.dropdown-menu');
+
+        toggle.addEventListener('click', function(e) {
+            e.stopPropagation();
+            menu.classList.toggle('show');
+        });
+    });
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', function() {
+        document.querySelectorAll('.dropdown-menu').forEach(menu => {
+            menu.classList.remove('show');
+        });
+    });
+});
+</script>
+
+<style>
+.dropdown-menu {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    margin-top: 0.5rem;
+    min-width: 12rem;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.375rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    z-index: 50;
+}
+
+.dark .dropdown-menu {
+    background: #1f2937;
+    border-color: #374151;
+}
+
+.dropdown-menu.show {
+    display: block;
+}
+
+.btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    background: white;
+    color: #374151;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-secondary:hover {
+    background: #f9fafb;
+}
+
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 0.375rem;
+    background: #3b82f6;
+    color: white;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-primary:hover {
+    background: #2563eb;
+}
+
+.dark .btn-secondary {
+    background: #374151;
+    color: #d1d5db;
+    border-color: #4b5563;
+}
+
+.dark .btn-secondary:hover {
+    background: #4b5563;
+}
+</style>
+
+{% endblock %}

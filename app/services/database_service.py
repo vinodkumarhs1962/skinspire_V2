@@ -178,7 +178,7 @@ class DatabaseService:
                         cls._set_read_only_mode(session)
                         if _debug_mode:
                             logger.debug(f"Session {session_id} set to read-only mode")
-                    
+
                     # Yield the session
                     yield session
                     # Transaction will be automatically committed or rolled back
@@ -189,10 +189,10 @@ class DatabaseService:
                     cls._set_read_only_mode(session)
                     if _debug_mode:
                         logger.debug(f"Session {session_id} set to read-only mode")
-                
+
                 # Yield the session
                 yield session
-                
+
                 # Commit if not read-only
                 if not read_only:
                     if _debug_mode:
@@ -260,7 +260,7 @@ class DatabaseService:
                         cls._set_read_only_mode(session)
                         if _debug_mode:
                             logger.debug(f"Session {session_id} set to read-only mode")
-                    
+
                     # Yield the session
                     yield session
                     # Transaction will be automatically committed or rolled back
@@ -271,10 +271,10 @@ class DatabaseService:
                     cls._set_read_only_mode(session)
                     if _debug_mode:
                         logger.debug(f"Session {session_id} set to read-only mode")
-                
+
                 # Yield the session
                 yield session
-                
+
                 # Commit if not read-only
                 if not read_only:
                     if _debug_mode:

@@ -17,6 +17,7 @@ SAFER APPROACH:
 from typing import Dict, Any, Optional, List, Union
 import uuid
 from datetime import datetime, date
+from types import SimpleNamespace
 from flask import request, url_for, current_app
 from flask_login import current_user
 from flask_wtf import FlaskForm
@@ -850,7 +851,9 @@ class EnhancedUniversalDataAssembler:
                 'summary_cards': list(getattr(config, 'summary_cards', [])),  # ✅ Convert to list
                 'permissions': dict(getattr(config, 'permissions', {})),  # ✅ Convert to dict
                 'enable_saved_filter_suggestions': getattr(config, 'enable_saved_filter_suggestions', True),
-                'enable_auto_submit': getattr(config, 'enable_auto_submit', True)  # ✅ ADD THIS LINE
+                'enable_auto_submit': getattr(config, 'enable_auto_submit', True),
+                'show_filter_card': getattr(config, 'show_filter_card', True),  # ✅ Filter card visibility
+                'show_info_card': getattr(config, 'show_info_card', False)  # ✅ Info card visibility
             }
         except Exception as e:
             logger.error(f"Error converting config to template-safe format: {str(e)}")
@@ -870,7 +873,9 @@ class EnhancedUniversalDataAssembler:
                 'summary_cards': [],
                 'permissions': {},
                 'enable_saved_filter_suggestions': True,
-                'enable_auto_submit': True
+                'enable_auto_submit': True,
+                'show_filter_card': True,
+                'show_info_card': False
             }
 
     def _get_field_type_safe(self, field) -> str:
@@ -977,7 +982,7 @@ class EnhancedUniversalDataAssembler:
                 
                 # Header configuration
                 'header_config': self._enhance_header_config(config) if hasattr(config.view_layout, 'header_config') else None,
-                'header_data': item,
+                'header_data': self._ensure_header_fields(item, config),
                 'header_actions': self._assemble_header_action_buttons(config, item, item_id),
 
                 # Context information
@@ -1013,9 +1018,16 @@ class EnhancedUniversalDataAssembler:
                 if action.id in processed_ids:
                     logger.debug(f"[DEBUG] Skipping duplicate action: {action.id}")
                     continue
-                    
-                if not getattr(action, 'show_in_detail', False):
-                    logger.debug(f"[DEBUG] Action {action.id} not shown in detail view")
+
+                # Check if action should be shown in detail view toolbar
+                # Use new explicit flag if available, fallback to old flag for backward compatibility
+                show_in_detail_toolbar = getattr(action, 'show_in_detail_toolbar', None)
+                if show_in_detail_toolbar is None:
+                    # Fallback to old logic for backward compatibility
+                    show_in_detail_toolbar = getattr(action, 'show_in_detail', False)
+
+                if not show_in_detail_toolbar:
+                    logger.debug(f"[DEBUG] Action {action.id} not shown in detail toolbar")
                     continue
                 
                 if not self._evaluate_action_conditions(action, item):
@@ -1079,11 +1091,60 @@ class EnhancedUniversalDataAssembler:
     def _evaluate_action_conditions(self, action: ActionDefinition, item: Any) -> bool:
         """
         Evaluate action conditions based on configuration
+        Supports both 'conditions' dict and 'conditional_display' expression
         """
         try:
+            # First check conditional_display expression (if present)
+            if hasattr(action, 'conditional_display') and action.conditional_display:
+                # Create a safe namespace that returns None for missing attributes
+                class SafeNamespace(SimpleNamespace):
+                    def __getattr__(self, name):
+                        # Return None for missing attributes instead of raising AttributeError
+                        return self.__dict__.get(name, None)
+
+                # Use SafeNamespace instead of SimpleNamespace for robust attribute access
+                eval_context = {
+                    'item': SafeNamespace(**item) if isinstance(item, dict) else item
+                }
+
+                # Enhanced logging for debugging parent_transaction_id issues
+                if action.id == 'back_to_consolidated':
+                    logger.info(f"🔍 [PARENT_BUTTON_DEBUG] Evaluating action {action.id}")
+                    logger.info(f"🔍 [PARENT_BUTTON_DEBUG] Conditional: {action.conditional_display}")
+                    logger.info(f"🔍 [PARENT_BUTTON_DEBUG] Item type: {type(item)}")
+                    if isinstance(item, dict):
+                        logger.info(f"🔍 [PARENT_BUTTON_DEBUG] parent_transaction_id in item: {'parent_transaction_id' in item}")
+                        logger.info(f"🔍 [PARENT_BUTTON_DEBUG] parent_transaction_id value: {item.get('parent_transaction_id')}")
+                        logger.info(f"🔍 [PARENT_BUTTON_DEBUG] parent_transaction_id type: {type(item.get('parent_transaction_id'))}")
+
+                try:
+                    result = eval(action.conditional_display, {"__builtins__": {}}, eval_context)
+
+                    if action.id == 'back_to_consolidated':
+                        logger.info(f"🔍 [PARENT_BUTTON_DEBUG] Evaluation result: {result}")
+
+                    if not result:
+                        logger.debug(f"[ACTION_DEBUG] Action {action.id} hidden by conditional_display: {action.conditional_display}")
+                        return False
+                except Exception as eval_error:
+                    logger.warning(f"[ACTION_DEBUG] Error evaluating conditional_display for action {action.id}: {eval_error}")
+                    if action.id == 'back_to_consolidated':
+                        logger.error(f"🔍 [PARENT_BUTTON_DEBUG] Evaluation error: {eval_error}", exc_info=True)
+                    # Default to showing on evaluation error
+                    pass
+
+            # Then check conditions dict (backward compatibility)
             if not hasattr(action, 'conditions') or not action.conditions:
+                logger.info(f"[ACTION_DEBUG] Action {action.id} has no conditions, showing by default")
                 return True
-            
+
+            # DEBUG: Log item fields for troubleshooting
+            if action.id in ['delete', 'restore', 'edit', 'approve']:
+                if isinstance(item, dict):
+                    logger.info(f"[ACTION_DEBUG] Action {action.id}: checking conditions against item fields: workflow_status={item.get('workflow_status')}, is_deleted={item.get('is_deleted')}")
+                else:
+                    logger.info(f"[ACTION_DEBUG] Action {action.id}: checking conditions against item fields: workflow_status={getattr(item, 'workflow_status', None)}, is_deleted={getattr(item, 'is_deleted', None)}")
+
             for field, allowed_values in action.conditions.items():
                 # ✅ FIXED: Check if field exists in item, evaluate if present
                 # Get value from item (works with dict or object)
@@ -1091,37 +1152,104 @@ class EnhancedUniversalDataAssembler:
                     actual_value = item.get(field)
                 else:
                     actual_value = getattr(item, field, None)
-                
+
                 # ✅ FIXED: If virtual field doesn't exist, skip evaluation (default to show)
                 # This allows gradual rollout of virtual fields without breaking existing functionality
                 if actual_value is None and field in ['can_be_approved', 'can_be_deleted', 'can_be_unapproved', 'has_invoice']:
                     logger.debug(f"Virtual field {field} not present in item, skipping condition check")
                     continue
-                
+
                 # ✅ FIXED: Handle None case for is_deleted field explicitly
                 # When is_deleted is None (field doesn't exist), treat as False (not deleted)
                 if field == 'is_deleted' and actual_value is None:
                     actual_value = False
                     logger.debug(f"Field {field} is None, treating as False (not deleted)")
-                
+
                 # Ensure allowed_values is a list
                 if not isinstance(allowed_values, list):
                     allowed_values = [allowed_values]
-                
+
                 # Check if value matches any allowed value
                 if actual_value not in allowed_values:
-                    logger.debug(f"Action {action.id} condition failed: {field}={actual_value} not in {allowed_values}")
+                    logger.info(f"[ACTION_DEBUG] Action {action.id} condition FAILED: {field}={actual_value} not in {allowed_values}")
                     return False
-            
+
+            logger.info(f"[ACTION_DEBUG] Action {action.id} all conditions PASSED")
             return True
-            
+
         except Exception as e:
-            logger.error(f"Error evaluating conditions: {str(e)}")
+            logger.error(f"Error evaluating conditions for action {action.id}: {str(e)}")
             return True  # Default to showing action on error
 
     def _enhance_header_config(self, config: EntityConfiguration) -> Dict:
         """Return header config without modification - views have all needed fields"""
         return config.view_layout.header_config if config.view_layout and config.view_layout.header_config else {}
+
+    def _ensure_header_fields(self, item: Any, config: EntityConfiguration) -> Dict:
+        """
+        Ensure all fields referenced in header_config exist with safe defaults
+        Prevents "unsupported format string passed to Undefined.__format__" errors
+        """
+        try:
+            # Convert item to dict if it isn't already
+            if isinstance(item, dict):
+                item_dict = item.copy()
+            else:
+                from app.services.database_service import get_entity_dict
+                item_dict = get_entity_dict(item)
+
+            # Get header config
+            if not (config.view_layout and config.view_layout.header_config):
+                return item_dict
+
+            header_config = config.view_layout.header_config
+
+            # Ensure primary_field exists
+            if 'primary_field' in header_config:
+                field_name = header_config['primary_field']
+                if field_name not in item_dict or item_dict[field_name] is None:
+                    item_dict[field_name] = 'N/A'
+
+            # Ensure title_field exists
+            if 'title_field' in header_config:
+                field_name = header_config['title_field']
+                if field_name not in item_dict or not item_dict[field_name]:
+                    item_dict[field_name] = 'Unknown'
+
+            # Ensure status_field exists
+            if 'status_field' in header_config:
+                field_name = header_config['status_field']
+                if field_name not in item_dict or not item_dict[field_name]:
+                    item_dict[field_name] = 'unknown'
+
+            # Ensure all secondary_fields exist with appropriate defaults
+            if 'secondary_fields' in header_config:
+                for field_config in header_config['secondary_fields']:
+                    field_name = field_config.get('field')
+                    field_type = field_config.get('type', 'text')
+
+                    if not field_name:
+                        continue
+
+                    # If field doesn't exist or is None, provide a safe default
+                    if field_name not in item_dict or item_dict[field_name] is None:
+                        if field_type in ['currency', 'number']:
+                            from decimal import Decimal
+                            item_dict[field_name] = Decimal('0.00')
+                        elif field_type == 'date':
+                            item_dict[field_name] = None  # None is OK for dates
+                        elif field_type == 'boolean':
+                            item_dict[field_name] = False
+                        else:  # text, etc.
+                            item_dict[field_name] = ''
+
+            logger.info(f"[HEADER] Ensured all header fields exist for {config.entity_type}")
+            return item_dict
+
+        except Exception as e:
+            logger.error(f"Error ensuring header fields: {str(e)}", exc_info=True)
+            # Return original item dict as fallback
+            return item if isinstance(item, dict) else {}
 
 
     def _clean_view_data(self, data: Any) -> Any:
@@ -1228,6 +1356,7 @@ class EnhancedUniversalDataAssembler:
                             'columns': section_config.columns if hasattr(section_config, 'columns') else 2,
                             'order': section_config.order if hasattr(section_config, 'order') else 0,
                             'collapsible': getattr(section_config, 'collapsible', False),
+                            'conditional_display': getattr(section_config, 'conditional_display', None),  # ✅ FIX: Extract conditional_display
                             'fields': []
                         }
         
@@ -1272,6 +1401,7 @@ class EnhancedUniversalDataAssembler:
                     'columns': 2,
                     'order': 0,
                     'collapsible': False,
+                    'conditional_display': None,  # ✅ FIX: Add conditional_display for dynamic sections
                     'fields': []
                 }
             
@@ -1309,6 +1439,7 @@ class EnhancedUniversalDataAssembler:
                         'columns': 2,
                         'order': 0,
                         'collapsible': False,
+                        'conditional_display': None,  # ✅ FIX: Add conditional_display for dynamic sections
                         'fields': []
                     }
                 
@@ -1319,17 +1450,28 @@ class EnhancedUniversalDataAssembler:
         # Convert to list and sort
         result = []
         for tab_key, tab_data in tabs.items():
-            # Convert sections dict to list and sort
-            sections_list = sorted(tab_data['sections'].values(), key=lambda x: x['order'])
-            tab_data['sections'] = sections_list
+            # Convert sections dict to list
+            sections_list = list(tab_data['sections'].values())
+
+            # ✅ FIX: Filter sections based on conditional_display BEFORE sorting
+            filtered_sections = []
+            for section in sections_list:
+                should_show = self._should_display_section(section, item)
+                if should_show:
+                    filtered_sections.append(section)
+                else:
+                    logger.debug(f"[VIEW] Section {section['key']} hidden by conditional_display")
+
+            # Sort filtered sections
+            tab_data['sections'] = sorted(filtered_sections, key=lambda x: x['order'])
             result.append(tab_data)
-        
+
         # Sort tabs by order
         result.sort(key=lambda x: x['order'])
-        
+
         # Log summary only (not details)
         logger.info(f"[VIEW] Assembled {len(result)} tabs for {config.entity_type}")
-        
+
         return result
 
 
@@ -1460,6 +1602,32 @@ class EnhancedUniversalDataAssembler:
             logger.error(f"Error formatting field {getattr(field, 'name', 'unknown')}: {str(e)}")
             return self._get_error_field_format(field)
 
+    def _should_display_section(self, section: Dict, item: Any, context: Optional[Dict] = None) -> bool:
+        """
+        Determine if section should be displayed based on conditional_display.
+        Entity-agnostic - evaluates Python expressions safely.
+        """
+        conditional = section.get('conditional_display')
+        if not conditional:
+            return True  # No condition = always show
+
+        try:
+            # Build evaluation context with item attributes
+            eval_context = {'item': item}
+
+            # Add additional context if provided
+            if context:
+                eval_context.update(context)
+
+            # Evaluate the condition expression
+            result = self._evaluate_condition_expression(conditional, eval_context)
+            return bool(result)
+
+        except Exception as e:
+            logger.warning(f"Error evaluating section condition '{conditional}': {str(e)}")
+            # Default to showing section if condition fails
+            return True
+
     def _should_display_field(self, field: FieldDefinition, item: Any, context: Optional[Dict] = None) -> bool:
         """
         Determine if field should be displayed based on configuration.
@@ -1469,18 +1637,18 @@ class EnhancedUniversalDataAssembler:
         # Check basic display flag
         if not getattr(field, 'show_in_detail', True):
             return False
-        
+
         # Check conditional display if configured
         conditional = getattr(field, 'conditional_display', None)
         if not conditional:
             return True
-        
+
         try:
             # Build evaluation context
             eval_context = {
                 'item': item,
             }
-            
+
             # Add additional context if provided
             if context:
                 eval_context.update({
@@ -1488,15 +1656,64 @@ class EnhancedUniversalDataAssembler:
                     'branch_id': context.get('branch_id'),
                     'hospital_id': context.get('hospital_id'),
                 })
-            
-            # Simple evaluation - you might want to use a safer evaluator
-            result = self._evaluate_condition(conditional, eval_context)
+
+            # ✅ FIX: Use advanced expression evaluator for complex conditions
+            # Supports: "item.field == 'value' or (item.field2 and item.field3 > 0)"
+            result = self._evaluate_condition_expression(conditional, eval_context)
             return bool(result)
-            
+
         except Exception as e:
             logger.warning(f"Error evaluating condition for {getattr(field, 'name', 'unknown')}: {str(e)}")
             # Default to showing field if condition fails
             return True
+
+    def _evaluate_condition_expression(self, expression: str, context: Dict) -> bool:
+        """
+        Safely evaluate a Python expression for conditional display.
+        Entity-agnostic - supports expressions like:
+        - "item.field_name > 0"
+        - "item.status == 'active'"
+        - "item.method == 'cash' or (item.method == 'mixed' and item.cash_amount > 0)"
+        """
+        try:
+            item = context.get('item')
+            if not item:
+                return True
+
+            # Build a safe namespace with only item attributes
+            safe_namespace = {}
+
+            # Extract all attributes from item (dict or object)
+            if isinstance(item, dict):
+                for key, value in item.items():
+                    safe_namespace[key] = value
+            else:
+                # For objects, get all non-private attributes
+                for attr in dir(item):
+                    if not attr.startswith('_'):
+                        try:
+                            safe_namespace[attr] = getattr(item, attr, None)
+                        except:
+                            pass
+
+            # Replace "item." with direct attribute access in expression
+            safe_expression = expression.replace('item.', '')
+
+            # Use eval with restricted namespace (only builtins needed for comparison)
+            safe_builtins = {
+                '__builtins__': {
+                    'True': True,
+                    'False': False,
+                    'None': None,
+                }
+            }
+
+            result = eval(safe_expression, safe_builtins, safe_namespace)
+            return bool(result)
+
+        except Exception as e:
+            logger.debug(f"Expression evaluation failed for '{expression}': {str(e)}")
+            return True  # Default to showing on error
 
     def _evaluate_condition(self, condition: str, context: Dict) -> bool:
         """
@@ -1509,19 +1726,19 @@ class EnhancedUniversalDataAssembler:
                 # Extract field name after 'item.'
                 field_name = condition.replace('item.', '')
                 item = context.get('item', {})
-                
+
                 # Check if item is dict or object
                 if isinstance(item, dict):
                     value = item.get(field_name)
                 else:
                     value = getattr(item, field_name, None)
-                
+
                 # Return True if field has a value
                 return bool(value)
-            
+
             # For other conditions, just check if the field exists
             return bool(context.get(condition))
-            
+
         except Exception as e:
             logger.debug(f"Condition evaluation for '{condition}' failed: {str(e)}")
             return True  # Default to showing field if evaluation fails
@@ -1883,7 +2100,8 @@ class EnhancedUniversalDataAssembler:
         for attr_name in dir(renderer):
             if not attr_name.startswith('_') and attr_name not in ['template', 'context_function', 'css_classes', 'javascript']:
                 attr_value = getattr(renderer, attr_name, None)
-                if attr_value is not None:
+                # ✅ FIX: Skip callable attributes (methods) to avoid template iteration errors
+                if attr_value is not None and not callable(attr_value):
                     config[attr_name] = attr_value
         
         return config

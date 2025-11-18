@@ -17,6 +17,7 @@ Integrated with Your Complete Architecture:
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, current_app, g, make_response, session
 from flask_login import login_required, current_user
 from datetime import datetime
+from app import csrf  # Import csrf for exempting routes
 import uuid
 from typing import Dict, Any, Optional, List
 import traceback  # Add this for error handling
@@ -128,8 +129,9 @@ def has_entity_permission(user, entity_type: str, action: str) -> bool:
         # Fallback mapping for existing entities
         permission_mapping = {
             'supplier_payments': 'payment',
-            'suppliers': 'supplier', 
+            'suppliers': 'supplier',
             'patients': 'patient',
+            'patient_invoices': 'billing_invoice',  # Added for patient invoices
             'medicines': 'medicine',
             'invoices': 'invoice'
         }
@@ -1016,6 +1018,12 @@ def universal_detail_view(entity_type: str, item_id: str):
         if request.path.startswith('/universal/'):
             template_name = 'engine/universal_view.html'
 
+        # Use custom detail template if configured
+        if config and hasattr(config, 'custom_templates') and config.custom_templates:
+            custom_detail = config.custom_templates.get('detail')
+            if custom_detail:
+                template_name = custom_detail
+
         if config.document_enabled:
                        
             # Store data for documents
@@ -1111,6 +1119,241 @@ def universal_detail_view(entity_type: str, item_id: str):
         
         flash(f"Error loading details: {str(e)}", 'error')
         return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+
+# =============================================================================
+# CONSOLIDATED INVOICE DETAIL VIEW - Shows child invoices in list format
+# =============================================================================
+
+@universal_bp.route('/consolidated_invoice_detail/<parent_invoice_id>')
+@login_required
+@require_web_branch_permission('billing', 'view')
+def consolidated_invoice_detail_view(parent_invoice_id: str):
+    """
+    Display child invoices for a consolidated invoice in universal list format
+    Shows summary cards and child invoices table (no filters)
+    Uses data assembler for proper universal engine format
+    """
+    try:
+        from app.services.consolidated_patient_invoice_service import get_consolidated_invoice_service
+        from app.utils.menu_utils import get_menu_items
+        from app.config.entity_configurations import get_entity_config
+        from app.engine.data_assembler import EnhancedUniversalDataAssembler
+
+        branch_uuid, branch_name = get_branch_uuid_from_context_or_request()
+        consolidated_service = get_consolidated_invoice_service()
+
+        # Convert and validate UUID
+        import uuid
+        try:
+            invoice_uuid = uuid.UUID(parent_invoice_id) if isinstance(parent_invoice_id, str) else parent_invoice_id
+        except ValueError:
+            logger.error(f"Invalid invoice ID format: {parent_invoice_id}")
+            flash('Invalid invoice ID', 'error')
+            return redirect(url_for('universal_views.universal_list_view', entity_type='consolidated_patient_invoices'))
+
+        logger.info(f"Looking for consolidated invoice: {invoice_uuid}, hospital: {current_user.hospital_id}")
+
+        # Get parent invoice
+        parent_invoice = consolidated_service.get_by_id(
+            str(invoice_uuid),
+            hospital_id=current_user.hospital_id,
+            branch_id=branch_uuid,
+            user=current_user
+        )
+
+        if not parent_invoice:
+            logger.error(f"Consolidated invoice not found: {invoice_uuid}")
+            flash('Consolidated invoice not found', 'error')
+            return redirect(url_for('universal_views.universal_list_view', entity_type='consolidated_patient_invoices'))
+
+        # Get child invoices (using new Universal Engine compatible signature)
+        child_result = consolidated_service.get_child_invoices(
+            item_id=str(invoice_uuid),
+            hospital_id=str(current_user.hospital_id)
+        )
+        child_invoices = child_result.get('children', []) if child_result.get('success') else []
+
+        logger.info(f"🔍 Child invoices query result: success={child_result.get('success')}, count={len(child_invoices)}")
+
+        # Create all_invoices list (parent + children)
+        # Include patient_name and other fields for consistent display
+        all_invoices = [{
+            'invoice_id': parent_invoice.get('invoice_id'),
+            'invoice_number': parent_invoice.get('invoice_number', 'N/A'),
+            'invoice_date': parent_invoice.get('invoice_date'),
+            'patient_name': parent_invoice.get('patient_name', 'N/A'),  # ADDED: Patient name
+            'patient_mrn': parent_invoice.get('patient_mrn', ''),  # ADDED: Patient MRN
+            'grand_total': parent_invoice.get('parent_grand_total', 0) or 0,
+            'paid_amount': parent_invoice.get('parent_paid_amount', 0) or 0,
+            'balance_due': parent_invoice.get('parent_balance_due', 0) or 0,
+            'payment_status': parent_invoice.get('payment_status', 'unpaid'),
+            'is_parent': True,
+            'invoice_type': 'Parent Invoice',
+            'split_sequence': 0,
+            'is_gst_invoice': parent_invoice.get('is_gst_invoice', False),  # ADDED: GST flag
+            'branch_name': parent_invoice.get('branch_name', '')  # ADDED: Branch name
+        }] + child_invoices
+
+        # Calculate summary for data assembler
+        total_count = parent_invoice.get('total_invoice_count', 0) or 0
+        total_amount = float(parent_invoice.get('consolidated_grand_total', 0) or 0)
+        total_balance = float(parent_invoice.get('consolidated_balance_due', 0) or 0)
+        total_gst = (float(parent_invoice.get('parent_cgst', 0) or 0) +
+                     float(parent_invoice.get('parent_sgst', 0) or 0) +
+                     float(parent_invoice.get('parent_igst', 0) or 0))
+
+        # Get consolidated_invoice_detail configuration
+        # This config combines:
+        # - patient_invoices fields for table (individual invoice columns)
+        # - consolidated summary cards for header
+        config = get_entity_config('consolidated_invoice_detail')
+
+        # Create raw_data structure expected by data assembler
+        raw_data = {
+            'items': all_invoices,
+            'total': total_count,
+            'success': True,
+            'summary': {
+                'total_count': total_count,
+                'consolidated_grand_total_sum': int(round(total_amount)),
+                'total_gst_sum': int(round(total_gst)),
+                'consolidated_balance_due_sum': int(round(total_balance))
+            },
+            'pagination': {
+                'page': 1,
+                'per_page': total_count,
+                'total_count': total_count,
+                'total_pages': 1,
+                'has_prev': False,
+                'has_next': False
+            }
+        }
+
+        # Use data assembler - clean and simple!
+        assembler = EnhancedUniversalDataAssembler()
+        assembled_data = assembler.assemble_complex_list_data(
+            config=config,
+            raw_data=raw_data,
+            form_instance=None
+        )
+
+        # Customize for detail view
+        assembled_data['parent_invoice'] = parent_invoice
+        assembled_data['parent_invoice_id'] = parent_invoice_id  # Make parent_invoice_id available for button URLs
+        assembled_data['enable_filters'] = False
+
+        # Override page title and description for detail view
+        invoice_number = parent_invoice.get('invoice_number', 'N/A')
+        patient_name = parent_invoice.get('patient_name', 'N/A')
+        assembled_data['entity_config']['page_title'] = f"Invoice Breakdown: {invoice_number}"
+        assembled_data['entity_config']['description'] = f"Patient: {patient_name} - Showing all invoices in this consolidated group"
+
+        # Add entity_info (generic structure for any related entity - patient, supplier, etc.)
+        assembled_data['entity_info'] = {
+            'type': 'patient',  # entity type
+            'icon': 'fas fa-user-circle',
+            'name': parent_invoice.get('patient_name', 'N/A'),
+            'identifier': {
+                'label': 'MRN',
+                'value': parent_invoice.get('patient_mrn', 'N/A')
+            },
+            'contact': {
+                'phone': parent_invoice.get('patient_phone', ''),
+                'email': parent_invoice.get('patient_email', '')
+            },
+            'address': parent_invoice.get('patient_address', '')
+        }
+
+        # Add info_card (generic structure for other templates that might use it)
+        assembled_data['info_card'] = {
+            'icon': 'fas fa-user-circle',
+            'title': parent_invoice.get('patient_name', 'N/A'),
+            'fields': [
+                {
+                    'label': 'MRN',
+                    'value': parent_invoice.get('patient_mrn', 'N/A'),
+                    'icon': 'fas fa-id-card',
+                    'icon_color': 'text-blue-600 dark:text-blue-400',
+                    'multiline': False,
+                    'full_width': False
+                },
+                {
+                    'label': 'Phone',
+                    'value': parent_invoice.get('patient_phone', ''),
+                    'icon': 'fas fa-phone',
+                    'icon_color': 'text-green-600 dark:text-green-400',
+                    'multiline': False,
+                    'full_width': False
+                },
+                {
+                    'label': 'Email',
+                    'value': parent_invoice.get('patient_email', ''),
+                    'icon': 'fas fa-envelope',
+                    'icon_color': 'text-purple-600 dark:text-purple-400',
+                    'multiline': False,
+                    'full_width': False
+                },
+                {
+                    'label': 'Blood Group',
+                    'value': parent_invoice.get('patient_blood_group', ''),
+                    'icon': 'fas fa-tint',
+                    'icon_color': 'text-red-600 dark:text-red-400',
+                    'multiline': False,
+                    'full_width': False
+                },
+                {
+                    'label': 'Address',
+                    'value': parent_invoice.get('patient_address', ''),
+                    'icon': 'fas fa-map-marker-alt',
+                    'icon_color': 'text-orange-600 dark:text-orange-400',
+                    'multiline': True,
+                    'full_width': True
+                }
+            ]
+        }
+
+        # Get hospital and branch names for header
+        hospital_name, branch_name_display = get_hospital_and_branch_names_for_header(
+            current_user.hospital_id,
+            current_user.user_id  # Fixed: Use user_id (phone number), not branch_uuid
+        )
+        assembled_data['hospital_name'] = hospital_name
+        assembled_data['branch_name'] = branch_name_display
+
+        menu_items = get_menu_items(current_user)
+
+        logger.info(f"Assembled data for consolidated detail view:")
+        logger.info(f"  - Parent invoice: {parent_invoice.get('invoice_number')}")
+        logger.info(f"  - Total invoices: {total_count}")
+        logger.info(f"  - Summary cards: {len(assembled_data.get('summary_cards', []))}")
+
+        return render_template(
+            'engine/universal_list.html',  # Use standard universal list template
+            menu_items=menu_items,
+            assembled_data=assembled_data,
+            **assembled_data
+        )
+
+    except Exception as e:
+        logger.error(f"Error in consolidated_invoice_detail_view: {str(e)}", exc_info=True)
+        flash(f"Error loading consolidated invoice details: {str(e)}", 'error')
+        return redirect(url_for('universal_views.universal_list_view', entity_type='consolidated_patient_invoices'))
+
+        logger.info(f"  - Total invoices: {total_count}")
+        logger.info(f"  - Summary cards: {len(assembled_data.get('summary_cards', []))}")
+
+        return render_template(
+            'engine/universal_list.html',  # Use the standard universal list template
+            menu_items=menu_items,
+            assembled_data=assembled_data,
+            **assembled_data
+        )
+
+    except Exception as e:
+        logger.error(f"Error in consolidated_invoice_detail_view: {str(e)}", exc_info=True)
+        flash(f"Error loading consolidated invoice details: {str(e)}", 'error')
+        return redirect(url_for('universal_views.universal_list_view', entity_type='consolidated_patient_invoices'))
+
 
 # =============================================================================
 # UNIVERSAL CREATE VIEW - Main Route
@@ -1520,33 +1763,67 @@ def handle_universal_edit_post(entity_type: str, item_id: str, config):
     """Handle POST request for universal edit - process form"""
     try:
         logger.info(f"💾 Processing edit form for {entity_type}/{item_id}")
-        
+
+        # CSRF validation is handled automatically by Flask-WTF (no need for manual validation)
+
         # Import required service
         from app.engine.universal_crud_service import UniversalCRUDService
         crud_service = UniversalCRUDService()
-        
+
         # Get form data
         form_data = request.form.to_dict()
         
-        # Handle boolean fields (checkboxes) - same as create
+        # Filter out virtual and readonly fields before processing
         field_definitions = {field.name: field for field in config.fields}
+        filtered_form_data = {}
+
+        for field_name, field_value in form_data.items():
+            # Skip CSRF token
+            if field_name == 'csrf_token':
+                continue
+
+            # Skip fields not in field definitions
+            if field_name not in field_definitions:
+                continue
+
+            field_def = field_definitions[field_name]
+
+            # Skip virtual fields (computed/derived fields)
+            if getattr(field_def, 'virtual', False):
+                logger.info(f"Skipping virtual field: {field_name}")
+                continue
+
+            # Skip readonly fields
+            if getattr(field_def, 'readonly', False):
+                logger.info(f"Skipping readonly field: {field_name}")
+                continue
+
+            # Include the field
+            filtered_form_data[field_name] = field_value
+
+        logger.info(f"Filtered form data: {list(filtered_form_data.keys())}")
+
+        # Handle boolean fields (checkboxes) - same as create
         for field_name, field_def in field_definitions.items():
             if field_def.field_type == FieldType.BOOLEAN:
-                if field_name in form_data:
-                    value = form_data[field_name]
-                    form_data[field_name] = value.lower() in ('on', 'true', '1', 'yes', 'checked')
-                elif field_name in getattr(config, 'edit_fields', []):
+                if field_name in filtered_form_data:
+                    value = filtered_form_data[field_name]
+                    filtered_form_data[field_name] = value.lower() in ('on', 'true', '1', 'yes', 'checked')
+                elif field_name in getattr(config, 'edit_fields', []) and not getattr(field_def, 'virtual', False) and not getattr(field_def, 'readonly', False):
                     # Checkbox exists in form but wasn't checked
-                    form_data[field_name] = False
-        
+                    filtered_form_data[field_name] = False
+
         # Also check for known boolean field patterns (backward compatibility)
-        for key in list(form_data.keys()):
+        for key in list(filtered_form_data.keys()):
             if key.startswith('is_') or key.endswith('_enabled') or key == 'black_listed':
                 if key not in field_definitions:  # Only if not already handled above
-                    value = form_data[key]
+                    value = filtered_form_data[key]
                     if isinstance(value, str):
-                        form_data[key] = value.lower() in ('on', 'true', '1', 'yes', 'checked')
-        
+                        filtered_form_data[key] = value.lower() in ('on', 'true', '1', 'yes', 'checked')
+
+        # Use filtered data for update
+        form_data = filtered_form_data
+
         # Prepare context with audit fields
         context = {
             'hospital_id': current_user.hospital_id,

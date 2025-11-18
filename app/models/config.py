@@ -1,11 +1,11 @@
 # app/models/config.py - ENHANCED with Branch Access Support
 # ALIGNED with executed SQL script - INTEGER for role_id/module_id
 
-from sqlalchemy import Column, String, ForeignKey, Boolean, Integer, Text, CheckConstraint, UniqueConstraint, Index, DateTime
+from sqlalchemy import Column, String, ForeignKey, Boolean, Integer, Text, CheckConstraint, UniqueConstraint, Index, DateTime, Date, Numeric
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from .base import Base, TimestampMixin, generate_uuid
 
 class ModuleMaster(Base, TimestampMixin):
@@ -172,3 +172,256 @@ class RoleModuleBranchAccess(Base, TimestampMixin):
 
     def __repr__(self):
         return f"<RoleModuleBranchAccess {self.role_id} - {self.module_id} - {self.branch_id or 'All Branches'}>"
+
+
+class InvoiceSequence(Base, TimestampMixin):
+    """
+    Thread-safe invoice sequence tracking for split invoices
+    Prevents duplicate invoice numbers under concurrent load
+    """
+    __tablename__ = 'invoice_sequences'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+    prefix = Column(String(10), nullable=False)  # SVC, MED, EXM, RX
+    financial_year = Column(String(10), nullable=False)  # 2024-2025, 2025-2026
+    current_sequence = Column(Integer, default=0, nullable=False)
+
+    # Relationships
+    hospital = relationship("Hospital")
+
+    # Composite unique constraint - one sequence per hospital/prefix/year
+    __table_args__ = (
+        UniqueConstraint('hospital_id', 'prefix', 'financial_year', name='uq_invoice_sequence'),
+        Index('idx_invoice_sequence_lookup', 'hospital_id', 'prefix', 'financial_year')
+    )
+
+    def __repr__(self):
+        return f"<InvoiceSequence {self.prefix}/{self.financial_year}: {self.current_sequence}>"
+
+
+class EntityPricingTaxConfig(Base, TimestampMixin):
+    """
+    Date-based versioning of pricing and GST rates for medicines, services, and packages.
+    Supports:
+    - MRP/price change tracking with manufacturer notifications
+    - GST rate change tracking with government notifications
+    - Complete historical accuracy for invoicing and tax compliance
+    """
+    __tablename__ = 'entity_pricing_tax_config'
+
+    config_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+    branch_id = Column(UUID(as_uuid=True), ForeignKey('branches.branch_id'))
+
+    # Entity Reference (exactly ONE must be populated)
+    medicine_id = Column(UUID(as_uuid=True), ForeignKey('medicines.medicine_id'))
+    service_id = Column(UUID(as_uuid=True), ForeignKey('services.service_id'))
+    package_id = Column(UUID(as_uuid=True), ForeignKey('packages.package_id'))
+
+    # Effective Period
+    effective_from = Column(Date, nullable=False)
+    effective_to = Column(Date)  # NULL = currently effective
+
+    # === PRICING INFORMATION ===
+    # For Medicines
+    mrp = Column(Numeric(12, 2))                    # Maximum Retail Price
+    pack_mrp = Column(Numeric(12, 2))               # MRP per pack
+    pack_purchase_price = Column(Numeric(12, 2))   # Purchase price per pack
+    units_per_pack = Column(Numeric(10, 2))        # Units in a pack
+    unit_price = Column(Numeric(12, 2))            # Price per unit
+    selling_price = Column(Numeric(12, 2))         # Actual selling price
+    cost_price = Column(Numeric(12, 2))            # Cost for profit calculation
+
+    # For Services/Packages
+    service_price = Column(Numeric(12, 2))         # Service base price
+    package_price = Column(Numeric(12, 2))         # Package base price
+
+    # === GST INFORMATION ===
+    gst_rate = Column(Numeric(5, 2))               # Overall GST (%)
+    cgst_rate = Column(Numeric(5, 2))              # Central GST (%)
+    sgst_rate = Column(Numeric(5, 2))              # State GST (%)
+    igst_rate = Column(Numeric(5, 2))              # Integrated GST (%)
+    is_gst_exempt = Column(Boolean, default=False)
+    gst_inclusive = Column(Boolean, default=False)
+
+    # === REFERENCE DOCUMENTATION ===
+    # For GST changes
+    gst_notification_number = Column(String(100))
+    gst_notification_date = Column(Date)
+    gst_notification_url = Column(String(500))
+
+    # For price changes
+    manufacturer_notification = Column(String(100))
+    manufacturer_notification_date = Column(Date)
+    price_revision_reason = Column(Text)
+
+    # === METADATA ===
+    change_type = Column(String(50))  # 'gst_change', 'price_change', 'both', 'initial'
+    change_reason = Column(Text)
+    remarks = Column(Text)
+
+    # Soft delete
+    is_deleted = Column(Boolean, default=False)
+
+    # Relationships
+    hospital = relationship("Hospital")
+    branch = relationship("Branch")
+    medicine = relationship("Medicine", foreign_keys=[medicine_id])
+    service = relationship("Service", foreign_keys=[service_id])
+    package = relationship("Package", foreign_keys=[package_id])
+
+    __table_args__ = (
+        CheckConstraint(
+            """
+            (medicine_id IS NOT NULL AND service_id IS NULL AND package_id IS NULL) OR
+            (medicine_id IS NULL AND service_id IS NOT NULL AND package_id IS NULL) OR
+            (medicine_id IS NULL AND service_id IS NULL AND package_id IS NOT NULL)
+            """,
+            name='chk_entity_reference'
+        ),
+        CheckConstraint(
+            'effective_to IS NULL OR effective_to > effective_from',
+            name='chk_effective_dates'
+        ),
+        CheckConstraint(
+            'gst_rate IS NULL OR gst_rate = COALESCE(cgst_rate, 0) + COALESCE(sgst_rate, 0) + COALESCE(igst_rate, 0)',
+            name='chk_gst_rate_sum'
+        ),
+    )
+
+    @property
+    def entity_type(self):
+        """Return the type of entity this config applies to"""
+        if self.medicine_id:
+            return 'medicine'
+        elif self.service_id:
+            return 'service'
+        elif self.package_id:
+            return 'package'
+        return None
+
+    @property
+    def entity_id(self):
+        """Return the ID of the entity this config applies to"""
+        if self.medicine_id:
+            return self.medicine_id
+        elif self.service_id:
+            return self.service_id
+        elif self.package_id:
+            return self.package_id
+        return None
+
+    @property
+    def is_currently_effective(self):
+        """Check if this config is currently in effect"""
+        today = date.today()
+        return (self.effective_from <= today and
+                (self.effective_to is None or self.effective_to >= today))
+
+    @property
+    def applicable_price(self):
+        """Get the applicable price based on entity type"""
+        if self.medicine_id:
+            return self.mrp or self.selling_price or self.pack_mrp
+        elif self.service_id:
+            return self.service_price
+        elif self.package_id:
+            return self.package_price
+        return None
+
+    def __repr__(self):
+        entity_info = f"{self.entity_type}_{self.entity_id}"
+        period = f"{self.effective_from} to {self.effective_to or 'current'}"
+        return f"<EntityPricingTaxConfig {entity_info} {period} price={self.applicable_price} gst={self.gst_rate}%>"
+
+
+class CampaignHookConfig(Base, TimestampMixin):
+    """
+    Campaign Hook Configuration - Plugin architecture for hospital-specific promotional campaigns.
+
+    Allows hospitals to implement custom campaign logic without modifying core code.
+    Supports multiple hook types: API endpoints, Python modules, or SQL functions.
+    """
+    __tablename__ = 'campaign_hook_config'
+
+    hook_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+
+    # Hospital Reference
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+
+    # Hook Identification
+    hook_name = Column(String(100), nullable=False)
+    hook_description = Column(Text)
+    hook_type = Column(String(50), nullable=False)  # 'api_endpoint', 'python_module', 'sql_function'
+
+    # Hook Implementation
+    hook_endpoint = Column(String(500))  # API endpoint URL
+    hook_module_path = Column(String(500))  # Python module path
+    hook_function_name = Column(String(100))  # Function name to call
+    hook_sql_function = Column(String(200))  # SQL function name
+
+    # Hook Activation
+    is_active = Column(Boolean, default=True)
+    priority = Column(Integer, default=100)  # Lower = higher priority
+
+    # Applicability
+    applies_to_medicines = Column(Boolean, default=False)
+    applies_to_services = Column(Boolean, default=False)
+    applies_to_packages = Column(Boolean, default=False)
+
+    # Effective Period
+    effective_from = Column(Date)
+    effective_to = Column(Date)
+
+    # Hook Configuration (flexible JSON)
+    hook_config = Column(JSONB)
+
+    # Authentication (for API hooks)
+    api_auth_type = Column(String(50))  # 'none', 'basic', 'bearer', 'api_key'
+    api_auth_credentials = Column(Text)  # Encrypted credentials
+
+    # Performance & Monitoring
+    timeout_ms = Column(Integer, default=5000)
+    retry_attempts = Column(Integer, default=0)
+    cache_results = Column(Boolean, default=False)
+    cache_ttl_seconds = Column(Integer, default=300)
+
+    # Soft Delete
+    is_deleted = Column(Boolean, default=False)
+    deleted_at = Column(DateTime(timezone=True))
+    deleted_by = Column(String(100))
+
+    # Relationships
+    hospital = relationship("Hospital")
+
+    @property
+    def is_currently_effective(self):
+        """Check if hook is currently effective"""
+        if not self.is_active or self.is_deleted:
+            return False
+
+        today = date.today()
+
+        if self.effective_from and self.effective_from > today:
+            return False
+
+        if self.effective_to and self.effective_to < today:
+            return False
+
+        return True
+
+    @property
+    def applies_to_entity_type(self, entity_type: str) -> bool:
+        """Check if hook applies to given entity type"""
+        if entity_type == 'medicine':
+            return self.applies_to_medicines
+        elif entity_type == 'service':
+            return self.applies_to_services
+        elif entity_type == 'package':
+            return self.applies_to_packages
+        return False
+
+    def __repr__(self):
+        status = "active" if self.is_currently_effective else "inactive"
+        return f"<CampaignHookConfig '{self.hook_name}' type={self.hook_type} priority={self.priority} {status}>"

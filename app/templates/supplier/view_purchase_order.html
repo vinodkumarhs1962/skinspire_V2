@@ -67,9 +67,10 @@
                 </div>
             </div>
             <div class="mt-4 md:mt-0 flex items-center space-x-4">
-                <a href="{{ url_for('supplier_views.purchase_order_list') }}" class="btn-secondary flex items-center">
-                    <i class="fas fa-arrow-left mr-2"></i> Back
-                </a>
+                <!-- Standard Back Button (Always First) -->
+                <button onclick="window.history.back()" type="button" class="btn-back">
+                    <i class="fas fa-arrow-left icon-left"></i>Back
+                </button>
                 <div class="relative dropdown">
                     <button type="button" class="btn-primary dropdown-toggle flex items-center">
                         <i class="fas fa-cog mr-2"></i> Actions <i class="fas fa-chevron-down ml-2"></i>

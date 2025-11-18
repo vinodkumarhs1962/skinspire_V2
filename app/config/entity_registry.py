@@ -51,8 +51,22 @@ ENTITY_REGISTRY: Dict[str, EntityRegistration] = {
         service_class="app.services.patient_service.PatientService",
         model_class="app.models.master.Patient"
     ),
-    
-    
+
+    "packages": EntityRegistration(
+        category=EntityCategory.MASTER,
+        module="app.config.modules.package_config",  # Minimal config for autocomplete and basic CRUD
+        service_class="app.services.package_service.PackageService",
+        model_class="app.models.master.Package"
+    ),
+
+    "package_payment_plans": EntityRegistration(
+        category=EntityCategory.MASTER,  # Full CRUD like master entities
+        module="app.config.modules.package_payment_plan_config",
+        service_class="app.services.package_payment_service.PackagePaymentService",
+        model_class="app.models.views.PackagePaymentPlanView"  # ✅ FIX: Use VIEW model not base model!
+    ),
+
+
     # ========== TRANSACTION ENTITIES (Read-Only in Universal Engine) ==========
     "supplier_payments": EntityRegistration(
         category=EntityCategory.TRANSACTION,
@@ -60,7 +74,14 @@ ENTITY_REGISTRY: Dict[str, EntityRegistration] = {
         service_class="app.services.supplier_payment_service.SupplierPaymentService",
         model_class="app.models.views.SupplierPaymentView"  # ← Use VIEW like PurchaseOrders
     ),
-    
+
+    "patient_payments": EntityRegistration(
+        category=EntityCategory.TRANSACTION,
+        module="app.config.modules.patient_payment_config",
+        service_class="app.services.patient_payment_service.PatientPaymentService",
+        model_class="app.models.views.PatientPaymentReceiptView"  # Use VIEW for list/search
+    ),
+
     "supplier_invoices": EntityRegistration(
         category=EntityCategory.TRANSACTION,
         module="app.config.modules.supplier_invoice_config",
@@ -74,7 +95,28 @@ ENTITY_REGISTRY: Dict[str, EntityRegistration] = {
         service_class="app.services.purchase_order_service.PurchaseOrderService",  # New service
         model_class="app.models.views.PurchaseOrderView"
     ),
-    
+
+    "patient_invoices": EntityRegistration(
+        category=EntityCategory.TRANSACTION,
+        module="app.config.modules.patient_invoice_config",
+        service_class="app.services.patient_invoice_service.PatientInvoiceService",
+        model_class="app.models.views.PatientInvoiceView"  # View model for list/search
+    ),
+
+    "consolidated_patient_invoices": EntityRegistration(
+        category=EntityCategory.TRANSACTION,
+        module="app.config.modules.consolidated_patient_invoices_config",
+        service_class="app.services.consolidated_patient_invoice_service.ConsolidatedPatientInvoiceService",
+        model_class="app.models.views.ConsolidatedPatientInvoiceView"  # Dedicated view for consolidated invoices
+    ),
+
+    "consolidated_invoice_detail": EntityRegistration(
+        category=EntityCategory.TRANSACTION,
+        module="app.config.modules.consolidated_invoice_detail_config",
+        service_class="app.services.consolidated_patient_invoice_service.ConsolidatedPatientInvoiceService",  # Reuse same service
+        model_class="app.models.views.PatientInvoiceView"  # Individual invoices view
+    ),
+
 }
 
 # =============================================================================
@@ -148,10 +190,25 @@ CUSTOM_ENTITY_URLS = {
         "edit": "/supplier/po/edit/{po_id}",
         "delete": None,
     },
+    "patient_invoices": {
+        "create": "/billing/invoice/create",
+        "edit": "/billing/invoice/edit/{invoice_id}",
+        "delete": None,
+    },
+    "patient_payments": {
+        "create": "/billing/payment/patient-selection",  # Patient selection first, then payment form
+        "edit": None,  # No edit for payments (only approve/reject/reverse)
+        "delete": None,  # Use workflow actions (soft delete via service)
+    },
     "billing_transactions": {
         "create": "/billing/create",
         "edit": "/billing/edit/{transaction_id}",
         "delete": None,
+    },
+    "package_payment_plans": {
+        "create": "/package/payment-plan/create",  # Custom route with cascading workflow
+        "edit": None,  # Use Universal Engine for edit
+        "delete": None,  # Use Universal Engine for delete
     },
 }
 

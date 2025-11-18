@@ -1,6 +1,12 @@
 <!-- Universal Line Items Table Template - FULL WIDTH -->
 <!-- File: app/templates/engine/business/universal_line_items_table.html -->
 
+<div class="container-fluid px-0" style="max-width: 100%;">
+
+{# Calculate footer colspan based on entity type and medicine items #}
+{# ✅ Reduced by 1 since we removed the action column #}
+{% set footer_colspan = 9 if (data.entity_type == 'po' or data.has_medicine_items) else 7 %}
+
 {% if data.header_info %}
 <div class="alert alert-info mb-3">
     <i class="fas fa-info-circle"></i>
@@ -26,27 +32,42 @@
                 <tr>
                     <!-- Compact column widths for both PO and Invoice -->
                     <th width="4%" style="text-align: left !important;">#</th>
-                    <th width="22%" style="text-align: left !important;">Item Name</th>
-                    
+                    <th width="20%" style="text-align: left !important;">Item Name</th>
+
                     {% if data.entity_type == 'po' %}
                         <th width="8%" style="text-align: center !important;">HSN</th>
                         <th width="8%">Delivery</th>
-                    {% elif data.entity_type == 'invoice' %}
+                    {% elif data.entity_type == 'invoice' and data.has_medicine_items %}
                         <th width="8%" style="text-align: left !important;">Batch</th>
                         <th width="8%">Expiry</th>
                     {% endif %}
-                    
+
                     <th width="7%" class="text-end">Qty</th>
                     <th width="9%" class="text-end">Rate</th>
                     <th width="8%" class="text-end">Disc</th>
                     <th width="7%" class="text-end">GST%</th>
                     <th width="9%" class="text-end">GST</th>
-                    <th width="10%" class="text-end">Total</th>
+                    <th width="12%" class="text-end">Total</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in data['items'] %}
-                <tr class="{% if item.is_free %}table-info{% endif %}">
+                {# Show invoice separator for multi-invoice payments #}
+                {% if data.get('is_multi_invoice') and loop.index0 == 0 %}
+                <tr class="table-warning">
+                    <td colspan="{{ footer_colspan }}" class="text-center font-bold">
+                        <i class="fas fa-file-invoice"></i> Invoice: {{ item.invoice_number }} ({{ item.invoice_date }})
+                    </td>
+                </tr>
+                {% elif data.get('is_multi_invoice') and loop.index0 > 0 and item.invoice_number != data['items'][loop.index0 - 1].invoice_number %}
+                <tr class="table-warning">
+                    <td colspan="{{ footer_colspan }}" class="text-center font-bold">
+                        <i class="fas fa-file-invoice"></i> Invoice: {{ item.invoice_number }} ({{ item.invoice_date }})
+                    </td>
+                </tr>
+                {% endif %}
+
+                <tr class="{% if item.is_free %}table-info{% endif %}{% if item.is_prescription_item and item.consolidation_group_id %} prescription-consolidated-item{% endif %}">
                     <td style="text-align: left !important;">{{ loop.index }}</td>
                     <td class="text-left item-name-cell">
                         <div class="truncate-text" title="{{ item.item_name }}{% if item.is_free %} (FREE){% endif %}">
@@ -56,7 +77,7 @@
                             {% endif %}
                         </div>
                     </td>
-                    
+
                     {% if data.entity_type == 'po' %}
                         <td style="text-align: center !important;">
                             <div class="truncate-text" title="{{ item.hsn_code|default('-', true) }}">
@@ -68,10 +89,10 @@
                                 {{ item.expected_delivery|default('-', true) }}
                             </div>
                         </td>
-                    {% elif data.entity_type == 'invoice' %}
+                    {% elif data.entity_type == 'invoice' and data.has_medicine_items %}
                         <td>
-                            <div class="truncate-text" title="{{ item.batch_number|default('-', true) }}">
-                                {{ item.batch_number|default('-', true) }}
+                            <div class="truncate-text" title="{{ item.batch|default('-', true) }}">
+                                {{ item.batch|default('-', true) }}
                             </div>
                         </td>
                         <td>
@@ -80,7 +101,7 @@
                             </div>
                         </td>
                     {% endif %}
-                    
+
                     <td class="text-end">{{ "{:,.2f}".format(item.quantity) }}</td>
                     <td class="text-end">₹{{ "{:,.2f}".format(item.unit_price) }}</td>
                     <td class="text-end">
@@ -104,32 +125,109 @@
             <tfoot class="table-light">
                 <!-- Subtotal Row -->
                 <tr>
-                    <td colspan="9" class="text-end"><strong>Subtotal:</strong></td>
-                    <td class="text-end"><strong>₹{{ "{:,.2f}".format(data.summary.subtotal|default(data.summary.total_amount, true)) }}</strong></td>
+                    <td colspan="{{ footer_colspan }}" class="text-end"><strong>Subtotal:</strong></td>
+                    <td class="text-end"><strong>₹{{ "{:,.2f}".format(data['summary']['subtotal']|default(data['summary'].get('total_amount', 0), true)) }}</strong></td>
                 </tr>
-                
+
                 <!-- Discount Row (if applicable) -->
-                {% if data.summary.total_discount > 0 %}
+                {% if data['summary'].get('total_discount', 0) > 0 %}
                 <tr>
-                    <td colspan="9" class="text-end">Total Discount:</td>
-                    <td class="text-end text-danger">-₹{{ "{:,.2f}".format(data.summary.total_discount) }}</td>
+                    <td colspan="{{ footer_colspan }}" class="text-end">Total Discount:</td>
+                    <td class="text-end text-danger">-₹{{ "{:,.2f}".format(data['summary']['total_discount']) }}</td>
                 </tr>
                 {% endif %}
-                
+
                 <!-- GST Row -->
                 <tr>
-                    <td colspan="9" class="text-end">Total GST:</td>
-                    <td class="text-end">₹{{ "{:,.2f}".format(data.summary.total_gst) }}</td>
+                    <td colspan="{{ footer_colspan }}" class="text-end">Total GST:</td>
+                    <td class="text-end">₹{{ "{:,.2f}".format(data['summary'].get('total_gst', 0)) }}</td>
                 </tr>
-                
+
                 <!-- Grand Total Row -->
                 <tr class="table-primary">
-                    <td colspan="9" class="text-end"><strong>Grand Total:</strong></td>
-                    <td class="text-end"><strong class="text-primary">₹{{ "{:,.2f}".format(data.summary.grand_total) }}</strong></td>
+                    <td colspan="{{ footer_colspan }}" class="text-end"><strong>Grand Total:</strong></td>
+                    <td class="text-end"><strong class="text-primary">₹{{ "{:,.2f}".format(data['summary'].get('grand_total', 0)) }}</strong></td>
                 </tr>
             </tfoot>
         </table>
     </div>
+
+    <!-- Consolidated Prescription Items Breakdown -->
+    <!-- HIDDEN: Prescription consolidation happens at PRINT level only, not in display -->
+    <!-- Items are stored individually with batch/expiry and shown in main table above -->
+    {% if false and data.has_consolidated_groups %}
+    <div class="mt-4" style="display: none;">
+        <div class="card">
+            <div class="card-header bg-warning bg-opacity-25">
+                <h6 class="mb-0">
+                    <i class="fas fa-capsules"></i> Prescription Item Breakdown
+                    <small class="text-muted ms-2">(Consolidated for printing)</small>
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-3">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Note:</strong> The following prescription items are stored individually in the system but will print as
+                    <strong>"Doctor's Examination and Treatment"</strong> on the invoice (hospital does not have pharmacy registration).
+                </div>
+
+                {% if data.consolidated_groups is mapping %}
+                    {% for group_id, group in data.consolidated_groups.items() %}
+                <div class="mb-3">
+                    <h6 class="text-primary">Consolidated Group ({{ group.item_count }} items) - Total: ₹{{ "{:,.2f}".format(group.total_amount) }}</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th width="5%">#</th>
+                                    <th width="30%">Medicine Name</th>
+                                    <th width="15%">Batch</th>
+                                    <th width="15%">Expiry</th>
+                                    <th width="10%" class="text-end">Qty</th>
+                                    <th width="12%" class="text-end">Rate</th>
+                                    <th width="13%" class="text-end">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in group['items'] %}
+                                <tr>
+                                    <td>{{ loop.index }}</td>
+                                    <td><strong>{{ item.item_name }}</strong></td>
+                                    <td>{{ item.batch|default('-', true) }}</td>
+                                    <td>{{ item.expiry_date|default('-', true) }}</td>
+                                    <td class="text-end">{{ "{:,.2f}".format(item.quantity) }}</td>
+                                    <td class="text-end">₹{{ "{:,.2f}".format(item.unit_price) }}</td>
+                                    <td class="text-end fw-bold">₹{{ "{:,.2f}".format(item.line_total) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-light">
+                                <tr>
+                                    <td colspan="6" class="text-end"><strong>Group Total:</strong></td>
+                                    <td class="text-end"><strong class="text-primary">₹{{ "{:,.2f}".format(group.total_amount) }}</strong></td>
+                                </tr>
+                                <tr class="table-warning">
+                                    <td colspan="7" class="text-center">
+                                        <i class="fas fa-print"></i>
+                                        <strong>Prints as:</strong> Doctor's Examination and Treatment - ₹{{ "{:,.2f}".format(group.total_amount) }}
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Warning:</strong> Consolidated groups data is not in the expected format.
+                        Type: {{ data.consolidated_groups|string }}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 {% else %}
@@ -143,10 +241,12 @@
 <!-- Error Message (if any) -->
 {% if data.has_error %}
 <div class="alert alert-danger">
-    <i class="fas fa-exclamation-triangle"></i> 
+    <i class="fas fa-exclamation-triangle"></i>
     <strong>Error:</strong> {{ data.error }}
 </div>
 {% endif %}
+
+</div><!-- Close container-fluid wrapper -->
 
 <style>
 /* Invoice Items Table Styling - EXACT COPY FROM invoice_items_table.html */
@@ -274,5 +374,27 @@
 /* Small text in discount column */
 .d-block {
     display: block !important;
+}
+
+/* Consolidated Prescription Items Styling */
+.prescription-consolidated-item {
+    background-color: #fff8e1 !important;  /* Light yellow background */
+    border-left: 3px solid #ffc107 !important;  /* Warning color left border */
+}
+
+.prescription-consolidated-item:hover {
+    background-color: #fff3cd !important;
+}
+
+/* Consolidated group card styling */
+.card-header.bg-warning {
+    background-color: #fff8e1 !important;
+    border-bottom: 2px solid #ffc107;
+}
+
+/* Print indicator row */
+.table-warning td {
+    background-color: #fff8e1 !important;
+    font-style: italic;
 }
 </style>

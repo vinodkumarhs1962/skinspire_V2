@@ -1,0 +1,42 @@
+<!-- Payment Breakdown Summary - Shows invoices paid by this payment -->
+{% if data and data.has_items and data.items %}
+<div class="payment-breakdown-summary">
+    <div class="breakdown-items">
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Invoice</th>
+                    <th>Date</th>
+                    <th class="text-right">Invoice Amount</th>
+                    <th class="text-right">Paid</th>
+                    <th class="text-right">Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in data.items %}
+                <tr>
+                    <td>{{ item.invoice_number }}</td>
+                    <td>{{ item.invoice_date }}</td>
+                    <td class="text-right">{{ data.currency_symbol }}{{ "%.2f"|format(item.invoice_amount) }}</td>
+                    <td class="text-right">{{ data.currency_symbol }}{{ "%.2f"|format(item.payment_amount) }}</td>
+                    <td class="text-right">{{ data.currency_symbol }}{{ "%.2f"|format(item.balance) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            {% if data.summary %}
+            <tfoot>
+                <tr class="font-weight-bold">
+                    <td colspan="3" class="text-right">Total Paid:</td>
+                    <td class="text-right">{{ data.currency_symbol }}{{ "%.2f"|format(data.summary.total_paid) }}</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="text-muted">
+    <i class="fas fa-info-circle"></i> No invoice breakdown available
+</div>
+{% endif %}

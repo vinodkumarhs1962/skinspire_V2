@@ -98,12 +98,21 @@ def _search_patients(
         results = []
         for patient in patients:
             try:
-                # Get name - prioritize dedicated fields
+                # Get name - SIMPLIFIED: Just first_name + last_name (NO TITLE)
                 name = ""
-                if hasattr(patient, 'full_name') and patient.full_name:
+                if hasattr(patient, 'first_name') and hasattr(patient, 'last_name'):
+                    # Just concatenate first and last name
+                    name_parts = []
+                    if patient.first_name:
+                        name_parts.append(patient.first_name)
+                    if patient.last_name:
+                        name_parts.append(patient.last_name)
+                    name = ' '.join(name_parts) if name_parts else ''
+                elif hasattr(patient, 'full_name') and patient.full_name:
+                    # Fallback to full_name if first/last not available
                     name = patient.full_name
-                elif hasattr(patient, 'first_name') and hasattr(patient, 'last_name'):
-                    name = f"{patient.first_name or ''} {patient.last_name or ''}".strip()
+                else:
+                    name = ''
                 
                 # Get contact info
                 contact = ""

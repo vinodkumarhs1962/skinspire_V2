@@ -1,0 +1,377 @@
+<!--
+Package Payment Plan - Sessions Child Table
+Displays session schedule and completion tracking
+Used in package payment plan detail view
+-->
+
+<div class="container-fluid px-0" style="max-width: 100%;">
+
+{% if data and data.child_items and data.child_items|length > 0 %}
+<!-- Sessions Section -->
+<div class="line-items-container" style="width: 100%;">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="mb-0">
+            <i class="fas fa-calendar-check text-primary me-2"></i>
+            Service Sessions
+        </h5>
+        <span class="badge bg-secondary">
+            Completed: {{ data.child_items|selectattr('session_status', 'equalto', 'completed')|list|length }} / {{ data.child_items|length }}
+        </span>
+    </div>
+
+    <div class="table-responsive" style="width: 100%;">
+        <table class="table table-bordered table-hover invoice-items-table table-sm" style="width: 100%; table-layout: fixed;">
+            <thead class="table-light">
+                <tr>
+                    <th width="5%">#</th>
+                    <th width="12%">Scheduled Date</th>
+                    <th width="12%">Actual Date</th>
+                    <th width="10%" class="text-center">Status</th>
+                    <th width="15%">Performed By</th>
+                    <th width="30%">Notes</th>
+                    <th width="16%" class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for session in data.child_items %}
+                <tr class="{% if session.session_status == 'completed' %}table-success{% endif %}">
+                    <td><strong>{{ session.session_number }}</strong></td>
+                    <td>
+                        {% if session.session_date %}
+                            {{ session.session_date.strftime('%d %b %Y') if session.session_date is not string else session.session_date }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if session.session_status == 'completed' and session.actual_completion_date %}
+                            {{ session.actual_completion_date.strftime('%d %b %Y') if session.actual_completion_date is not string else session.actual_completion_date }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if session.session_status == 'completed' %}
+                            <span class="badge bg-success">
+                                <i class="fas fa-check-circle me-1"></i>Completed
+                            </span>
+                        {% elif session.session_status == 'cancelled' %}
+                            <span class="badge bg-danger">
+                                <i class="fas fa-times-circle me-1"></i>Cancelled
+                            </span>
+                        {% elif session.session_status == 'no_show' %}
+                            <span class="badge bg-warning text-dark">
+                                <i class="fas fa-user-slash me-1"></i>No Show
+                            </span>
+                        {% else %}
+                            <span class="badge bg-primary">
+                                <i class="fas fa-clock me-1"></i>Scheduled
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td>{{ session.performed_by_name if session.performed_by_name else '-' }}</td>
+                    <td>
+                        <span title="{{ session.service_notes if session.service_notes else '' }}">
+                            {{ session.service_notes[:50] if session.service_notes else '-' }}{% if session.service_notes and session.service_notes|length > 50 %}...{% endif %}
+                        </span>
+                    </td>
+                    <td class="text-center">
+                        <div class="d-flex flex-nowrap justify-content-center gap-1">
+                            <button type="button"
+                                    class="btn-warning btn-sm btn-icon-only"
+                                    onclick="editSessionDate('{{ session.session_id }}', '{{ session.session_date if session.session_date else '' }}', {{ session.session_number }})"
+                                    title="Edit session date">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            {% if session.session_status == 'scheduled' %}
+                                <button type="button"
+                                        class="btn-success btn-sm btn-icon-only"
+                                        onclick="openSessionModal('{{ session.session_id }}', {{ session.session_number }})"
+                                        title="Complete session">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+    <i class="fas fa-inbox"></i>
+    No sessions configured
+</div>
+{% endif %}
+
+</div><!-- Close container-fluid -->
+
+<!-- Session Completion Modal - POPUP (Tailwind hidden class) -->
+<div id="session-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 dark:bg-gray-900 dark:bg-opacity-75 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-5/12 lg:w-1/4 shadow-lg rounded-md bg-white dark:bg-gray-800">
+        <div class="mt-3">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center pb-3 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                    <i class="fas fa-check-circle text-success me-2"></i>
+                    Complete Session #<span id="modal-session-number"></span>
+                </h3>
+                <button type="button" onclick="closeSessionModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <form id="session-completion-form" class="mt-4">
+                <input type="hidden" id="modal-session-id">
+
+                <div class="mb-4">
+                    <label for="actual-date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Actual Completion Date
+                    </label>
+                    <input type="date" id="actual-date" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white" required>
+                </div>
+
+                <div class="mb-4">
+                    <label for="performed-by" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Performed By
+                    </label>
+                    <select id="performed-by" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
+                        <option value="">Select Staff</option>
+                    </select>
+                </div>
+
+                <div class="mb-4">
+                    <label for="service-notes" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Service Notes
+                    </label>
+                    <textarea id="service-notes" rows="3" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white" placeholder="Enter any notes about the service..."></textarea>
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="flex justify-end gap-2 mt-6">
+                    <button type="button" onclick="closeSessionModal()" class="btn-outline btn-sm">
+                        <i class="fas fa-times me-1"></i>Cancel
+                    </button>
+                    <button type="submit" class="btn-success btn-sm">
+                        <i class="fas fa-check me-1"></i>Save Session
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Session Date Modal - POPUP (Tailwind hidden class) -->
+<div id="edit-session-date-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 dark:bg-gray-900 dark:bg-opacity-75 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/3 lg:w-1/4 shadow-lg rounded-md bg-white dark:bg-gray-800">
+        <div class="mt-3">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center pb-3 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                    <i class="fas fa-calendar-alt text-primary me-2"></i>
+                    Edit Session Date #<span id="edit-session-number"></span>
+                </h3>
+                <button type="button" onclick="closeEditSessionModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <form id="session-date-edit-form" class="mt-4">
+                <input type="hidden" id="edit-session-id">
+
+                <div class="mb-4">
+                    <label for="edit-session-date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Session Date
+                    </label>
+                    <input type="date" id="edit-session-date" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white" required>
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="flex justify-end gap-2 mt-6">
+                    <button type="button" onclick="closeEditSessionModal()" class="btn-outline btn-sm">
+                        <i class="fas fa-times me-1"></i>Cancel
+                    </button>
+                    <button type="submit" class="btn-primary btn-sm">
+                        <i class="fas fa-save me-1"></i>Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// ==========================================
+// EDIT SESSION DATE MODAL
+// ==========================================
+
+function editSessionDate(sessionId, currentDate, sessionNumber) {
+    console.log('[editSessionDate] Called with:', sessionId, currentDate, sessionNumber);
+
+    document.getElementById('edit-session-id').value = sessionId;
+    document.getElementById('edit-session-number').textContent = sessionNumber;
+
+    // Format date for input (YYYY-MM-DD)
+    if (currentDate && currentDate !== '') {
+        try {
+            const dateObj = new Date(currentDate);
+            const formattedDate = dateObj.toISOString().split('T')[0];
+            document.getElementById('edit-session-date').value = formattedDate;
+            console.log('[editSessionDate] Date formatted:', formattedDate);
+        } catch (e) {
+            console.error('[editSessionDate] Error parsing date:', e);
+        }
+    }
+
+    // Show modal - remove hidden class (NOT Bootstrap)
+    const modal = document.getElementById('edit-session-date-modal');
+    modal.classList.remove('hidden');
+    console.log('[editSessionDate] Modal shown');
+}
+
+function closeEditSessionModal() {
+    const modal = document.getElementById('edit-session-date-modal');
+    modal.classList.add('hidden');
+    console.log('[closeEditSessionModal] Modal hidden');
+}
+
+// Handle form submission for session date edit
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('session-date-edit-form');
+    if (form) {
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const sessionId = document.getElementById('edit-session-id').value;
+            const newDate = document.getElementById('edit-session-date').value;
+
+            console.log('[Form Submit] Updating session:', sessionId, 'to date:', newDate);
+
+            // Disable submit button
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
+
+            try {
+                const url = `/api/package/session/${sessionId}/date`;
+                console.log('[API Call] URL:', url);
+
+                // Get CSRF token
+                const csrfToken = document.querySelector('[name=csrf_token]').value;
+                console.log('[API Call] CSRF Token:', csrfToken ? 'Present' : 'Missing');
+
+                const response = await fetch(url, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({
+                        session_date: newDate
+                    })
+                });
+
+                console.log('[API Response] Status:', response.status);
+                const result = await response.json();
+                console.log('[API Response] Data:', result);
+
+                if (result.success) {
+                    // Close modal
+                    closeEditSessionModal();
+
+                    // Show success and reload
+                    alert('Session date updated successfully!');
+                    console.log('[Success] Reloading page...');
+                    window.location.reload();
+                } else {
+                    console.error('[API Error]:', result.error);
+                    alert('Error: ' + (result.error || 'Failed to update session date'));
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText;
+                }
+            } catch (error) {
+                console.error('[Exception] Error updating session date:', error);
+                alert('Error updating session date. Please try again.');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalText;
+            }
+        });
+    }
+});
+
+// ==========================================
+// COMPLETE SESSION MODAL
+// ==========================================
+
+function closeSessionModal() {
+    const modal = document.getElementById('session-modal');
+    modal.classList.add('hidden');
+    console.log('[closeSessionModal] Modal hidden');
+}
+
+// Escape key handler for both modals
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const editModal = document.getElementById('edit-session-date-modal');
+        const completeModal = document.getElementById('session-modal');
+
+        if (!editModal.classList.contains('hidden')) {
+            closeEditSessionModal();
+        }
+        if (!completeModal.classList.contains('hidden')) {
+            closeSessionModal();
+        }
+    }
+});
+</script>
+
+<!-- Include JavaScript for session modal -->
+<script src="{{ url_for('static', filename='js/pages/package_payment_plan.js') }}"></script>
+
+<style>
+/* Match invoice items table styling exactly */
+.invoice-items-table {
+    font-size: 0.9rem;
+    width: 100% !important;
+}
+
+.invoice-items-table thead th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.invoice-items-table th,
+.invoice-items-table td {
+    padding: 0.4rem 0.5rem !important;
+    vertical-align: middle;
+}
+
+.invoice-items-table tfoot td {
+    font-weight: 500;
+}
+
+.invoice-items-table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+.line-items-container {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.table-responsive {
+    width: 100% !important;
+    overflow-x: auto;
+}
+
+.table {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+</style>

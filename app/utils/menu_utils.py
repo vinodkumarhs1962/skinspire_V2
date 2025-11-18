@@ -27,6 +27,9 @@ def universal_url(entity_type, action, item_id=None, **kwargs):
         'supplier_payments',
         'supplier_invoices',  # Added
         'purchase_orders',    # Added
+        'patient_invoices',   # Added - Phase 4
+        'patient_payments',   # Added - Patient payment receipts
+        'package_payment_plans',  # Added - Package payment plans
         'patients',
         'medicines',
         'users',
@@ -265,29 +268,133 @@ def generate_menu_for_role(role):
                     ]
                 },
                 {
-                    'name': 'Patient Billing',
+                    'name': 'Patient Invoices',
                     'url': '#',  # No URL for second level
-                    'icon': 'receipt',
-                    'badge': 'Standard',
-                    'badge_color': 'secondary',
-                    'children': [
+                    'icon': 'file-invoice-dollar',
+                    'badge': 'Universal',
+                    'badge_color': 'primary',
+                    'children': [  # Third level with actual URLs
                         {
-                            'name': 'Billing List',
-                            'url': safe_url_for('billing_views.invoice_list'),
+                            'name': 'View All Invoices',
+                            'url': universal_url('patient_invoices', 'list'),
                             'icon': 'list',
-                            'description': 'View all bills'
+                            'description': 'List all patient invoices'
                         },
                         {
-                            'name': 'Create Bill',
-                            'url': safe_url_for('billing_views.create_invoice_view'),
+                            'name': 'Create Invoice',
+                            'url': safe_url_for('billing_views.create_invoice_view'),  # Still standard
                             'icon': 'plus-circle',
-                            'description': 'New patient bill'
+                            'description': 'Create new invoice',
+                            'badge': 'Standard',
+                            'badge_color': 'secondary'
                         },
                         {
-                            'name': 'Pending Bills',
-                            'url': safe_url_for('billing_views.pending_bills'),
+                            'name': 'All Patient Invoices',
+                            'url': safe_url_for('universal_views.universal_list_view', entity_type='patient_invoices'),
+                            'icon': 'file-invoice-dollar',
+                            'description': 'View all patient invoices',
+                            'badge': 'Universal',
+                            'badge_color': 'secondary'
+                        },
+                        {
+                            'name': 'Consolidated Invoices',
+                            'url': safe_url_for('universal_views.universal_list_view', entity_type='consolidated_patient_invoices'),
+                            'icon': 'folder-open',
+                            'description': 'View consolidated invoice groups (multi-invoice transactions)',
+                            'badge': 'Phase 3',
+                            'badge_color': 'info'
+                        },
+                        {
+                            'name': 'Unpaid Invoices',
+                            'url': universal_url('patient_invoices', 'list') + '?payment_status=unpaid',
                             'icon': 'clock',
-                            'description': 'Unpaid bills'
+                            'description': 'Unpaid invoices'
+                        },
+                        {
+                            'name': 'Partially Paid',
+                            'url': universal_url('patient_invoices', 'list') + '?payment_status=partial',
+                            'icon': 'hourglass-half',
+                            'description': 'Partially paid invoices'
+                        }
+                    ]
+                },
+                {
+                    'name': 'Patient Payments',
+                    'url': '#',  # No URL for second level
+                    'icon': 'money-bill-wave',
+                    'badge': 'Universal',
+                    'badge_color': 'primary',
+                    'children': [  # Third level with actual URLs
+                        {
+                            'name': 'View All Payments',
+                            'url': universal_url('patient_payments', 'list'),
+                            'icon': 'list',
+                            'description': 'List all payment receipts'
+                        },
+                        {
+                            'name': 'Record Payment',
+                            'url': safe_url_for('billing_views.payment_patient_selection'),
+                            'icon': 'plus-circle',
+                            'description': 'Record patient payment against invoices',
+                            'badge': 'Standard',
+                            'badge_color': 'secondary'
+                        },
+                        {
+                            'name': 'Pending Approval',
+                            'url': universal_url('patient_payments', 'list') + '?workflow_status=pending_approval',
+                            'icon': 'user-check',
+                            'description': 'Payments awaiting approval'
+                        },
+                        {
+                            'name': 'Today\'s Payments',
+                            'url': universal_url('patient_payments', 'list') + '?date=today',
+                            'icon': 'calendar-day',
+                            'description': 'Payments received today'
+                        },
+                        {
+                            'name': 'Record Advance Payment',
+                            'url': safe_url_for('billing_views.create_advance_payment_view'),
+                            'icon': 'piggy-bank',
+                            'description': 'Record patient advance payment'
+                        },
+                        {
+                            'name': 'View Patient Advances',
+                            'url': safe_url_for('billing_views.view_all_patient_advances'),
+                            'icon': 'list-alt',
+                            'description': 'View all patient advance balances'
+                        }
+                    ]
+                },
+                {
+                    'name': 'Package Session & Payment Plans',
+                    'url': '#',  # No URL for second level
+                    'icon': 'calendar-alt',
+                    'badge': 'Universal',
+                    'badge_color': 'primary',
+                    'children': [  # Third level with actual URLs
+                        {
+                            'name': 'View All Plans',
+                            'url': universal_url('package_payment_plans', 'list'),
+                            'icon': 'list',
+                            'description': 'List all package payment plans'
+                        },
+                        {
+                            'name': 'Create Plan',
+                            'url': '/package/payment-plan/create',  # Custom route with cascading workflow
+                            'icon': 'plus-circle',
+                            'description': 'Create new payment plan'
+                        },
+                        {
+                            'name': 'Active Plans',
+                            'url': universal_url('package_payment_plans', 'list') + '?status=active',
+                            'icon': 'check-circle',
+                            'description': 'Active payment plans'
+                        },
+                        {
+                            'name': 'Completed Plans',
+                            'url': universal_url('package_payment_plans', 'list') + '?status=completed',
+                            'icon': 'check-double',
+                            'description': 'Fully paid plans'
                         }
                     ]
                 },
@@ -437,6 +544,14 @@ def generate_menu_for_role(role):
                         'badge_color': 'primary'
                     },
                     {
+                        'name': 'Config to Master Sync',
+                        'url': safe_url_for('admin.config_sync_page'),
+                        'icon': 'sync-alt',
+                        'badge': 'Admin',
+                        'badge_color': 'warning',
+                        'description': 'Sync pricing/GST configs to master tables'
+                    },
+                    {
                         'name': 'System Config',
                         'url': safe_url_for('settings.system'),
                         'icon': 'sliders-h',
@@ -460,12 +575,14 @@ def get_menu_items(current_user):
     try:
         with get_db_session() as session:
             from app.models.transaction import User
-            user = session.query(User).filter_by(user_id=current_user.user_id).first()
-            
+            # Ensure user_id is string (phone number), not UUID
+            user_id_str = str(current_user.user_id) if current_user.user_id else None
+            user = session.query(User).filter_by(user_id=user_id_str).first()
+
             if not user:
                 role = getattr(current_user, 'entity_type', 'patient')
                 return generate_menu_for_role(role)
-            
+
             detached_user = get_detached_copy(user)
             role = getattr(detached_user, 'entity_type', 'patient')
             return generate_menu_for_role(role)

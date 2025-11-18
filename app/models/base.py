@@ -273,7 +273,99 @@ class ApprovalMixin:
         logger.info(f"Unapproved {self.__class__.__name__} by {user_id} (previously approved by {previous_approver})")
 
 
+# ============================================================================
+# SQLAlchemy Event Listeners for Audit Trail
+# ============================================================================
+
+def get_current_user_id():
+    """
+    Get current user ID from Flask-Login context
+
+    Returns:
+        str: User ID if authenticated, 'system' otherwise
+
+    Fallback chain:
+        1. Flask-Login current_user.user_id (if authenticated)
+        2. 'system' (default for background jobs, migrations, scripts)
+
+    This function is used by event listeners to automatically populate
+    created_by and updated_by audit fields.
+    """
+    try:
+        from flask_login import current_user
+        if current_user and current_user.is_authenticated:
+            # Get user_id attribute (or id if user_id not available)
+            user_id = getattr(current_user, 'user_id', None) or getattr(current_user, 'id', None)
+            return str(user_id) if user_id else 'system'
+        return 'system'
+    except RuntimeError:
+        # Outside Flask application context (migrations, scripts, background jobs)
+        return 'system'
+    except Exception as e:
+        # Any other error - log and return system
+        logger.warning(f"Error getting current user ID: {e}")
+        return 'system'
+
+
+@event.listens_for(TimestampMixin, 'before_insert', propagate=True)
+def timestamp_before_insert(mapper, connection, target):
+    """
+    Automatically set created_by and updated_by on INSERT
+    Also sets PostgreSQL session variable for database triggers
+
+    This event fires BEFORE the INSERT is sent to the database,
+    allowing us to populate audit fields with current user context.
+
+    The session variable ensures database triggers have access to
+    user context even for operations that bypass the ORM.
+
+    Args:
+        mapper: SQLAlchemy mapper
+        connection: Database connection
+        target: The object being inserted
+    """
+    user_id = get_current_user_id()
+
+    # ✅ IMPORTANT: Only set if not already set by application code
+    # This allows explicit setting in services to take precedence
+    if not target.created_by:
+        target.created_by = user_id
+    if not target.updated_by:
+        target.updated_by = user_id
+
+    # Note: Session variable setting removed - triggers will use fallback
+    # The user_id is already set on the Python object above
+
+
+@event.listens_for(TimestampMixin, 'before_update', propagate=True)
+def timestamp_before_update(mapper, connection, target):
+    """
+    Automatically set updated_by on UPDATE
+    Also sets PostgreSQL session variable for database triggers
+
+    This event fires BEFORE the UPDATE is sent to the database.
+
+    Args:
+        mapper: SQLAlchemy mapper
+        connection: Database connection
+        target: The object being updated
+    """
+    # Get user from Flask-Login context (might be 'system' if outside Flask)
+    user_id = get_current_user_id()
+
+    # ✅ ALWAYS set updated_by to track who made the change
+    # If running outside Flask context (tests, scripts), it will be 'system'
+    # but this is correct behavior for audit trail
+    target.updated_by = user_id
+
+    # Note: Session variable setting removed - triggers will use fallback
+    # The user_id is already set on the Python object above
+
+
+# ============================================================================
 # SQLAlchemy Event Listeners for Data Consistency (EXISTING - unchanged)
+# ============================================================================
+
 @event.listens_for(SoftDeleteMixin, 'before_update', propagate=True)
 def enforce_soft_delete_consistency(mapper, connection, target):
     """
@@ -286,7 +378,7 @@ def enforce_soft_delete_consistency(mapper, connection, target):
             target.deleted_at = datetime.now(timezone.utc)
             if not target.deleted_by and hasattr(target, 'updated_by'):
                 target.deleted_by = target.updated_by
-        
+
         # If setting is_deleted to False, clear timestamp fields
         elif not target.is_deleted and target.deleted_at:
             target.deleted_at = None
@@ -294,4 +386,4 @@ def enforce_soft_delete_consistency(mapper, connection, target):
 
 def generate_uuid():
     """Generate a UUID for primary keys"""
-    return str(uuid.uuid4())
+    return uuid.uuid4()  # Return UUID object, not string

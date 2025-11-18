@@ -1,0 +1,170 @@
+<!-- ==========================================
+     CHILD INVOICES TABLE - CUSTOM RENDERER
+     For displaying split invoices in consolidated view
+     Uses production universal-data-table styling from tables.css
+     ========================================== -->
+
+{% if has_children %}
+<div class="child-invoices-container mb-4">
+    <!-- Section Header -->
+    <div class="mb-3">
+        <h4 class="text-lg text-gray-800 dark:text-gray-100">
+            <i class="fas fa-layer-group mr-2"></i>
+            Tax-Compliant Split Invoices ({{ count }})
+        </h4>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            This transaction was split into {{ count }} separate invoices for tax compliance
+        </p>
+    </div>
+
+    <!-- Table Container -->
+    <div class="table-responsive overflow-x-auto">
+        <table class="universal-data-table w-full">
+            <thead>
+                <tr>
+                    <th class="universal-table-header text-left" style="width: 8%;">Seq</th>
+                    <th class="universal-table-header text-left" style="width: 20%;">Invoice Number</th>
+                    <th class="universal-table-header text-left" style="width: 22%;">Category</th>
+                    <th class="universal-table-header text-right" style="width: 15%;">Amount</th>
+                    <th class="universal-table-header text-right" style="width: 15%;">Balance</th>
+                    <th class="universal-table-header text-center" style="width: 10%;">Status</th>
+                    <th class="universal-table-header text-center" style="width: 10%;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for child in children %}
+                <tr class="universal-table-row">
+                    <!-- Sequence -->
+                    <td class="text-center">
+                        <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 text-sm font-semibold">
+                            {{ child.split_sequence }}
+                        </span>
+                    </td>
+
+                    <!-- Invoice Number - Clickable -->
+                    <td class="text-left">
+                        <a href="{{ url_for('universal_views.universal_detail_view', entity_type='patient_invoices', item_id=child.invoice_id) }}"
+                           class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 font-medium">
+                            {{ child.invoice_number }}
+                        </a>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            {{ child.invoice_date.strftime('%d %b %Y') if child.invoice_date else '—' }}
+                        </div>
+                    </td>
+
+                    <!-- Category Badge -->
+                    <td class="text-left">
+                        {% if 'SVC' in child.invoice_number %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200">
+                            <i class="fas fa-concierge-bell mr-1.5"></i> Service & Package
+                        </span>
+                        {% elif 'MED' in child.invoice_number %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-success-100 text-success-800 dark:bg-success-900 dark:text-success-200">
+                            <i class="fas fa-pills mr-1.5"></i> GST Medicines
+                        </span>
+                        {% elif 'EXM' in child.invoice_number %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-info-100 text-info-800 dark:bg-info-900 dark:text-info-200">
+                            <i class="fas fa-shield-alt mr-1.5"></i> GST Exempt
+                        </span>
+                        {% elif 'RX' in child.invoice_number %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-warning-100 text-warning-800 dark:bg-warning-900 dark:text-warning-200">
+                            <i class="fas fa-prescription mr-1.5"></i> Prescription
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                            <i class="fas fa-file-invoice mr-1.5"></i> {{ child.invoice_type or 'Invoice' }}
+                        </span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Amount - Right aligned -->
+                    <td class="text-right font-medium text-gray-900 dark:text-gray-100">
+                        ₹{{ "{:,.2f}".format(child.grand_total) }}
+                    </td>
+
+                    <!-- Balance Due - Right aligned -->
+                    <td class="text-right">
+                        {% if child.balance_due > 0 %}
+                        <span class="text-red-600 dark:text-red-400 font-semibold">
+                            ₹{{ "{:,.2f}".format(child.balance_due) }}
+                        </span>
+                        {% else %}
+                        <span class="text-green-600 dark:text-green-400 font-medium">
+                            <i class="fas fa-check-circle mr-1"></i>Paid
+                        </span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Payment Status Badge -->
+                    <td class="text-center">
+                        {% if child.balance_due <= 0 %}
+                        <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                            Paid
+                        </span>
+                        {% elif child.paid_amount > 0 %}
+                        <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                            Partial
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                            Unpaid
+                        </span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Actions -->
+                    <td class="text-center">
+                        <div class="flex justify-center gap-1">
+                            <a href="{{ url_for('universal_views.universal_detail_view', entity_type='patient_invoices', item_id=child.invoice_id) }}"
+                               class="inline-flex items-center justify-center w-8 h-8 rounded text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+                               title="View Details">
+                                <i class="fas fa-eye text-sm"></i>
+                            </a>
+                            <a href="{{ url_for('universal_views.universal_document_view', entity_type='patient_invoices', item_id=child.invoice_id, doc_type='invoice') }}"
+                               class="inline-flex items-center justify-center w-8 h-8 rounded text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
+                               title="Print Invoice"
+                               target="_blank">
+                                <i class="fas fa-print text-sm"></i>
+                            </a>
+                            {% if child.balance_due > 0 %}
+                            <a href="{{ url_for('billing_views.record_invoice_payment', invoice_id=child.invoice_id) }}"
+                               class="inline-flex items-center justify-center w-8 h-8 rounded text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors"
+                               title="Collect Payment">
+                                <i class="fas fa-money-bill-wave text-sm"></i>
+                            </a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+
+            <!-- Totals Footer -->
+            <tfoot>
+                <tr class="bg-gray-50 dark:bg-gray-800">
+                    <td colspan="3" class="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        Totals:
+                    </td>
+                    <td class="text-right py-3 px-4 text-sm font-bold text-gray-900 dark:text-gray-100">
+                        ₹{{ "{:,.2f}".format(total_amount) }}
+                    </td>
+                    <td class="text-right py-3 px-4 text-sm font-bold">
+                        <span class="{{ 'text-red-600 dark:text-red-400' if total_balance > 0 else 'text-green-600 dark:text-green-400' }}">
+                            ₹{{ "{:,.2f}".format(total_balance) }}
+                        </span>
+                    </td>
+                    <td colspan="2"></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+{% else %}
+<!-- Empty State -->
+<div class="text-center py-8 px-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+    <i class="fas fa-info-circle text-4xl text-gray-400 dark:text-gray-600 mb-3"></i>
+    <p class="text-gray-600 dark:text-gray-400 text-sm">
+        This invoice is not split (single invoice transaction)
+    </p>
+</div>
+{% endif %}

@@ -1475,6 +1475,16 @@ table .supplier-column {
     position: relative !important;
 }
 
+/* ✅ NEW: Override truncation when text-wrap is configured */
+.universal-data-table td.text-wrap {
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    line-height: 1.4 !important;
+}
+
 /* ✅ NEW: Hover tooltip for truncated text */
 .universal-data-table td:hover::after {
     content: attr(title) !important;

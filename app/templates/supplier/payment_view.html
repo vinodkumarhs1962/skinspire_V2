@@ -16,9 +16,10 @@
             </p>
         </div>
         <div class="flex space-x-2 mt-4 md:mt-0">
-            <a href="{{ url_for('supplier_views.payment_list') }}" class="btn-secondary">
-                <i class="fas fa-arrow-left icon-left"></i>Back to Payments
-            </a>
+            <!-- Standard Back Button (Always First) -->
+            <button onclick="window.history.back()" type="button" class="btn-back">
+                <i class="fas fa-arrow-left icon-left"></i>Back
+            </button>
             {% if payment.invoice_id %}
             <a href="{{ url_for('supplier_views.view_supplier_invoice', invoice_id=payment.invoice_id) }}" 
                class="btn-secondary">
@@ -26,7 +27,7 @@
             </a>
             {% endif %}
             {% if payment.workflow_status not in ['approved', 'rejected'] %}
-            <a href="{{ url_for('supplier_views.edit_payment', payment_id=payment.payment_id) }}" 
+            <a href="{{ url_for('universal_views.universal_edit_view', entity_type='supplier_payments', item_id=payment.payment_id) }}" 
                class="btn-warning">
                 <i class="fas fa-edit icon-left"></i>Edit Payment
             </a>
@@ -330,7 +331,7 @@
                 <div class="info-card-content">
                     <div class="space-y-3">
                         {% if payment.workflow_status not in ['approved', 'rejected'] %}
-                        <a href="{{ url_for('supplier_views.edit_payment', payment_id=payment.payment_id) }}" 
+                        <a href="{{ url_for('universal_views.universal_edit_view', entity_type='supplier_payments', item_id=payment.payment_id) }}" 
                            class="btn-warning w-full justify-center">
                             <i class="fas fa-edit icon-left"></i>Edit Payment
                         </a>

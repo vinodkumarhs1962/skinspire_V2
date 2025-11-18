@@ -15,10 +15,13 @@ from decimal import Decimal
 class InvoiceLineItemForm(FlaskForm):
     """Form for invoice line item"""
     item_type = SelectField('Item Type', choices=[
-        ('Package', 'Package'), 
+        ('OTC', 'OTC'),
+        ('Prescription', 'Prescription'),
+        ('Product', 'Product'),
+        ('Consumable', 'Consumable'),
+        ('Package', 'Package'),
         ('Service', 'Service'),
-        ('Medicine', 'Medicine'),
-        ('Prescription', 'Prescription')  # Added Prescription type
+        ('Medicine', 'Medicine')  # Keep for backward compatibility
     ], validators=[DataRequired()])
     
     item_id = HiddenField('Item ID', validators=[DataRequired()])
@@ -50,15 +53,14 @@ class InvoiceLineItemForm(FlaskForm):
 
 class InvoiceForm(FlaskForm):
     """Form for invoice creation"""
-    patient_id = SelectField('Patient', validators=[DataRequired()], 
-        choices=[], 
-        coerce=str,  # Ensure value is converted to string
-        description='Dynamic patient selection'
+    # Changed from SelectField to HiddenField since UI uses patient search input
+    patient_id = HiddenField('Patient', validators=[DataRequired()],
+        description='Patient ID set by search component'
     )
     patient_search = StringField('Patient Search', validators=[Optional()], 
         description='Search patients by name, MRN, or phone'
     )
-    patient_name = StringField('Patient Name', validators=[DataRequired(), Length(max=100)])
+    patient_name = StringField('Patient Name', validators=[Optional(), Length(max=100)])
 
     invoice_date = DateField('Invoice Date', format='%Y-%m-%d', validators=[DataRequired()])
     

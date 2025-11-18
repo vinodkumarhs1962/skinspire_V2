@@ -809,6 +809,59 @@ def get_audit_logs(user_id, session):
         logger.error(f"Error getting audit logs: {str(e)}")
         return jsonify({'error': 'Failed to get audit logs'}), 500
 
+@auth_bp.route('/user/preferences/batch-mode', methods=['POST'])
+@token_required
+def update_batch_mode_preference(user_id, session):
+    """
+    Update user's batch allocation mode preference (manual or auto)
+    Used in invoice creation to toggle between manual batch selection and automated FIFO
+    """
+    try:
+        # Get request data
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided', 'success': False}), 400
+
+        batch_mode = data.get('batch_mode')
+        if not batch_mode or batch_mode not in ['manual', 'auto']:
+            return jsonify({
+                'error': 'Invalid batch_mode. Must be "manual" or "auto"',
+                'success': False
+            }), 400
+
+        # Get user from session
+        user = session.query(User).filter_by(user_id=user_id).first()
+        if not user:
+            return jsonify({'error': 'User not found', 'success': False}), 404
+
+        # Get current ui_preferences or initialize if None
+        ui_prefs = user.ui_preferences or {}
+        if isinstance(ui_prefs, str):
+            import json
+            ui_prefs = json.loads(ui_prefs)
+
+        # Update batch_mode preference
+        ui_prefs['invoice_batch_mode'] = batch_mode
+
+        # Save back to user
+        user.ui_preferences = ui_prefs
+        session.flush()
+
+        logger.info(f"Updated batch mode preference for user {user_id} to {batch_mode}")
+
+        return jsonify({
+            'success': True,
+            'message': f'Batch mode updated to {batch_mode}',
+            'batch_mode': batch_mode
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error updating batch mode preference: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': 'Failed to update batch mode preference',
+            'success': False
+        }), 500
+
 @auth_bp.route('/test', methods=['GET'])
 @token_required
 def test_authentication(user_id, session):
@@ -820,17 +873,17 @@ def test_authentication(user_id, session):
         user = session.query(User).filter_by(user_id=user_id).first()
         if not user:
             return jsonify({'error': 'User not found'}), 404
-            
+
         # Log user details for debugging
         logger.info(f"TEST ENDPOINT - User ID: {user_id}, Entity Type: {user.entity_type}")
-            
+
         # For testing purposes, check the user_id directly
         if user_id == '9876543210':  # Admin user ID as defined in the test
             return jsonify({'success': True, 'role': 'admin'}), 200
         else:
             # For other users, return forbidden
             return jsonify({'error': 'Permission denied'}), 403
-            
+
     except Exception as e:
         logger.error(f"Test authentication error: {str(e)}", exc_info=True)
         return jsonify({'error': 'Test failed'}), 500

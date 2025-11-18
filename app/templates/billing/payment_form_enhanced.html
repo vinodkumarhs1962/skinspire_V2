@@ -1,0 +1,3147 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Record Payment - Enhanced{% endblock %}
+
+{% from "billing/payment_form.html" import payment_form as payment_form_macro %}
+{% from 'components/patient_info_header.jinja' import patient_info_header %}
+
+{% block styles %}
+{{ super() }}
+<!-- Payment Form Enhanced Styles (following supplier payment pattern) -->
+<style>
+    /* Two-column grid for payment methods */
+    .payment-two-column-grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 1rem !important;
+        width: 100% !important;
+    }
+
+    @media (max-width: 768px) {
+        .payment-two-column-grid {
+            grid-template-columns: 1fr !important;
+        }
+    }
+
+    /* Active Filters Styling - Matching Universal Engine */
+    .universal-active-filters-enhanced {
+        margin-top: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .universal-active-filters-container {
+        background-color: rgb(248 250 252); /* slate-50 */
+        border: 1px solid rgb(226 232 240); /* slate-200 */
+        border-radius: 0.5rem;
+        padding: 1rem;
+    }
+
+    .dark .universal-active-filters-container {
+        background-color: rgb(30 41 59); /* slate-800 */
+        border-color: rgb(71 85 105); /* slate-600 */
+    }
+
+    .universal-active-filters-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0;
+        padding-bottom: 0;
+        border-bottom: none;
+    }
+
+    .universal-active-filters-info {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .universal-active-filters-info i {
+        color: rgb(59 130 246); /* blue-500 */
+        font-size: 1.125rem;
+    }
+
+    .dark .universal-active-filters-info i {
+        color: rgb(147 197 253); /* blue-300 */
+    }
+
+    .universal-active-filters-label {
+        font-weight: 600;
+        color: rgb(55 65 81); /* gray-700 */
+        font-size: 0.9375rem;
+    }
+
+    .dark .universal-active-filters-label {
+        color: rgb(209 213 219); /* gray-300 */
+    }
+
+    .universal-active-filters-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.5rem;
+        height: 1.5rem;
+        padding: 0 0.5rem;
+        background-color: rgb(59 130 246); /* blue-500 */
+        color: white;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .universal-clear-all-filters-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.375rem 0.75rem;
+        background-color: rgb(239 68 68); /* red-500 */
+        color: white;
+        border: none;
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .universal-clear-all-filters-btn:hover {
+        background-color: rgb(220 38 38); /* red-600 */
+    }
+
+    .universal-active-filters-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 0;
+    }
+
+    .universal-filter-tag-enhanced {
+        display: inline-flex;
+        align-items: center;
+        background-color: white;
+        border: 1px solid rgb(209 213 219); /* gray-300 */
+        border-radius: 0.375rem;
+        padding: 0.375rem 0.625rem;
+        font-size: 0.875rem;
+        gap: 0.5rem;
+    }
+
+    .dark .universal-filter-tag-enhanced {
+        background-color: rgb(55 65 81); /* gray-700 */
+        border-color: rgb(107 114 128); /* gray-500 */
+    }
+
+    .universal-filter-tag-content {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+    }
+
+    .universal-filter-tag-label {
+        font-weight: 600;
+        color: rgb(107 114 128); /* gray-500 */
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.025em;
+    }
+
+    .dark .universal-filter-tag-label {
+        color: rgb(156 163 175); /* gray-400 */
+    }
+
+    .universal-filter-tag-value {
+        color: rgb(17 24 39); /* gray-900 */
+        font-weight: 500;
+    }
+
+    .dark .universal-filter-tag-value {
+        color: rgb(243 244 246); /* gray-100 */
+    }
+
+    .universal-filter-tag-remove {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        margin-left: 0.25rem;
+        background: none;
+        border: none;
+        color: rgb(156 163 175); /* gray-400 */
+        cursor: pointer;
+        transition: color 0.2s;
+        font-size: 0.875rem;
+    }
+
+    .universal-filter-tag-remove:hover {
+        color: rgb(239 68 68); /* red-500 */
+    }
+
+    .universal-active-filters-summary {
+        padding-top: 0;
+        border-top: none;
+        margin-left: auto;
+        padding-left: 1rem;
+    }
+
+    .universal-filters-summary-text {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        color: rgb(107 114 128); /* gray-500 */
+        font-size: 0.875rem;
+    }
+
+    .dark .universal-filters-summary-text {
+        color: rgb(156 163 175); /* gray-400 */
+    }
+
+    .universal-filters-summary-text i {
+        color: rgb(59 130 246); /* blue-500 */
+    }
+
+    .dark .universal-filters-summary-text i {
+        color: rgb(147 197 253); /* blue-300 */
+    }
+
+    /* Payment method fields - green highlight for advance */
+    .advance-allocation-field {
+        background: rgb(240 253 244) !important;
+        border: 2px solid rgb(134 239 172) !important;
+    }
+
+    .dark .advance-allocation-field {
+        background: rgba(34, 197, 94, 0.1) !important;
+        border-color: rgb(34 197 94) !important;
+    }
+
+    /* Conditional detail sections styling */
+    .payment-details-section {
+        margin-top: 1rem;
+        padding: 1rem;
+        border-radius: 0.5rem;
+    }
+
+    .card-details-section {
+        background: rgb(239 246 255);
+        border-left: 4px solid rgb(59 130 246);
+    }
+
+    .dark .card-details-section {
+        background: rgba(59, 130, 246, 0.1);
+        border-left-color: rgb(59 130 246);
+    }
+
+    .upi-details-section {
+        background: rgb(255 247 237);
+        border-left: 4px solid rgb(249 115 22);
+    }
+
+    .dark .upi-details-section {
+        background: rgba(249, 115, 22, 0.1);
+        border-left-color: rgb(249 115 22);
+    }
+
+    /* Payment summary styling */
+    .payment-summary-box {
+        background: rgb(249 250 251);
+        border-radius: 0.5rem;
+        padding: 1rem;
+    }
+
+    .dark .payment-summary-box {
+        background: rgb(55 65 81);
+    }
+
+    /* NEW: Hierarchical table styles */
+    .invoice-header-row {
+        background: white;
+        font-weight: 500;
+        border-bottom: 2px solid #e5e7eb;
+    }
+
+    .dark .invoice-header-row {
+        background: #1f2937;
+        border-bottom-color: #374151;
+    }
+
+    .line-item-row {
+        background: #f9fafb;
+    }
+
+    .dark .line-item-row {
+        background: #111827;
+    }
+
+    .installment-row {
+        background: #f3f4f6;
+        font-size: 0.875rem;
+    }
+
+    .dark .installment-row {
+        background: #1f2937;
+    }
+
+    .expandable-row {
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .expandable-row:hover {
+        background: #f3f4f6 !important;
+    }
+
+    .dark .expandable-row:hover {
+        background: #374151 !important;
+    }
+
+    /* Indentation for hierarchy */
+    .indent-1 { padding-left: 2rem !important; }
+    .indent-2 { padding-left: 4rem !important; }
+    .indent-3 { padding-left: 6rem !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Page Title and Breadcrumb with Date/Day on Right -->
+    <div class="flex justify-between items-start mb-4">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-3">
+                <i class="fas fa-credit-card text-blue-600 dark:text-blue-400"></i>
+                Record Payment
+            </h1>
+            <nav class="flex items-center space-x-1 text-sm text-gray-500 dark:text-gray-400">
+                <a href="{{ url_for('auth_views.dashboard') }}" class="hover:text-gray-700 dark:hover:text-gray-300">Dashboard</a>
+                <span class="mx-2">/</span>
+                <a href="{{ url_for('billing_views.payment_patient_selection') }}" class="hover:text-gray-700 dark:hover:text-gray-300">Patient Selection</a>
+                <span class="mx-2">/</span>
+                <span class="text-gray-700 dark:text-gray-300">Record Payment</span>
+            </nav>
+        </div>
+        <div class="text-right">
+            <div class="text-base font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-end gap-2">
+                <i class="fas fa-calendar-alt text-blue-600 dark:text-blue-400"></i>
+                <span id="current-date"></span>
+            </div>
+            <div class="text-sm text-gray-500 dark:text-gray-400 mt-1" id="current-day"></div>
+        </div>
+    </div>
+
+    <!-- Patient Details Card -->
+    <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6 mb-6">
+        <!-- Patient Info with MRN -->
+        <div class="mb-6">
+            <div class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">PATIENT:</div>
+            <div class="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                {{ patient.full_name or (patient.first_name ~ ' ' ~ patient.last_name) or 'N/A' }}
+            </div>
+            <div class="text-lg text-gray-600 dark:text-gray-400">
+                <span class="font-semibold">MRN:</span> {{ patient.mrn or 'N/A' }}
+            </div>
+        </div>
+
+        <!-- Action Buttons Row -->
+        <div class="flex flex-wrap gap-3 mb-6">
+            <button onclick="window.history.back()" type="button" class="btn-back">
+                <i class="fas fa-arrow-left icon-left"></i>Back
+            </button>
+            <a href="{{ url_for('universal_views.universal_list_view', entity_type='patient_payments') }}"
+               class="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded transition dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">
+                <i class="fas fa-receipt mr-2"></i> Payment List
+            </a>
+            <a href="{{ url_for('universal_views.universal_list_view', entity_type='patient_invoices') }}"
+               class="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded transition dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">
+                <i class="fas fa-file-invoice mr-2"></i> Invoice List
+            </a>
+            <a href="{{ url_for('universal_views.universal_list_view', entity_type='packages') }}"
+               class="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded transition dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">
+                <i class="fas fa-box mr-2"></i> Package List
+            </a>
+            <button onclick="printOutstanding()" type="button"
+               class="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded transition dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">
+                <i class="fas fa-print mr-2"></i> Print Outstanding
+            </button>
+        </div>
+
+        <!-- Info Summary - 4 Card Grid (Universal Engine Style) -->
+        <div class="border-t border-gray-200 dark:border-gray-700 pt-6">
+            <div class="grid grid-cols-4 gap-6">
+                <!-- Phone Card -->
+                <div class="text-center">
+                    <div class="flex items-center justify-center gap-2 mb-2">
+                        <i class="fas fa-phone text-blue-600 dark:text-blue-400"></i>
+                        <span class="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase">Phone</span>
+                    </div>
+                    <div class="text-base text-gray-900 dark:text-white font-medium">
+                        {{ patient.contact_info.phone if patient.contact_info and patient.contact_info.phone else 'N/A' }}
+                    </div>
+                </div>
+
+                <!-- Email Card -->
+                <div class="text-center">
+                    <div class="flex items-center justify-center gap-2 mb-2">
+                        <i class="fas fa-envelope text-blue-600 dark:text-blue-400"></i>
+                        <span class="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase">Email</span>
+                    </div>
+                    <div class="text-base text-gray-900 dark:text-white font-medium break-words">
+                        {{ patient.contact_info.email if patient.contact_info and patient.contact_info.email else 'N/A' }}
+                    </div>
+                </div>
+
+                <!-- Address Card -->
+                <div class="text-center">
+                    <div class="flex items-center justify-center gap-2 mb-2">
+                        <i class="fas fa-map-marker-alt text-blue-600 dark:text-blue-400"></i>
+                        <span class="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase">Address</span>
+                    </div>
+                    {% if patient.contact_info and patient.contact_info.address %}
+                        {% if patient.contact_info.address is mapping %}
+                            {# Handle dictionary format #}
+                            <div class="text-sm text-gray-900 dark:text-white font-medium">
+                                {{ patient.contact_info.address.street or '' }}
+                            </div>
+                            {% set location_parts = [
+                                patient.contact_info.address.city,
+                                patient.contact_info.address.state,
+                                patient.contact_info.address.pincode
+                            ] | select | list %}
+                            {% if location_parts %}
+                                <div class="text-sm text-gray-900 dark:text-white font-medium">
+                                    {{ location_parts | join(', ') }}
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            {# Handle string format - original code #}
+                            {% set address_parts = patient.contact_info.address.split(',') %}
+                            {% if address_parts|length > 1 %}
+                                <div class="text-sm text-gray-900 dark:text-white font-medium">
+                                    {{ address_parts[0].strip() }}
+                                </div>
+                                <div class="text-sm text-gray-900 dark:text-white font-medium">
+                                    {{ address_parts[1:] | join(', ') }}
+                                </div>
+                            {% else %}
+                                <div class="text-sm text-gray-900 dark:text-white font-medium break-words">
+                                    {{ patient.contact_info.address }}
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                    {% else %}
+                        <div class="text-base text-gray-900 dark:text-white font-medium">N/A</div>
+                    {% endif %}
+                </div>
+
+                <!-- Gender Card -->
+                <div class="text-center">
+                    <div class="flex items-center justify-center gap-2 mb-2">
+                        <i class="fas fa-venus-mars text-blue-600 dark:text-blue-400"></i>
+                        <span class="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase">Gender</span>
+                    </div>
+                    <div class="text-base text-gray-900 dark:text-white font-medium">
+                        {{ patient.gender.title() if patient.gender else 'N/A' }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- SUMMARY CARDS - Universal Engine Style -->
+    <!-- ============================================== -->
+    <div class="card-grid cols-3 mb-6">
+        <!-- Total Outstanding Card -->
+        <div class="stat-card">
+            <div class="stat-card-icon danger">
+                <i class="fas fa-file-invoice-dollar"></i>
+            </div>
+            <div class="stat-card-value" id="summary-outstanding">₹0</div>
+            <div class="stat-card-label">Total Outstanding</div>
+            <div class="stat-card-subtitle text-xs text-gray-500">
+                <span id="summary-invoice-count">0</span> invoices
+            </div>
+        </div>
+
+        <!-- Packages Due Card -->
+        <div class="stat-card">
+            <div class="stat-card-icon warning">
+                <i class="fas fa-box"></i>
+            </div>
+            <div class="stat-card-value" id="summary-packages-due">₹0</div>
+            <div class="stat-card-label">Packages Due</div>
+            <div class="stat-card-subtitle text-xs text-gray-500">
+                <span id="summary-package-count">0</span> packages
+            </div>
+        </div>
+
+        <!-- Advance Balance Card -->
+        <div class="stat-card">
+            <div class="stat-card-icon success">
+                <i class="fas fa-wallet"></i>
+            </div>
+            <div class="stat-card-value" id="summary-advance">₹0</div>
+            <div class="stat-card-label">Advance Balance</div>
+            <div class="stat-card-subtitle text-xs text-gray-500">
+                Available for adjustment
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- UNIVERSAL ENGINE FILTER CARD -->
+    <!-- ============================================== -->
+
+    <!-- Filter Card Header -->
+    <div class="universal-filter-card-header">
+        <h3 class="universal-filter-card-title">
+            <i class="fas fa-filter"></i>Filter Outstanding Payments
+        </h3>
+        <div class="universal-filter-results-count">
+            <span id="results-count">0 results</span>
+        </div>
+    </div>
+
+    <!-- Filter Card Body -->
+    <div class="universal-filter-card-body">
+        <form id="universal-filter-form" class="universal-filter-form">
+
+            <!-- SECTION 1: Date Filter with Presets -->
+            <div class="universal-date-filter-container">
+                <div class="universal-date-filter-section">
+                    <div class="universal-date-filter-title">
+                        <i class="fas fa-calendar-alt"></i>Invoice Date Range
+                    </div>
+
+                    <!-- Date Preset Buttons -->
+                    <div class="universal-date-filter-presets-row">
+                        <button type="button" class="universal-date-preset-btn universal-date-filter-preset" data-preset="today">
+                            <i class="fas fa-calendar-day"></i>Today
+                        </button>
+                        <button type="button" class="universal-date-preset-btn universal-date-filter-preset" data-preset="this_month">
+                            <i class="fas fa-calendar-alt"></i>This Month
+                        </button>
+                        <button type="button" class="universal-date-preset-btn universal-date-filter-preset" data-preset="financial_year">
+                            <i class="fas fa-chart-line"></i>Financial Year
+                        </button>
+                        <button type="button" class="universal-date-preset-btn universal-date-filter-preset" data-preset="clear">
+                            <i class="fas fa-times"></i>Clear
+                        </button>
+                    </div>
+
+                    <!-- Date Input Fields -->
+                    <div class="universal-date-filter-inputs-row">
+                        <div class="universal-date-input-group">
+                            <label class="universal-date-label">From Date</label>
+                            <input type="date"
+                                   id="start_date"
+                                   name="start_date"
+                                   class="universal-form-input">
+                        </div>
+                        <div class="universal-date-separator-container">
+                            <span class="universal-date-filter-separator">to</span>
+                        </div>
+                        <div class="universal-date-input-group">
+                            <label class="universal-date-label">To Date</label>
+                            <input type="date"
+                                   id="end_date"
+                                   name="end_date"
+                                   class="universal-form-input">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 2: Other Filters -->
+            <div class="universal-other-filters-container">
+                <div class="universal-other-filters-section">
+                    <div class="universal-filter-grid">
+                        <!-- Amount Due Filter (Greater Than or Equal To) -->
+                        <div class="universal-form-group">
+                            <label class="universal-form-label">
+                                Amount Due
+                                <span class="text-xs text-gray-500 font-normal ml-1">(≥)</span>
+                            </label>
+                            <input type="number"
+                                   id="filter-amount-due"
+                                   name="amount_due"
+                                   min="0"
+                                   step="0.01"
+                                   placeholder="Minimum amount..."
+                                   class="universal-form-input">
+                        </div>
+
+                        <!-- Universal Text Search (Invoice, Payment ID, Package ID) -->
+                        <div class="universal-form-group">
+                            <label class="universal-form-label">
+                                Search
+                                <span class="text-xs text-gray-500 font-normal ml-1">(Invoice / Payment / Package)</span>
+                            </label>
+                            <input type="text"
+                                   id="filter-universal-search"
+                                   name="universal_search"
+                                   placeholder="Search by invoice, payment or package ID..."
+                                   class="universal-form-input">
+                        </div>
+
+                        <!-- Package Name with Autocomplete -->
+                        <div class="universal-form-group">
+                            <label class="universal-form-label">Package Name</label>
+                            <div class="universal-autocomplete-wrapper" style="position: relative;">
+                                <input type="text"
+                                       id="filter-package-name"
+                                       name="package_name"
+                                       class="universal-form-input universal-autocomplete-search"
+                                       placeholder="Type to search packages..."
+                                       autocomplete="off"
+                                       data-autocomplete-type="packages"
+                                       data-value-field="package_id"
+                                       data-display-field="package_name">
+                                <div id="package-name-dropdown"
+                                     class="universal-autocomplete-dropdown absolute z-50 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg hidden mt-1 max-h-60 overflow-y-auto">
+                                </div>
+                                <div id="package-name-loading"
+                                     class="absolute right-3 top-3 hidden">
+                                    <i class="fas fa-spinner fa-spin text-gray-400"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Packages Only Checkbox -->
+                        <div class="universal-form-group">
+                            <label class="universal-form-label">&nbsp;</label>
+                            <div class="form-check">
+                                <input type="checkbox"
+                                       id="filter-packages-only"
+                                       name="packages_only"
+                                       class="form-check-input">
+                                <label for="filter-packages-only" class="form-check-label">
+                                    Packages Only
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Sort Order Checkbox (NEW) -->
+                        <div class="universal-form-group">
+                            <label class="universal-form-label">&nbsp;</label>
+                            <div class="form-check">
+                                <input type="checkbox"
+                                       id="filter-sort-oldest-first"
+                                       name="sort_oldest_first"
+                                       class="form-check-input"
+                                       onchange="toggleSortOrder()">
+                                <label for="filter-sort-oldest-first" class="form-check-label">
+                                    Oldest First
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 3: Filter Actions -->
+            <div class="universal-filter-actions">
+                <div class="universal-filter-actions-left">
+                    <button type="button"
+                            onclick="applyUniversalFilters()"
+                            class="btn-primary">
+                        <i class="fas fa-search icon-left"></i>Apply Filters
+                    </button>
+                    <button type="button"
+                            onclick="clearUniversalFilters()"
+                            class="btn-secondary">
+                        <i class="fas fa-undo icon-left"></i>Reset All
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- ENHANCED Active Filters Display -->
+    <div class="universal-active-filters-enhanced" id="active-filters" style="display: none;">
+        <div class="universal-active-filters-container">
+            <!-- Single Horizontal Row with All Elements -->
+            <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                <!-- Filter Header with Count -->
+                <div class="universal-active-filters-info">
+                    <i class="fas fa-filter-circle-dollar"></i>
+                    <span class="universal-active-filters-label">Active Filters</span>
+                    <span class="universal-active-filters-count" id="active-filter-count">0</span>
+                </div>
+
+                <!-- Filter Tags Grid -->
+                <div class="universal-active-filters-grid" id="active-filter-tags" style="flex: 1;">
+                    <!-- Filter tags will be inserted here dynamically -->
+                </div>
+
+                <!-- Filter Summary Stats -->
+                <div class="universal-active-filters-summary">
+                    <span class="universal-filters-summary-text">
+                        <i class="fas fa-info-circle"></i>
+                        <span id="filter-summary-text">0 filters applied • 0 results found</span>
+                    </span>
+                </div>
+
+                <!-- Clear All Button -->
+                <button type="button" class="universal-clear-all-filters-btn" onclick="clearUniversalFilters()">
+                    <i class="fas fa-times-circle"></i>Clear All
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <form id="enhanced-payment-form" method="POST" action="{{ url_for('billing_views.record_invoice_payment_enhanced', invoice_id=invoice.invoice_id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left Column: Outstanding Invoices + Package Installments -->
+            <div class="lg:col-span-2 space-y-6">
+
+                <!-- ============================================== -->
+                <!-- SECTION 1: OUTSTANDING INVOICES -->
+                <!-- ============================================== -->
+                <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800 dark:text-white">
+                            <i class="fas fa-file-invoice text-blue-500 mr-2"></i>
+                            Outstanding Invoices
+                        </h2>
+
+                        <!-- Allocation Mode Toggle and Selection Controls -->
+                        <div class="flex items-center space-x-4">
+                            <span class="text-sm text-gray-600 dark:text-gray-400">Allocation Mode:</span>
+                            <button type="button" id="toggle-allocation-mode"
+                                    class="px-4 py-2 rounded-lg font-medium text-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700"
+                                    data-mode="auto">
+                                <i class="fas fa-magic mr-2"></i>
+                                <span id="mode-text">Auto-FIFO</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Loading State -->
+                    <div id="invoices-loading" class="text-center py-8">
+                        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                        <p class="mt-2 text-gray-600 dark:text-gray-400">Loading outstanding invoices...</p>
+                    </div>
+
+                    <!-- Invoices Table -->
+                    <div id="invoices-table-container" class="hidden">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead class="bg-gray-50 dark:bg-gray-700">
+                                    <tr>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            <input type="checkbox" id="select-all-invoices" class="form-checkbox h-4 w-4 text-blue-600 rounded">
+                                        </th>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Invoice #
+                                        </th>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Date
+                                        </th>
+                                        <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Total
+                                        </th>
+                                        <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Paid
+                                        </th>
+                                        <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Balance
+                                        </th>
+                                        <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Allocate Amount
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody id="invoices-table-body" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                    <!-- Populated by JavaScript -->
+                                </tbody>
+                                <tfoot class="bg-gray-50 dark:bg-gray-700">
+                                    <tr class="text-sm">
+                                        <td colspan="5" class="px-3 py-3 text-right font-medium text-gray-700 dark:text-gray-300">
+                                            Totals:
+                                        </td>
+                                        <td class="px-3 py-3 text-right">
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 uppercase mb-1">Outstanding</div>
+                                            <div class="text-sm font-semibold text-gray-900 dark:text-white">
+                                                <span id="total-invoice-balance">₹0.00</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-3 py-3 text-right">
+                                            <div class="text-xs text-blue-500 dark:text-blue-400 uppercase mb-1">Allocated</div>
+                                            <div class="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                                                ₹<span id="total-invoice-allocation">0.00</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr class="text-sm bg-gray-100 dark:bg-gray-600">
+                                        <td colspan="6" class="px-3 py-3 text-right font-medium text-gray-700 dark:text-gray-300">
+                                            Balance Outstanding:
+                                        </td>
+                                        <td class="px-3 py-3 text-right">
+                                            <div class="text-sm font-semibold" id="balance-outstanding-container">
+                                                ₹<span id="balance-outstanding">0.00</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+
+                        <!-- No Invoices Message -->
+                        <div id="no-invoices-message" class="text-center py-8 text-gray-600 dark:text-gray-400 hidden">
+                            <i class="fas fa-check-circle text-4xl text-green-500 mb-3"></i>
+                            <p class="font-medium">No outstanding invoices found</p>
+                            <p class="text-sm mt-1">All invoices for this patient are fully paid</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================== -->
+                <!-- SECTION 2: PACKAGE INSTALLMENTS -->
+                <!-- ============================================== -->
+                <div id="package-installments-section" class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 hidden">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">
+                        <i class="fas fa-box text-purple-500 mr-2"></i>
+                        Package Installments
+                    </h2>
+
+                    <!-- Loading State -->
+                    <div id="installments-loading" class="text-center py-8">
+                        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+                        <p class="mt-2 text-gray-600 dark:text-gray-400">Loading package installments...</p>
+                    </div>
+
+                    <!-- Installments Table -->
+                    <div id="installments-table-container" class="hidden">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead class="bg-gray-50 dark:bg-gray-700">
+                                    <tr>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            <input type="checkbox" id="select-all-installments" class="form-checkbox h-4 w-4 text-purple-600 rounded">
+                                        </th>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Package
+                                        </th>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Installment
+                                        </th>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Due Date
+                                        </th>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Status
+                                        </th>
+                                        <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Amount
+                                        </th>
+                                        <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Pay Amount
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody id="installments-table-body" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                    <!-- Populated by JavaScript -->
+                                </tbody>
+                                <tfoot class="bg-gray-50 dark:bg-gray-700">
+                                    <tr class="font-semibold">
+                                        <td colspan="5" class="px-3 py-3 text-right text-gray-700 dark:text-gray-300">
+                                            Total Allocated to Installments:
+                                        </td>
+                                        <td class="px-3 py-3 text-right text-gray-900 dark:text-white">
+                                            <span id="total-installment-amount">₹0.00</span>
+                                        </td>
+                                        <td class="px-3 py-3 text-right text-purple-600 dark:text-purple-400 font-bold">
+                                            ₹<span id="total-installment-allocation">0.00</span>
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================== -->
+                <!-- SECTION 3: PAYMENT METHODS -->
+                <!-- ============================================== -->
+                <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">
+                        <i class="fas fa-credit-card text-green-500 mr-2"></i>
+                        Payment Method Distribution
+                    </h2>
+
+                    <!-- Payment Date -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Payment Date <span class="text-red-500">*</span>
+                        </label>
+                        <input type="date" name="payment_date" id="payment_date" required
+                               value="{{ now().strftime('%Y-%m-%d') }}"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100">
+                    </div>
+
+                    <!-- Advance Amount - Full Width with Green Highlight -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            <i class="fas fa-piggy-bank text-green-600 mr-1"></i>
+                            Allocate from Advance Balance
+                            <span class="text-xs text-gray-500 ml-2">(Available: ₹<span id="advance-balance-display">0.00</span>)</span>
+                        </label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500 font-semibold">₹</span>
+                            <input type="number" name="advance_amount" id="advance_amount" step="0.01" min="0"
+                                   class="advance-allocation-field w-full pl-10 pr-3 py-2 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 dark:text-gray-100"
+                                   placeholder="0.00">
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Amount to allocate from available advance balance</p>
+                    </div>
+
+                    <!-- Payment Methods Grid -->
+                    <div class="payment-two-column-grid mb-4">
+                        <!-- Cash Amount -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                <i class="fas fa-money-bill-wave text-green-600 mr-2"></i>
+                                Cash Amount
+                            </label>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500 font-semibold">₹</span>
+                                <input type="number" name="cash_amount" id="cash_amount" step="0.01" min="0"
+                                       class="payment-method-input w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                                       placeholder="0.00">
+                            </div>
+                        </div>
+
+                        <!-- Credit Card Amount -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                <i class="fas fa-credit-card text-blue-600 mr-2"></i>
+                                Credit Card
+                            </label>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500 font-semibold">₹</span>
+                                <input type="number" name="credit_card_amount" id="credit_card_amount" step="0.01" min="0"
+                                       class="payment-method-input w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                                       placeholder="0.00">
+                            </div>
+                        </div>
+
+                        <!-- Debit Card Amount -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                <i class="fas fa-credit-card text-purple-600 mr-2"></i>
+                                Debit Card
+                            </label>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500 font-semibold">₹</span>
+                                <input type="number" name="debit_card_amount" id="debit_card_amount" step="0.01" min="0"
+                                       class="payment-method-input w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                                       placeholder="0.00">
+                            </div>
+                        </div>
+
+                        <!-- UPI Amount -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                <i class="fas fa-mobile-alt text-orange-600 mr-2"></i>
+                                UPI Amount
+                            </label>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500 font-semibold">₹</span>
+                                <input type="number" name="upi_amount" id="upi_amount" step="0.01" min="0"
+                                       class="payment-method-input w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                                       placeholder="0.00">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card Details (shown when card amount > 0) -->
+                    <div id="card-details" class="hidden payment-details-section card-details-section">
+                        <h4 class="font-semibold mb-3 text-gray-700 dark:text-gray-300">
+                            <i class="fas fa-credit-card text-blue-600 mr-2"></i>
+                            Card Details
+                        </h4>
+                        <div class="payment-two-column-grid">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Last 4 Digits <span class="text-red-500">*</span>
+                                </label>
+                                <input type="text" name="card_number_last4" id="card_number_last4" maxlength="4" pattern="\d{4}"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                                       placeholder="1234">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Card Type <span class="text-red-500">*</span>
+                                </label>
+                                <select name="card_type" id="card_type"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100">
+                                    <option value="">Select...</option>
+                                    <option value="Visa">Visa</option>
+                                    <option value="MasterCard">MasterCard</option>
+                                    <option value="RuPay">RuPay</option>
+                                    <option value="Amex">American Express</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- UPI Details (shown when UPI amount > 0) -->
+                    <div id="upi-details" class="hidden payment-details-section upi-details-section">
+                        <h4 class="font-semibold mb-3 text-gray-700 dark:text-gray-300">
+                            <i class="fas fa-mobile-alt text-orange-600 mr-2"></i>
+                            UPI Details
+                        </h4>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                UPI ID <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" name="upi_id" id="upi_id"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                                   placeholder="username@upi">
+                        </div>
+                    </div>
+
+                    <!-- Reference Number -->
+                    <div class="mt-4">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Reference Number (Optional)
+                        </label>
+                        <input type="text" name="reference_number" id="reference_number"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                               placeholder="Transaction reference or receipt number">
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Column: Summary + Actions -->
+            <div class="space-y-6">
+
+                <!-- ============================================== -->
+                <!-- SECTION 4: PAYMENT SUMMARY -->
+                <!-- ============================================== -->
+                <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 sticky top-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">
+                        <i class="fas fa-calculator text-blue-500 mr-2"></i>
+                        Payment Summary
+                    </h2>
+
+                    <!-- Payment Method Breakdown -->
+                    <div id="payment-breakdown" class="space-y-2 mb-4">
+                        <!-- Populated by JavaScript -->
+                    </div>
+
+                    <div class="border-t border-gray-200 dark:border-gray-700 my-4"></div>
+
+                    <!-- Total Allocation Section -->
+                    <div class="space-y-2 mb-4">
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-gray-600 dark:text-gray-400">To Invoices:</span>
+                            <span class="font-medium text-gray-900 dark:text-white">₹ <span id="summary-invoice-allocation">0.00</span></span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-gray-600 dark:text-gray-400">To Installments:</span>
+                            <span class="font-medium text-gray-900 dark:text-white">₹ <span id="summary-installment-allocation">0.00</span></span>
+                        </div>
+                        <div class="flex justify-between items-center pt-2 border-t border-gray-200 dark:border-gray-700">
+                            <span class="font-semibold text-gray-700 dark:text-gray-300">Total Allocation:</span>
+                            <span class="font-semibold text-gray-900 dark:text-white">₹ <span id="summary-total-allocated">0.00</span></span>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-gray-200 dark:border-gray-700 my-4"></div>
+
+                    <!-- Comparison Summary -->
+                    <div class="space-y-2 mb-4">
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="font-medium text-gray-700 dark:text-gray-300">Payment Methods Total:</span>
+                            <span class="font-semibold text-gray-900 dark:text-white">₹ <span id="summary-method-total">0.00</span></span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="font-medium text-gray-700 dark:text-gray-300">Allocation Total:</span>
+                            <span class="font-semibold text-gray-900 dark:text-white">₹ <span id="summary-allocation-total">0.00</span></span>
+                        </div>
+                        <div id="difference-row" class="flex justify-between items-center pt-2 border-t border-gray-200 dark:border-gray-700">
+                            <span class="font-semibold text-gray-700 dark:text-gray-300">Difference:</span>
+                            <span id="difference-amount" class="font-semibold">₹ 0.00</span>
+                        </div>
+                    </div>
+
+                    <!-- Validation Messages -->
+                    <div id="validation-message" class="mt-4">
+                        <!-- Populated by JavaScript -->
+                    </div>
+
+                    <!-- Approval Threshold Warning -->
+                    <div id="approval-threshold-warning" class="hidden mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                        <div class="flex items-start">
+                            <i class="fas fa-exclamation-triangle text-yellow-500 mr-2 mt-0.5"></i>
+                            <div class="text-sm text-yellow-800 dark:text-yellow-200">
+                                <p class="font-medium">Approval Required</p>
+                                <p class="mt-1">Payment ≥₹{{ "{:,.2f}".format(approval_threshold) }} requires approval before GL posting.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Supporting Documents -->
+        <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">
+                <i class="fas fa-paperclip text-blue-500 mr-2"></i>
+                Supporting Documents
+            </h2>
+            <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
+                <i class="fas fa-cloud-upload-alt text-gray-400 text-4xl mb-3"></i>
+                <p class="text-gray-600 dark:text-gray-400 mb-2">Drag and drop files here, or click to browse</p>
+                <p class="text-sm text-gray-500 dark:text-gray-500">Supported formats: PDF, JPG, PNG (Max 10MB)</p>
+                <input type="file" id="document-upload" name="documents[]" multiple accept=".pdf,.jpg,.jpeg,.png" class="hidden">
+                <button type="button" onclick="document.getElementById('document-upload').click()"
+                        class="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                    <i class="fas fa-upload mr-2"></i>
+                    Choose Files
+                </button>
+            </div>
+            <div id="uploaded-files-list" class="mt-4 space-y-2 hidden">
+                <!-- Files will be listed here -->
+            </div>
+        </div>
+
+        <!-- Bottom Action Buttons -->
+        <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg mb-6">
+            <div class="p-6">
+                <div class="flex justify-end items-center gap-3">
+                    <a href="{{ url_for('universal_views.universal_list_view', entity_type='patient_invoices') }}"
+                       class="btn-danger">
+                        <i class="fas fa-times mr-2"></i>
+                        Cancel
+                    </a>
+                    <button type="button" id="save-draft-button"
+                            class="btn-outline"
+                            disabled>
+                        <i class="fas fa-save mr-2"></i>
+                        Save as Draft
+                    </button>
+                    <button type="submit" id="submit-button"
+                            class="btn-success"
+                            style="background-color: #047857 !important; border-color: #047857 !important;"
+                            disabled>
+                        <i class="fas fa-check-circle mr-2"></i>
+                        Record Payment
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+(function() {
+    'use strict';
+
+    // ============================================
+    // FIELD REFERENCES
+    // ============================================
+    const form = document.getElementById('enhanced-payment-form');
+    const advanceField = document.getElementById('advance_amount');
+    const cashField = document.getElementById('cash_amount');
+    const creditCardField = document.getElementById('credit_card_amount');
+    const debitCardField = document.getElementById('debit_card_amount');
+    const upiField = document.getElementById('upi_amount');
+    const cardDetails = document.getElementById('card-details');
+    const upiDetails = document.getElementById('upi-details');
+    const validationDiv = document.getElementById('validation-message');
+    const paymentBreakdownDiv = document.getElementById('payment-breakdown');
+
+    // ============================================
+    // STATE MANAGEMENT
+    // ============================================
+    const state = {
+        patientId: '{{ patient.patient_id }}',
+        hospitalId: '{{ current_user.hospital_id }}',
+        currentInvoiceId: '{{ invoice.invoice_id }}',
+        approvalThreshold: {{ approval_threshold }},
+
+        outstandingInvoices: [],
+        filteredInvoices: [],        // NEW: Filtered invoice list
+        pendingInstallments: [],     // Will be removed - now part of line items
+        advanceBalance: 0,
+
+        expandedInvoices: new Set(), // NEW: Track which invoices are expanded
+        expandedPackages: new Set(), // NEW: Track which packages show installments
+
+        allocations: {
+            invoices: {},       // { invoice_id: amount }
+            installments: {}    // { installment_id: amount }
+        }
+    };
+
+    // ============================================
+    // INITIALIZATION
+    // ============================================
+    document.addEventListener('DOMContentLoaded', async function() {
+        console.log('[INIT] Patient payment form initialized');
+
+        // Fetch all data
+        await Promise.all([
+            fetchPatientSummary(),       // NEW: Fetch patient financial summary
+            fetchOutstandingInvoices(),   // Now fetches hierarchical data
+            fetchAdvanceBalance()
+            // fetchPendingInstallments() - REMOVED: Now part of invoice line items
+        ]);
+
+        // Set up event listeners for payment method fields
+        [advanceField, cashField, creditCardField, debitCardField, upiField].forEach(field => {
+            if (field) {
+                field.addEventListener('input', function() {
+                    toggleMethodDetails();
+                    updateSummary();
+                    validateAmounts();
+                });
+            }
+        });
+
+        // ✅ Header "Select All" checkbox for invoices (Toggle behavior)
+        const selectAllInvoicesCheckbox = document.getElementById('select-all-invoices');
+        if (selectAllInvoicesCheckbox) {
+            selectAllInvoicesCheckbox.addEventListener('change', function() {
+                const isChecked = this.checked;
+
+                // Toggle all invoice checkboxes
+                document.querySelectorAll('.invoice-checkbox').forEach(checkbox => {
+                    checkbox.checked = isChecked;
+                    const invoiceId = checkbox.dataset.invoiceId;
+                    const input = document.querySelector(`.invoice-allocation-input[data-invoice-id="${invoiceId}"]`);
+
+                    if (isChecked) {
+                        // Check: allocate full balance
+                        const balance = parseFloat(checkbox.dataset.balance);
+                        if (input) {
+                            input.value = balance.toFixed(2);
+                            state.allocations.invoices[invoiceId] = balance;
+                        }
+                    } else {
+                        // Uncheck: clear allocation
+                        if (input) {
+                            input.value = '0.00';
+                            state.allocations.invoices[invoiceId] = 0;
+                        }
+                    }
+                });
+
+                // ✅ FIX: Also toggle all child installment checkboxes (packages)
+                document.querySelectorAll('.installment-checkbox').forEach(checkbox => {
+                    checkbox.checked = isChecked;
+                    const installmentId = checkbox.dataset.installmentId;
+                    const invoiceId = checkbox.dataset.invoiceId;
+                    const input = document.querySelector(`.installment-allocation-input[data-installment-id="${installmentId}"]`);
+
+                    if (isChecked) {
+                        // Check: allocate full payable amount
+                        const balance = parseFloat(checkbox.dataset.balance);
+                        if (input) {
+                            input.value = balance.toFixed(2);
+                            state.allocations.installments[installmentId] = balance;
+                        }
+                    } else {
+                        // Uncheck: clear allocation
+                        if (input) {
+                            input.value = '0.00';
+                            state.allocations.installments[installmentId] = 0;
+                        }
+                    }
+
+                    // Update parent invoice allocation display
+                    if (invoiceId) {
+                        updateParentInvoiceAllocation(invoiceId);
+                    }
+                });
+
+                updateInvoiceTotals();
+                updateInstallmentTotals();
+                updateSummary();
+                validateAmounts();
+            });
+        }
+
+        // ✅ Header "Select All" checkbox for installments (Toggle behavior)
+        const selectAllInstallmentsCheckbox = document.getElementById('select-all-installments');
+        if (selectAllInstallmentsCheckbox) {
+            selectAllInstallmentsCheckbox.addEventListener('change', function() {
+                const isChecked = this.checked;
+
+                // Toggle all installment checkboxes
+                document.querySelectorAll('.installment-checkbox').forEach(checkbox => {
+                    checkbox.checked = isChecked;
+                    const installmentId = checkbox.dataset.installmentId;
+                    const invoiceId = checkbox.dataset.invoiceId;
+                    const input = document.querySelector(`.installment-allocation-input[data-installment-id="${installmentId}"]`);
+
+                    if (isChecked) {
+                        // Check: allocate full balance
+                        const balance = parseFloat(checkbox.dataset.balance);
+                        if (input) {
+                            input.value = balance.toFixed(2);
+                            state.allocations.installments[installmentId] = balance;
+                        }
+                    } else {
+                        // Uncheck: clear allocation
+                        if (input) {
+                            input.value = '0.00';
+                            state.allocations.installments[installmentId] = 0;
+                        }
+                    }
+
+                    // Update parent invoice checkbox
+                    if (invoiceId) {
+                        syncParentInvoiceCheckbox(invoiceId);
+                        updateParentInvoiceAllocation(invoiceId);
+                    }
+                });
+
+                updateInstallmentTotals();
+                updateSummary();
+                validateAmounts();
+            });
+        }
+
+        // Save as Draft button
+        const saveDraftBtn = document.getElementById('save-draft-button');
+        if (saveDraftBtn) {
+            saveDraftBtn.addEventListener('click', function() {
+                // Add hidden field to indicate draft save
+                const draftInput = document.createElement('input');
+                draftInput.type = 'hidden';
+                draftInput.name = 'save_as_draft';
+                draftInput.value = 'true';
+                document.getElementById('enhanced-payment-form').appendChild(draftInput);
+
+                // Submit the form
+                document.getElementById('enhanced-payment-form').submit();
+            });
+        }
+
+        // Initial update
+        toggleMethodDetails();
+        updateSummary();
+        validateAmounts();
+
+        console.log('[INIT] Initialization complete');
+    });
+
+    // ============================================
+    // DATA FETCHING
+    // ============================================
+
+    async function fetchPatientSummary() {
+        try {
+            const response = await fetch(`/api/patient/${state.patientId}/payment-summary`);
+            if (!response.ok) throw new Error('Failed to fetch patient summary');
+
+            const data = await response.json();
+
+            // Update patient details in the card
+            document.getElementById('patient-name-summary').textContent = data.patient.name;
+            document.getElementById('patient-mrn-header').textContent = `MRN: ${data.patient.mrn}`;
+            document.getElementById('patient-phone-summary').textContent = data.patient.phone || 'N/A';
+            document.getElementById('patient-email-summary').textContent = data.patient.email || 'N/A';
+            document.getElementById('patient-age-summary').textContent = data.patient.age || '-';
+            document.getElementById('patient-gender-summary').textContent = data.patient.gender || '-';
+
+            // Update financial summary
+            document.getElementById('total-outstanding').textContent = `₹${data.financial_summary.total_outstanding.toFixed(2)}`;
+            document.getElementById('advance-balance-summary').textContent = `₹${data.financial_summary.advance_balance.toFixed(2)}`;
+            document.getElementById('net-due').textContent = `₹${data.financial_summary.net_due.toFixed(2)}`;
+            document.getElementById('outstanding-count').textContent = data.financial_summary.outstanding_invoices_count;
+            document.getElementById('installments-count').textContent = data.financial_summary.pending_installments_count;
+
+            console.log('[PATIENT] Summary loaded:', data.financial_summary);
+        } catch (error) {
+            console.error('[ERROR] Fetching patient summary:', error);
+        }
+    }
+
+    async function fetchOutstandingInvoices() {
+        try {
+            // ✅ Get sort order from checkbox (default: latest first)
+            const sortOldestFirst = document.getElementById('filter-sort-oldest-first')?.checked || false;
+            const sortParam = sortOldestFirst ? 'asc' : 'desc';
+
+            const response = await fetch(`/api/billing/patient/${state.patientId}/outstanding-invoices?sort=${sortParam}`);
+            if (!response.ok) throw new Error('Failed to fetch invoices');
+
+            const data = await response.json();
+            state.outstandingInvoices = data.invoices || [];
+
+            // Initialize filteredInvoices with all invoices
+            state.filteredInvoices = [...state.outstandingInvoices];
+
+            // Calculate summary values
+            let totalOutstanding = 0;
+            let packagesDue = 0;
+            let packageCount = 0;
+            const uniquePackages = new Set();
+
+            // Extract installments from line items for backwards compatibility
+            state.pendingInstallments = [];
+            state.outstandingInvoices.forEach(invoice => {
+                totalOutstanding += parseFloat(invoice.balance_due || 0);
+
+                if (invoice.line_items) {
+                    invoice.line_items.forEach(lineItem => {
+                        if (lineItem.has_installments && lineItem.installments) {
+                            uniquePackages.add(lineItem.item_name);
+                            packagesDue += parseFloat(lineItem.line_balance || 0);
+
+                            lineItem.installments.forEach(inst => {
+                                // Add invoice and line item references for context
+                                state.pendingInstallments.push({
+                                    ...inst,
+                                    invoice_id: invoice.invoice_id,
+                                    invoice_number: invoice.invoice_number,
+                                    line_item_id: lineItem.line_item_id,
+                                    package_name: lineItem.item_name
+                                });
+                            });
+                        }
+                    });
+                }
+            });
+
+            packageCount = uniquePackages.size;
+
+            // Update summary cards
+            updateSummaryCards(totalOutstanding, packagesDue, packageCount);
+
+            document.getElementById('invoices-loading').classList.add('hidden');
+            document.getElementById('invoices-table-container').classList.remove('hidden');
+
+            if (state.outstandingInvoices.length === 0) {
+                document.getElementById('no-invoices-message').classList.remove('hidden');
+            } else {
+                renderInvoicesTable();
+            }
+        } catch (error) {
+            console.error('[ERROR] Fetching invoices:', error);
+        }
+    }
+
+    function updateSummaryCards(totalOutstanding, packagesDue, packageCount) {
+        // Update Total Outstanding
+        document.getElementById('summary-outstanding').textContent =
+            `₹${totalOutstanding.toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 0})}`;
+        document.getElementById('summary-invoice-count').textContent = state.outstandingInvoices.length;
+
+        // Update Packages Due
+        document.getElementById('summary-packages-due').textContent =
+            `₹${packagesDue.toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 0})}`;
+        document.getElementById('summary-package-count').textContent = packageCount;
+
+        // Update Advance Balance
+        const advanceBalance = state.advanceBalance || 0;
+        document.getElementById('summary-advance').textContent =
+            `₹${advanceBalance.toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 0})}`;
+
+        // Update results count
+        document.getElementById('results-count').textContent = `${state.outstandingInvoices.length} results`;
+    }
+
+    async function fetchAdvanceBalance() {
+        try {
+            const response = await fetch(`/api/billing/patient/${state.patientId}/advance-balance`);
+            if (!response.ok) throw new Error('Failed to fetch advance balance');
+
+            const data = await response.json();
+            state.advanceBalance = parseFloat(data.balance) || 0;
+
+            const advanceDisplayEl = document.getElementById('advance-balance-display');
+            if (advanceDisplayEl) {
+                advanceDisplayEl.textContent = state.advanceBalance.toFixed(2);
+            }
+
+            if (advanceField) {
+                advanceField.setAttribute('max', state.advanceBalance);
+            }
+
+            console.log('[ADVANCE] Balance loaded:', state.advanceBalance);
+        } catch (error) {
+            console.error('[ERROR] Fetching advance balance:', error);
+        }
+    }
+
+    async function fetchPendingInstallments() {
+        try {
+            const response = await fetch(`/api/billing/patient/${state.patientId}/pending-installments`);
+            if (!response.ok) throw new Error('Failed to fetch installments');
+
+            const data = await response.json();
+            state.pendingInstallments = data.installments || [];
+
+            if (state.pendingInstallments.length > 0) {
+                document.getElementById('package-installments-section').classList.remove('hidden');
+                document.getElementById('installments-loading').classList.add('hidden');
+                document.getElementById('installments-table-container').classList.remove('hidden');
+                renderInstallmentsTable();
+            }
+        } catch (error) {
+            console.error('[ERROR] Fetching installments:', error);
+        }
+    }
+
+    // ============================================
+    // RENDERING FUNCTIONS
+    // ============================================
+
+    function renderInvoicesTable() {
+        const tbody = document.getElementById('invoices-table-body');
+        tbody.innerHTML = '';
+
+        // Apply filters to invoices
+        const invoicesToRender = applyFilters();
+
+        if (invoicesToRender.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                        <i class="fas fa-filter-circle-xmark mb-2 text-3xl"></i>
+                        <p>No invoices match the current filters</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        invoicesToRender.forEach((invoice) => {
+            // Render invoice header row
+            renderInvoiceHeaderRow(invoice, tbody);
+
+            // If invoice is expanded, render its contents
+            if (state.expandedInvoices.has(invoice.invoice_id)) {
+                if (invoice.line_items && invoice.line_items.length > 0) {
+                    invoice.line_items.forEach(lineItem => {
+                        renderLineItemRow(lineItem, invoice, tbody);
+
+                        // If line item has installments and package is expanded, render them
+                        if (lineItem.has_installments &&
+                            state.expandedPackages.has(`${invoice.invoice_id}_${lineItem.line_item_id}`) &&
+                            lineItem.installments && lineItem.installments.length > 0) {
+                            lineItem.installments.forEach(installment => {
+                                renderInstallmentRow(installment, lineItem, invoice, tbody);
+                            });
+                        }
+                    });
+                } else {
+                    // No line items - show a message
+                    const row = document.createElement('tr');
+                    row.className = 'line-item-row';
+                    row.innerHTML = `
+                        <td colspan="7" class="px-12 py-2 text-sm text-gray-500 dark:text-gray-400 italic">
+                            No line items available
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                }
+            }
+        });
+
+        // Update totals
+        updateInvoiceTotals();
+        updateInstallmentTotals();
+
+        // ✅ Update header checkbox states
+        updateSelectAllInvoicesCheckbox();
+        updateSelectAllInstallmentsCheckbox();
+    }
+
+    function renderInvoiceHeaderRow(invoice, tbody) {
+        const row = document.createElement('tr');
+        const balance = parseFloat(invoice.balance_due);
+        const isExpanded = state.expandedInvoices.has(invoice.invoice_id);
+        const hasLineItems = invoice.line_items && invoice.line_items.length > 0;
+
+        // Calculate total allocated for this invoice (including installments)
+        let totalAllocated = 0;
+        if (invoice.line_items) {
+            invoice.line_items.forEach(lineItem => {
+                if (lineItem.has_installments && lineItem.installments) {
+                    lineItem.installments.forEach(inst => {
+                        totalAllocated += state.allocations.installments[inst.installment_id] || 0;
+                    });
+                } else {
+                    // For non-package items, use invoice allocation
+                    const lineAllocation = (state.allocations.invoices[invoice.invoice_id] || 0) *
+                                         (lineItem.line_balance / invoice.balance_due);
+                    totalAllocated += lineAllocation;
+                }
+            });
+        }
+
+        row.className = 'invoice-row expandable-row ' +
+                       (invoice.invoice_id === state.currentInvoiceId ?
+                        'bg-blue-50 dark:bg-blue-900/20' : 'bg-white dark:bg-gray-800');
+
+        row.innerHTML = `
+            <td class="px-3 py-3 whitespace-nowrap">
+                <div class="flex items-center">
+                    ${hasLineItems ? `
+                        <button class="expand-toggle mr-2 text-gray-400 hover:text-gray-600"
+                                onclick="toggleInvoiceExpand('${invoice.invoice_id}')">
+                            <i class="fas fa-chevron-${isExpanded ? 'down' : 'right'} text-xs"></i>
+                        </button>
+                    ` : '<span class="w-6"></span>'}
+                    <input type="checkbox"
+                           class="invoice-checkbox form-checkbox h-4 w-4 text-blue-600 rounded"
+                           data-invoice-id="${invoice.invoice_id}"
+                           data-balance="${balance}"
+                           onchange="handleInvoiceCheckbox('${invoice.invoice_id}', this.checked)"
+                           ${totalAllocated > 0 ? 'checked' : ''}>
+                </div>
+            </td>
+            <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                <div class="flex items-center">
+                    <i class="fas fa-file-invoice mr-2 text-blue-500"></i>
+                    <a href="/universal/patient_invoices/detail/${invoice.invoice_id}"
+                       class="text-blue-600 hover:text-blue-800 dark:text-blue-400"
+                       target="_blank">
+                        ${invoice.invoice_number}
+                    </a>
+                    ${invoice.invoice_id === state.currentInvoiceId ?
+                      '<span class="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Current</span>' : ''}
+                </div>
+            </td>
+            <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                ${formatDate(invoice.invoice_date)}
+            </td>
+            <td class="px-3 py-3 whitespace-nowrap text-sm text-right text-gray-900 dark:text-white">
+                ₹${parseFloat(invoice.grand_total).toFixed(2)}
+            </td>
+            <td class="px-3 py-3 whitespace-nowrap text-sm text-right text-green-600 dark:text-green-400">
+                ₹${parseFloat(invoice.paid_amount).toFixed(2)}
+            </td>
+            <td class="px-3 py-3 whitespace-nowrap text-sm text-right font-medium text-gray-900 dark:text-white">
+                ₹${balance.toFixed(2)}
+            </td>
+            <td class="px-3 py-3 whitespace-nowrap text-right">
+                <div class="inline-flex items-center gap-2">
+                    <span class="text-gray-500 text-sm font-semibold">₹</span>
+                    <input type="number"
+                           class="invoice-allocation-input w-32 px-3 py-1.5 text-sm text-right border border-gray-300 rounded"
+                           data-invoice-id="${invoice.invoice_id}"
+                           data-balance="${balance}"
+                           value="${totalAllocated.toFixed(2)}"
+                           step="0.01"
+                           min="0"
+                           max="${balance}"
+                           onchange="handleInvoiceAllocation('${invoice.invoice_id}', this.value)">
+                </div>
+            </td>
+        `;
+
+        tbody.appendChild(row);
+    }
+
+    function renderLineItemRow(lineItem, invoice, tbody) {
+        const row = document.createElement('tr');
+        const hasInstallments = lineItem.has_installments && lineItem.installments && lineItem.installments.length > 0;
+        const isExpanded = state.expandedPackages.has(`${invoice.invoice_id}_${lineItem.line_item_id}`);
+        const packageKey = `${invoice.invoice_id}_${lineItem.line_item_id}`;
+
+        row.className = 'line-item-row';
+        row.innerHTML = `
+            <td class="pl-8 pr-3 py-2 whitespace-nowrap">
+                ${hasInstallments ? `
+                    <button class="expand-toggle text-gray-400 hover:text-gray-600"
+                            onclick="togglePackageExpand('${packageKey}')">
+                        <i class="fas fa-chevron-${isExpanded ? 'down' : 'right'} text-xs"></i>
+                    </button>
+                ` : ''}
+            </td>
+            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                <div class="flex items-center">
+                    <i class="fas fa-${lineItem.item_type === 'Package' ? 'box' : lineItem.item_type === 'Service' ? 'hand-holding-medical' : 'pills'} mr-2 text-gray-400"></i>
+                    <span>${lineItem.item_name}</span>
+                    ${hasInstallments ? `
+                        <span class="ml-2 text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded">
+                            ${lineItem.installments.length} installments
+                        </span>
+                    ` : ''}
+                </div>
+            </td>
+            <td class="px-3 py-2 text-sm text-gray-500" colspan="2">
+                ${lineItem.item_type}
+            </td>
+            <td class="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-700 dark:text-gray-300">
+                ₹${parseFloat(lineItem.line_total).toFixed(2)}
+            </td>
+            <td class="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-700 dark:text-gray-300">
+                ₹${parseFloat(lineItem.line_balance).toFixed(2)}
+            </td>
+            <td class="px-3 py-2"></td>
+        `;
+
+        tbody.appendChild(row);
+    }
+
+    function renderInstallmentRow(installment, lineItem, invoice, tbody) {
+        const row = document.createElement('tr');
+        const allocated = state.allocations.installments[installment.installment_id] || 0;
+        const isOverdue = new Date(installment.due_date) < new Date() && installment.status !== 'paid';
+
+        row.className = 'installment-row';
+        row.innerHTML = `
+            <td class="pl-16 pr-3 py-2 whitespace-nowrap">
+                <input type="checkbox"
+                       class="installment-checkbox form-checkbox h-4 w-4 text-purple-600 rounded"
+                       data-installment-id="${installment.installment_id}"
+                       data-invoice-id="${invoice.invoice_id}"
+                       data-balance="${installment.payable_amount}"
+                       onchange="handleInstallmentCheckbox('${installment.installment_id}', '${invoice.invoice_id}', this.checked)"
+                       ${allocated > 0 ? 'checked' : ''}>
+            </td>
+            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                <div class="flex items-center gap-2">
+                    <span class="font-medium">Installment #${installment.installment_number}</span>
+                    ${isOverdue ? '<span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">Overdue</span>' : ''}
+                    ${installment.payable_amount < installment.balance_amount ?
+                      '<span class="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded" title="Limited by invoice balance">Capped</span>' : ''}
+                </div>
+            </td>
+            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
+                Due: ${formatDate(installment.due_date)}
+            </td>
+            <td class="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-600">
+                ₹${parseFloat(installment.amount).toFixed(2)}
+            </td>
+            <td class="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-600">
+                ₹${parseFloat(installment.paid_amount).toFixed(2)}
+            </td>
+            <td class="px-3 py-2 whitespace-nowrap text-sm text-right font-medium text-gray-700 dark:text-gray-300">
+                ₹${parseFloat(installment.payable_amount).toFixed(2)}
+            </td>
+            <td class="px-3 py-2 whitespace-nowrap text-right">
+                <div class="inline-flex items-center gap-1">
+                    <span class="text-gray-500 text-xs font-semibold">₹</span>
+                    <input type="number"
+                           class="installment-allocation-input w-28 px-2 py-1 text-xs text-right border border-gray-300 rounded"
+                           data-installment-id="${installment.installment_id}"
+                           data-balance="${installment.payable_amount}"
+                           value="${allocated.toFixed(2)}"
+                           step="0.01"
+                           min="0"
+                           max="${installment.payable_amount}"
+                           onchange="handleInstallmentAllocation('${installment.installment_id}', this.value)">
+                </div>
+            </td>
+        `;
+
+        tbody.appendChild(row);
+    }
+
+    function renderInstallmentsTable() {
+        const tbody = document.getElementById('installments-table-body');
+        tbody.innerHTML = '';
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Auto-allocate overdue installments
+        const overdueInstallments = state.pendingInstallments.filter(inst => {
+            const dueDate = new Date(inst.due_date);
+            dueDate.setHours(0, 0, 0, 0);
+            return dueDate < today;
+        });
+
+        overdueInstallments.forEach(installment => {
+            if (state.allocations.installments[installment.installment_id] === undefined) {
+                // ✅ Use payable_amount (capped by invoice balance) for auto-allocation
+                const payableAmount = parseFloat(installment.payable_amount || installment.balance_amount);
+                state.allocations.installments[installment.installment_id] = payableAmount;
+            }
+        });
+
+        state.pendingInstallments.forEach(installment => {
+            const row = document.createElement('tr');
+            const isOverdue = new Date(installment.due_date) < today;
+
+            // ✅ Use payable_amount (capped by invoice balance) instead of full amount
+            const payableAmount = parseFloat(installment.payable_amount || installment.balance_amount);
+            const installmentAmount = parseFloat(installment.amount);
+            const allocated = state.allocations.installments[installment.installment_id] || 0;
+
+            // Show warning if payable < installment balance
+            const hasInvoiceLimit = installment.invoice_balance !== null && installment.invoice_balance < installment.balance_amount;
+
+            row.className = isOverdue ?
+                'bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30' :
+                'hover:bg-gray-50 dark:hover:bg-gray-700';
+
+            row.innerHTML = `
+                <td class="px-3 py-3 whitespace-nowrap">
+                    <input type="checkbox"
+                           class="installment-checkbox form-checkbox h-4 w-4 text-purple-600 rounded"
+                           data-installment-id="${installment.installment_id}"
+                           data-amount="${payableAmount}"
+                           ${allocated > 0 ? 'checked' : ''}>
+                </td>
+                <td class="px-3 py-3 text-sm text-gray-900 dark:text-white">
+                    ${installment.package_name}
+                    ${hasInvoiceLimit ? '<br><span class="text-xs text-amber-600 dark:text-amber-400"><i class="fas fa-exclamation-triangle"></i> Limited by invoice balance</span>' : ''}
+                </td>
+                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                    #${installment.installment_number}
+                </td>
+                <td class="px-3 py-3 whitespace-nowrap text-sm ${isOverdue ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-600 dark:text-gray-400'}">
+                    ${formatDate(installment.due_date)}
+                    ${isOverdue ? '<i class="fas fa-exclamation-circle ml-1"></i>' : ''}
+                </td>
+                <td class="px-3 py-3 whitespace-nowrap">
+                    <span class="px-2 py-1 text-xs font-medium rounded ${getStatusClass(installment.status)}">
+                        ${installment.status}
+                    </span>
+                </td>
+                <td class="px-3 py-3 whitespace-nowrap text-sm text-right font-medium text-gray-900 dark:text-white">
+                    ₹${installmentAmount.toFixed(2)}
+                    ${hasInvoiceLimit ? `<br><span class="text-xs text-amber-600 dark:text-amber-400">Max: ₹${payableAmount.toFixed(2)}</span>` : ''}
+                </td>
+                <td class="px-3 py-3 whitespace-nowrap text-right">
+                    <div class="inline-flex items-center gap-2">
+                        <span class="text-gray-500 text-sm font-semibold">₹</span>
+                        <input type="number"
+                               class="installment-allocation-input w-32 px-3 py-1.5 text-sm text-right border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                               data-installment-id="${installment.installment_id}"
+                               data-amount="${payableAmount}"
+                               value="${allocated.toFixed(2)}"
+                               step="0.01"
+                               min="0"
+                               max="${payableAmount}">
+                    </div>
+                </td>
+            `;
+
+            tbody.appendChild(row);
+        });
+
+        attachInstallmentEventListeners();
+        updateInstallmentTotals();
+    }
+
+    // ============================================
+    // EVENT LISTENERS
+    // ============================================
+
+    function attachInvoiceEventListeners() {
+        // Checkbox handlers
+        document.querySelectorAll('.invoice-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const invoiceId = this.dataset.invoiceId;
+                const balance = parseFloat(this.dataset.balance);
+                const input = document.querySelector(`.invoice-allocation-input[data-invoice-id="${invoiceId}"]`);
+
+                if (this.checked) {
+                    const currentAllocation = state.allocations.invoices[invoiceId] || 0;
+                    if (currentAllocation === 0) {
+                        input.value = balance.toFixed(2);
+                        state.allocations.invoices[invoiceId] = balance;
+                    }
+                } else {
+                    input.value = '0.00';
+                    state.allocations.invoices[invoiceId] = 0;
+                }
+
+                updateInvoiceTotals();
+                updateSummary();
+                validateAmounts();
+                // ✅ Update header checkbox state
+                updateSelectAllInvoicesCheckbox();
+            });
+        });
+
+        // Amount input handlers
+        document.querySelectorAll('.invoice-allocation-input').forEach(input => {
+            input.addEventListener('input', function() {
+                const invoiceId = this.dataset.invoiceId;
+                const amount = parseFloat(this.value) || 0;
+                const checkbox = document.querySelector(`.invoice-checkbox[data-invoice-id="${invoiceId}"]`);
+
+                checkbox.checked = amount > 0;
+                state.allocations.invoices[invoiceId] = amount;
+
+                updateInvoiceTotals();
+                updateSummary();
+                validateAmounts();
+                // ✅ Update header checkbox state
+                updateSelectAllInvoicesCheckbox();
+            });
+        });
+
+        // Invoice row clicks handled by direct links in the table
+    }
+
+    /**
+     * Syncs parent invoice checkbox state based on child installment selections
+     * Auto-checks parent if any installment is checked, unchecks if all are unchecked
+     */
+    function syncParentInvoiceCheckbox(invoiceId) {
+        if (!invoiceId) return;
+
+        // Find all installment checkboxes for this invoice
+        const installmentCheckboxes = document.querySelectorAll(
+            `.installment-checkbox[data-invoice-id="${invoiceId}"]`
+        );
+
+        // Check if any installment is checked or has an allocation
+        let anyInstallmentChecked = false;
+        let totalInstallmentAllocation = 0;
+
+        installmentCheckboxes.forEach(cb => {
+            const installmentId = cb.dataset.installmentId;
+            const allocation = state.allocations.installments[installmentId] || 0;
+
+            if (cb.checked || allocation > 0) {
+                anyInstallmentChecked = true;
+                totalInstallmentAllocation += allocation;
+            }
+        });
+
+        // Find parent invoice checkbox
+        const parentCheckbox = document.querySelector(
+            `.invoice-checkbox[data-invoice-id="${invoiceId}"]`
+        );
+
+        if (parentCheckbox) {
+            // Auto-check/uncheck parent based on installment selections
+            parentCheckbox.checked = anyInstallmentChecked;
+
+            // Important: DO NOT modify state.allocations.invoices for package invoices
+            // because installments are tracked separately in state.allocations.installments
+            // This prevents double-counting in the payment summary
+
+            // Clear any invoice-level allocation for this package invoice to avoid double-counting
+            if (anyInstallmentChecked && state.allocations.invoices[invoiceId]) {
+                state.allocations.invoices[invoiceId] = 0;
+            }
+        }
+    }
+
+    /**
+     * Updates the parent invoice allocation input field based on installment allocations
+     * ✅ NEW: Fixes issue where parent invoice allocation shows zero when installment is allocated
+     */
+    function updateParentInvoiceAllocation(invoiceId) {
+        if (!invoiceId) return;
+
+        // Find the invoice in outstanding invoices
+        const invoice = state.outstandingInvoices.find(inv => inv.invoice_id === invoiceId);
+        if (!invoice) return;
+
+        // Calculate total allocated for this invoice from installments
+        let totalAllocated = 0;
+        if (invoice.line_items) {
+            invoice.line_items.forEach(lineItem => {
+                if (lineItem.has_installments && lineItem.installments) {
+                    lineItem.installments.forEach(inst => {
+                        totalAllocated += state.allocations.installments[inst.installment_id] || 0;
+                    });
+                }
+            });
+        }
+
+        // Update the invoice allocation input field
+        const invoiceAllocationInput = document.querySelector(
+            `.invoice-allocation-input[data-invoice-id="${invoiceId}"]`
+        );
+
+        if (invoiceAllocationInput) {
+            invoiceAllocationInput.value = totalAllocated.toFixed(2);
+        }
+
+        // Update invoice totals
+        updateInvoiceTotals();
+    }
+
+    function attachInstallmentEventListeners() {
+        // Checkbox handlers
+        document.querySelectorAll('.installment-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const installmentId = this.dataset.installmentId;
+                const invoiceId = this.dataset.invoiceId;
+                const amount = parseFloat(this.dataset.amount);
+                const input = document.querySelector(`.installment-allocation-input[data-installment-id="${installmentId}"]`);
+
+                if (this.checked) {
+                    const currentAllocation = state.allocations.installments[installmentId] || 0;
+                    if (currentAllocation === 0) {
+                        input.value = amount.toFixed(2);
+                        state.allocations.installments[installmentId] = amount;
+                    }
+                } else {
+                    input.value = '0.00';
+                    state.allocations.installments[installmentId] = 0;
+                }
+
+                // Auto-check/uncheck parent invoice checkbox based on installment selections
+                syncParentInvoiceCheckbox(invoiceId);
+
+                // ✅ FIX: Update parent invoice allocation display
+                updateParentInvoiceAllocation(invoiceId);
+
+                updateInstallmentTotals();
+                updateSummary();
+                validateAmounts();
+                // ✅ Update header checkbox state
+                updateSelectAllInstallmentsCheckbox();
+            });
+        });
+
+        // Amount input handlers
+        document.querySelectorAll('.installment-allocation-input').forEach(input => {
+            input.addEventListener('input', function() {
+                const installmentId = this.dataset.installmentId;
+                const amount = parseFloat(this.value) || 0;
+                const checkbox = document.querySelector(`.installment-checkbox[data-installment-id="${installmentId}"]`);
+
+                checkbox.checked = amount > 0;
+                state.allocations.installments[installmentId] = amount;
+
+                // Auto-check/uncheck parent invoice checkbox based on installment selections
+                const invoiceId = checkbox.dataset.invoiceId;
+                if (invoiceId) {
+                    syncParentInvoiceCheckbox(invoiceId);
+                    // ✅ FIX: Update parent invoice allocation display
+                    updateParentInvoiceAllocation(invoiceId);
+                }
+
+                updateInstallmentTotals();
+                updateSummary();
+                validateAmounts();
+                // ✅ Update header checkbox state
+                updateSelectAllInstallmentsCheckbox();
+            });
+        });
+    }
+
+    // ============================================
+    // UPDATE FUNCTIONS
+    // ============================================
+
+    function updateInvoiceTotals() {
+        const totalBalance = state.outstandingInvoices.reduce((sum, inv) =>
+            sum + parseFloat(inv.balance_due), 0);
+
+        // ✅ FIX: Include both invoice allocations AND installment allocations (for packages)
+        const invoiceAllocation = Object.values(state.allocations.invoices).reduce((sum, val) => sum + val, 0);
+        const installmentAllocation = Object.values(state.allocations.installments).reduce((sum, val) => sum + val, 0);
+        const totalAllocation = invoiceAllocation + installmentAllocation;
+
+        const balanceOutstanding = totalBalance - totalAllocation;
+
+        document.getElementById('total-invoice-balance').textContent = '₹' + totalBalance.toFixed(2);
+        document.getElementById('total-invoice-allocation').textContent = totalAllocation.toFixed(2);
+
+        // Update balance outstanding
+        const balanceEl = document.getElementById('balance-outstanding');
+        const balanceContainer = document.getElementById('balance-outstanding-container');
+        if (balanceEl) {
+            balanceEl.textContent = balanceOutstanding.toFixed(2);
+
+            // Color code the balance
+            if (balanceOutstanding > 0) {
+                balanceContainer.className = 'text-sm font-semibold text-orange-600 dark:text-orange-400';
+            } else if (balanceOutstanding < 0) {
+                balanceContainer.className = 'text-sm font-semibold text-red-600 dark:text-red-400';
+            } else {
+                balanceContainer.className = 'text-sm font-semibold text-green-600 dark:text-green-400';
+            }
+        }
+    }
+
+    function updateInstallmentTotals() {
+        const totalAmount = state.pendingInstallments.reduce((sum, inst) =>
+            sum + parseFloat(inst.amount), 0);
+
+        const totalAllocation = Object.values(state.allocations.installments).reduce((sum, val) => sum + val, 0);
+
+        document.getElementById('total-installment-amount').textContent = '₹' + totalAmount.toFixed(2);
+        document.getElementById('total-installment-allocation').textContent = totalAllocation.toFixed(2);
+    }
+
+    function toggleMethodDetails() {
+        const creditCardAmount = parseFloat(creditCardField?.value) || 0;
+        const debitCardAmount = parseFloat(debitCardField?.value) || 0;
+        const upiAmount = parseFloat(upiField?.value) || 0;
+
+        if (cardDetails) {
+            const hasCardPayment = creditCardAmount > 0 || debitCardAmount > 0;
+            cardDetails.classList.toggle('hidden', !hasCardPayment);
+        }
+
+        if (upiDetails) {
+            upiDetails.classList.toggle('hidden', upiAmount === 0);
+        }
+    }
+
+    function updateSummary() {
+        // Calculate payment method totals
+        const advanceAmount = parseFloat(advanceField?.value) || 0;
+        const cashAmount = parseFloat(cashField?.value) || 0;
+        const creditCardAmount = parseFloat(creditCardField?.value) || 0;
+        const debitCardAmount = parseFloat(debitCardField?.value) || 0;
+        const upiAmount = parseFloat(upiField?.value) || 0;
+
+        const methodTotal = advanceAmount + cashAmount + creditCardAmount + debitCardAmount + upiAmount;
+
+        // Calculate allocation totals
+        const invoiceAllocation = Object.values(state.allocations.invoices).reduce((sum, val) => sum + val, 0);
+        const installmentAllocation = Object.values(state.allocations.installments).reduce((sum, val) => sum + val, 0);
+        const allocationTotal = invoiceAllocation + installmentAllocation;
+
+        const difference = methodTotal - allocationTotal;
+
+        // Update payment method breakdown
+        let breakdownHTML = '<div class="space-y-2">';
+
+        if (advanceAmount > 0) {
+            breakdownHTML += `<div class="flex justify-between text-green-600"><span>Advance:</span><span>₹${advanceAmount.toFixed(2)}</span></div>`;
+        }
+        if (cashAmount > 0) {
+            breakdownHTML += `<div class="flex justify-between"><span>Cash:</span><span>₹${cashAmount.toFixed(2)}</span></div>`;
+        }
+        if (creditCardAmount > 0) {
+            breakdownHTML += `<div class="flex justify-between"><span>Credit Card:</span><span>₹${creditCardAmount.toFixed(2)}</span></div>`;
+        }
+        if (debitCardAmount > 0) {
+            breakdownHTML += `<div class="flex justify-between"><span>Debit Card:</span><span>₹${debitCardAmount.toFixed(2)}</span></div>`;
+        }
+        if (upiAmount > 0) {
+            breakdownHTML += `<div class="flex justify-between"><span>UPI:</span><span>₹${upiAmount.toFixed(2)}</span></div>`;
+        }
+
+        if (methodTotal === 0) {
+            breakdownHTML += '<div class="text-sm text-gray-500 dark:text-gray-400 italic">No payment methods entered</div>';
+        }
+
+        breakdownHTML += '</div>';
+        if (paymentBreakdownDiv) {
+            paymentBreakdownDiv.innerHTML = breakdownHTML;
+        }
+
+        // Update totals
+        document.getElementById('summary-invoice-allocation').textContent = invoiceAllocation.toFixed(2);
+        document.getElementById('summary-installment-allocation').textContent = installmentAllocation.toFixed(2);
+        document.getElementById('summary-total-allocated').textContent = allocationTotal.toFixed(2);
+        document.getElementById('summary-method-total').textContent = methodTotal.toFixed(2);
+        document.getElementById('summary-allocation-total').textContent = allocationTotal.toFixed(2);
+
+        // Update difference
+        const differenceAmountEl = document.getElementById('difference-amount');
+        if (differenceAmountEl) {
+            differenceAmountEl.textContent = '₹' + Math.abs(difference).toFixed(2);
+
+            if (Math.abs(difference) > 0.01) {
+                if (difference > 0) {
+                    differenceAmountEl.className = 'text-lg font-bold text-orange-600 dark:text-orange-400';
+                } else {
+                    differenceAmountEl.className = 'text-lg font-bold text-red-600 dark:text-red-400';
+                }
+            } else {
+                differenceAmountEl.className = 'text-lg font-bold text-green-600 dark:text-green-400';
+            }
+        }
+
+        // Show approval threshold warning if needed
+        const approvalWarning = document.getElementById('approval-threshold-warning');
+        if (approvalWarning) {
+            approvalWarning.classList.toggle('hidden', methodTotal < state.approvalThreshold);
+        }
+    }
+
+    function validateAmounts() {
+        // Calculate totals
+        const advanceAmount = parseFloat(advanceField?.value) || 0;
+        const cashAmount = parseFloat(cashField?.value) || 0;
+        const creditCardAmount = parseFloat(creditCardField?.value) || 0;
+        const debitCardAmount = parseFloat(debitCardField?.value) || 0;
+        const upiAmount = parseFloat(upiField?.value) || 0;
+
+        const methodTotal = advanceAmount + cashAmount + creditCardAmount + debitCardAmount + upiAmount;
+
+        const invoiceAllocation = Object.values(state.allocations.invoices).reduce((sum, val) => sum + val, 0);
+        const installmentAllocation = Object.values(state.allocations.installments).reduce((sum, val) => sum + val, 0);
+        const allocationTotal = invoiceAllocation + installmentAllocation;
+
+        const difference = methodTotal - allocationTotal;
+
+        // Validate advance doesn't exceed balance
+        if (advanceAmount > state.advanceBalance) {
+            showValidationError(`Advance amount (₹${advanceAmount.toFixed(2)}) exceeds available balance (₹${state.advanceBalance.toFixed(2)})`);
+            disableSubmitButtons();
+            return;
+        }
+
+        // Validate payment methods match allocation
+        if (Math.abs(difference) > 0.01) {
+            const message = difference > 0
+                ? `Payment methods total (₹${methodTotal.toFixed(2)}) exceeds allocation total (₹${allocationTotal.toFixed(2)}) by ₹${difference.toFixed(2)}`
+                : `Payment methods total (₹${methodTotal.toFixed(2)}) is less than allocation total (₹${allocationTotal.toFixed(2)}) by ₹${Math.abs(difference).toFixed(2)}`;
+
+            showValidationWarning(message);
+            disableSubmitButtons();
+        } else if (methodTotal > 0 && allocationTotal > 0) {
+            showValidationSuccess('Payment methods match allocation total. Ready to submit!');
+            enableSubmitButtons();
+        } else if (methodTotal === 0 && allocationTotal === 0) {
+            clearValidation();
+            disableSubmitButtons();
+        } else {
+            clearValidation();
+            disableSubmitButtons();
+        }
+    }
+
+    function showValidationError(message) {
+        if (validationDiv) {
+            validationDiv.innerHTML = `
+                <div class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                    <div class="flex items-start">
+                        <i class="fas fa-times-circle text-red-600 mr-2 mt-0.5"></i>
+                        <span class="text-sm text-red-800 dark:text-red-200">${message}</span>
+                    </div>
+                </div>`;
+        }
+    }
+
+    function showValidationWarning(message) {
+        if (validationDiv) {
+            validationDiv.innerHTML = `
+                <div class="p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+                    <div class="flex items-start">
+                        <i class="fas fa-exclamation-triangle text-orange-600 mr-2 mt-0.5"></i>
+                        <span class="text-sm text-orange-800 dark:text-orange-200">${message}</span>
+                    </div>
+                </div>`;
+        }
+    }
+
+    function showValidationSuccess(message) {
+        if (validationDiv) {
+            validationDiv.innerHTML = `
+                <div class="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                    <div class="flex items-start">
+                        <i class="fas fa-check-circle text-green-600 mr-2 mt-0.5"></i>
+                        <span class="text-sm text-green-800 dark:text-green-200">${message}</span>
+                    </div>
+                </div>`;
+        }
+    }
+
+    function clearValidation() {
+        if (validationDiv) {
+            validationDiv.innerHTML = '';
+        }
+    }
+
+    function enableSubmitButtons() {
+        const submitButton = document.getElementById('submit-button');
+        const draftButton = document.getElementById('save-draft-button');
+
+        if (submitButton) submitButton.disabled = false;
+        if (draftButton) draftButton.disabled = false;
+    }
+
+    function disableSubmitButtons() {
+        const submitButton = document.getElementById('submit-button');
+        const draftButton = document.getElementById('save-draft-button');
+
+        if (submitButton) submitButton.disabled = true;
+        if (draftButton) draftButton.disabled = true;
+    }
+
+    // ============================================
+    // FORM SUBMISSION
+    // ============================================
+
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            console.log('[SUBMIT] Form submission validation starting...');
+
+            // Calculate totals
+            const advanceAmount = parseFloat(advanceField?.value) || 0;
+            const cashAmount = parseFloat(cashField?.value) || 0;
+            const creditCardAmount = parseFloat(creditCardField?.value) || 0;
+            const debitCardAmount = parseFloat(debitCardField?.value) || 0;
+            const upiAmount = parseFloat(upiField?.value) || 0;
+
+            const methodTotal = advanceAmount + cashAmount + creditCardAmount + debitCardAmount + upiAmount;
+
+            const invoiceAllocation = Object.values(state.allocations.invoices).reduce((sum, val) => sum + val, 0);
+            const installmentAllocation = Object.values(state.allocations.installments).reduce((sum, val) => sum + val, 0);
+            const allocationTotal = invoiceAllocation + installmentAllocation;
+
+            // Validate advance
+            if (advanceAmount > state.advanceBalance) {
+                e.preventDefault();
+                alert(`Advance amount (₹${advanceAmount.toFixed(2)}) exceeds available balance (₹${state.advanceBalance.toFixed(2)})`);
+                return false;
+            }
+
+            // Validate payment methods match allocation
+            if (Math.abs(methodTotal - allocationTotal) > 0.01) {
+                e.preventDefault();
+                alert('Payment methods total must match allocation total. Please adjust amounts.');
+                return false;
+            }
+
+            // Validate card details if card payment entered
+            if (creditCardAmount > 0 || debitCardAmount > 0) {
+                const last4 = document.getElementById('card_number_last4')?.value;
+                const cardType = document.getElementById('card_type')?.value;
+
+                if (!last4 || !/^\d{4}$/.test(last4)) {
+                    e.preventDefault();
+                    alert('Please enter the last 4 digits of the card');
+                    return false;
+                }
+                if (!cardType) {
+                    e.preventDefault();
+                    alert('Please select card type');
+                    return false;
+                }
+            }
+
+            // Validate UPI details if UPI payment entered
+            if (upiAmount > 0) {
+                const upiId = document.getElementById('upi_id')?.value;
+                if (!upiId || !upiId.trim()) {
+                    e.preventDefault();
+                    alert('Please enter UPI ID');
+                    return false;
+                }
+            }
+
+            // Add allocation data to form
+            Object.entries(state.allocations.invoices).forEach(([invoiceId, amount]) => {
+                if (amount > 0) {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = `invoice_allocations[${invoiceId}]`;
+                    input.value = amount;
+                    form.appendChild(input);
+                }
+            });
+
+            Object.entries(state.allocations.installments).forEach(([installmentId, amount]) => {
+                if (amount > 0) {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = `installment_allocations[${installmentId}]`;
+                    input.value = amount;
+                    form.appendChild(input);
+                }
+            });
+
+            console.log('[SUBMIT] Validation passed');
+        });
+    }
+
+    // ============================================
+    // UTILITY FUNCTIONS
+    // ============================================
+
+    function formatDate(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+
+    function getStatusClass(status) {
+        const classes = {
+            'pending': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
+            'partial': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+            'overdue': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
+            'paid': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+            'waived': 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
+        };
+        return classes[status] || classes['pending'];
+    }
+
+    // ============================================
+    // INTERACTION HANDLERS
+    // ============================================
+
+    window.toggleInvoiceExpand = function(invoiceId) {
+        if (state.expandedInvoices.has(invoiceId)) {
+            state.expandedInvoices.delete(invoiceId);
+            // Also collapse all packages within this invoice
+            const keysToRemove = [];
+            state.expandedPackages.forEach(key => {
+                if (key.startsWith(invoiceId + '_')) {
+                    keysToRemove.push(key);
+                }
+            });
+            keysToRemove.forEach(key => state.expandedPackages.delete(key));
+        } else {
+            state.expandedInvoices.add(invoiceId);
+        }
+        renderInvoicesTable();
+    };
+
+    window.togglePackageExpand = function(packageKey) {
+        if (state.expandedPackages.has(packageKey)) {
+            state.expandedPackages.delete(packageKey);
+        } else {
+            state.expandedPackages.add(packageKey);
+        }
+        renderInvoicesTable();
+    };
+
+    window.handleInvoiceCheckbox = function(invoiceId, checked) {
+        const invoice = state.outstandingInvoices.find(inv => inv.invoice_id === invoiceId);
+        if (!invoice) return;
+
+        if (checked) {
+            // Check all line items and installments
+            if (invoice.line_items) {
+                invoice.line_items.forEach(lineItem => {
+                    if (lineItem.has_installments && lineItem.installments) {
+                        lineItem.installments.forEach(inst => {
+                            state.allocations.installments[inst.installment_id] = inst.payable_amount;
+                        });
+                    } else {
+                        // For non-package items, use invoice allocation
+                        const lineAllocation = lineItem.line_balance;
+                        if (!state.allocations.invoices[invoiceId]) {
+                            state.allocations.invoices[invoiceId] = 0;
+                        }
+                        state.allocations.invoices[invoiceId] += lineAllocation;
+                    }
+                });
+            }
+        } else {
+            // Uncheck all line items and installments
+            if (invoice.line_items) {
+                invoice.line_items.forEach(lineItem => {
+                    if (lineItem.has_installments && lineItem.installments) {
+                        lineItem.installments.forEach(inst => {
+                            state.allocations.installments[inst.installment_id] = 0;
+                        });
+                    }
+                });
+            }
+            state.allocations.invoices[invoiceId] = 0;
+        }
+
+        renderInvoicesTable();
+        updateSummary();
+        validateAmounts();
+        // ✅ Update header checkbox state
+        updateSelectAllInvoicesCheckbox();
+    };
+
+    window.handleInvoiceAllocation = function(invoiceId, value) {
+        const amount = parseFloat(value) || 0;
+        const invoice = state.outstandingInvoices.find(inv => inv.invoice_id === invoiceId);
+        if (!invoice) return;
+
+        // Distribute amount across line items proportionally
+        if (invoice.line_items) {
+            const totalBalance = invoice.balance_due;
+            invoice.line_items.forEach(lineItem => {
+                if (lineItem.has_installments && lineItem.installments) {
+                    // For packages, distribute to installments
+                    const lineRatio = lineItem.line_balance / totalBalance;
+                    const lineAmount = amount * lineRatio;
+                    let remainingAmount = lineAmount;
+
+                    lineItem.installments.forEach(inst => {
+                        const instAllocation = Math.min(remainingAmount, inst.payable_amount);
+                        state.allocations.installments[inst.installment_id] = instAllocation;
+                        remainingAmount -= instAllocation;
+                    });
+                }
+            });
+        }
+
+        // Store the invoice-level allocation for non-package items
+        state.allocations.invoices[invoiceId] = amount;
+
+        updateSummary();
+        validateAmounts();
+    };
+
+    window.handleInstallmentCheckbox = function(installmentId, invoiceId, checked) {
+        const amount = checked ?
+            parseFloat(document.querySelector(`.installment-allocation-input[data-installment-id="${installmentId}"]`)?.dataset.balance || 0) :
+            0;
+        state.allocations.installments[installmentId] = amount;
+
+        // Update the input field
+        const input = document.querySelector(`.installment-allocation-input[data-installment-id="${installmentId}"]`);
+        if (input) {
+            input.value = amount.toFixed(2);
+        }
+
+        // Auto-check/uncheck parent invoice checkbox based on installment selections
+        syncParentInvoiceCheckbox(invoiceId);
+
+        // ✅ FIX: Update parent invoice allocation display
+        updateParentInvoiceAllocation(invoiceId);
+
+        updateInstallmentTotals();
+        updateSummary();
+        validateAmounts();
+        // ✅ Update header checkbox state
+        updateSelectAllInstallmentsCheckbox();
+    };
+
+    window.handleInstallmentAllocation = function(installmentId, value) {
+        const amount = parseFloat(value) || 0;
+        state.allocations.installments[installmentId] = amount;
+
+        // Update checkbox state
+        const checkbox = document.querySelector(`.installment-checkbox[data-installment-id="${installmentId}"]`);
+        if (checkbox) {
+            checkbox.checked = amount > 0;
+
+            // Auto-check/uncheck parent invoice checkbox based on installment selections
+            const invoiceId = checkbox.dataset.invoiceId;
+            if (invoiceId) {
+                syncParentInvoiceCheckbox(invoiceId);
+                // ✅ FIX: Update parent invoice allocation display
+                updateParentInvoiceAllocation(invoiceId);
+            }
+        }
+
+        updateInstallmentTotals();
+        updateSummary();
+        validateAmounts();
+        // ✅ Update header checkbox state
+        updateSelectAllInstallmentsCheckbox();
+    };
+
+    // ============================================
+    // FILTER FUNCTIONS
+    // ============================================
+
+    window.applyFilters = function() {
+        const universalSearchFilter = document.getElementById('filter-universal-search')?.value.toLowerCase() || '';
+        const startDateFilter = document.getElementById('start_date')?.value || '';
+        const endDateFilter = document.getElementById('end_date')?.value || '';
+        const packageNameFilter = document.getElementById('filter-package-name')?.value.toLowerCase() || '';
+        const packagesOnlyFilter = document.getElementById('filter-packages-only')?.checked || false;
+        const amountDueFilter = parseFloat(document.getElementById('filter-amount-due')?.value) || 0;
+
+        let filtered = [...state.outstandingInvoices];
+
+        // Filter by amount due (greater than or equal to)
+        if (amountDueFilter > 0) {
+            filtered = filtered.filter(inv =>
+                parseFloat(inv.balance_due || 0) >= amountDueFilter
+            );
+        }
+
+        // Universal text search - searches across invoice number, payment ID (invoice_id), and package IDs
+        if (universalSearchFilter) {
+            filtered = filtered.filter(inv => {
+                // Search in invoice number
+                if (inv.invoice_number.toLowerCase().includes(universalSearchFilter)) {
+                    return true;
+                }
+
+                // Search in payment/invoice ID
+                if (inv.invoice_id.toLowerCase().includes(universalSearchFilter)) {
+                    return true;
+                }
+
+                // Search in package IDs (within line items)
+                if (inv.line_items) {
+                    const hasMatchingPackage = inv.line_items.some(li => {
+                        // Check if line item has installments (is a package)
+                        if (li.has_installments && li.installments) {
+                            // Check if any installment's package_payment_plan_id matches
+                            return li.installments.some(inst =>
+                                inst.package_payment_plan_id &&
+                                inst.package_payment_plan_id.toLowerCase().includes(universalSearchFilter)
+                            );
+                        }
+                        return false;
+                    });
+                    if (hasMatchingPackage) return true;
+                }
+
+                return false;
+            });
+        }
+
+        // Filter by package name
+        if (packageNameFilter) {
+            filtered = filtered.filter(inv => {
+                if (inv.line_items) {
+                    // ✅ FIX: Check all packages, not just those with installments
+                    return inv.line_items.some(li =>
+                        li.item_type === 'Package' && li.item_name.toLowerCase().includes(packageNameFilter)
+                    );
+                }
+                return false;
+            });
+        }
+
+        // Filter by date range
+        if (startDateFilter || endDateFilter) {
+            filtered = filtered.filter(inv => {
+                const invoiceDate = new Date(inv.invoice_date);
+
+                // Check if invoice date is within range
+                let dateInRange = true;
+                if (startDateFilter) {
+                    dateInRange = dateInRange && invoiceDate >= new Date(startDateFilter);
+                }
+                if (endDateFilter) {
+                    dateInRange = dateInRange && invoiceDate <= new Date(endDateFilter);
+                }
+
+                // Also check installment due dates if filtering packages
+                if (inv.line_items) {
+                    const hasInstallmentInRange = inv.line_items.some(li => {
+                        if (li.has_installments && li.installments) {
+                            return li.installments.some(inst => {
+                                const dueDate = new Date(inst.due_date);
+                                let instInRange = true;
+                                if (startDateFilter) {
+                                    instInRange = instInRange && dueDate >= new Date(startDateFilter);
+                                }
+                                if (endDateFilter) {
+                                    instInRange = instInRange && dueDate <= new Date(endDateFilter);
+                                }
+                                return instInRange;
+                            });
+                        }
+                        return false;
+                    });
+
+                    return dateInRange || hasInstallmentInRange;
+                }
+
+                return dateInRange;
+            });
+        }
+
+        // Filter for packages only
+        if (packagesOnlyFilter) {
+            filtered = filtered.filter(inv => {
+                if (inv.line_items) {
+                    // ✅ FIX: Show all packages, not just those with installments
+                    return inv.line_items.some(li => li.item_type === 'Package');
+                }
+                return false;
+            });
+        }
+
+        state.filteredInvoices = filtered;
+        updateResultsCount();
+        return filtered;
+    };
+
+    // ============================================
+    // UNIVERSAL ENGINE FILTER FUNCTIONS
+    // ============================================
+
+    // Initialize date preset buttons and autocomplete
+    document.addEventListener('DOMContentLoaded', function() {
+        const presetButtons = document.querySelectorAll('.universal-date-preset-btn');
+        presetButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                handleDatePreset(this.dataset.preset);
+            });
+        });
+
+        // Initialize autocomplete for package only
+        initializeAutocomplete('filter-package-name', 'package-name-dropdown', 'package-name-loading', 'packages');
+
+        // Display current date and day
+        updateDateTime();
+    });
+
+    // Update date and day display
+    function updateDateTime() {
+        const now = new Date();
+        const dateOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+        const dayOptions = { weekday: 'long' };
+
+        const dateElement = document.getElementById('current-date');
+        const dayElement = document.getElementById('current-day');
+
+        if (dateElement) {
+            dateElement.textContent = now.toLocaleDateString('en-IN', dateOptions);
+        }
+        if (dayElement) {
+            dayElement.textContent = now.toLocaleDateString('en-IN', dayOptions);
+        }
+    }
+
+    // Print outstanding invoices
+    window.printOutstanding = function() {
+        // Collect all filtered invoices
+        const invoices = state.filteredInvoices || state.outstandingInvoices || [];
+
+        if (invoices.length === 0) {
+            alert('No outstanding invoices to print.');
+            return;
+        }
+
+        // Create print window
+        const printWindow = window.open('', '_blank');
+
+        // Build HTML content
+        let html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Outstanding Invoices - ${state.patientId}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; margin: 0; }
+                    .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #3b82f6; padding-bottom: 20px; }
+                    .logo { max-width: 150px; margin-bottom: 10px; }
+                    .clinic-name { font-size: 24px; font-weight: bold; color: #1f2937; margin: 10px 0; }
+                    .clinic-address { font-size: 14px; color: #6b7280; line-height: 1.6; }
+                    h1 { color: #1f2937; text-align: center; margin: 20px 0; }
+                    .patient-info { margin: 20px 0; padding: 15px; background: #f3f4f6; border-radius: 8px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                    th { background: #3b82f6; color: white; padding: 12px; text-align: left; }
+                    td { padding: 10px; border-bottom: 1px solid #e5e7eb; }
+                    tr:hover { background: #f9fafb; }
+                    .total { font-weight: bold; background: #f3f4f6; }
+                    @media print {
+                        button { display: none; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <img src="/static/images/logo.png" alt="Clinic Logo" class="logo" onerror="this.style.display='none'">
+                    <div class="clinic-name">{{ session.get('hospital_name', 'SkinSpire Clinic') }}</div>
+                    <div class="clinic-address">
+                        {{ session.get('hospital_address', 'Clinic Address') }}<br>
+                        Phone: {{ session.get('hospital_phone', 'Contact Number') }} | Email: {{ session.get('hospital_email', 'Email Address') }}
+                    </div>
+                </div>
+                <h1>Outstanding Invoices Statement</h1>
+                <div class="patient-info">
+                    <strong>Patient:</strong> {{ patient.full_name or (patient.first_name ~ ' ' ~ patient.last_name) or 'N/A' }}<br>
+                    <strong>MRN:</strong> {{ patient.mrn or 'N/A' }}<br>
+                    <strong>Date:</strong> ${new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' })}
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Invoice No.</th>
+                            <th>Invoice Date</th>
+                            <th>Total Amount</th>
+                            <th>Paid Amount</th>
+                            <th>Balance Due</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        let totalDue = 0;
+        invoices.forEach(inv => {
+            const balanceDue = parseFloat(inv.balance_due || 0);
+            totalDue += balanceDue;
+            html += `
+                <tr>
+                    <td>${inv.invoice_number || 'N/A'}</td>
+                    <td>${inv.invoice_date || 'N/A'}</td>
+                    <td>₹${parseFloat(inv.total_amount || 0).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    <td>₹${parseFloat(inv.paid_amount || 0).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    <td>₹${balanceDue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                </tr>
+            `;
+        });
+
+        html += `
+                        <tr class="total">
+                            <td colspan="4" style="text-align: right;"><strong>Total Outstanding:</strong></td>
+                            <td><strong>₹${totalDue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <br>
+                <button onclick="window.print()" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 5px; cursor: pointer;">Print</button>
+            </body>
+            </html>
+        `;
+
+        printWindow.document.write(html);
+        printWindow.document.close();
+    }
+
+    // Handle date preset clicks
+    function handleDatePreset(preset) {
+        const startDateInput = document.getElementById('start_date');
+        const endDateInput = document.getElementById('end_date');
+
+        const today = new Date();
+        let startDate, endDate;
+
+        switch (preset) {
+            case 'today':
+                startDate = endDate = today.toISOString().split('T')[0];
+                break;
+            case 'this_month':
+                startDate = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+                endDate = today.toISOString().split('T')[0];
+                break;
+            case 'financial_year':
+                // Financial year starts April 1st
+                const currentMonth = today.getMonth();
+                const currentYear = today.getFullYear();
+                const fyStartYear = currentMonth >= 3 ? currentYear : currentYear - 1;
+                startDate = new Date(fyStartYear, 3, 1).toISOString().split('T')[0]; // April 1st
+                endDate = today.toISOString().split('T')[0];
+                break;
+            case 'clear':
+                startDate = endDate = '';
+                break;
+            default:
+                return;
+        }
+
+        startDateInput.value = startDate;
+        endDateInput.value = endDate;
+
+        // Highlight active preset
+        document.querySelectorAll('.universal-date-preset-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        if (preset !== 'clear') {
+            event.target.classList.add('active');
+        }
+    }
+
+    // Apply Universal Filters
+    window.applyUniversalFilters = function() {
+        applyFilters();
+        const filters = collectActiveFilters();
+        updateUniversalActiveFilters(filters);
+        renderInvoicesTable();
+    };
+
+    // Clear all filters
+    window.clearUniversalFilters = function() {
+        // Clear date inputs
+        document.getElementById('start_date').value = '';
+        document.getElementById('end_date').value = '';
+
+        // Clear other filters
+        document.getElementById('filter-amount-due').value = '';
+        document.getElementById('filter-universal-search').value = '';
+        const packageNameInput = document.getElementById('filter-package-name');
+        if (packageNameInput) {
+            packageNameInput.value = '';
+            delete packageNameInput.dataset.selectedValue;
+        }
+        document.getElementById('filter-packages-only').checked = false;
+
+        // Clear active preset highlights
+        document.querySelectorAll('.universal-date-preset-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+
+        // Hide active filters display
+        document.getElementById('active-filters').style.display = 'none';
+
+        // Reset filtered invoices
+        state.filteredInvoices = [...state.outstandingInvoices];
+        renderInvoicesTable();
+        updateResultsCount();
+    };
+
+    function collectActiveFilters() {
+        const filters = [];
+
+        // Date range filters
+        const startDate = document.getElementById('start_date')?.value;
+        const endDate = document.getElementById('end_date')?.value;
+        if (startDate && endDate) {
+            filters.push({label: `Date: ${formatDate(startDate)} to ${formatDate(endDate)}`, field: 'date-range', value: {start: startDate, end: endDate}});
+        } else if (startDate) {
+            filters.push({label: `From: ${formatDate(startDate)}`, field: 'start-date', value: startDate});
+        } else if (endDate) {
+            filters.push({label: `To: ${formatDate(endDate)}`, field: 'end-date', value: endDate});
+        }
+
+        // Amount due filter
+        const amountDue = document.getElementById('filter-amount-due')?.value;
+        if (amountDue && parseFloat(amountDue) > 0) {
+            filters.push({label: `Amount Due ≥`, field: 'amount-due', value: amountDue, displayValue: `₹${parseFloat(amountDue).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`});
+        }
+
+        // Other filters
+        const universalSearch = document.getElementById('filter-universal-search')?.value;
+        if (universalSearch) filters.push({label: `Search`, field: 'universal-search', value: universalSearch, displayValue: universalSearch});
+
+        const packageName = document.getElementById('filter-package-name')?.value;
+        if (packageName) filters.push({label: `Package`, field: 'package-name', value: packageName, displayValue: packageName});
+
+        const packagesOnly = document.getElementById('filter-packages-only')?.checked;
+        if (packagesOnly) filters.push({label: `Type`, field: 'packages-only', value: true, displayValue: 'Packages Only'});
+
+        return filters;
+    }
+
+    function updateUniversalActiveFilters(filters) {
+        const container = document.getElementById('active-filters');
+        const tagsContainer = document.getElementById('active-filter-tags');
+        const filterCount = document.getElementById('active-filter-count');
+        const summaryText = document.getElementById('filter-summary-text');
+
+        if (filters.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'block';
+        filterCount.textContent = filters.length;
+
+        // Create filter tags with Universal Engine styling
+        tagsContainer.innerHTML = filters.map(f => `
+            <div class="universal-filter-tag-enhanced">
+                <div class="universal-filter-tag-content">
+                    <span class="universal-filter-tag-label">${f.label}</span>
+                    <span class="universal-filter-tag-value">${f.displayValue || f.value}</span>
+                </div>
+                <button type="button" class="universal-filter-tag-remove" onclick="removeUniversalFilter('${f.field}')" title="Remove this filter">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `).join('');
+
+        // Update summary
+        const resultCount = state.filteredInvoices?.length || 0;
+        summaryText.textContent = `${filters.length} filter${filters.length !== 1 ? 's' : ''} applied • ${resultCount} result${resultCount !== 1 ? 's' : ''} found`;
+    }
+
+    window.removeUniversalFilter = function(field) {
+        switch(field) {
+            case 'date-range':
+            case 'start-date':
+            case 'end-date':
+                document.getElementById('start_date').value = '';
+                document.getElementById('end_date').value = '';
+                break;
+            case 'amount-due':
+                document.getElementById('filter-amount-due').value = '';
+                break;
+            case 'universal-search':
+                document.getElementById('filter-universal-search').value = '';
+                break;
+            case 'package-name':
+                const packageNameInput = document.getElementById('filter-package-name');
+                if (packageNameInput) {
+                    packageNameInput.value = '';
+                    delete packageNameInput.dataset.selectedValue;
+                }
+                break;
+            case 'packages-only':
+                document.getElementById('filter-packages-only').checked = false;
+                break;
+        }
+        applyUniversalFilters();
+    };
+
+    function updateResultsCount() {
+        const count = state.filteredInvoices?.length || 0;
+        document.getElementById('results-count').textContent = `${count} ${count === 1 ? 'result' : 'results'}`;
+    }
+
+    /**
+     * Update the "Select All Invoices" header checkbox state
+     * ✅ Syncs header checkbox with individual invoice checkbox states
+     */
+    function updateSelectAllInvoicesCheckbox() {
+        const headerCheckbox = document.getElementById('select-all-invoices');
+        if (!headerCheckbox) return;
+
+        const allCheckboxes = document.querySelectorAll('.invoice-checkbox');
+        if (allCheckboxes.length === 0) {
+            headerCheckbox.checked = false;
+            headerCheckbox.indeterminate = false;
+            return;
+        }
+
+        const checkedCount = Array.from(allCheckboxes).filter(cb => cb.checked).length;
+
+        if (checkedCount === 0) {
+            // None checked
+            headerCheckbox.checked = false;
+            headerCheckbox.indeterminate = false;
+        } else if (checkedCount === allCheckboxes.length) {
+            // All checked
+            headerCheckbox.checked = true;
+            headerCheckbox.indeterminate = false;
+        } else {
+            // Some checked (indeterminate state)
+            headerCheckbox.checked = false;
+            headerCheckbox.indeterminate = true;
+        }
+    }
+
+    /**
+     * Update the "Select All Installments" header checkbox state
+     * ✅ Syncs header checkbox with individual installment checkbox states
+     */
+    function updateSelectAllInstallmentsCheckbox() {
+        const headerCheckbox = document.getElementById('select-all-installments');
+        if (!headerCheckbox) return;
+
+        const allCheckboxes = document.querySelectorAll('.installment-checkbox');
+        if (allCheckboxes.length === 0) {
+            headerCheckbox.checked = false;
+            headerCheckbox.indeterminate = false;
+            return;
+        }
+
+        const checkedCount = Array.from(allCheckboxes).filter(cb => cb.checked).length;
+
+        if (checkedCount === 0) {
+            // None checked
+            headerCheckbox.checked = false;
+            headerCheckbox.indeterminate = false;
+        } else if (checkedCount === allCheckboxes.length) {
+            // All checked
+            headerCheckbox.checked = true;
+            headerCheckbox.indeterminate = false;
+        } else {
+            // Some checked (indeterminate state)
+            headerCheckbox.checked = false;
+            headerCheckbox.indeterminate = true;
+        }
+    }
+
+    /**
+     * Toggle sort order and reload invoices
+     * ✅ NEW: Allows user to toggle between latest-first (default) and oldest-first
+     */
+    window.toggleSortOrder = async function() {
+        console.log('[SORT] Toggling sort order...');
+
+        // Show loading state
+        document.getElementById('invoices-loading').classList.remove('hidden');
+        document.getElementById('invoices-table-container').classList.add('hidden');
+
+        // Reload invoices with new sort order
+        await fetchOutstandingInvoices();
+
+        console.log('[SORT] Sort order toggled successfully');
+    };
+
+    // ============================================
+    // AUTOCOMPLETE FUNCTIONALITY
+    // ============================================
+
+    function initializeAutocomplete(inputId, dropdownId, loadingId, type) {
+        const input = document.getElementById(inputId);
+        const dropdown = document.getElementById(dropdownId);
+        const loading = document.getElementById(loadingId);
+        let debounceTimer;
+
+        if (!input || !dropdown || !loading) return;
+
+        // Show recent items on focus
+        input.addEventListener('focus', async function() {
+            if (!input.value) {
+                loading.classList.remove('hidden');
+                const results = await searchAutocomplete(type, '');
+                loading.classList.add('hidden');
+                showAutocompleteResults(results, dropdown, input);
+            }
+        });
+
+        // Search on input
+        input.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            const query = input.value;
+
+            if (!query) {
+                dropdown.classList.add('hidden');
+                return;
+            }
+
+            debounceTimer = setTimeout(async () => {
+                loading.classList.remove('hidden');
+                const results = await searchAutocomplete(type, query);
+                loading.classList.add('hidden');
+                showAutocompleteResults(results, dropdown, input);
+            }, 300);
+        });
+
+        // Hide dropdown on click outside
+        document.addEventListener('click', function(e) {
+            if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.classList.add('hidden');
+            }
+        });
+    }
+
+    async function searchAutocomplete(type, query) {
+        try {
+            let url = '';
+            if (type === 'patients') {
+                url = `/api/universal/patients/search?q=${encodeURIComponent(query)}&limit=20`;
+            } else if (type === 'packages') {
+                url = `/api/universal/packages/search?q=${encodeURIComponent(query)}&limit=20`;
+            }
+
+            const response = await fetch(url);
+            const data = await response.json();
+            return data.results || [];
+        } catch (error) {
+            console.error('Autocomplete search error:', error);
+            return [];
+        }
+    }
+
+    function showAutocompleteResults(results, dropdown, input) {
+        if (results.length === 0) {
+            dropdown.innerHTML = '<div class="p-3 text-sm text-gray-500">No results found</div>';
+            dropdown.classList.remove('hidden');
+            return;
+        }
+
+        dropdown.innerHTML = results.map(item => {
+            const displayText = item.full_name || item.package_name || item.name;
+            const subText = item.mrn ? `MRN: ${item.mrn}` : item.package_type || '';
+            return `
+                <div class="autocomplete-item p-3 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                     data-value="${item.patient_id || item.package_id || item.id}"
+                     data-display="${displayText}">
+                    <div class="font-medium text-gray-900 dark:text-white">${displayText}</div>
+                    ${subText ? `<div class="text-xs text-gray-500 dark:text-gray-400">${subText}</div>` : ''}
+                </div>
+            `;
+        }).join('');
+
+        dropdown.classList.remove('hidden');
+
+        // Add click handlers
+        dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
+            item.addEventListener('click', function() {
+                input.value = this.dataset.display;
+                input.dataset.selectedValue = this.dataset.value;
+                dropdown.classList.add('hidden');
+
+                // Trigger filter application immediately after selection
+                applyUniversalFilters();
+            });
+        });
+    }
+
+})();
+</script>
+{% endblock %}

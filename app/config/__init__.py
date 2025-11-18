@@ -74,6 +74,7 @@ POSTING_CONFIG = {
         'upi': os.getenv('DEFAULT_BANK_ACCOUNT', '1001'),
         'neft': os.getenv('DEFAULT_BANK_ACCOUNT', '1001'),
         'rtgs': os.getenv('DEFAULT_BANK_ACCOUNT', '1001'),
+        'advance': '1250',  # Supplier Advance account (Asset)
     },
     
     # Account mappings by medicine type for better classification

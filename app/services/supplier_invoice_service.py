@@ -136,9 +136,13 @@ class SupplierInvoiceService(UniversalEntityService):
             if result.get('invoice_date'):
                 invoice_date = result['invoice_date']
                 if isinstance(invoice_date, str):
-                    invoice_date = datetime.strptime(invoice_date, '%Y-%m-%d')
-                
-                age_delta = datetime.now() - invoice_date
+                    invoice_date = datetime.strptime(invoice_date, '%Y-%m-%d').date()
+                elif hasattr(invoice_date, 'date'):
+                    # Convert datetime to date to avoid timezone issues
+                    invoice_date = invoice_date.date()
+
+                # ✅ FIX: Use date.today() to avoid offset-naive/offset-aware mismatch
+                age_delta = date.today() - invoice_date
                 result['invoice_age_days'] = age_delta.days
                 
                 # Calculate days overdue if applicable
@@ -318,24 +322,32 @@ class SupplierInvoiceService(UniversalEntityService):
                 if not invoice:
                     return False
                 
-                # Calculate total paid
+                # Calculate total paid - use workflow_status and amount fields
+                # Exclude soft-deleted payments
                 total_paid = db_session.query(
-                    func.coalesce(func.sum(SupplierPayment.payment_amount), 0)
+                    func.coalesce(func.sum(SupplierPayment.amount), 0)
                 ).filter(
                     SupplierPayment.invoice_id == invoice_id,
-                    SupplierPayment.payment_status.in_(['approved', 'completed'])
+                    SupplierPayment.workflow_status == 'approved',
+                    SupplierPayment.is_deleted == False
                 ).scalar() or Decimal('0')
-                
-                # Update payment status
-                if total_paid >= invoice.invoice_total_amount:
+
+                # Get invoice total (handle None)
+                invoice_total = invoice.total_amount or Decimal('0')
+
+                # Update payment status with logging
+                old_status = invoice.payment_status
+                if total_paid >= invoice_total and invoice_total > 0:
                     invoice.payment_status = 'paid'
                 elif total_paid > 0:
                     invoice.payment_status = 'partial'
                 elif invoice.due_date and date.today() > invoice.due_date:
                     invoice.payment_status = 'overdue'
                 else:
-                    invoice.payment_status = 'pending'
-                
+                    invoice.payment_status = 'unpaid'
+
+                logger.info(f"Updated invoice {invoice_id} payment status: {old_status} -> {invoice.payment_status} (paid: ₹{total_paid}, total: ₹{invoice_total})")
+
                 db_session.flush()
                 return True
             

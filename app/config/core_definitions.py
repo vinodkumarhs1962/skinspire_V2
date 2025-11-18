@@ -211,8 +211,52 @@ class FilterType(Enum):
     SELECT = "select"               # Standard dropdown
     DATE_RANGE = "date_range"       # Date range picker
     ENTITY_DROPDOWN = "entity_dropdown"  # Searchable entity dropdown
+    AUTOCOMPLETE = "autocomplete"   # Autocomplete filter with initial list
     MULTI_SELECT = "multi_select"   # Multiple selection dropdown
     NUMERIC_RANGE = "numeric_range" # Min/max numeric inputs
+
+class InvoiceSplitCategory(Enum):
+    """
+    Invoice split categories for tax compliance
+    Patient invoices are split into 4 separate tax documents based on item type and GST status
+    """
+    SERVICE_PACKAGE = "service_package"           # Services and Packages
+    GST_MEDICINES = "gst_medicines"              # OTC, Products, Consumables with GST
+    GST_EXEMPT_MEDICINES = "gst_exempt_medicines"  # Medicines/products with GST exemption
+    PRESCRIPTION_COMPOSITE = "prescription_composite"  # Prescription medicines + consultation
+
+# =============================================================================
+# INVOICE SPLIT CONFIGURATION
+# =============================================================================
+
+@dataclass
+class InvoiceSplitConfig:
+    """
+    Configuration for invoice splitting categories
+    Each category has its own serial number sequence and prefix
+    """
+    category: InvoiceSplitCategory
+    prefix: str                      # Invoice number prefix (e.g., 'SVC', 'MED', 'EXM', 'RX')
+    name: str                        # Display name
+    description: str                 # Description for users
+    starting_number: int = 1         # Starting serial number
+    item_types: List[str] = field(default_factory=list)  # Applicable item types
+    requires_gst: Optional[bool] = None  # None=both, True=GST only, False=non-GST only
+
+    def matches_item(self, item_type: str, is_gst_exempt: bool) -> bool:
+        """Check if an invoice line item belongs to this category"""
+        # Check item type first
+        if item_type not in self.item_types:
+            return False
+
+        # Check GST requirement
+        if self.requires_gst is not None:
+            if self.requires_gst and is_gst_exempt:
+                return False
+            if not self.requires_gst and not is_gst_exempt:
+                return False
+
+        return True
 
 # =============================================================================
 # VIEW SECTION DEFINITIONS - Eliminates Hardcoded Values
@@ -360,6 +404,7 @@ class FieldDefinition:
     autocomplete_source: Optional[str] = None  # 'backend', 'static', 'hybrid'
     autocomplete_min_chars: int = 2            # ✓ FROM field_definitions
     entity_search_config: Optional['EntitySearchConfiguration'] = None
+    autocomplete_config: Optional[Dict] = None  # NEW: Complete autocomplete configuration dictionary
     
     # ========== DATABASE MAPPING ==========
     db_column: Optional[str] = None      # Actual database column name
@@ -402,13 +447,17 @@ class ActionDefinition:
     confirmation_message: str = ""        # Confirmation message
     
     # ========== DISPLAY CONTROL ==========
-    show_in_list: bool = True            # Show in list view actions
+    show_in_list: bool = True            # Show in list view row actions (table action column)
     show_in_detail: bool = True          # Show in detail view
-    show_in_toolbar: bool = False        # Show in page toolbar
-    
-    # ========== NEW PARAMETERS TO ADD ==========
-    display_type: ActionDisplayType = ActionDisplayType.DROPDOWN_ITEM  # NEW: How to display
-    button_group: Optional[str] = None   # NEW: Group buttons together
+    show_in_toolbar: bool = False        # DEPRECATED: Use show_in_list_toolbar or show_in_detail_toolbar instead
+
+    # ========== NEW: EXPLICIT TOOLBAR CONTEXT FLAGS (Removes ambiguity) ==========
+    show_in_list_toolbar: bool = False   # Show in LIST page toolbar (navigation/create buttons)
+    show_in_detail_toolbar: bool = False # Show in DETAIL/VIEW page toolbar (action buttons)
+
+    # ========== DISPLAY TYPE ==========
+    display_type: ActionDisplayType = ActionDisplayType.DROPDOWN_ITEM  # How to display (button/dropdown)
+    button_group: Optional[str] = None   # Group buttons together
 
     # ========== ADVANCED FEATURES ==========
     conditions: Optional[Dict[str, Any]] = None    # Conditional display rules
@@ -740,8 +789,11 @@ class EntityConfiguration:
     actions: List[ActionDefinition]     # Action definitions
     summary_cards: List[Dict]           # Summary statistics
     permissions: Dict[str, str]         # Permission mapping
-    
+
     # ========== ALL OPTIONAL PARAMETERS AFTER ==========
+
+    # Info Card Configuration
+    info_card_fields: List[str] = field(default_factory=list)  # Fields to show in info card
 
     # ========== VIEW LAYOUT CONFIGURATION (v2.1) ==========
     view_layout: Optional[ViewLayoutConfiguration] = None
@@ -770,6 +822,8 @@ class EntityConfiguration:
     enable_save_filters: bool = False
     enable_filter_presets: bool = True
     enable_complex_search: bool = True
+    show_filter_card: bool = True  # Show/hide entire filter card (default: True)
+    show_info_card: bool = False  # Show entity-agnostic info card (default: False)
     
     # Export Configuration
     export_endpoint: Optional[str] = None

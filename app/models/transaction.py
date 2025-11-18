@@ -455,8 +455,13 @@ class InvoiceHeader(Base, TimestampMixin, TenantMixin):
     # Invoice cancellation flag
     is_cancelled = Column(Boolean, default=False)
     cancellation_reason = Column(String(255))
-    cancelled_at = Column(DateTime(timezone=True))  
-    
+    cancelled_at = Column(DateTime(timezone=True))
+
+    # Split Invoice Tracking (for batch allocation, GST split, etc.)
+    parent_transaction_id = Column(UUID(as_uuid=True), ForeignKey('invoice_header.invoice_id'))
+    split_sequence = Column(Integer, default=1)
+    is_split_invoice = Column(Boolean, default=False)
+    split_reason = Column(String(100))  # BATCH_ALLOCATION, GST_SPLIT, PRESCRIPTION_CONSOLIDATION
 
     # Default GL Account (Business Rule #9)
     gl_account_id = Column(UUID(as_uuid=True), ForeignKey('chart_of_accounts.account_id'))
@@ -471,7 +476,13 @@ class InvoiceHeader(Base, TimestampMixin, TenantMixin):
     gl_account = relationship("ChartOfAccounts")
     line_items = relationship("InvoiceLineItem", back_populates="invoice", cascade="all, delete-orphan")
     payments = relationship("PaymentDetail", back_populates="invoice", cascade="all, delete-orphan")
+    documents = relationship("InvoiceDocument", back_populates="invoice", cascade="all, delete-orphan")
     gl_transaction = relationship("GLTransaction", back_populates="invoice_ref", uselist=False)
+
+    # Split invoice relationships
+    parent_invoice = relationship("InvoiceHeader", remote_side=[invoice_id],
+                                   foreign_keys=[parent_transaction_id],
+                                   backref=backref("child_invoices", lazy="dynamic"))
 
     @property
     def branch_name(self):
@@ -513,7 +524,12 @@ class InvoiceLineItem(Base, TimestampMixin, TenantMixin):
     
     # For Prescription Drugs included in consultation (Business Rule #5)
     included_in_consultation = Column(Boolean, default=False)
-    
+
+    # Prescription Consolidation Flags (for split invoices without drug license)
+    is_prescription_item = Column(Boolean, default=False)  # Marks PRESCRIPTION_COMPOSITE category items
+    consolidation_group_id = Column(UUID(as_uuid=True))  # Groups items for consolidated printing
+    print_as_consolidated = Column(Boolean, default=False)  # Snapshot: hospital drug license status at creation
+
     # Quantities and Amounts
     quantity = Column(Numeric(10, 2), nullable=False, default=1)
     unit_price = Column(Numeric(12, 2), nullable=False)
@@ -544,63 +560,209 @@ class InvoiceLineItem(Base, TimestampMixin, TenantMixin):
     package = relationship("Package")
     service = relationship("Service")
     medicine = relationship("Medicine")
-    
+
+class InvoiceDocument(Base, TimestampMixin, TenantMixin):
+    """
+    Document management for patient invoices
+    Stores generated invoice PDFs for audit compliance and historical record-keeping
+    """
+    __tablename__ = 'invoice_documents'
+
+    # === PRIMARY KEYS & RELATIONSHIPS ===
+    document_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+    branch_id = Column(UUID(as_uuid=True), ForeignKey('branches.branch_id'))
+    invoice_id = Column(UUID(as_uuid=True), ForeignKey('invoice_header.invoice_id'), nullable=False)
+
+    # === DOCUMENT CLASSIFICATION ===
+    document_type = Column(String(50), nullable=False, default='invoice_pdf')  # invoice_pdf, revised_invoice, credit_note
+    document_category = Column(String(30), default='billing')  # billing, audit, compliance
+    document_status = Column(String(20), default='generated')  # generated, archived, superseded
+
+    # === FILE INFORMATION ===
+    original_filename = Column(String(255), nullable=False)
+    stored_filename = Column(String(255), nullable=False)  # UUID-based secure filename
+    file_path = Column(String(500), nullable=False)
+    file_size = Column(Integer)  # Size in bytes
+    mime_type = Column(String(100), default='application/pdf')
+    file_extension = Column(String(10), default='pdf')
+
+    # === VERSION CONTROL ===
+    is_original = Column(Boolean, default=True)
+    parent_document_id = Column(UUID(as_uuid=True), ForeignKey('invoice_documents.document_id'))
+    version_number = Column(Integer, default=1)
+
+    # === SNAPSHOT METADATA (what was printed at the time) ===
+    hospital_had_drug_license = Column(Boolean)  # Snapshot of hospital drug license status
+    prescription_items_count = Column(Integer, default=0)  # Count of prescription items
+    consolidated_prescription = Column(Boolean, default=False)  # Whether prescription was consolidated
+
+    # === BUSINESS METADATA ===
+    description = Column(Text)
+    generation_trigger = Column(String(50))  # on_creation, manual_regenerate, revision
+    tags = Column(JSONB, default=list)
+
+    # === ACCESS TRACKING ===
+    last_accessed_at = Column(DateTime(timezone=True))
+    last_accessed_by = Column(String(15), ForeignKey('users.user_id'))
+    access_count = Column(Integer, default=0)
+
+    # === RELATIONSHIPS ===
+    hospital = relationship("Hospital")
+    branch = relationship("Branch")
+    invoice = relationship("InvoiceHeader", back_populates="documents")
+    last_accessed_by_user = relationship("User", foreign_keys=[last_accessed_by])
+
+    # Self-referential for versions
+    parent_document = relationship("InvoiceDocument", foreign_keys=[parent_document_id], remote_side=[document_id])
+    versions = relationship("InvoiceDocument", foreign_keys=[parent_document_id], overlaps="parent_document")
+
+    @property
+    def file_size_mb(self):
+        """Return file size in MB"""
+        if self.file_size:
+            return round(self.file_size / (1024 * 1024), 2)
+        return 0
+
+    @property
+    def is_latest_version(self):
+        """Check if this is the latest version"""
+        return self.document_status != 'superseded'
+
 class PaymentDetail(Base, TimestampMixin, TenantMixin):
-    """Payment details for invoices"""
+    """Payment details for invoices - Enhanced with workflow and approval tracking"""
     __tablename__ = 'payment_details'
-    
+
     payment_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
     hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
     invoice_id = Column(UUID(as_uuid=True), ForeignKey('invoice_header.invoice_id'), nullable=False)
-    
+
     # Payment Information
     payment_date = Column(DateTime(timezone=True), nullable=False)  # With timezone
-    
+
     # Payment type Information
     advance_adjustment_id = Column(UUID(as_uuid=True), ForeignKey('advance_adjustments.adjustment_id'))
     loyalty_redemption_id = Column(UUID(as_uuid=True), ForeignKey('loyalty_redemptions.redemption_id'))
-    
 
     # Payment Methods
     cash_amount = Column(Numeric(12, 2), default=0)
     credit_card_amount = Column(Numeric(12, 2), default=0)
     debit_card_amount = Column(Numeric(12, 2), default=0)
     upi_amount = Column(Numeric(12, 2), default=0)
-    
+
     # Currency Information
     currency_code = Column(String(3), default='INR')
     exchange_rate = Column(Numeric(10, 6), default=1.0)  # For international payments
-    
+
     # Payment Details
     card_number_last4 = Column(String(4))
     card_type = Column(String(20))
     upi_id = Column(String(50))
     reference_number = Column(String(50))
-    
+
     # Totals
     total_amount = Column(Numeric(12, 2), nullable=False)
-    
+
     # Refund Information
     refunded_amount = Column(Numeric(12, 2), default=0)
     refund_date = Column(DateTime(timezone=True))
     refund_reason = Column(String(255))
-    
+
     # GL Reference
     gl_entry_id = Column(UUID(as_uuid=True), ForeignKey('gl_transaction.transaction_id'))
-    
+
     # For Bank Reconciliation (Business Rule #8)
     reconciliation_status = Column(String(20), default='pending')  # pending, reconciled, disputed
     reconciliation_date = Column(DateTime(timezone=True))
-    
-    # Add notes column here
-    notes = Column(Text)  # Add this line to include notes
+
+    # Notes
+    notes = Column(Text)
+
+    # ============================================================================
+    # WORKFLOW & APPROVAL FIELDS (Added: 2025-01-10)
+    # ============================================================================
+
+    # Workflow Status
+    workflow_status = Column(String(20), default='approved')  # draft, pending_approval, approved, rejected, reversed
+    requires_approval = Column(Boolean, default=False)
+
+    # Submission Tracking
+    submitted_by = Column(String(15), ForeignKey('users.user_id'))
+    submitted_at = Column(DateTime(timezone=True))
+
+    # Approval Tracking
+    approved_by = Column(String(15), ForeignKey('users.user_id'))
+    approved_at = Column(DateTime(timezone=True))
+
+    # Rejection Tracking
+    rejected_by = Column(String(15), ForeignKey('users.user_id'))
+    rejected_at = Column(DateTime(timezone=True))
+    rejection_reason = Column(Text)
+
+    # GL Posting Tracking
+    gl_posted = Column(Boolean, default=False)
+    posting_date = Column(DateTime(timezone=True))
+
+    # Soft Delete Support
+    is_deleted = Column(Boolean, default=False)
+    deleted_at = Column(DateTime(timezone=True))
+    deleted_by = Column(String(15))
+    deletion_reason = Column(Text)
+
+    # Reversal Tracking
+    is_reversed = Column(Boolean, default=False)
+    reversed_at = Column(DateTime(timezone=True))
+    reversed_by = Column(String(15))
+    reversal_reason = Column(Text)
+    reversal_gl_entry_id = Column(UUID(as_uuid=True), ForeignKey('gl_transaction.transaction_id'))
+
+    # ============================================================================
+    # TRACEABILITY FIELDS (Added: 2025-11-15)
+    # ============================================================================
+
+    # Direct References (avoid joins for common queries)
+    patient_id = Column(UUID(as_uuid=True), ForeignKey('patients.patient_id'))
+    branch_id = Column(UUID(as_uuid=True), ForeignKey('branches.branch_id'))
+
+    # Human-Readable Reference
+    payment_number = Column(String(50), unique=True)  # Auto-generated: PMT-YYYY-NNNNNN
+
+    # Accountability
+    recorded_by = Column(String(15), ForeignKey('users.user_id'))
+
+    # Tracking
+    payment_source = Column(String(20))  # 'single_invoice', 'multi_invoice', 'package_installment', 'advance'
+    advance_adjustment_amount = Column(Numeric(12, 2))  # Amount from advance adjustment
+    invoice_count = Column(Integer, default=1)  # Number of invoices paid
+
+    # Change Tracking
+    last_modified_by = Column(String(15), ForeignKey('users.user_id'))
+    last_modified_at = Column(DateTime(timezone=True))
+
+    # Bank Reconciliation Enhancement
+    bank_reconciled = Column(Boolean, default=False)
+    bank_reconciled_date = Column(DateTime(timezone=True))
+    bank_reconciled_by = Column(String(15), ForeignKey('users.user_id'))
 
     # Relationships
     hospital = relationship("Hospital")
     invoice = relationship("InvoiceHeader", back_populates="payments")
     gl_transaction = relationship("GLTransaction", foreign_keys=[gl_entry_id])
+    reversal_gl_transaction = relationship("GLTransaction", foreign_keys=[reversal_gl_entry_id])
     advance_adjustment = relationship("AdvanceAdjustment", foreign_keys=[advance_adjustment_id], backref="related_payments")
     loyalty_redemption = relationship("LoyaltyRedemption", foreign_keys=[loyalty_redemption_id], backref="related_payment")
+
+    # User relationships for workflow tracking
+    submitted_by_user = relationship("User", foreign_keys=[submitted_by])
+    approved_by_user = relationship("User", foreign_keys=[approved_by])
+    rejected_by_user = relationship("User", foreign_keys=[rejected_by])
+
+    # Traceability relationships
+    patient = relationship("Patient", foreign_keys=[patient_id])
+    branch = relationship("Branch", foreign_keys=[branch_id])
+    recorded_by_user = relationship("User", foreign_keys=[recorded_by])
+    last_modified_by_user = relationship("User", foreign_keys=[last_modified_by])
+    bank_reconciled_by_user = relationship("User", foreign_keys=[bank_reconciled_by])
 
 class PurchaseOrderHeader(Base, TimestampMixin, TenantMixin, SoftDeleteMixin, ApprovalMixin):
     """Purchase order header - Enhanced with soft delete and approval tracking"""
@@ -949,7 +1111,7 @@ class SupplierInvoiceLine(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     invoice = relationship("SupplierInvoice", back_populates="invoice_lines")
     medicine = relationship("Medicine")
 
-class SupplierPayment(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
+class SupplierPayment(Base, TimestampMixin, TenantMixin, SoftDeleteMixin, ApprovalMixin):
     """Enhanced Payments to suppliers with Branch Support"""
     __tablename__ = 'supplier_payment'
     
@@ -996,6 +1158,7 @@ class SupplierPayment(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     cheque_amount = Column(Numeric(12, 2), default=0)
     bank_transfer_amount = Column(Numeric(12, 2), default=0)
     upi_amount = Column(Numeric(12, 2), default=0)
+    advance_amount = Column(Numeric(12, 2), default=0)  # Amount allocated from advance/unallocated payments
     
     # Cheque Details
     cheque_number = Column(String(20))
@@ -1130,7 +1293,7 @@ class SupplierPayment(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     supplier = relationship("Supplier", back_populates="supplier_payments")
     invoice = relationship("SupplierInvoice", back_populates="payments")
     gl_transaction = relationship("GLTransaction", foreign_keys=[gl_entry_id])
-    
+
     # User relationships
     submitted_by_user = relationship("User", foreign_keys=[submitted_by])
     approved_by_user = relationship("User", foreign_keys=[approved_by])
@@ -1138,13 +1301,17 @@ class SupplierPayment(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     document_verified_by_user = relationship("User", foreign_keys=[document_verified_by])
     reconciled_by_user = relationship("User", foreign_keys=[reconciled_by])
     reversed_by_user = relationship("User", foreign_keys=[reversed_by])
-    
+
     # Self-reference for reversals
     original_payment = relationship("SupplierPayment", foreign_keys=[original_payment_id], remote_side=[payment_id])
     reversal_payments = relationship("SupplierPayment", foreign_keys=[original_payment_id], overlaps="original_payment")
-    
+
     documents = relationship("PaymentDocument", back_populates="payment", cascade="all, delete-orphan")
     next_approver = relationship("User", foreign_keys=[next_approver_id])
+
+    # Advance adjustment relationships (defined in SupplierAdvanceAdjustment model using backref)
+    # - advance_allocations_out: List of adjustments where this payment is the source (advance being used)
+    # - advance_allocations_in: List of adjustments where this payment is the target (receiving advance allocation)
 
     # === COMPUTED PROPERTIES ===
     @property
@@ -1565,70 +1732,395 @@ class PrescriptionInvoiceMap(Base, TimestampMixin, TenantMixin):
     medicine = relationship("Medicine")
 
 class PatientAdvancePayment(Base, TimestampMixin, TenantMixin):
-    """Tracks advance payments made by patients"""
+    """Tracks advance payments made by patients - Enhanced with workflow and approval tracking"""
     __tablename__ = 'patient_advance_payments'
-    
+
     advance_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
     hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
     patient_id = Column(UUID(as_uuid=True), ForeignKey('patients.patient_id'), nullable=False)
-    
+
     # Payment details
     amount = Column(Numeric(12, 2), nullable=False)
     payment_date = Column(DateTime(timezone=True), nullable=False)
-    
+
     # Payment methods (matching PaymentDetail model structure)
     cash_amount = Column(Numeric(12, 2), default=0)
     credit_card_amount = Column(Numeric(12, 2), default=0)
     debit_card_amount = Column(Numeric(12, 2), default=0)
     upi_amount = Column(Numeric(12, 2), default=0)
-    
+
     # Currency information (matching InvoiceHeader)
     currency_code = Column(String(3), default='INR')
     exchange_rate = Column(Numeric(10, 6), default=1.0)
-    
+
     # Payment details (matching PaymentDetail)
     card_number_last4 = Column(String(4))
     card_type = Column(String(20))
     upi_id = Column(String(50))
     reference_number = Column(String(50))
-    
+
     # Status information
     is_active = Column(Boolean, default=True)
     notes = Column(Text)
-    
+
     # GL Reference (matching PaymentDetail)
     gl_entry_id = Column(UUID(as_uuid=True), ForeignKey('gl_transaction.transaction_id'))
-    
+
     # Available balance (tracked for quick reference)
     available_balance = Column(Numeric(12, 2), nullable=False)
-    
+
+    # ============================================================================
+    # WORKFLOW & APPROVAL FIELDS (Added: 2025-01-10)
+    # ============================================================================
+
+    # Workflow Status
+    workflow_status = Column(String(20), default='approved')  # draft, pending_approval, approved, rejected
+    requires_approval = Column(Boolean, default=False)
+
+    # Approval Tracking
+    approved_by = Column(String(15), ForeignKey('users.user_id'))
+    approved_at = Column(DateTime(timezone=True))
+
+    # Rejection Tracking
+    rejected_by = Column(String(15))
+    rejected_at = Column(DateTime(timezone=True))
+    rejection_reason = Column(Text)
+
+    # GL Posting Tracking
+    gl_posted = Column(Boolean, default=False)
+    posting_date = Column(DateTime(timezone=True))
+
+    # Branch Support (for multi-branch hospitals)
+    branch_id = Column(UUID(as_uuid=True), ForeignKey('branches.branch_id'))
+
     # Relationships
     hospital = relationship("Hospital")
     patient = relationship("Patient")
+    branch = relationship("Branch")
     gl_transaction = relationship("GLTransaction", foreign_keys=[gl_entry_id])
     adjustments = relationship("AdvanceAdjustment", back_populates="advance_payment")
 
+    # User relationships for workflow tracking
+    approved_by_user = relationship("User", foreign_keys=[approved_by])
+
 class AdvanceAdjustment(Base, TimestampMixin, TenantMixin):
-    """Tracks adjustments to patient advance payments"""
+    """Tracks adjustments to patient advance payments - Enhanced with GL tracking and reversal support"""
     __tablename__ = 'advance_adjustments'
-    
+
     adjustment_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
     hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
     advance_id = Column(UUID(as_uuid=True), ForeignKey('patient_advance_payments.advance_id'), nullable=False)
     invoice_id = Column(UUID(as_uuid=True), ForeignKey('invoice_header.invoice_id'))
     payment_id = Column(UUID(as_uuid=True), ForeignKey('payment_details.payment_id'))
-    
+
     # Adjustment details
     amount = Column(Numeric(12, 2), nullable=False)
     adjustment_date = Column(DateTime(timezone=True), nullable=False)
     notes = Column(Text)
-    
+
+    # ============================================================================
+    # GL TRACKING & REVERSAL FIELDS (Added: 2025-01-10)
+    # ============================================================================
+
+    # GL Reference
+    gl_entry_id = Column(UUID(as_uuid=True), ForeignKey('gl_transaction.transaction_id'))
+
+    # Reversal Tracking
+    is_reversed = Column(Boolean, default=False)
+    reversed_at = Column(DateTime(timezone=True))
+    reversed_by = Column(String(15))
+
     # Relationships
     hospital = relationship("Hospital")
     advance_payment = relationship("PatientAdvancePayment", back_populates="adjustments")
     invoice = relationship("InvoiceHeader")
     # Specify which foreign key to use for this relationship
     payment = relationship("PaymentDetail", foreign_keys=[payment_id])
+    gl_transaction = relationship("GLTransaction", foreign_keys=[gl_entry_id])
+
+class PackagePaymentPlan(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
+    """
+    Tracks service packages sold to patients with installment payment schedules
+    Example: Laser Hair Reduction - 5 sessions for ₹50,000 paid in 3 installments
+    """
+    __tablename__ = 'package_payment_plans'
+
+    # Primary Key
+    plan_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+
+    # Multi-tenant & Branch Support
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+    branch_id = Column(UUID(as_uuid=True), ForeignKey('branches.branch_id'))
+
+    # Patient Reference
+    patient_id = Column(UUID(as_uuid=True), ForeignKey('patients.patient_id'), nullable=False)
+
+    # Invoice Reference (links to originating invoice with package)
+    invoice_id = Column(UUID(as_uuid=True), ForeignKey('invoice_header.invoice_id'))
+
+    # Package Reference (PRIMARY - references packages master table)
+    package_id = Column(UUID(as_uuid=True), ForeignKey('packages.package_id'))
+
+    # Package Information (DEPRECATED - kept for backward compatibility only)
+    # TODO: Remove these fields after full migration to package_id reference
+    package_name = Column(String(255))  # Deprecated: Use package.package_name via relationship
+    package_description = Column(Text)   # Deprecated: Use package relationship
+    package_code = Column(String(50))    # Deprecated: Use package relationship
+
+    # Session Tracking
+    total_sessions = Column(Integer, nullable=False)
+    completed_sessions = Column(Integer, default=0)
+    # remaining_sessions computed in database
+
+    # Financial Information
+    total_amount = Column(Numeric(12, 2), nullable=False)
+    paid_amount = Column(Numeric(12, 2), nullable=False)
+    # balance_amount computed in database
+
+    # Installment Configuration
+    installment_count = Column(Integer, nullable=False)
+    installment_frequency = Column(String(20), default='monthly')  # weekly, biweekly, monthly, custom
+    first_installment_date = Column(Date, nullable=False)
+
+    # Status
+    status = Column(String(20), default='active')  # active, completed, cancelled, suspended
+
+    # Cancellation/Suspension Information
+    cancelled_at = Column(DateTime(timezone=True))
+    cancelled_by = Column(String(15), ForeignKey('users.user_id'))
+    cancellation_reason = Column(Text)
+
+    suspended_at = Column(DateTime(timezone=True))
+    suspended_by = Column(String(15), ForeignKey('users.user_id'))
+    suspension_reason = Column(Text)
+
+    # Discontinuation Information (triggers refund process)
+    discontinued_at = Column(DateTime(timezone=True))
+    discontinued_by = Column(String(15), ForeignKey('users.user_id'))
+    discontinuation_reason = Column(Text)
+    refund_amount = Column(Numeric(12, 2))
+    refund_status = Column(String(20), default='none')  # none, pending, approved, processed, failed
+    credit_note_id = Column(UUID(as_uuid=True), ForeignKey('patient_credit_notes.credit_note_id'))
+
+    # Notes
+    notes = Column(Text)
+
+    # Relationships
+    hospital = relationship("Hospital")
+    branch = relationship("Branch")
+    patient = relationship("Patient")
+    invoice = relationship("InvoiceHeader", foreign_keys=[invoice_id])  # Originating invoice
+    package = relationship("Package")  # PRIMARY relationship to fetch package details
+    installments = relationship("InstallmentPayment", back_populates="plan", cascade="all, delete-orphan")
+    sessions = relationship("PackageSession", back_populates="plan", cascade="all, delete-orphan")
+    credit_note = relationship("PatientCreditNote", foreign_keys=[credit_note_id], uselist=False)
+    cancelled_by_user = relationship("User", foreign_keys=[cancelled_by])
+    suspended_by_user = relationship("User", foreign_keys=[suspended_by])
+    discontinued_by_user = relationship("User", foreign_keys=[discontinued_by])
+
+    @property
+    def remaining_sessions(self):
+        """Calculate remaining sessions"""
+        return self.total_sessions - (self.completed_sessions or 0)
+
+    @property
+    def balance_amount(self):
+        """Calculate balance amount"""
+        return self.total_amount - (self.paid_amount or 0)
+
+    @property
+    def completion_percentage(self):
+        """Calculate completion percentage based on sessions"""
+        if self.total_sessions == 0:
+            return 0
+        return (self.completed_sessions / self.total_sessions) * 100
+
+    @property
+    def payment_percentage(self):
+        """Calculate payment percentage"""
+        if self.total_amount == 0:
+            return 0
+        return (self.paid_amount / self.total_amount) * 100
+
+
+class InstallmentPayment(Base, TimestampMixin):
+    """
+    Tracks individual installment payments for package payment plans
+    """
+    __tablename__ = 'installment_payments'
+
+    # Primary Key
+    installment_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+
+    # Multi-tenant Support
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+
+    # Plan Reference
+    plan_id = Column(UUID(as_uuid=True), ForeignKey('package_payment_plans.plan_id'), nullable=False)
+
+    # Installment Information
+    installment_number = Column(Integer, nullable=False)
+    due_date = Column(Date, nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+
+    # Payment Information
+    paid_date = Column(Date)
+    paid_amount = Column(Numeric(12, 2), default=0)
+    payment_id = Column(UUID(as_uuid=True), ForeignKey('payment_details.payment_id'))
+
+    # Status
+    status = Column(String(20), default='pending')  # pending, partial, paid, overdue, waived
+
+    # Waiver Information
+    waived_at = Column(DateTime(timezone=True))
+    waived_by = Column(String(15), ForeignKey('users.user_id'))
+    waiver_reason = Column(Text)
+    waived_amount = Column(Numeric(12, 2), default=0)
+
+    # Additional Fields
+    notes = Column(Text)
+
+    # Audit fields (created_at, created_by, updated_at, updated_by) provided by TimestampMixin
+
+    # Relationships
+    hospital = relationship("Hospital")
+    plan = relationship("PackagePaymentPlan", back_populates="installments")
+    payment = relationship("PaymentDetail")
+    waived_by_user = relationship("User", foreign_keys=[waived_by])
+
+    @property
+    def balance_amount(self):
+        """Calculate balance amount for this installment"""
+        return self.amount - (self.paid_amount or 0) - (self.waived_amount or 0)
+
+    @property
+    def is_overdue(self):
+        """Check if installment is overdue"""
+        from datetime import date
+        if self.status in ('paid', 'waived'):
+            return False
+        return self.due_date < date.today()
+
+    @property
+    def days_overdue(self):
+        """Calculate days overdue"""
+        from datetime import date
+        if not self.is_overdue:
+            return 0
+        return (date.today() - self.due_date).days
+
+
+class PackageSession(Base, TimestampMixin):
+    """
+    Tracks individual service sessions for packages (optional, separate from payment installments)
+    Example: Track completion of each laser session independent of payment
+    """
+    __tablename__ = 'package_sessions'
+
+    # Primary Key
+    session_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+
+    # Multi-tenant Support
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+
+    # Plan Reference
+    plan_id = Column(UUID(as_uuid=True), ForeignKey('package_payment_plans.plan_id'), nullable=False)
+
+    # Session Information
+    session_number = Column(Integer, nullable=False)
+    session_date = Column(Date)  # Scheduled date (can be rescheduled)
+    actual_completion_date = Column(Date)  # Actual date when session was completed
+    session_status = Column(String(20), default='scheduled')  # scheduled, completed, cancelled, no_show
+
+    # Service Details
+    service_name = Column(String(255))
+    service_notes = Column(Text)
+    performed_by = Column(String(15), ForeignKey('users.user_id'))
+
+    # Relationships
+    hospital = relationship("Hospital")
+    plan = relationship("PackagePaymentPlan", back_populates="sessions")
+    performed_by_user = relationship("User", foreign_keys=[performed_by])
+
+
+class PatientCreditNote(Base, TimestampMixin, TenantMixin):
+    """
+    Credit notes issued against patient invoices
+    Used for refunds, adjustments, and package plan discontinuations
+    """
+    __tablename__ = 'patient_credit_notes'
+
+    # Primary Key
+    credit_note_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+
+    # Multi-tenant Support
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+    branch_id = Column(UUID(as_uuid=True), ForeignKey('branches.branch_id'))
+
+    # References
+    credit_note_number = Column(String(50), nullable=False)
+    original_invoice_id = Column(UUID(as_uuid=True), ForeignKey('invoice_header.invoice_id'), nullable=False)
+    plan_id = Column(UUID(as_uuid=True), ForeignKey('package_payment_plans.plan_id'))
+    patient_id = Column(UUID(as_uuid=True), ForeignKey('patients.patient_id'), nullable=False)
+
+    # Amounts
+    credit_note_date = Column(Date, nullable=False)
+    total_amount = Column(Numeric(12, 2), nullable=False)
+
+    # Reason
+    reason_code = Column(String(20))  # plan_discontinued, service_not_provided, overcharge, goodwill
+    reason_description = Column(Text)
+
+    # GL Posting
+    gl_posted = Column(Boolean, default=False)
+    gl_transaction_id = Column(UUID(as_uuid=True), ForeignKey('gl_transaction.transaction_id'))
+    posted_at = Column(DateTime(timezone=True))
+    posted_by = Column(String(15))
+
+    # Status
+    status = Column(String(20), default='draft')  # draft, approved, posted, cancelled
+    approved_by = Column(String(15), ForeignKey('users.user_id'))
+    approved_at = Column(DateTime(timezone=True))
+
+    # Relationships
+    hospital = relationship("Hospital")
+    branch = relationship("Branch")
+    patient = relationship("Patient")
+    invoice = relationship("InvoiceHeader", foreign_keys=[original_invoice_id])
+    plan = relationship("PackagePaymentPlan", foreign_keys=[plan_id])
+    gl_transaction = relationship("GLTransaction", foreign_keys=[gl_transaction_id])
+    approver = relationship("User", foreign_keys=[approved_by])
+
+
+class SupplierAdvanceAdjustment(Base, TimestampMixin, TenantMixin):
+    """Tracks adjustments to supplier advance payments (unallocated payments)"""
+    __tablename__ = 'supplier_advance_adjustments'
+
+    adjustment_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+    branch_id = Column(UUID(as_uuid=True), ForeignKey('branches.branch_id'), nullable=False)
+
+    # Source advance payment (the unallocated payment being used)
+    source_payment_id = Column(UUID(as_uuid=True), ForeignKey('supplier_payment.payment_id'), nullable=False)
+
+    # Target references (what the advance is being applied to)
+    target_payment_id = Column(UUID(as_uuid=True), ForeignKey('supplier_payment.payment_id'))  # The new payment record
+    invoice_id = Column(UUID(as_uuid=True), ForeignKey('supplier_invoice.invoice_id'))
+    supplier_id = Column(UUID(as_uuid=True), ForeignKey('suppliers.supplier_id'), nullable=False)
+
+    # Adjustment details
+    amount = Column(Numeric(12, 2), nullable=False)
+    adjustment_date = Column(DateTime(timezone=True), nullable=False)
+    adjustment_type = Column(String(20), default='allocation')  # allocation, reversal, refund
+    notes = Column(Text)
+
+    # Relationships
+    hospital = relationship("Hospital")
+    branch = relationship("Branch")
+    supplier = relationship("Supplier")
+    source_payment = relationship("SupplierPayment", foreign_keys=[source_payment_id], backref="advance_allocations_out")
+    target_payment = relationship("SupplierPayment", foreign_keys=[target_payment_id], backref="advance_allocations_in")
+    invoice = relationship("SupplierInvoice")
 
 class LoyaltyPoint(Base, TimestampMixin, TenantMixin):
     """Tracks loyalty points earned by patients"""
@@ -1690,7 +2182,12 @@ class ARSubledger(Base, TimestampMixin, TenantMixin):
     reference_id = Column(UUID(as_uuid=True), nullable=False)  # invoice_id, payment_id, or advance_id
     reference_type = Column(String(20), nullable=False)  # 'invoice', 'payment', or 'advance'
     reference_number = Column(String(50))  # Invoice number, payment reference, etc.
-    
+    reference_line_item_id = Column(UUID(as_uuid=True), ForeignKey('invoice_line_item.line_item_id'))  # For line-item level tracking
+
+    # Item Details (denormalized for faster reporting and historical accuracy)
+    item_type = Column(String(20))  # Service, Medicine, Package
+    item_name = Column(String(255))  # Item description
+
     # Patient Information
     patient_id = Column(UUID(as_uuid=True), ForeignKey('patients.patient_id'), nullable=False)
     
@@ -1708,6 +2205,7 @@ class ARSubledger(Base, TimestampMixin, TenantMixin):
     hospital = relationship("Hospital")
     branch = relationship("Branch")  # Added branch relationship
     patient = relationship("Patient")
+    line_item = relationship("InvoiceLineItem", foreign_keys=[reference_line_item_id])  # Line item for payment allocation
     gl_transaction = relationship("GLTransaction")
 
 

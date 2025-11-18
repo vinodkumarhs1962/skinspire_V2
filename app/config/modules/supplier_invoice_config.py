@@ -815,68 +815,168 @@ SUPPLIER_INVOICE_VIEW_LAYOUT = ViewLayoutConfiguration(
 # =============================================================================
 
 SUPPLIER_INVOICE_ACTIONS = [
-    # === LIST VIEW ACTIONS ===
+    # =============================================================================
+    # LIST PAGE - TOOLBAR ACTIONS (Navigation buttons)
+    # =============================================================================
+
+    # Related List Navigation - Suppliers
+    ActionDefinition(
+        id="goto_suppliers_list",
+        label="Suppliers",
+        icon="fas fa-building",
+        button_type=ButtonType.SECONDARY,
+        route_name="universal_views.universal_list_view",
+        route_params={"entity_type": "suppliers"},
+        show_in_list=False,
+        show_in_list_toolbar=True,
+        show_in_detail_toolbar=False,
+        display_type=ActionDisplayType.BUTTON,
+        permission="suppliers_view",
+        order=1
+    ),
+
+    # Related List Navigation - Purchase Orders
+    ActionDefinition(
+        id="goto_purchase_orders_list",
+        label="Purchase Orders",
+        icon="fas fa-file-invoice",
+        button_type=ButtonType.SECONDARY,
+        route_name="universal_views.universal_list_view",
+        route_params={"entity_type": "purchase_orders"},
+        show_in_list=False,
+        show_in_list_toolbar=True,
+        show_in_detail_toolbar=False,
+        display_type=ActionDisplayType.BUTTON,
+        permission="purchase_order_view",
+        order=2
+    ),
+
+    # Related List Navigation - Supplier Payments
+    ActionDefinition(
+        id="goto_supplier_payments_list",
+        label="Supplier Payments",
+        icon="fas fa-money-check-alt",
+        button_type=ButtonType.SECONDARY,
+        route_name="universal_views.universal_list_view",
+        route_params={"entity_type": "supplier_payments"},
+        show_in_list=False,
+        show_in_list_toolbar=True,
+        show_in_detail_toolbar=False,
+        display_type=ActionDisplayType.BUTTON,
+        permission="supplier_payment_view",
+        order=3
+    ),
+
+    # =============================================================================
+    # LIST PAGE - ROW ACTIONS (Per-record actions in table)
+    # =============================================================================
+
+    # View Details (always first row action)
     ActionDefinition(
         id="view",
-        label="View Details",
+        label="View",
         icon="fas fa-eye",
         button_type=ButtonType.INFO,
         route_name="universal_views.universal_detail_view",
         route_params={"entity_type": "supplier_invoices", "item_id": "{invoice_id}"},
         show_in_list=True,
-        show_in_detail=False,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=False,
         display_type=ActionDisplayType.BUTTON,
         permission="supplier_invoice_view",
         order=1
     ),
-    
+
+    # Delete (row action for quick delete)
     ActionDefinition(
-        id="make_payment",
-        label="Make Payment",
-        icon="fas fa-money-bill-wave",
-        button_type=ButtonType.SUCCESS,
-        route_name="supplier_views.create_payment",
-        route_params={"invoice_id": "{invoice_id}"},
+        id="delete_row",
+        label="Delete",
+        icon="fas fa-trash",
+        button_type=ButtonType.DANGER,
+        url_pattern="/supplier/invoice/delete/{invoice_id}",
         show_in_list=True,
-        show_in_detail=True,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=False,
         display_type=ActionDisplayType.BUTTON,
-        permission="supplier_payment_create",
-        order=1.5,
+        permission="supplier_invoice_delete",
+        order=2,
         conditions={
-            "payment_status": ["pending", "partial", "overdue"]
-        }
+            "payment_status": ["unpaid"],
+            "is_deleted": [False, None]
+        },
+        confirmation_required=True,
+        confirmation_message="Are you sure you want to delete this invoice?"
     ),
 
+    # =============================================================================
+    # DETAIL/VIEW PAGE - TOOLBAR ACTIONS (Navigation buttons)
+    # =============================================================================
+
+    # Back to Supplier Invoices List
     ActionDefinition(
-        id="export",
-        label="Export",
-        icon="fas fa-download",
+        id="back_to_invoices_list",
+        label="Supplier Invoices",
+        icon="fas fa-file-invoice-dollar",
         button_type=ButtonType.SECONDARY,
-        url_pattern="/universal/supplier_invoices/export",
-        show_in_list=False,
-        show_in_detail=False,
-        show_in_toolbar=True,
-        display_type=ActionDisplayType.BUTTON,
-        permission="supplier_invoice_export",
-        order=2
-    ),
-    
-    # === DETAIL VIEW ACTIONS - TOOLBAR ===
-    ActionDefinition(
-        id="back",
-        label="Back to List",
-        icon="fas fa-arrow-left",
-        button_type=ButtonType.SECONDARY,
-        route_name="universal_entity.list",
+        route_name="universal_views.universal_list_view",
         route_params={"entity_type": "supplier_invoices"},
         show_in_list=False,
-        show_in_detail=True,
-        show_in_toolbar=True,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
         display_type=ActionDisplayType.BUTTON,
-        permission="supplier_invoice_list",
+        permission="supplier_invoice_view",
         order=1
     ),
-    
+
+    # Related List - Suppliers
+    ActionDefinition(
+        id="goto_suppliers_from_detail",
+        label="Suppliers",
+        icon="fas fa-building",
+        button_type=ButtonType.SECONDARY,
+        route_name="universal_views.universal_list_view",
+        route_params={"entity_type": "suppliers"},
+        show_in_list=False,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
+        display_type=ActionDisplayType.BUTTON,
+        permission="suppliers_view",
+        order=2
+    ),
+
+    # Related List - Purchase Orders
+    ActionDefinition(
+        id="goto_purchase_orders_from_detail",
+        label="Purchase Orders",
+        icon="fas fa-file-invoice",
+        button_type=ButtonType.SECONDARY,
+        route_name="universal_views.universal_list_view",
+        route_params={"entity_type": "purchase_orders"},
+        show_in_list=False,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
+        display_type=ActionDisplayType.BUTTON,
+        permission="purchase_order_view",
+        order=3
+    ),
+
+    # Related List - Supplier Payments
+    ActionDefinition(
+        id="goto_supplier_payments_from_detail",
+        label="Supplier Payments",
+        icon="fas fa-money-check-alt",
+        button_type=ButtonType.SECONDARY,
+        route_name="universal_views.universal_list_view",
+        route_params={"entity_type": "supplier_payments"},
+        show_in_list=False,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
+        display_type=ActionDisplayType.BUTTON,
+        permission="supplier_payment_view",
+        order=4
+    ),
+
+    # Print Invoice
     ActionDefinition(
         id="print_invoice",
         label="Print Invoice",
@@ -884,29 +984,19 @@ SUPPLIER_INVOICE_ACTIONS = [
         button_type=ButtonType.INFO,
         route_name="universal_views.universal_document_view",
         route_params={"entity_type": "supplier_invoices", "item_id": "{invoice_id}", "doc_type": "invoice"},
-        show_in_list=True,
-        show_in_detail=True,
-        show_in_toolbar=True,
+        show_in_list=False,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
         display_type=ActionDisplayType.BUTTON,
         permission="supplier_invoice_print",
-        order=2
+        order=5
     ),
     
-    ActionDefinition(
-        id="download_pdf",
-        label="Download PDF",
-        icon="fas fa-file-pdf",
-        button_type=ButtonType.SUCCESS,
-        url_pattern="/universal/supplier_invoices/document/{invoice_id}?type=invoice&format=pdf",
-        show_in_list=False,
-        show_in_detail=True,
-        show_in_toolbar=True,
-        display_type=ActionDisplayType.BUTTON,
-        permission="supplier_invoice_document",
-        order=3
-    ),
-    
-    # === DETAIL VIEW ACTIONS - DROPDOWN ===
+    # =============================================================================
+    # DETAIL/VIEW PAGE - DROPDOWN ACTIONS (Actions menu)
+    # =============================================================================
+
+    # Edit Invoice
     ActionDefinition(
         id="edit_invoice",
         label="Edit Invoice",
@@ -915,103 +1005,52 @@ SUPPLIER_INVOICE_ACTIONS = [
         route_name="supplier_views.edit_supplier_invoice",
         route_params={"invoice_id": "{invoice_id}"},
         show_in_list=False,
-        show_in_detail=True,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
         display_type=ActionDisplayType.DROPDOWN_ITEM,
         permission="supplier_invoice_edit",
-        order=3.5,
+        order=1,
         conditions={
             "payment_status": ["unpaid", "partial"]
         }
     ),
 
-    ActionDefinition(
-        id="view_supplier",
-        label="View Supplier",
-        icon="fas fa-building",
-        button_type=ButtonType.INFO,
-        url_pattern="/universal/suppliers/view/{supplier_id}",
-        show_in_list=False,
-        show_in_detail=True,
-        display_type=ActionDisplayType.DROPDOWN_ITEM,
-        conditional_display="item.supplier_id",
-        permission="suppliers_view",
-        order=4
-    ),
-    
-    ActionDefinition(
-        id="view_po",
-        label="View Purchase Order",
-        icon="fas fa-file-invoice",
-        button_type=ButtonType.INFO,
-        url_pattern="/universal/purchase_orders/view/{po_id}",
-        show_in_list=False,
-        show_in_detail=True,
-        display_type=ActionDisplayType.DROPDOWN_ITEM,
-        conditional_display="item.po_id",
-        permission="purchase_order_view",
-        order=5
-    ),
-    
-    ActionDefinition(
-        id="view_payments",
-        label="View Related Payments",
-        icon="fas fa-money-check",
-        button_type=ButtonType.INFO,
-        url_pattern="/supplier/invoices/{invoice_id}/payments",
-        show_in_list=False,
-        show_in_detail=True,
-        display_type=ActionDisplayType.DROPDOWN_ITEM,
-        conditional_display="item.paid_amount > 0",
-        permission="supplier_payment_view",
-        order=6
-    ),
-    
-    ActionDefinition(
-        id="download_statement",
-        label="Download Statement",
-        icon="fas fa-file-alt",
-        button_type=ButtonType.SECONDARY,
-        url_pattern="/universal/supplier_invoices/document/{invoice_id}?type=statement&format=pdf",
-        show_in_list=False,
-        show_in_detail=True,
-        display_type=ActionDisplayType.DROPDOWN_ITEM,
-        permission="supplier_invoice_document",
-        order=7
-    ),
-
-    # === SOFT DELETE AND RESTORE ===
+    # Delete Invoice
     ActionDefinition(
         id="delete",
-        label="Delete",
+        label="Delete Invoice",
         icon="fas fa-trash",
         button_type=ButtonType.DANGER,
         url_pattern="/supplier/invoice/delete/{invoice_id}",
         show_in_list=False,
-        show_in_detail=True,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
         display_type=ActionDisplayType.DROPDOWN_ITEM,
         permission="supplier_invoice_delete",
-        order=8,
+        order=2,
         conditions={
-            "payment_status": ["unpaid"],  # Only unpaid invoices
-            "is_deleted": [False, None]  # Not already deleted
+            "payment_status": ["unpaid"],
+            "is_deleted": [False, None]
         },
         confirmation_required=True,
-        confirmation_message="Are you sure you want to delete this invoice? This action can be undone."
+        confirmation_message="Are you sure you want to delete this invoice?"
     ),
 
+    # Restore Invoice
     ActionDefinition(
         id="restore",
-        label="Restore",
+        label="Restore Invoice",
         icon="fas fa-undo",
         button_type=ButtonType.SUCCESS,
         url_pattern="/supplier/invoice/undelete/{invoice_id}",
         show_in_list=False,
-        show_in_detail=True,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
         display_type=ActionDisplayType.DROPDOWN_ITEM,
         permission="supplier_invoice_delete",
-        order=9,
+        order=3,
         conditions={
-            "is_deleted": [True]  # Only show for deleted invoices
+            "is_deleted": [True]
         },
         confirmation_required=True,
         confirmation_message="Are you sure you want to restore this invoice?"

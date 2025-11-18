@@ -9,11 +9,12 @@ import logging
 from sqlalchemy import and_, or_, func, desc
 from sqlalchemy.orm import Session
 
-from app.models.master import Patient, ChartOfAccounts
+from app.models.master import Patient, ChartOfAccounts, Supplier
 from app.models.transaction import (
-    InvoiceHeader, InvoiceLineItem, PaymentDetail, 
+    InvoiceHeader, InvoiceLineItem, PaymentDetail,
     SupplierInvoice, SupplierInvoiceLine, SupplierPayment,
-    GLTransaction, GLEntry, GSTLedger, PatientAdvancePayment
+    GLTransaction, GLEntry, GSTLedger, PatientAdvancePayment,
+    PatientCreditNote, ARSubledger
 )
 from app.services.database_service import get_db_session, get_entity_dict
 
@@ -828,8 +829,179 @@ def _get_gl_accounts_for_payment(session: Session, payment: PaymentDetail) -> Di
         accounts['upi'] = bank_account.account_id
     else:
         accounts['upi'] = upi_account.account_id
-    
+
     return accounts
+
+
+def create_multi_invoice_payment_gl_entries(
+    payment_id: uuid.UUID,
+    invoice_count: int,
+    current_user_id: Optional[str] = None,
+    session: Optional[Session] = None
+) -> Dict:
+    """
+    Create GL entries for multi-invoice patient payment
+
+    Args:
+        payment_id: Payment UUID
+        invoice_count: Number of invoices paid
+        current_user_id: ID of user creating entries
+        session: Database session (optional)
+
+    Returns:
+        Dict with success status and transaction_id
+    """
+    if session:
+        return _create_multi_invoice_payment_gl_entries(session, payment_id, invoice_count, current_user_id)
+
+    with get_db_session() as new_session:
+        return _create_multi_invoice_payment_gl_entries(new_session, payment_id, invoice_count, current_user_id)
+
+
+def _create_multi_invoice_payment_gl_entries(
+    session: Session,
+    payment_id: uuid.UUID,
+    invoice_count: int,
+    current_user_id: Optional[str] = None
+) -> Dict:
+    """
+    Internal function to create GL entries for multi-invoice payment
+
+    GL Posting Logic:
+    - Debit: Cash/Credit Card/Debit Card/UPI (based on payment methods)
+    - Credit: Accounts Receivable (total payment amount)
+    """
+    try:
+        # Get the payment record
+        payment = session.query(PaymentDetail).filter_by(payment_id=payment_id).first()
+
+        if not payment:
+            return {'success': False, 'error': f'Payment {payment_id} not found'}
+
+        # Get GL accounts
+        accounts = _get_gl_accounts_for_payment(session, payment)
+
+        # Create GL transaction
+        gl_transaction = GLTransaction(
+            hospital_id=payment.hospital_id,
+            transaction_date=payment.payment_date,
+            transaction_type="PAYMENT_RECEIPT",
+            reference_id=str(payment.payment_id),
+            description=f"Multi-Invoice Payment ({invoice_count} invoices)",
+            currency_code=payment.currency_code or 'INR',
+            exchange_rate=payment.exchange_rate or Decimal('1.0'),
+            total_debit=payment.total_amount,
+            total_credit=payment.total_amount
+        )
+
+        if current_user_id:
+            gl_transaction.created_by = current_user_id
+
+        session.add(gl_transaction)
+        session.flush()  # Get transaction_id
+
+        # Create GL entries
+        entries = []
+
+        # 1. CREDIT: Accounts Receivable (total payment reduces A/R)
+        ar_entry = GLEntry(
+            hospital_id=payment.hospital_id,
+            transaction_id=gl_transaction.transaction_id,
+            account_id=accounts['accounts_receivable'],
+            debit_amount=Decimal('0'),
+            credit_amount=payment.total_amount,
+            entry_date=payment.payment_date,
+            description=f"Multi-Invoice Payment - {invoice_count} invoices"
+        )
+
+        if current_user_id:
+            ar_entry.created_by = current_user_id
+
+        session.add(ar_entry)
+        entries.append(ar_entry)
+
+        # 2. DEBIT: Payment method accounts (cash, cards, UPI)
+        if payment.cash_amount and payment.cash_amount > 0:
+            cash_entry = GLEntry(
+                hospital_id=payment.hospital_id,
+                transaction_id=gl_transaction.transaction_id,
+                account_id=accounts['cash'],
+                debit_amount=payment.cash_amount,
+                credit_amount=Decimal('0'),
+                entry_date=payment.payment_date,
+                description=f"Cash Receipt - Multi-Invoice Payment"
+            )
+
+            if current_user_id:
+                cash_entry.created_by = current_user_id
+
+            session.add(cash_entry)
+            entries.append(cash_entry)
+
+        if payment.credit_card_amount and payment.credit_card_amount > 0:
+            cc_entry = GLEntry(
+                hospital_id=payment.hospital_id,
+                transaction_id=gl_transaction.transaction_id,
+                account_id=accounts['credit_card'],
+                debit_amount=payment.credit_card_amount,
+                credit_amount=Decimal('0'),
+                entry_date=payment.payment_date,
+                description=f"Credit Card Receipt - Multi-Invoice Payment"
+            )
+
+            if current_user_id:
+                cc_entry.created_by = current_user_id
+
+            session.add(cc_entry)
+            entries.append(cc_entry)
+
+        if payment.debit_card_amount and payment.debit_card_amount > 0:
+            dc_entry = GLEntry(
+                hospital_id=payment.hospital_id,
+                transaction_id=gl_transaction.transaction_id,
+                account_id=accounts['debit_card'],
+                debit_amount=payment.debit_card_amount,
+                credit_amount=Decimal('0'),
+                entry_date=payment.payment_date,
+                description=f"Debit Card Receipt - Multi-Invoice Payment"
+            )
+
+            if current_user_id:
+                dc_entry.created_by = current_user_id
+
+            session.add(dc_entry)
+            entries.append(dc_entry)
+
+        if payment.upi_amount and payment.upi_amount > 0:
+            upi_entry = GLEntry(
+                hospital_id=payment.hospital_id,
+                transaction_id=gl_transaction.transaction_id,
+                account_id=accounts['upi'],
+                debit_amount=payment.upi_amount,
+                credit_amount=Decimal('0'),
+                entry_date=payment.payment_date,
+                description=f"UPI Receipt - Multi-Invoice Payment"
+            )
+
+            if current_user_id:
+                upi_entry.created_by = current_user_id
+
+            session.add(upi_entry)
+            entries.append(upi_entry)
+
+        session.flush()
+
+        return {
+            'success': True,
+            'transaction_id': gl_transaction.transaction_id,
+            'entries_count': len(entries),
+            'total_amount': float(payment.total_amount)
+        }
+
+    except Exception as e:
+        logger.error(f"Error creating multi-invoice payment GL entries: {e}", exc_info=True)
+        return {'success': False, 'error': str(e)}
+
 
 def create_supplier_invoice_gl_entries(
     invoice_id: uuid.UUID,
@@ -1136,20 +1308,20 @@ def _create_supplier_payment_gl_entries(
     try:
         # Get the payment record
         payment = session.query(SupplierPayment).filter_by(payment_id=payment_id).first()
-        
+
         if not payment:
             raise ValueError(f"Supplier payment with ID {payment_id} not found")
-        
+
         # Get the supplier invoice if available
         invoice = None
         if payment.invoice_id:
             invoice = session.query(SupplierInvoice).filter_by(invoice_id=payment.invoice_id).first()
-        
+
         # Get the supplier
         supplier = None
         if payment.supplier_id:
-            supplier = session.query('Supplier').filter_by(supplier_id=payment.supplier_id).first()
-            
+            supplier = session.query(Supplier).filter_by(supplier_id=payment.supplier_id).first()
+
         # Get the GL accounts to use
         accounts = _get_gl_accounts_for_supplier_payment(session, payment)
         
@@ -1165,134 +1337,439 @@ def _create_supplier_payment_gl_entries(
             total_debit=payment.amount,
             total_credit=payment.amount
         )
-        
+
         if current_user_id:
             gl_transaction.created_by = current_user_id
-            
+
         session.add(gl_transaction)
         session.flush()  # To get the transaction_id
-        
+
         # Create entries for the transaction
         entries = []
-        
-        # 1. Accounts Payable debit entry (DR A/P)
-        ap_entry = GLEntry(
-            hospital_id=payment.hospital_id,
-            transaction_id=gl_transaction.transaction_id,
-            account_id=accounts['accounts_payable'],
-            debit_amount=payment.amount,
-            credit_amount=Decimal('0'),
-            entry_date=payment.payment_date,
-            description=f"Payment to supplier {supplier.supplier_name if supplier else ''} {invoice.supplier_invoice_number if invoice else ''}"
-        )
-        
+
+        # CRITICAL LOGIC: Different GL entries for advance payment vs invoice payment
+        # 1. DEBIT ENTRY - Check if this is an advance payment or invoice payment
+        if payment.invoice_id:
+            # This is a payment AGAINST AN INVOICE
+            # Debit: Accounts Payable (reduce liability)
+            debit_entry = GLEntry(
+                hospital_id=payment.hospital_id,
+                transaction_id=gl_transaction.transaction_id,
+                account_id=accounts['accounts_payable'],
+                debit_amount=payment.amount,
+                credit_amount=Decimal('0'),
+                entry_date=payment.payment_date,
+                description=f"Payment to supplier {supplier.supplier_name if supplier else ''} invoice {invoice.supplier_invoice_number if invoice else ''}"
+            )
+        else:
+            # This is an ADVANCE payment (no invoice yet)
+            # Debit: Supplier Advance (create asset)
+            # CRITICAL FIX: Only create if account exists
+            if not accounts.get('supplier_advance'):
+                raise ValueError("Cannot post GL for advance payment: Supplier Advance account not configured")
+
+            debit_entry = GLEntry(
+                hospital_id=payment.hospital_id,
+                transaction_id=gl_transaction.transaction_id,
+                account_id=accounts['supplier_advance'],
+                debit_amount=payment.amount,
+                credit_amount=Decimal('0'),
+                entry_date=payment.payment_date,
+                description=f"Advance payment to supplier {supplier.supplier_name if supplier else ''}"
+            )
+
         if current_user_id:
-            ap_entry.created_by = current_user_id
-            
-        session.add(ap_entry)
-        entries.append(ap_entry)
-        
-        # 2. Payment method credit entry
-        # Cash payment
-        if payment.payment_method == 'cash':
+            debit_entry.created_by = current_user_id
+
+        session.add(debit_entry)
+        entries.append(debit_entry)
+
+        # 2. MULTI-METHOD PAYMENT CREDIT ENTRIES
+        # Create separate GL entry for each payment method used
+
+        # 2a. Cash payment (if any)
+        if payment.cash_amount and payment.cash_amount > 0:
             cash_entry = GLEntry(
                 hospital_id=payment.hospital_id,
                 transaction_id=gl_transaction.transaction_id,
                 account_id=accounts['cash'],
                 debit_amount=Decimal('0'),
-                credit_amount=payment.amount,
+                credit_amount=payment.cash_amount,
                 entry_date=payment.payment_date,
                 description=f"Cash payment to supplier {supplier.supplier_name if supplier else ''}"
             )
-            
             if current_user_id:
                 cash_entry.created_by = current_user_id
-                
             session.add(cash_entry)
             entries.append(cash_entry)
-        
-        # Bank payment
-        elif payment.payment_method in ['bank_transfer', 'cheque', 'online']:
+
+        # 2b. Cheque payment (if any)
+        if payment.cheque_amount and payment.cheque_amount > 0:
+            cheque_entry = GLEntry(
+                hospital_id=payment.hospital_id,
+                transaction_id=gl_transaction.transaction_id,
+                account_id=accounts['bank'],  # Cheques go to bank
+                debit_amount=Decimal('0'),
+                credit_amount=payment.cheque_amount,
+                entry_date=payment.payment_date,
+                description=f"Cheque payment to supplier {supplier.supplier_name if supplier else ''} - Cheque# {payment.cheque_number if payment.cheque_number else 'N/A'}"
+            )
+            if current_user_id:
+                cheque_entry.created_by = current_user_id
+            session.add(cheque_entry)
+            entries.append(cheque_entry)
+
+        # 2c. Bank transfer payment (if any)
+        if payment.bank_transfer_amount and payment.bank_transfer_amount > 0:
             bank_entry = GLEntry(
                 hospital_id=payment.hospital_id,
                 transaction_id=gl_transaction.transaction_id,
                 account_id=accounts['bank'],
                 debit_amount=Decimal('0'),
-                credit_amount=payment.amount,
+                credit_amount=payment.bank_transfer_amount,
                 entry_date=payment.payment_date,
-                description=f"Bank payment to supplier {supplier.supplier_name if supplier else ''} {payment.reference_no if payment.reference_no else ''}"
+                description=f"Bank transfer to supplier {supplier.supplier_name if supplier else ''} - Ref# {payment.bank_reference_number if payment.bank_reference_number else 'N/A'}"
             )
-            
             if current_user_id:
                 bank_entry.created_by = current_user_id
-                
             session.add(bank_entry)
             entries.append(bank_entry)
-                
+
+        # 2d. UPI payment (if any)
+        if payment.upi_amount and payment.upi_amount > 0:
+            upi_entry = GLEntry(
+                hospital_id=payment.hospital_id,
+                transaction_id=gl_transaction.transaction_id,
+                account_id=accounts['bank'],  # UPI goes through bank
+                debit_amount=Decimal('0'),
+                credit_amount=payment.upi_amount,
+                entry_date=payment.payment_date,
+                description=f"UPI payment to supplier {supplier.supplier_name if supplier else ''} - UPI# {payment.upi_transaction_id if payment.upi_transaction_id else 'N/A'}"
+            )
+            if current_user_id:
+                upi_entry.created_by = current_user_id
+            session.add(upi_entry)
+            entries.append(upi_entry)
+
+        # 2e. ADVANCE ALLOCATION (if any) - CRITICAL FIX
+        # This is an internal transfer from Supplier Advance (Asset) to reduce AP
+        if payment.advance_amount and payment.advance_amount > 0:
+            # CRITICAL FIX: Only create GL entry if Supplier Advance account exists
+            if accounts.get('supplier_advance'):
+                advance_entry = GLEntry(
+                    hospital_id=payment.hospital_id,
+                    transaction_id=gl_transaction.transaction_id,
+                    account_id=accounts['supplier_advance'],  # Credit the Supplier Advance account
+                    debit_amount=Decimal('0'),
+                    credit_amount=payment.advance_amount,
+                    entry_date=payment.payment_date,
+                    description=f"Advance allocation to supplier {supplier.supplier_name if supplier else ''} invoice {invoice.supplier_invoice_number if invoice else 'N/A'}"
+                )
+                if current_user_id:
+                    advance_entry.created_by = current_user_id
+                session.add(advance_entry)
+                entries.append(advance_entry)
+            else:
+                logger.warning(f"Skipping GL entry for advance allocation of ₹{payment.advance_amount} - Supplier Advance account not configured")
+
         session.flush()
-        
+
         # Update payment record with GL reference
         payment.gl_entry_id = gl_transaction.transaction_id
-        
-        # Return the created transaction
-        return get_entity_dict(gl_transaction)
+
+        # ✅ CRITICAL FIX: Create AP Subledger entry for ALL supplier payments
+        # Best Practice: AP Subledger should track ALL supplier transactions
+        try:
+            from app.services.subledger_service import create_ap_subledger_entry
+            from decimal import Decimal
+
+            if payment.invoice_id:
+                # Payment AGAINST INVOICE - Debit AP (reduces liability)
+                create_ap_subledger_entry(
+                    session=session,
+                    hospital_id=payment.hospital_id,
+                    branch_id=payment.branch_id,
+                    supplier_id=payment.supplier_id,
+                    entry_type='payment',
+                    reference_type='payment',
+                    reference_id=payment.payment_id,
+                    reference_number=payment.reference_no,
+                    transaction_date=payment.payment_date,
+                    debit_amount=payment.amount,  # Payment = Debit (reduces liability)
+                    credit_amount=Decimal('0'),
+                    gl_transaction_id=gl_transaction.transaction_id,
+                    current_user_id=current_user_id
+                )
+                logger.info(f"Created AP subledger entry for invoice payment {payment.payment_id}, amount: ₹{payment.amount}")
+            else:
+                # ADVANCE PAYMENT - Debit AP (advance payment)
+                create_ap_subledger_entry(
+                    session=session,
+                    hospital_id=payment.hospital_id,
+                    branch_id=payment.branch_id,
+                    supplier_id=payment.supplier_id,
+                    entry_type='advance',
+                    reference_type='payment',
+                    reference_id=payment.payment_id,
+                    reference_number=payment.reference_no,
+                    transaction_date=payment.payment_date,
+                    debit_amount=payment.amount,  # Advance = Debit
+                    credit_amount=Decimal('0'),
+                    gl_transaction_id=gl_transaction.transaction_id,
+                    current_user_id=current_user_id
+                )
+                logger.info(f"Created AP subledger entry for advance payment {payment.payment_id}, amount: ₹{payment.amount}")
+        except Exception as ap_error:
+            # Don't fail the entire transaction if AP subledger creation fails
+            # But log it prominently
+            logger.error(f"Failed to create AP subledger entry for payment {payment.payment_id}: {str(ap_error)}", exc_info=True)
+            # Continue - GL entries are more critical
+
+        # Return just the transaction_id (avoid session access issues with get_entity_dict)
+        return {'transaction_id': gl_transaction.transaction_id}
         
     except Exception as e:
         logger.error(f"Error creating supplier payment GL entries: {str(e)}")
-        session.rollback()
+        # CRITICAL FIX: Don't rollback when using a shared session
+        # The caller should handle rollback
+        # session.rollback()  # REMOVED - causes "closed transaction" error
         raise
 
 def _get_gl_accounts_for_supplier_payment(session: Session, payment: SupplierPayment) -> Dict:
     """
     Get the GL accounts needed for a supplier payment
-    
+
     Args:
         session: Database session
         payment: Supplier payment object
-        
+
     Returns:
         Dictionary of account IDs by purpose
     """
     hospital_id = payment.hospital_id
     accounts = {}
-    
+
     # Get the Accounts Payable account
     ap_account = session.query(ChartOfAccounts).filter(
         ChartOfAccounts.hospital_id == hospital_id,
         ChartOfAccounts.account_name.like('%Accounts Payable%'),
         ChartOfAccounts.is_active == True
     ).first()
-    
+
     if not ap_account:
         raise ValueError("Accounts Payable GL account not found")
-        
+
     accounts['accounts_payable'] = ap_account.account_id
-    
+
     # Cash account
     cash_account = session.query(ChartOfAccounts).filter(
         ChartOfAccounts.hospital_id == hospital_id,
         ChartOfAccounts.account_name.like('%Cash%'),
         ChartOfAccounts.is_active == True
     ).first()
-    
+
     if not cash_account:
         raise ValueError("Cash GL account not found")
-        
+
     accounts['cash'] = cash_account.account_id
-    
+
     # Bank account
     bank_account = session.query(ChartOfAccounts).filter(
         ChartOfAccounts.hospital_id == hospital_id,
         ChartOfAccounts.account_name.like('%Bank%'),
         ChartOfAccounts.is_active == True
     ).first()
-    
+
     if not bank_account:
         raise ValueError("Bank GL account not found")
-        
+
     accounts['bank'] = bank_account.account_id
-    
+
+    # Supplier Advance account (Asset account) - OPTIONAL for advance allocations
+    supplier_advance_account = session.query(ChartOfAccounts).filter(
+        ChartOfAccounts.hospital_id == hospital_id,
+        ChartOfAccounts.account_name.like('%Supplier Advance%'),
+        ChartOfAccounts.is_active == True
+    ).first()
+
+    if not supplier_advance_account:
+        # Try alternative name
+        supplier_advance_account = session.query(ChartOfAccounts).filter(
+            ChartOfAccounts.hospital_id == hospital_id,
+            ChartOfAccounts.account_name.like('%Advance to Suppliers%'),
+            ChartOfAccounts.is_active == True
+        ).first()
+
+    # CRITICAL FIX: Make this optional - if not found, set to None
+    # The GL posting will skip advance entries if this is None
+    if supplier_advance_account:
+        accounts['supplier_advance'] = supplier_advance_account.account_id
+        logger.info(f"Found Supplier Advance GL account: {supplier_advance_account.account_name}")
+    else:
+        accounts['supplier_advance'] = None
+        logger.warning("Supplier Advance GL account not found. Advance allocations will not have GL entries. Please create an asset account named 'Supplier Advance'.")
+
     return accounts
+
+def reverse_supplier_payment_gl_entries(
+    payment_id: uuid.UUID,
+    current_user_id: Optional[str] = None,
+    session: Optional[Session] = None
+) -> Dict:
+    """
+    Reverse GL entries for a supplier payment (used when deleting payment)
+
+    Args:
+        payment_id: Supplier Payment UUID
+        current_user_id: ID of the user creating the reversal
+        session: Database session (optional)
+
+    Returns:
+        Dictionary containing reversal transaction details
+    """
+    if session is not None:
+        return _reverse_supplier_payment_gl_entries(session, payment_id, current_user_id)
+
+    with get_db_session() as new_session:
+        return _reverse_supplier_payment_gl_entries(new_session, payment_id, current_user_id)
+
+def _reverse_supplier_payment_gl_entries(
+    session: Session,
+    payment_id: uuid.UUID,
+    current_user_id: Optional[str] = None
+) -> Dict:
+    """
+    Internal function to reverse GL entries for a supplier payment
+    """
+    try:
+        # Get the payment record
+        payment = session.query(SupplierPayment).filter_by(payment_id=payment_id).first()
+
+        if not payment:
+            raise ValueError(f"Supplier payment with ID {payment_id} not found")
+
+        # Find the original GL transaction
+        original_gl = session.query(GLTransaction).filter_by(
+            reference_id=str(payment_id),
+            transaction_type="SUPPLIER_PAYMENT"
+        ).first()
+
+        if not original_gl:
+            raise ValueError(f"Original GL transaction not found for payment {payment_id}")
+
+        # Create reversal GL transaction
+        reversal_gl = GLTransaction(
+            hospital_id=payment.hospital_id,
+            transaction_date=datetime.now(),
+            transaction_type="SUPPLIER_PAYMENT_REVERSAL",
+            reference_id=str(payment.payment_id),
+            description=f"Reversal of payment {payment.reference_no or payment.payment_id}",
+            currency_code=payment.currency_code,
+            exchange_rate=payment.exchange_rate,
+            total_debit=original_gl.total_debit,
+            total_credit=original_gl.total_credit,
+            is_reversal=True
+        )
+
+        if current_user_id:
+            reversal_gl.created_by = current_user_id
+
+        session.add(reversal_gl)
+        session.flush()
+
+        # Reverse all original GL entries (swap debit and credit)
+        original_entries = session.query(GLEntry).filter_by(
+            transaction_id=original_gl.transaction_id
+        ).all()
+
+        for original_entry in original_entries:
+            reversal_entry = GLEntry(
+                hospital_id=original_entry.hospital_id,
+                transaction_id=reversal_gl.transaction_id,
+                account_id=original_entry.account_id,
+                debit_amount=original_entry.credit_amount,  # Swap
+                credit_amount=original_entry.debit_amount,  # Swap
+                entry_date=datetime.now(),
+                description=f"Reversal: {original_entry.description}"
+            )
+
+            if current_user_id:
+                reversal_entry.created_by = current_user_id
+
+            session.add(reversal_entry)
+
+        session.flush()
+
+        # ✅ CRITICAL FIX: Reverse AP Subledger entries
+        # Best Practice: Maintain complete audit trail in subledgers
+        try:
+            from app.services.subledger_service import create_ap_subledger_entry
+            from app.models.transaction import APSubledger, SupplierAdvanceAdjustment
+            from decimal import Decimal
+
+            # Find original AP subledger entry
+            original_ap_entry = session.query(APSubledger).filter_by(
+                reference_id=payment.payment_id,
+                reference_type='payment'
+            ).first()
+
+            if original_ap_entry:
+                # Create offsetting AP subledger entry
+                create_ap_subledger_entry(
+                    session=session,
+                    hospital_id=payment.hospital_id,
+                    branch_id=payment.branch_id,
+                    supplier_id=payment.supplier_id,
+                    entry_type='adjustment',  # Reversal is an adjustment
+                    reference_type='payment',  # ✅ FIXED: Use 'payment' not 'payment_reversal'
+                    reference_id=payment.payment_id,
+                    reference_number=f"REV-{payment.reference_no or payment.payment_id}",
+                    transaction_date=datetime.now(),
+                    debit_amount=original_ap_entry.credit_amount,  # Swap
+                    credit_amount=original_ap_entry.debit_amount,  # Swap
+                    gl_transaction_id=reversal_gl.transaction_id,
+                    current_user_id=current_user_id
+                )
+                logger.info(f"Reversed AP subledger entry for payment {payment_id}")
+
+            # Reverse Supplier Advance subledger entries (if advance payment)
+            if not payment.invoice_id:
+                original_advance_entry = session.query(SupplierAdvanceAdjustment).filter_by(
+                    payment_id=payment.payment_id
+                ).first()
+
+                if original_advance_entry:
+                    # Create offsetting advance entry
+                    reversal_advance_entry = SupplierAdvanceAdjustment(
+                        hospital_id=payment.hospital_id,
+                        branch_id=payment.branch_id,
+                        supplier_id=payment.supplier_id,
+                        adjustment_date=datetime.now(),
+                        adjustment_type='reversal',
+                        payment_id=payment.payment_id,
+                        invoice_id=None,
+                        debit_amount=original_advance_entry.credit_amount or Decimal('0'),  # Swap
+                        credit_amount=original_advance_entry.debit_amount or Decimal('0'),  # Swap
+                        description=f"Reversal of advance payment {payment.reference_no or payment.payment_id}",
+                        gl_transaction_id=reversal_gl.transaction_id
+                    )
+                    if current_user_id:
+                        reversal_advance_entry.created_by = current_user_id
+
+                    session.add(reversal_advance_entry)
+                    logger.info(f"Reversed Supplier Advance subledger entry for payment {payment_id}")
+
+        except Exception as subledger_error:
+            # Log but don't fail - GL reversal is more critical
+            logger.error(f"Failed to reverse subledger entries for payment {payment_id}: {str(subledger_error)}", exc_info=True)
+
+        # Return the reversal transaction
+        return get_entity_dict(reversal_gl)
+
+    except Exception as e:
+        logger.error(f"Error reversing supplier payment GL entries: {str(e)}")
+        session.rollback()
+        raise
 
 # Functions to add to app/services/gl_service.py
 
@@ -1802,6 +2279,449 @@ def _get_gl_accounts_for_advance_payment(session: Session, advance: PatientAdvan
         accounts['upi'] = upi_account.account_id
     
     return accounts
+
+def create_advance_adjustment_gl_entries(
+    session: Session,
+    hospital_id: uuid.UUID,
+    advance_id: uuid.UUID,
+    invoice_id: uuid.UUID,
+    adjustment_amount: Decimal,
+    adjustment_date: datetime,
+    invoice_number: str,
+    current_user_id: Optional[str] = None
+) -> uuid.UUID:
+    """
+    Create GL entries for advance payment adjustment
+
+    Entries:
+    - DR Accounts Receivable (reduce AR)
+    - CR Patient Advance (reduce advance liability)
+
+    Args:
+        session: Database session
+        hospital_id: Hospital UUID
+        advance_id: Advance payment UUID
+        invoice_id: Invoice UUID
+        adjustment_amount: Amount being adjusted
+        adjustment_date: Date of adjustment
+        invoice_number: Invoice number for description
+        current_user_id: User creating the entries
+
+    Returns:
+        GL transaction UUID
+    """
+    try:
+        # Get GL accounts
+        ar_account = session.query(ChartOfAccounts).filter(
+            ChartOfAccounts.hospital_id == hospital_id,
+            ChartOfAccounts.account_name == 'Accounts Receivable'
+        ).first()
+
+        if not ar_account:
+            raise ValueError("Accounts Receivable GL account not found")
+
+        advance_account = session.query(ChartOfAccounts).filter(
+            ChartOfAccounts.hospital_id == hospital_id,
+            ChartOfAccounts.account_name == 'Advance from Patients'
+        ).first()
+
+        if not advance_account:
+            raise ValueError("Advance from Patients GL account not found")
+
+        # Create GL transaction
+        gl_transaction = GLTransaction(
+            hospital_id=hospital_id,
+            transaction_date=adjustment_date,
+            transaction_type="ADVANCE_ADJUSTMENT",
+            reference_id=str(invoice_id),
+            description=f"Advance adjustment for Invoice {invoice_number}",
+            currency_code='INR',
+            exchange_rate=Decimal('1.00'),
+            total_debit=adjustment_amount,
+            total_credit=adjustment_amount
+        )
+
+        if current_user_id:
+            gl_transaction.created_by = current_user_id
+
+        session.add(gl_transaction)
+        session.flush()
+
+        # Create DR entry for Accounts Receivable (reduce AR)
+        ar_entry = GLEntry(
+            hospital_id=hospital_id,
+            transaction_id=gl_transaction.transaction_id,
+            account_id=ar_account.account_id,
+            debit_amount=adjustment_amount,
+            credit_amount=Decimal('0'),
+            entry_date=adjustment_date,
+            description=f"Advance adjustment - Invoice {invoice_number}"
+        )
+
+        if current_user_id:
+            ar_entry.created_by = current_user_id
+
+        session.add(ar_entry)
+
+        # Create CR entry for Patient Advance (reduce liability)
+        advance_entry = GLEntry(
+            hospital_id=hospital_id,
+            transaction_id=gl_transaction.transaction_id,
+            account_id=advance_account.account_id,
+            debit_amount=Decimal('0'),
+            credit_amount=adjustment_amount,
+            entry_date=adjustment_date,
+            description=f"Advance adjustment - Invoice {invoice_number}"
+        )
+
+        if current_user_id:
+            advance_entry.created_by = current_user_id
+
+        session.add(advance_entry)
+        session.flush()
+
+        logger.info(f"Created GL entries for advance adjustment: Transaction {gl_transaction.transaction_id}")
+
+        return gl_transaction.transaction_id
+
+    except Exception as e:
+        logger.error(f"Error creating GL entries for advance adjustment: {str(e)}")
+        raise
+
+def create_patient_credit_note_gl_entries(
+    credit_note_id: str,
+    hospital_id: str,
+    current_user_id: Optional[str] = None,
+    session: Optional[Session] = None
+) -> Dict:
+    """
+    Create GL and AR entries for a patient credit note (package discontinuation)
+
+    GL Entries:
+      Dr: Package Revenue (4200) - Reduce income
+      Cr: Accounts Receivable (1100) - Reduce receivable
+
+    AR Entry:
+      Credit AR Subledger - Reduce patient's receivable balance
+
+    Args:
+        credit_note_id: Credit note ID (UUID as string)
+        hospital_id: Hospital ID (UUID as string)
+        current_user_id: User creating the entries
+        session: Database session (optional)
+
+    Returns:
+        {
+            'success': bool,
+            'ar_entry_id': str,
+            'gl_transaction_id': str,
+            'message': str
+        }
+    """
+    if session is not None:
+        return _create_patient_credit_note_gl_entries(session, credit_note_id, hospital_id, current_user_id)
+
+    with get_db_session() as new_session:
+        return _create_patient_credit_note_gl_entries(new_session, credit_note_id, hospital_id, current_user_id)
+
+def _create_patient_credit_note_gl_entries(
+    session: Session,
+    credit_note_id: str,
+    hospital_id: str,
+    current_user_id: Optional[str] = None
+) -> Dict:
+    """
+    Internal function to create GL and AR entries for a patient credit note
+    """
+    try:
+        # Get the credit note
+        credit_note = session.query(PatientCreditNote).filter(
+            and_(
+                PatientCreditNote.credit_note_id == credit_note_id,
+                PatientCreditNote.hospital_id == hospital_id
+            )
+        ).first()
+
+        if not credit_note:
+            return {
+                'success': False,
+                'error': f'Credit note {credit_note_id} not found'
+            }
+
+        # Check if already posted (fully completed)
+        if credit_note.gl_posted and credit_note.gl_transaction_id:
+            logger.info(f"✅ Credit note {credit_note.credit_note_number} already posted to GL")
+
+            # Get existing AR entry ID
+            existing_ar = session.query(ARSubledger).filter(
+                and_(
+                    ARSubledger.reference_type == 'credit_note',
+                    ARSubledger.reference_id == str(credit_note.credit_note_id)
+                )
+            ).first()
+
+            return {
+                'success': True,
+                'message': 'Credit note already posted',
+                'ar_entry_id': str(existing_ar.entry_id) if existing_ar else None,
+                'gl_transaction_id': str(credit_note.gl_transaction_id)
+            }
+
+        # Check for partial posting (entries exist but flag not set)
+        # This handles retry scenarios where posting partially succeeded
+        existing_ar = session.query(ARSubledger).filter(
+            and_(
+                ARSubledger.reference_type == 'credit_note',
+                ARSubledger.reference_id == str(credit_note.credit_note_id)
+            )
+        ).first()
+
+        existing_gl = session.query(GLTransaction).filter(
+            and_(
+                GLTransaction.source_document_type == 'credit_note',
+                GLTransaction.source_document_id == credit_note.credit_note_id
+            )
+        ).first()
+
+        if existing_ar and existing_gl:
+            # Both AR and GL exist - just update the flag (idempotent retry)
+            logger.info(f"🔄 Found existing GL entries for credit note {credit_note.credit_note_number}, updating status")
+            credit_note.gl_posted = True
+            credit_note.gl_transaction_id = existing_gl.transaction_id
+            credit_note.posted_at = datetime.utcnow()
+            credit_note.posted_by = current_user_id
+            credit_note.status = 'posted'
+
+            session.flush()
+
+            return {
+                'success': True,
+                'ar_entry_id': str(existing_ar.entry_id),
+                'gl_transaction_id': str(existing_gl.transaction_id),
+                'message': f'GL entries found and status updated for credit note {credit_note.credit_note_number}'
+            }
+
+        # If partial entries exist, log warning (should not happen in normal flow)
+        if existing_ar or existing_gl:
+            logger.warning(f"⚠️ Partial posting detected - AR: {bool(existing_ar)}, GL: {bool(existing_gl)}")
+            # Continue to create missing entries below
+
+        # 1. CREATE AR SUBLEDGER ENTRY (Credit entry to reduce AR balance)
+        ar_entry_id = None
+
+        # Skip AR creation if already exists
+        if existing_ar:
+            logger.info(f"✅ AR entry already exists, skipping creation")
+            ar_entry_id = str(existing_ar.entry_id)
+        else:
+            # Get branch_id from original invoice (credit_note.branch_id might be None)
+            ar_branch_id = credit_note.branch_id
+            if not ar_branch_id and credit_note.original_invoice_id:
+                # Fetch branch_id from original invoice
+                invoice = session.query(InvoiceHeader).filter(
+                    InvoiceHeader.invoice_id == credit_note.original_invoice_id
+                ).first()
+                if invoice:
+                    ar_branch_id = invoice.branch_id
+                    logger.info(f"Using invoice branch_id: {ar_branch_id}")
+
+            if not ar_branch_id:
+                logger.error("Cannot create AR entry: branch_id is required but not found")
+                return {
+                    'success': False,
+                    'error': 'branch_id is required for AR entry but not found in credit note or invoice'
+                }
+
+            # Get current patient balance
+            current_balance = session.query(
+                func.coalesce(func.sum(ARSubledger.debit_amount), 0) -
+                func.coalesce(func.sum(ARSubledger.credit_amount), 0)
+            ).filter(
+                and_(
+                    ARSubledger.hospital_id == hospital_id,
+                    ARSubledger.patient_id == credit_note.patient_id
+                )
+            ).scalar() or Decimal('0')
+
+            # Calculate new balance after credit
+            new_balance = current_balance - credit_note.total_amount
+
+            ar_entry = ARSubledger(
+                entry_id=uuid.uuid4(),
+                hospital_id=credit_note.hospital_id,
+                branch_id=ar_branch_id,  # Use fetched branch_id
+                transaction_date=credit_note.credit_note_date,
+                entry_type='credit_note',
+                reference_id=str(credit_note.credit_note_id),
+                reference_type='credit_note',
+                reference_number=credit_note.credit_note_number,
+                patient_id=credit_note.patient_id,
+                debit_amount=Decimal('0.00'),
+                credit_amount=credit_note.total_amount,
+                current_balance=new_balance,
+                gl_transaction_id=None,  # Will be updated after GL posting
+                created_at=datetime.utcnow(),
+                created_by=current_user_id
+            )
+
+            session.add(ar_entry)
+            session.flush()
+            ar_entry_id = str(ar_entry.entry_id)
+
+            logger.info(f"✅ AR credit entry created: ₹{credit_note.total_amount}, New balance: ₹{new_balance}")
+
+        # 2. CREATE GL TRANSACTION AND ENTRIES
+
+        # Skip GL creation if already exists
+        if existing_gl:
+            logger.info(f"✅ GL transaction already exists, skipping creation")
+
+            # Link AR entry to existing GL transaction if not already linked
+            if ar_entry_id and not existing_ar:
+                # Update newly created AR entry with GL transaction ID
+                ar_entry = session.query(ARSubledger).filter(
+                    ARSubledger.entry_id == ar_entry_id
+                ).first()
+                if ar_entry:
+                    ar_entry.gl_transaction_id = existing_gl.transaction_id
+                    session.flush()
+
+            # Update credit note with GL posting info
+            credit_note.gl_posted = True
+            credit_note.gl_transaction_id = existing_gl.transaction_id
+            credit_note.posted_at = datetime.utcnow()
+            credit_note.posted_by = current_user_id
+            credit_note.status = 'posted'
+
+            session.flush()
+
+            return {
+                'success': True,
+                'ar_entry_id': ar_entry_id,
+                'gl_transaction_id': str(existing_gl.transaction_id),
+                'message': f'GL entries already exist, status updated for credit note {credit_note.credit_note_number}'
+            }
+
+        # Find Package Revenue account (4200)
+        revenue_account = session.query(ChartOfAccounts).filter(
+            and_(
+                ChartOfAccounts.hospital_id == hospital_id,
+                ChartOfAccounts.gl_account_no == '4200',
+                ChartOfAccounts.is_active == True
+            )
+        ).first()
+
+        # Find AR account (1100 - Accounts Receivable)
+        ar_account = session.query(ChartOfAccounts).filter(
+            and_(
+                ChartOfAccounts.hospital_id == hospital_id,
+                ChartOfAccounts.gl_account_no == '1100',
+                ChartOfAccounts.account_name == 'Accounts Receivable',
+                ChartOfAccounts.is_active == True
+            )
+        ).first()
+
+        if not revenue_account:
+            logger.warning("Package Revenue account (4200) not found, using general revenue")
+            # Fallback to Service Revenue (4100)
+            revenue_account = session.query(ChartOfAccounts).filter(
+                and_(
+                    ChartOfAccounts.hospital_id == hospital_id,
+                    ChartOfAccounts.gl_account_no == '4100',
+                    ChartOfAccounts.is_active == True
+                )
+            ).first()
+
+        if not revenue_account or not ar_account:
+            return {
+                'success': False,
+                'error': f'GL accounts not found (Revenue: {revenue_account}, AR: {ar_account})'
+            }
+
+        # Create GL transaction
+        gl_transaction = GLTransaction(
+            transaction_id=uuid.uuid4(),
+            hospital_id=credit_note.hospital_id,
+            transaction_date=credit_note.credit_note_date,
+            transaction_type='credit_note',
+            reference_id=str(credit_note.credit_note_id),
+            description=f"Credit Note {credit_note.credit_note_number} - {credit_note.reason_description[:100]}",
+            source_document_type='credit_note',
+            source_document_id=credit_note.credit_note_id,
+            total_debit=credit_note.total_amount,
+            total_credit=credit_note.total_amount,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            created_by=current_user_id,
+            updated_by=current_user_id
+        )
+
+        session.add(gl_transaction)
+        session.flush()
+
+        # Entry 1: Debit Package Revenue (reduce income)
+        revenue_entry = GLEntry(
+            entry_id=uuid.uuid4(),
+            hospital_id=credit_note.hospital_id,
+            transaction_id=gl_transaction.transaction_id,
+            account_id=revenue_account.account_id,
+            entry_date=credit_note.credit_note_date,
+            description=f"Reduce revenue - Credit Note {credit_note.credit_note_number}",
+            debit_amount=credit_note.total_amount,
+            credit_amount=Decimal('0.00'),
+            source_document_type='credit_note',
+            source_document_id=credit_note.credit_note_id,
+            created_at=datetime.utcnow(),
+            created_by=current_user_id
+        )
+        session.add(revenue_entry)
+
+        # Entry 2: Credit AR (reduce receivable)
+        ar_gl_entry = GLEntry(
+            entry_id=uuid.uuid4(),
+            hospital_id=credit_note.hospital_id,
+            transaction_id=gl_transaction.transaction_id,
+            account_id=ar_account.account_id,
+            entry_date=credit_note.credit_note_date,
+            description=f"Reduce AR - Credit Note {credit_note.credit_note_number}",
+            debit_amount=Decimal('0.00'),
+            credit_amount=credit_note.total_amount,
+            source_document_type='credit_note',
+            source_document_id=credit_note.credit_note_id,
+            created_at=datetime.utcnow(),
+            created_by=current_user_id
+        )
+        session.add(ar_gl_entry)
+
+        session.flush()
+
+        # Update AR entry with GL transaction reference
+        ar_entry.gl_transaction_id = gl_transaction.transaction_id
+
+        # Update credit note with GL posting info
+        credit_note.gl_posted = True
+        credit_note.gl_transaction_id = gl_transaction.transaction_id
+        credit_note.posted_at = datetime.utcnow()
+        credit_note.posted_by = current_user_id
+        credit_note.status = 'posted'
+
+        session.flush()
+
+        logger.info(f"✅ GL entries created: Dr {revenue_account.account_name} ₹{credit_note.total_amount}, Cr {ar_account.account_name} ₹{credit_note.total_amount}")
+
+        return {
+            'success': True,
+            'ar_entry_id': ar_entry_id,
+            'gl_transaction_id': str(gl_transaction.transaction_id),
+            'message': f'GL/AR entries posted for credit note {credit_note.credit_note_number}'
+        }
+
+    except Exception as e:
+        logger.error(f"Error creating GL entries for credit note: {str(e)}", exc_info=True)
+        return {
+            'success': False,
+            'error': str(e)
+        }
 
 # Modify the import statement in billing_service.py to add these functions
 # from app.services.gl_service import create_invoice_gl_entries, create_payment_gl_entries, create_refund_gl_entries, process_void_invoice_gl_entries

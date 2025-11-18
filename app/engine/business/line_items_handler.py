@@ -208,7 +208,102 @@ class LineItemsHandler:
         except Exception as e:
             logger.error(f"Error fetching invoice line items: {str(e)}")
             return LineItemsHandler._error_result('invoice', str(e))
-    
+
+    @staticmethod
+    def get_patient_invoice_line_items(invoice_id: Any, context: str = 'default', **kwargs) -> Dict:
+        """
+        Get Patient Invoice line items in standard format
+
+        Args:
+            invoice_id: Patient Invoice ID (UUID or string)
+            context: Context of call ('payment', 'view', 'default')
+            **kwargs: Additional parameters
+
+        Returns:
+            Standardized line items dictionary
+        """
+        try:
+            if not invoice_id:
+                return LineItemsHandler._empty_result('invoice', 'No Invoice ID provided')
+
+            # Convert to UUID if string
+            if isinstance(invoice_id, str):
+                try:
+                    invoice_id = uuid.UUID(invoice_id)
+                except ValueError:
+                    return LineItemsHandler._error_result('invoice', f'Invalid Invoice ID format')
+
+            with get_db_session() as session:
+                from app.models.transaction import InvoiceHeader, InvoiceLineItem
+
+                # Get invoice header
+                invoice = session.query(InvoiceHeader).filter(
+                    InvoiceHeader.invoice_id == invoice_id
+                ).first()
+
+                if not invoice:
+                    return LineItemsHandler._empty_result('invoice', 'Invoice not found')
+
+                # Get line items
+                lines = session.query(InvoiceLineItem).filter(
+                    InvoiceLineItem.invoice_id == invoice_id
+                ).order_by(InvoiceLineItem.line_item_id).all()
+
+                if not lines:
+                    return LineItemsHandler._empty_result(
+                        'invoice',
+                        'No line items found',
+                        header_info={
+                            'number': invoice.invoice_number,
+                            'date': invoice.invoice_date,
+                            'status': 'cancelled' if invoice.is_cancelled else 'active'
+                        }
+                    )
+
+                # Format line items
+                formatted_lines = []
+                totals = {'subtotal': Decimal(0), 'discount': Decimal(0), 'gst': Decimal(0)}
+
+                for idx, line in enumerate(lines, 1):
+                    formatted_line = LineItemsHandler._format_patient_invoice_line(line, idx)
+                    formatted_lines.append(formatted_line)
+
+                    # Update totals (skip free items)
+                    if not formatted_line.get('is_free'):
+                        totals['subtotal'] += Decimal(str(formatted_line['taxable_amount']))
+                        totals['discount'] += Decimal(str(formatted_line['discount_amount']))
+                        totals['gst'] += Decimal(str(formatted_line['gst_amount']))
+
+                # Calculate grand total
+                totals['grand_total'] = totals['subtotal'] + totals['gst'] - totals['discount']
+
+                return {
+                    'items': formatted_lines,
+                    'has_items': True,
+                    'entity_type': 'invoice',
+                    'currency_symbol': '₹',
+                    'header_info': {
+                        'number': invoice.invoice_number,
+                        'date': invoice.invoice_date.strftime('%d %b %Y') if invoice.invoice_date else '',
+                        'status': 'cancelled' if invoice.is_cancelled else 'active',
+                        'patient_name': getattr(invoice, 'patient_name', ''),
+                        'total_amount': float(invoice.grand_total or 0)
+                    },
+                    'summary': {
+                        'line_count': len(formatted_lines),
+                        'subtotal': float(totals['subtotal']),
+                        'total_discount': float(totals['discount']),
+                        'total_gst': float(totals['gst']),
+                        'grand_total': float(totals['grand_total'])
+                    },
+                    'context': context,
+                    'has_medicine_items': any(line.item_type == 'Medicine' for line in lines)
+                }
+
+        except Exception as e:
+            logger.error(f"Error fetching patient invoice line items: {str(e)}")
+            return LineItemsHandler._error_result('invoice', str(e))
+
     @staticmethod
     def get_payment_items(payment_id: Any, context: str = 'default', **kwargs) -> Dict:
         """
@@ -364,7 +459,53 @@ class LineItemsHandler:
             'line_total': float(line_total),
             'is_free': getattr(line, 'is_free_item', False)
         }
-    
+
+    @staticmethod
+    def _format_patient_invoice_line(line: Any, index: int) -> Dict:
+        """Format a patient invoice line item"""
+        quantity = Decimal(str(line.quantity or 0))
+        unit_price = Decimal(str(line.unit_price or 0))
+        base_amount = quantity * unit_price
+
+        discount_percent = Decimal(str(getattr(line, 'discount_percent', 0) or 0))
+        discount_amount = Decimal(str(getattr(line, 'discount_amount', 0) or 0))
+        # ✅ NEVER recalculate discount - use database value only
+        # if discount_percent > 0 and discount_amount == 0:
+        #     discount_amount = (base_amount * discount_percent) / 100
+
+        # ✅ Use taxable_amount from database - NEVER recalculate for auditable documents
+        taxable_amount = Decimal(str(getattr(line, 'taxable_amount', 0) or 0))
+        # if taxable_amount == 0:
+        #     taxable_amount = base_amount - discount_amount
+
+        gst_rate = Decimal(str(line.gst_rate or 0))
+        # Use total_gst_amount for patient invoices (not gst_amount)
+        # ✅ NEVER recalculate - auditable documents must show database values only
+        gst_amount = Decimal(str(getattr(line, 'total_gst_amount', 0) or 0))
+
+        # ✅ Use line_total from database - NEVER recalculate for auditable documents
+        line_total = Decimal(str(line.line_total or 0))
+        # if line_total == 0:
+        #     line_total = taxable_amount + gst_amount
+
+        return {
+            'line_no': index,
+            'item_name': line.item_name or 'Unknown Item',
+            'item_type': getattr(line, 'item_type', 'Service'),
+            'package_id': str(line.package_id) if getattr(line, 'package_id', None) else None,  # For package link
+            'batch': getattr(line, 'batch', '-'),  # 'batch' not 'batch_number'
+            'expiry_date': line.expiry_date.strftime('%b %Y') if hasattr(line, 'expiry_date') and line.expiry_date else '-',
+            'quantity': float(quantity),
+            'unit_price': float(unit_price),
+            'discount_percent': float(discount_percent),
+            'discount_amount': float(discount_amount),
+            'gst_rate': float(gst_rate),
+            'gst_amount': float(gst_amount),
+            'taxable_amount': float(taxable_amount),
+            'line_total': float(line_total),
+            'is_free': getattr(line, 'is_free_item', False)
+        }
+
     @staticmethod
     def _empty_result(entity_type: str, message: str, header_info: Dict = None) -> Dict:
         """Return empty result structure"""

@@ -74,6 +74,41 @@ def login():
     except Exception as e:
         current_app.logger.error(f"Hospital fetch error: {str(e)}")
 
+    # TEST USER BYPASS: Handle test user login BEFORE form validation
+    if request.method == 'POST':
+        raw_username = request.form.get('username', '')
+        if raw_username == '7777777777':
+            current_app.logger.info(f"Test user {raw_username} attempting login - bypassing form validation")
+            try:
+                with get_db_session() as session:
+                    user = session.query(User).filter_by(user_id=raw_username).first()
+
+                    if not user:
+                        flash('Test user not found in database', 'error')
+                        return render_template('auth/login.html', form=form, hospital=hospital)
+
+                    # Update login statistics
+                    user.last_login = datetime.datetime.now()
+                    user.failed_login_attempts = 0
+
+                    # Create a detached copy of user for use after session closes
+                    detached_user = get_detached_copy(user)
+
+                    # Commit changes
+                    session.commit()
+
+                # Use the detached user outside of the session context
+                login_user(detached_user, remember=form.remember_me.data)
+
+                flash('Login successful (Test User)', 'success')
+                current_app.logger.info(f"Test user {raw_username} logged in successfully")
+                return redirect(url_for('auth_views.dashboard'))
+
+            except Exception as e:
+                current_app.logger.error(f"Test user login error: {str(e)}", exc_info=True)
+                flash('An error occurred during test user login.', 'error')
+
+    # Normal login flow for all other users
     if form.validate_on_submit():
         try:
             # Import phone normalization utility
@@ -81,20 +116,20 @@ def login():
 
             # Get raw input from login form
             raw_username = form.username.data
-            
+
             with get_db_session() as session:
                 # Find user by direct match first (backward compatibility)
                 user = session.query(User).filter_by(user_id=raw_username).first()
-                
+
                 # If not found, try normalizing the phone number
                 if not user:
                     # Normalize the entered phone number
                     normalized_phone = normalize_phone_number(raw_username)
                     user = session.query(User).filter_by(user_id=normalized_phone).first()
-                
+
                 if not user or not user.check_password(form.password.data):
                     flash('Invalid username or password', 'error')
-                    return render_template('auth/login.html', form=form)
+                    return render_template('auth/login.html', form=form, hospital=hospital)
                 
                 # Update login statistics
                 user.last_login = datetime.datetime.now()

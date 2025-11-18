@@ -113,7 +113,9 @@ def entity_search(entity_type: str):
             results = search_suppliers(search_term, hospital_id, branch_id, limit)
         elif entity_type == 'patients':
             # Special handling for patients
-            results = search_patients(search_term, hospital_id, branch_id, limit)
+            # active_only: True for create invoice (only active patients), False for history/lists (all patients)
+            active_only = request.args.get('active_only', 'false').lower() == 'true'
+            results = search_patients(search_term, hospital_id, branch_id, limit, active_only)
         elif entity_type in ['medicine', 'medicines']:  # Handle both singular and plural
             # Special handling for medicines
             results = search_medicines(search_term, hospital_id, branch_id, limit)
@@ -210,33 +212,46 @@ def search_suppliers(search_term: str, hospital_id: uuid.UUID,
         return []
 
 
-def search_patients(search_term: str, hospital_id: uuid.UUID, 
-                   branch_id: uuid.UUID, limit: int) -> List[Dict]:
+def search_patients(search_term: str, hospital_id: uuid.UUID,
+                   branch_id: uuid.UUID, limit: int, active_only: bool = False) -> List[Dict]:
     """
     Search patients - returns name for display and filtering
+
+    Args:
+        search_term: Search query
+        hospital_id: Hospital UUID
+        branch_id: Branch UUID (not used - multi-branch access allowed)
+        limit: Max results
+        active_only: If True, only return active non-deleted patients (for create invoice)
+                     If False, return all patients including inactive/deleted (for history/lists)
     """
     try:
         from app.models.master import Patient
-        
+
         with get_db_session() as session:
             query = session.query(Patient).filter(
                 Patient.hospital_id == hospital_id
             )
-            
-            # Apply soft delete filter
-            if hasattr(Patient, 'deleted_at'):
-                query = query.filter(Patient.deleted_at.is_(None))
-            elif hasattr(Patient, 'is_deleted'):
-                query = query.filter(Patient.is_deleted == False)
-            
-            # Filter active patients only (if status field exists)
-            if hasattr(Patient, 'status'):
-                query = query.filter(Patient.status == 'active')
-            
-            # Add branch filter if specified
-            if branch_id:
-                query = query.filter(Patient.branch_id == branch_id)
-            
+
+            # Apply filters based on context (create invoice vs history search)
+            if active_only:
+                # CREATE INVOICE: Only active, non-deleted patients
+                if hasattr(Patient, 'deleted_at'):
+                    query = query.filter(Patient.deleted_at.is_(None))
+                elif hasattr(Patient, 'is_deleted'):
+                    query = query.filter(Patient.is_deleted == False)
+
+                # Filter active patients only
+                if hasattr(Patient, 'status'):
+                    query = query.filter(Patient.status == 'active')
+            else:
+                # HISTORY/LISTS: Show all patients (we'll mark their status in display)
+                # No filters - include deleted and inactive patients
+                pass
+
+            # NO BRANCH FILTER for patient search - Show all patients in hospital
+            # This allows cross-branch patient access (important for multi-branch clinics)
+
             # Add search filter only if search term provided
             if search_term and search_term.strip():
                 search_pattern = f'%{search_term}%'
@@ -253,36 +268,45 @@ def search_patients(search_term: str, hospital_id: uuid.UUID,
                         (Patient.full_name.ilike(search_pattern)) |
                         (Patient.mrn.ilike(search_pattern))
                     )
-            
-            # Order by patient name
-            if hasattr(Patient, 'first_name'):
-                query = query.order_by(Patient.first_name, Patient.last_name)
-            elif hasattr(Patient, 'full_name'):
-                query = query.order_by(Patient.full_name)
-            
-            # Limit initial load if no search term
-            if not search_term:
-                limit = min(limit, 20)  # Limit initial load to 20
+
+                # For search results, order by name for easy scanning
+                if hasattr(Patient, 'first_name'):
+                    query = query.order_by(Patient.first_name, Patient.last_name)
+                elif hasattr(Patient, 'full_name'):
+                    query = query.order_by(Patient.full_name)
+            else:
+                # For initial load (no search term), show most recent patients
+                # Order by created_at DESC to show newest patients first
+                if hasattr(Patient, 'created_at'):
+                    query = query.order_by(Patient.created_at.desc())
+                elif hasattr(Patient, 'first_name'):
+                    query = query.order_by(Patient.first_name, Patient.last_name)
+                elif hasattr(Patient, 'full_name'):
+                    query = query.order_by(Patient.full_name)
+
+                # Limit initial load to 20 most recent patients
+                limit = min(limit, 20)
             
             # Get results
             patients = query.limit(limit).all()
             
-            # Format results - consistent with supplier pattern
+            # Format results - consistent with supplier pattern and patient_service
             results = []
             for patient in patients:
-                # Get patient name properly
-                if hasattr(patient, 'full_name') and patient.full_name:
-                    patient_name = patient.full_name
-                elif hasattr(patient, 'first_name'):
+                # Get patient name - SIMPLIFIED: Just first_name + last_name (NO TITLE)
+                patient_name = ''
+                if hasattr(patient, 'first_name') and hasattr(patient, 'last_name'):
                     name_parts = []
-                    if patient.title:
-                        name_parts.append(patient.title)
                     if patient.first_name:
                         name_parts.append(patient.first_name)
                     if patient.last_name:
                         name_parts.append(patient.last_name)
-                    patient_name = ' '.join(name_parts)
-                else:
+                    patient_name = ' '.join(name_parts) if name_parts else ''
+                elif hasattr(patient, 'full_name') and patient.full_name:
+                    patient_name = patient.full_name
+
+                # Fallback to JSON extraction if still no name
+                if not patient_name:
                     # Try to extract from personal_info JSON
                     try:
                         if hasattr(patient, 'personal_info') and patient.personal_info:
@@ -298,28 +322,57 @@ def search_patients(search_term: str, hospital_id: uuid.UUID,
                     except:
                         patient_name = 'Unknown Patient'
                 
-                # Create display name with MRN for clarity
+                # Get patient status
+                status = 'active'  # Default
+                is_deleted = False
+
+                if hasattr(patient, 'is_deleted') and patient.is_deleted:
+                    is_deleted = True
+                    status = 'deleted'
+                elif hasattr(patient, 'deleted_at') and patient.deleted_at is not None:
+                    is_deleted = True
+                    status = 'deleted'
+                elif hasattr(patient, 'status'):
+                    status = patient.status or 'active'
+
+                # Create display name with MRN and status badge
                 display_name = patient_name
                 if patient.mrn:
                     display_name = f"{patient_name} (MRN: {patient.mrn})"
-                
+
+                # Add status badge for non-active patients (for history/list views)
+                status_badge = ''
+                if status == 'deleted':
+                    status_badge = ' [DELETED]'
+                elif status == 'inactive':
+                    status_badge = ' [INACTIVE]'
+
+                # Display name with status (for dropdown)
+                display_name_with_status = display_name + status_badge
+
                 results.append({
-                    # Multiple formats for compatibility - use name as value
-                    'id': display_name,                        # Use display name as ID for filtering
+                    # For filtering - value must be NAME (like suppliers)
+                    'value': patient_name,                     # ✅ Use NAME for filtering (not UUID)
+                    'label': display_name_with_status,         # Label for display WITH status
+                    'subtitle': patient.mrn,                   # Subtitle with MRN
+                    'status': status,                          # Patient status
+                    'status_badge': status_badge.strip('[] '), # Status text without brackets
+
+                    # Compatibility fields
+                    'id': patient_name,                        # Use patient name as ID for filtering
                     'patient_id': str(patient.patient_id),    # Keep UUID for reference
                     'patient_name': patient_name,             # Actual name
                     'name': patient_name,                     # Generic name field
-                    'value': display_name,                     # Value for dropdown (NAME not UUID)
-                    'label': display_name,                     # Label for display
-                    'display': display_name,                   # Display text
-                    'text': display_name,                      # Alternative display field
-                    
+                    'display': display_name,                   # Display text WITHOUT status
+                    'text': display_name_with_status,          # Alternative display field WITH status
+
                     # Additional fields for reference
                     'uuid': str(patient.patient_id),          # Actual UUID if needed
                     'mrn': patient.mrn or '',                 # MRN for reference
                     'title': patient.title if hasattr(patient, 'title') else '',
                     'first_name': patient.first_name if hasattr(patient, 'first_name') else '',
-                    'last_name': patient.last_name if hasattr(patient, 'last_name') else ''
+                    'last_name': patient.last_name if hasattr(patient, 'last_name') else '',
+                    'is_deleted': is_deleted                   # Deletion flag
                 })
             
             return results

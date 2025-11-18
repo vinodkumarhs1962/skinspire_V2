@@ -663,7 +663,7 @@ class UniversalEntityService(ABC):
                     if (hasattr(field, 'entity_search_config') or  # Existing property
                         hasattr(field, 'related_field') or  # Existing property
                         field.name.endswith('_id')):  # Convention
-                        
+
                         self._load_foreign_key_relationship(
                             item_dict, item, session, field
                         )
@@ -693,16 +693,31 @@ class UniversalEntityService(ABC):
         """
         return {}
 
-    def _load_foreign_key_relationship(self, item_dict: Dict, item: Any, 
+    def _load_foreign_key_relationship(self, item_dict: Dict, item: Any,
                                     session: Session, field):
         """
         NEW HELPER METHOD
         Purpose: Load a specific foreign key relationship using existing config
         """
         try:
+            # Skip audit trail fields - they shouldn't have relationships loaded
+            if field.name in ['created_by', 'updated_by', 'deleted_by', 'approved_by', 'rejected_by']:
+                return
+
             # Get the foreign key value
             fk_value = getattr(item, field.name, None)
             if not fk_value:
+                return
+
+            # CRITICAL: Skip if the target display field already exists in item_dict
+            # This prevents overwriting correct values from database views
+            # E.g., patient_name from v_patient_payment_receipts shouldn't be overwritten
+            relationship_name = field.name.replace('_id', '')  # patient_id -> patient
+            target_field = f"{relationship_name}_name"  # patient_name
+
+            if target_field in item_dict and item_dict[target_field] is not None:
+                # Field already exists with data from view - don't overwrite
+                logger.debug(f"Skipping relationship load for {field.name}: {target_field} already exists in item_dict")
                 return
             
             # Determine the related entity

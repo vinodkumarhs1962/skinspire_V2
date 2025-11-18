@@ -463,8 +463,8 @@ def get_config_cache_statistics() -> Dict[str, Any]:
 def preload_common_configurations():
     """Preload frequently used configurations"""
     common_entities = [
-        'suppliers', 'supplier_payments', 'medicines', 'patients',
-        'users', 'configurations', 'settings'
+        'suppliers', 'supplier_payments', 'patient_payments', 'medicines', 'patients',
+        'users', 'configurations', 'settings', 'package_payment_plans'
     ]
     
     cached_loader = get_cached_configuration_loader()

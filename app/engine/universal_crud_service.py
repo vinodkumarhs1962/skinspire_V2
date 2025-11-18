@@ -135,20 +135,25 @@ class UniversalCRUDService:
             raise ValueError(f"Failed to determine branch: {str(e)}")
     
     def _load_model_class(self, config: EntityConfiguration):
-        """Dynamically load model class"""
-        model_path = getattr(config, 'model_class_path', None) or getattr(config, 'model_class', None)
-        
-        if not model_path:
+        """Dynamically load model class from entity registry"""
+        from app.config.entity_registry import get_entity_registration
+
+        # Get model path from registry (not config)
+        registration = get_entity_registration(config.entity_type)
+        if not registration or not registration.model_class:
             raise ValueError(f"No model class configured for {config.entity_type}")
-        
+
+        model_path = registration.model_class
+
         if model_path in self.model_cache:
             return self.model_cache[model_path]
-        
+
         try:
             parts = model_path.rsplit('.', 1)
             module = importlib.import_module(parts[0])
             model_class = getattr(module, parts[1])
             self.model_cache[model_path] = model_class
+            logger.info(f"Loaded model class for {config.entity_type}: {model_path}")
             return model_class
         except Exception as e:
             logger.error(f"Failed to load model {model_path}: {e}")
@@ -203,9 +208,9 @@ class UniversalCRUDService:
                 
                 # Prepare entity data
                 entity_data = {}
-                
+
                 # Set primary key
-                pk_field = getattr(config, 'primary_key_field', 'id')
+                pk_field = getattr(config, 'primary_key', None) or getattr(config, 'primary_key_field', 'id')
                 entity_data[pk_field] = uuid.uuid4()
                 
                 # Set required system fields
@@ -297,7 +302,9 @@ class UniversalCRUDService:
             # Generic update
             logger.info(f"Using generic CRUD update for {entity_type}")
             model_class = self._load_model_class(config)
-            pk_field = getattr(config, 'primary_key_field', 'id')
+            # Try primary_key first (main config param), then primary_key_field (fallback), then 'id'
+            pk_field = getattr(config, 'primary_key', None) or getattr(config, 'primary_key_field', 'id')
+            logger.info(f"Using primary key field: {pk_field}")
             
             with get_db_session() as session:
                 entity = session.query(model_class).filter_by(**{
@@ -383,7 +390,7 @@ class UniversalCRUDService:
             # Generic delete
             logger.info(f"Using generic CRUD delete for {entity_type}")
             model_class = self._load_model_class(config)
-            pk_field = getattr(config, 'primary_key_field', 'id')
+            pk_field = getattr(config, 'primary_key', None) or getattr(config, 'primary_key_field', 'id')
             
             with get_db_session() as session:
                 entity = session.query(model_class).filter_by(**{
@@ -443,9 +450,9 @@ class UniversalCRUDService:
             
             if not getattr(config, 'enable_soft_delete', False):
                 raise ValueError(f"Soft delete not enabled for {entity_type}")
-            
+
             model_class = self._load_model_class(config)
-            pk_field = getattr(config, 'primary_key_field', 'id')
+            pk_field = getattr(config, 'primary_key', None) or getattr(config, 'primary_key_field', 'id')
             
             with get_db_session() as session:
                 # Get the deleted entity

@@ -3832,11 +3832,12 @@ class SupplierPaymentController(FormController):
     
     def __init__(self, payment_id=None, invoice_id=None):
         from app.forms.supplier_forms import SupplierPaymentForm
-        
+
         self.payment_id = payment_id
         self.invoice_id = invoice_id  # NEW: Add invoice context
         self.is_edit = payment_id is not None
         self.is_invoice_specific = invoice_id is not None  # NEW: Track invoice context
+        self.edit_not_allowed = False  # Flag for edit permission check
         
         # Determine page title based on context
         if self.is_invoice_specific:
@@ -3850,25 +3851,44 @@ class SupplierPaymentController(FormController):
             form_class=SupplierPaymentForm,
             template_path='supplier/payment_form.html',
             success_url=self._get_success_url,
-            success_message="Payment recorded successfully" if not self.is_edit else "Payment updated successfully",
+            success_message="Payment processed successfully",  # Default message, will be overridden
             page_title=page_title,
             additional_context=self.get_additional_context
         )
 
-    
+    def handle_request(self, *args, **kwargs):
+        """Override to check edit permissions before processing"""
+        form = self.get_form(*args, **kwargs)
+
+        # Check if edit is not allowed (set in get_form)
+        if self.edit_not_allowed:
+            from flask import redirect, url_for
+            return redirect(url_for('universal_views.universal_detail_view',
+                                   entity_type='supplier_payments',
+                                   item_id=self.payment_id))
+
+        # Continue with normal flow
+        return super().handle_request(*args, **kwargs)
+
     def _get_success_url(self, result):
-        """Enhanced success URL for invoice context"""
+        """Enhanced success URL - ALWAYS shows payment detail view after save"""
         from flask import url_for
-        
-        if self.is_invoice_specific and self.invoice_id:
-            # Return to the invoice view
-            return url_for('supplier_views.view_supplier_invoice', invoice_id=self.invoice_id)
-        elif self.is_edit:
-            # Return to payment view
-            return url_for('supplier_views.view_payment', payment_id=self.payment_id)
+
+        # Extract payment_id from result
+        payment_id = result.get('payment_id') or result.get('data', {}).get('payment_id')
+
+        # PRIORITY: Always show the payment detail view after creating/editing a payment
+        if payment_id or self.payment_id:
+            # Return to Universal Engine payment detail view
+            actual_payment_id = payment_id or self.payment_id
+            current_app.logger.info(f"Redirecting to payment detail view: {actual_payment_id}")
+            return url_for('universal_views.universal_detail_view',
+                          entity_type='supplier_payments',
+                          item_id=actual_payment_id)
         else:
-            # Return to payment list
-            return url_for('supplier_views.payment_list')
+            # Fallback: Return to Universal Engine payment list if no payment_id available
+            current_app.logger.warning("No payment_id in result, redirecting to Universal Engine payment list")
+            return url_for('universal_views.universal_list_view', entity_type='supplier_payments')
     
     def get_additional_context(self, *args, **kwargs):
         """Enhanced context with CORRECTED invoice balance calculation for partial payments"""
@@ -3994,8 +4014,35 @@ class SupplierPaymentController(FormController):
                             }
                         })
                         
+                        #   NEW: Get supplier advance balance for invoice payments
+                        try:
+                            from app.services.supplier_payment_service import SupplierPaymentService
+                            payment_service = SupplierPaymentService()
+                            supplier_id = invoice.get('supplier_id')
+
+                            if supplier_id:
+                                advance_info = payment_service.get_supplier_advance_balance(
+                                    supplier_id=str(supplier_id),
+                                    hospital_id=current_user.hospital_id
+                                )
+
+                                context.update({
+                                    'supplier_advance_balance': advance_info.get('advance_balance', 0.0),
+                                    'supplier_advance_count': advance_info.get('payment_count', 0),
+                                    'supplier_advance_payments': advance_info.get('payments', [])
+                                })
+
+                                current_app.logger.info(f"Supplier advance balance: ₹{advance_info.get('advance_balance', 0.0):.2f}")
+                        except Exception as adv_err:
+                            current_app.logger.warning(f"Could not get advance balance: {str(adv_err)}")
+                            context.update({
+                                'supplier_advance_balance': 0.0,
+                                'supplier_advance_count': 0,
+                                'supplier_advance_payments': []
+                            })
+
                         current_app.logger.info(f"Added enhanced invoice context for {invoice.get('supplier_invoice_number')}")
-                        
+
                 except Exception as e:
                     current_app.logger.error(f"Error getting invoice context: {str(e)}")
                     # Fallback for invoice-specific context
@@ -4059,26 +4106,206 @@ class SupplierPaymentController(FormController):
                 self._setup_other_choices(form)
             except Exception as other_error:
                 current_app.logger.warning(f"Other choices setup failed: {str(other_error)}")
-            
-            #   CRITICAL FIX: For invoice-specific payments, pre-populate with CORRECT balance
-            if self.is_invoice_specific and self.invoice_id and request.method == 'GET':
-                current_app.logger.info(f"Pre-populating form for invoice {self.invoice_id}")
-                
-                # Get invoice and calculate CURRENT balance
+
+            # ===================================================================
+            #   CRITICAL FIX: Populate invoice choices for validation
+            # ===================================================================
+            # On POST requests for standalone payments, populate invoice choices based on submitted supplier_id
+            # This is needed for form validation to pass
+            if request.method == 'POST' and not self.is_invoice_specific and hasattr(form, 'supplier_id') and hasattr(form, 'invoice_id'):
+                supplier_id = form.supplier_id.data
+                invoice_id = form.invoice_id.data
+
+                current_app.logger.info(f"POST validation: supplier_id={supplier_id}, invoice_id={invoice_id}")
+
+                if supplier_id and invoice_id:
+                    # Populate invoice choices for this supplier to allow validation
+                    try:
+                        from app.services.database_service import get_db_session
+                        from app.models.transaction import SupplierInvoice, SupplierPayment
+                        from sqlalchemy import func
+                        import uuid
+
+                        current_app.logger.info(f"Populating invoice choices for supplier {supplier_id}")
+
+                        with get_db_session(read_only=True) as session:
+                            # Get invoices for this supplier (unpaid/partial)
+                            invoices = session.query(SupplierInvoice).filter(
+                                SupplierInvoice.supplier_id == uuid.UUID(supplier_id),
+                                SupplierInvoice.hospital_id == current_user.hospital_id,
+                                SupplierInvoice.payment_status.in_(['unpaid', 'partial'])
+                            ).order_by(SupplierInvoice.invoice_date.desc()).limit(50).all()
+
+                            # Build choices
+                            invoice_choices = [('', 'Select Invoice (Optional)')]
+                            for inv in invoices:
+                                # Calculate balance
+                                paid_sum = session.query(func.sum(SupplierPayment.amount)).filter(
+                                    SupplierPayment.invoice_id == inv.invoice_id,
+                                    SupplierPayment.workflow_status == 'approved'
+                                ).scalar() or 0
+
+                                total_amount = float(inv.total_amount) if inv.total_amount else 0
+                                balance_due = total_amount - float(paid_sum)
+
+                                if balance_due < 0:
+                                    balance_due = 0
+
+                                invoice_display = f"{inv.supplier_invoice_number} (Balance: ₹{balance_due:.2f})"
+                                invoice_choices.append((str(inv.invoice_id), invoice_display))
+
+                            form.invoice_id.choices = invoice_choices
+                            current_app.logger.info(f"Added {len(invoice_choices)} invoice choices for validation")
+
+                    except Exception as e:
+                        current_app.logger.error(f"Error populating invoice choices for validation: {str(e)}", exc_info=True)
+                        # Set minimal choices to allow validation
+                        form.invoice_id.choices = [('', 'Select Invoice (Optional)'), (invoice_id, f'Invoice {invoice_id}')]
+                elif not invoice_id:
+                    # No invoice selected - set default choice
+                    form.invoice_id.choices = [('', 'Select Invoice (Optional)')]
+                    current_app.logger.info("No invoice selected, validation will pass")
+
+            # ===================================================================
+            #   CRITICAL FIX: For invoice-specific payments, populate choices AND data
+            # ===================================================================
+            if self.is_invoice_specific and self.invoice_id:
+                current_app.logger.info(f"Pre-populating form for invoice {self.invoice_id} (Method: {request.method})")
+
+                # STEP 1: Populate form choices (supplier, invoice dropdown options, branch, etc.)
+                # This MUST run on both GET and POST for form validation to work
+                # The method has internal logic to only set form.data on GET requests
+                self._populate_form_for_invoice(form)
+                current_app.logger.info(f"  Step 1 complete: Invoice choices populated")
+
+                # STEP 2: Get invoice data and calculate CURRENT balance due
+                # This ensures amounts are calculated correctly based on approved payments
+                # Also ensures supplier/branch are in choices for validation
                 invoice, current_balance_due = self._ensure_invoice_data_in_form(form, current_user)
-                
-                #   FORCE the form amount to use the correctly calculated balance
-                form.amount.data = float(current_balance_due) if current_balance_due else 0.0
-                form.cash_amount.data = float(current_balance_due) if current_balance_due else 0.0
-                form.cheque_amount.data = 0.0
-                form.bank_transfer_amount.data = 0.0
-                form.upi_amount.data = 0.0
-                
-                current_app.logger.info(f"  FIXED: Set form amount to current balance: {current_balance_due}")
-                
+                current_app.logger.info(f"  Step 2 complete: Balance calculated = {current_balance_due}")
+
+                # STEP 3: Override amount fields with the correctly calculated balance
+                # ONLY on GET requests - don't override user's submitted values on POST
+                if request.method == 'GET':
+                    form.amount.data = float(current_balance_due) if current_balance_due else 0.0
+                    form.cash_amount.data = float(current_balance_due) if current_balance_due else 0.0
+                    form.cheque_amount.data = 0.0
+                    form.bank_transfer_amount.data = 0.0
+                    form.upi_amount.data = 0.0
+                    current_app.logger.info(f"  Step 3 complete: Form amounts set to balance: {current_balance_due}")
+                else:
+                    current_app.logger.info(f"  Step 3 skipped: POST request, keeping user's submitted values")
+            else:
+                # ✅ FIX: Generate reference_no for non-invoice payments (advance/direct supplier payments)
+                if request.method == 'GET' and not form.reference_no.data:
+                    from datetime import date
+                    # Generate reference based on supplier or generic
+                    if form.supplier_id.data:
+                        # If supplier is selected, generate PAY-SUP-<date> format
+                        form.reference_no.data = f"PAY-SUP-{date.today().strftime('%Y%m%d')}"
+                    else:
+                        # Generic advance payment reference
+                        form.reference_no.data = f"PAY-ADV-{date.today().strftime('%Y%m%d')}"
+                    form.payment_date.data = date.today()
+                    current_app.logger.info(f"Generated default reference_no for non-invoice payment: {form.reference_no.data}")
+
+            # ============================================================================
+            # EDIT MODE: Load existing payment data and pre-populate form
+            # ============================================================================
+            if self.is_edit and self.payment_id and request.method == 'GET':
+                current_app.logger.info(f"Loading existing payment data for edit mode: {self.payment_id}")
+                try:
+                    from app.services.supplier_payment_service import SupplierPaymentService
+                    import uuid
+
+                    payment_service = SupplierPaymentService()
+                    payment_dict = payment_service.get_by_id(
+                        self.payment_id,
+                        hospital_id=str(current_user.hospital_id)
+                    )
+
+                    if payment_dict:
+                        current_app.logger.info(f"Found payment: {payment_dict.get('reference_no')}")
+
+                        # Check if payment can be edited (only draft or rejected payments)
+                        workflow_status = payment_dict.get('workflow_status')
+                        if workflow_status not in ['draft', 'rejected']:
+                            current_app.logger.warning(f"Attempt to edit payment with status: {workflow_status}")
+                            flash(f"Cannot edit payment with status '{workflow_status}'. Only draft or rejected payments can be edited.", "error")
+                            # Store error flag to handle in handle_request
+                            self.edit_not_allowed = True
+                            return form
+
+                        # Pre-populate all form fields from existing payment
+                        form.supplier_id.data = str(payment_dict.get('supplier_id')) if payment_dict.get('supplier_id') else None
+                        form.invoice_id.data = str(payment_dict.get('invoice_id')) if payment_dict.get('invoice_id') else ''
+                        form.amount.data = float(payment_dict.get('amount', 0))
+                        form.payment_date.data = payment_dict.get('payment_date')
+                        form.branch_id.data = str(payment_dict.get('branch_id')) if payment_dict.get('branch_id') else None
+                        form.payment_method.data = payment_dict.get('payment_method', 'cash')
+                        form.reference_no.data = payment_dict.get('reference_no', '')
+                        form.notes.data = payment_dict.get('notes', '')
+                        form.currency_code.data = payment_dict.get('currency_code', 'INR')
+                        form.exchange_rate.data = float(payment_dict.get('exchange_rate', 1.0))
+
+                        # Multi-method amounts
+                        form.cash_amount.data = float(payment_dict.get('cash_amount', 0))
+                        form.cheque_amount.data = float(payment_dict.get('cheque_amount', 0))
+                        form.bank_transfer_amount.data = float(payment_dict.get('bank_transfer_amount', 0))
+                        form.upi_amount.data = float(payment_dict.get('upi_amount', 0))
+
+                        # Cheque details
+                        form.cheque_number.data = payment_dict.get('cheque_number', '')
+                        form.cheque_date.data = payment_dict.get('cheque_date')
+                        form.cheque_bank.data = payment_dict.get('cheque_bank', '')
+                        form.bank_account_name.data = payment_dict.get('bank_account_name', '')
+
+                        # Bank transfer details
+                        form.bank_reference_number.data = payment_dict.get('bank_reference_number', '')
+
+                        # UPI details
+                        form.upi_transaction_id.data = payment_dict.get('upi_transaction_id', '')
+                        form.upi_app_name.data = payment_dict.get('upi_app_name', '')
+
+                        # TDS fields
+                        if hasattr(form, 'tds_applicable'):
+                            form.tds_applicable.data = payment_dict.get('tds_applicable', False)
+                            form.tds_rate.data = float(payment_dict.get('tds_rate', 0))
+                            form.tds_amount.data = float(payment_dict.get('tds_amount', 0))
+                            form.tds_reference.data = payment_dict.get('tds_reference', '')
+
+                        # If payment has an invoice, set up invoice choices
+                        if payment_dict.get('invoice_id'):
+                            try:
+                                from app.services.supplier_service import get_supplier_invoice_by_id
+                                invoice = get_supplier_invoice_by_id(
+                                    invoice_id=uuid.UUID(payment_dict.get('invoice_id')),
+                                    hospital_id=current_user.hospital_id
+                                )
+                                if invoice:
+                                    invoice_number = invoice.get('supplier_invoice_number', 'Unknown')
+                                    balance_due = invoice.get('balance_due', 0)
+                                    invoice_display = f"{invoice_number} (Balance: ₹{balance_due:.2f})"
+                                    form.invoice_id.choices = [
+                                        ('', 'Select Invoice (Optional)'),
+                                        (str(payment_dict.get('invoice_id')), invoice_display)
+                                    ]
+                                    current_app.logger.info(f"Set invoice choices for edit mode: {invoice_display}")
+                            except Exception as inv_err:
+                                current_app.logger.warning(f"Could not load invoice for edit mode: {inv_err}")
+
+                        current_app.logger.info(f"Successfully pre-populated form for edit mode")
+                    else:
+                        current_app.logger.error(f"Payment not found: {self.payment_id}")
+                        flash("Payment not found", "error")
+
+                except Exception as load_err:
+                    current_app.logger.error(f"Error loading payment data for edit: {str(load_err)}", exc_info=True)
+                    flash(f"Error loading payment data: {str(load_err)}", "error")
+
         except Exception as e:
-            current_app.logger.error(f"Error in get_form: {str(e)}")
-        
+            current_app.logger.error(f"Error in get_form: {str(e)}", exc_info=True)
+
         return form
     
     def _populate_form_for_invoice(self, form):
@@ -4332,30 +4559,82 @@ class SupplierPaymentController(FormController):
         CRITICAL FIX: Handle case where readonly fields don't submit properly
         """
         try:
-            from app.services.supplier_service import record_supplier_payment, update_supplier_payment
+            from app.services.supplier_payment_service import SupplierPaymentService
+            from app.services.supplier_service import update_supplier_payment
             from flask_login import current_user
-            
+            from flask import request
+
+            # Helper function to safely convert to float
+            def safe_float(value, default=0):
+                """Safely convert value to float, handling empty strings and None"""
+                if value is None or value == '':
+                    return default
+                try:
+                    return float(value)
+                except (ValueError, TypeError):
+                    return default
+
+            # Helper function to determine payment method based on amounts
+            def determine_payment_method(cash, cheque, bank, upi, advance):
+                """Determine payment method based on which amounts are > 0"""
+                methods_used = []
+                if cash > 0:
+                    methods_used.append('cash')
+                if cheque > 0:
+                    methods_used.append('cheque')
+                if bank > 0:
+                    methods_used.append('bank_transfer')
+                if upi > 0:
+                    methods_used.append('upi')
+                if advance > 0:
+                    methods_used.append('advance')
+
+                if len(methods_used) == 0:
+                    return 'cash'  # Default
+                elif len(methods_used) == 1:
+                    return methods_used[0]
+                else:
+                    return 'mixed'
+
             # CRITICAL FIX: For invoice-specific payments, ensure required fields are populated
             # even if they didn't come through in the form submission
             if self.is_invoice_specific and self.invoice_id:
                 self._ensure_invoice_data_in_form(form, current_user)
-            
+
+            # Extract payment amounts first
+            cash_amt = safe_float(form.cash_amount.data)
+            cheque_amt = safe_float(form.cheque_amount.data)
+            bank_amt = safe_float(form.bank_transfer_amount.data)
+            upi_amt = safe_float(form.upi_amount.data)
+            advance_amt = safe_float(request.form.get('advance_allocation_amount', 0))
+
+            # Determine payment method automatically based on amounts
+            auto_payment_method = determine_payment_method(cash_amt, cheque_amt, bank_amt, upi_amt, advance_amt)
+
+            # Check if saving as draft or submitting
+            save_as = request.form.get('save_as', 'submit')
+            save_as_draft = (save_as == 'draft')
+
             # Prepare payment data
             payment_data = {
                 'supplier_id': form.supplier_id.data,
                 'invoice_id': form.invoice_id.data if hasattr(form, 'invoice_id') and form.invoice_id.data else None,
-                'amount': float(form.amount.data),
+                'amount': safe_float(form.amount.data),
                 'payment_date': form.payment_date.data,
                 'branch_id': form.branch_id.data,
-                
-                # FIXED: Add payment_method field that was missing
-                'payment_method': form.payment_method.data if hasattr(form, 'payment_method') and form.payment_method.data else 'mixed',
-                
-                # Multi-method amounts
-                'cash_amount': float(form.cash_amount.data or 0),
-                'cheque_amount': float(form.cheque_amount.data or 0),
-                'bank_transfer_amount': float(form.bank_transfer_amount.data or 0),
-                'upi_amount': float(form.upi_amount.data or 0),
+
+                # FIXED: Auto-determine payment method based on amounts used
+                'payment_method': auto_payment_method,
+
+                # Multi-method amounts (including advance allocation) - FIXED: Use safe_float
+                'advance_allocation_amount': advance_amt,
+                'cash_amount': cash_amt,
+                'cheque_amount': cheque_amt,
+                'bank_transfer_amount': bank_amt,
+                'upi_amount': upi_amt,
+
+                # NEW: Workflow control
+                'save_as_draft': save_as_draft,
                 
                 # Method-specific details
                 'cheque_number': form.cheque_number.data,
@@ -4366,16 +4645,16 @@ class SupplierPaymentController(FormController):
                 'upi_transaction_id': form.upi_transaction_id.data,
                 'upi_app_name': form.upi_app_name.data,
                 
-                # Additional fields
-                'reference_no': form.reference_no.data,
-                'notes': form.notes.data,
+                # Additional fields - FIXED: Handle None/empty strings
+                'reference_no': form.reference_no.data if hasattr(form, 'reference_no') and form.reference_no.data and form.reference_no.data.strip() else None,
+                'notes': form.notes.data if hasattr(form, 'notes') and form.notes.data and form.notes.data.strip() else None,
                 'currency_code': form.currency_code.data if hasattr(form, 'currency_code') else 'INR',
-                'exchange_rate': float(form.exchange_rate.data) if hasattr(form, 'exchange_rate') else 1.0,
-                
-                # TDS fields (if present)
+                'exchange_rate': safe_float(form.exchange_rate.data, 1.0) if hasattr(form, 'exchange_rate') else 1.0,
+
+                # TDS fields (if present) - FIXED: Use safe_float
                 'tds_applicable': form.tds_applicable.data if hasattr(form, 'tds_applicable') else False,
-                'tds_rate': float(form.tds_rate.data or 0) if hasattr(form, 'tds_rate') else 0,
-                'tds_amount': float(form.tds_amount.data or 0) if hasattr(form, 'tds_amount') else 0,
+                'tds_rate': safe_float(form.tds_rate.data) if hasattr(form, 'tds_rate') else 0,
+                'tds_amount': safe_float(form.tds_amount.data) if hasattr(form, 'tds_amount') else 0,
                 'tds_reference': form.tds_reference.data if hasattr(form, 'tds_reference') else None
             }
             
@@ -4402,9 +4681,13 @@ class SupplierPaymentController(FormController):
             current_app.logger.info(f"Payment data prepared for submission:")
             current_app.logger.info(f"  supplier_id: {payment_data.get('supplier_id')}")
             current_app.logger.info(f"  amount: {payment_data.get('amount')}")
+            current_app.logger.info(f"  advance_allocation_amount: {payment_data.get('advance_allocation_amount')}")
             current_app.logger.info(f"  payment_method: {payment_data.get('payment_method')}")
             current_app.logger.info(f"  branch_id: {payment_data.get('branch_id')}")
-            
+
+            # Initialize payment service
+            payment_service = SupplierPaymentService()
+
             # Record or update payment
             if self.is_edit:
                 result = update_supplier_payment(
@@ -4414,12 +4697,24 @@ class SupplierPaymentController(FormController):
                     current_user_id=current_user.user_id
                 )
             else:
-                result = record_supplier_payment(
-                    hospital_id=current_user.hospital_id,
-                    payment_data=payment_data,
-                    current_user_id=current_user.user_id
+                # Use new SupplierPaymentService with advance allocation support
+                result = payment_service.create_payment(
+                    data=payment_data,
+                    hospital_id=str(current_user.hospital_id),
+                    branch_id=payment_data['branch_id'],
+                    user_id=current_user.user_id
                 )
-            
+
+            # Add custom success message based on save_as parameter
+            if result.get('success'):
+                if self.is_edit:
+                    result['message'] = "Payment updated successfully"
+                else:
+                    if save_as_draft:
+                        result['message'] = "Payment saved as draft successfully"
+                    else:
+                        result['message'] = result.get('message', "Payment recorded successfully")
+
             return result
             
         except Exception as e:
@@ -4475,9 +4770,44 @@ class SupplierPaymentController(FormController):
             # Set critical form fields
             # ===================================================================
             
-            # 1. Supplier ID
+            # 1. Supplier ID - ENHANCED: Ensure invoice supplier is in choices
+            supplier_id_str = str(invoice.get('supplier_id'))
+
+            # CRITICAL: Always ensure the invoice supplier is in form choices
+            # This must run on BOTH GET and POST for validation to work
+            current_choices = dict(form.supplier_id.choices) if form.supplier_id.choices else {}
+            current_app.logger.info(f"DEBUG: Current supplier choices count: {len(current_choices)}")
+            current_app.logger.info(f"DEBUG: Invoice supplier needed: {supplier_id_str}")
+            current_app.logger.info(f"DEBUG: Invoice supplier in choices: {supplier_id_str in current_choices}")
+
+            if supplier_id_str not in current_choices:
+                current_app.logger.info(f"DEBUG: Invoice supplier NOT in choices, adding it")
+                try:
+                    from app.services.database_service import get_db_session
+                    from app.models.master import Supplier
+
+                    with get_db_session(read_only=True) as session:
+                        supplier = session.query(Supplier).filter_by(
+                            supplier_id=uuid.UUID(supplier_id_str),
+                            hospital_id=current_user.hospital_id
+                        ).first()
+
+                        if supplier:
+                            # Add the invoice supplier to choices
+                            supplier_display = f"{supplier.supplier_name} (From Invoice)"
+                            form.supplier_id.choices.append((supplier_id_str, supplier_display))
+                            current_app.logger.info(f"Added invoice supplier '{supplier.supplier_name}' to choices")
+                        else:
+                            current_app.logger.error(f"DEBUG: Supplier {supplier_id_str} not found in database!")
+
+                except Exception as e:
+                    current_app.logger.error(f"Could not add invoice supplier to choices: {str(e)}", exc_info=True)
+            else:
+                current_app.logger.info(f"DEBUG: Invoice supplier already in choices")
+
+            # Only set form.data if it's empty (GET request with no data)
             if not form.supplier_id.data or form.supplier_id.data.strip() == '':
-                form.supplier_id.data = str(invoice.get('supplier_id'))
+                form.supplier_id.data = supplier_id_str
                 current_app.logger.info(f"Set supplier_id to '{form.supplier_id.data}'")
             
             # 2. Invoice ID

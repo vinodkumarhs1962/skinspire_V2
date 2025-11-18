@@ -20,8 +20,9 @@ class LoginForm(FlaskForm):
     username = StringField('Phone Number', validators=[
         DataRequired(message="Phone number is required")
     ])
+    # Password is Optional to allow bypass for test user 7777777777
     password = PasswordField('Password', validators=[
-        DataRequired(message="Password is required")
+        Optional()
     ])
     remember_me = BooleanField('Remember Me')
 

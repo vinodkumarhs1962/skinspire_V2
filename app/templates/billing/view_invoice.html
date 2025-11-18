@@ -113,29 +113,34 @@
         
         <!-- Action buttons right-aligned -->
         <div class="flex items-center space-x-2 mt-4 md:mt-0">
-            <!-- Print button(s) first -->
+            <!-- Standard Back Button (Always First) -->
+            <button onclick="window.history.back()" type="button" class="btn-back">
+                <i class="fas fa-arrow-left icon-left"></i>Back
+            </button>
+
+            <!-- Print button(s) -->
             {% if related_invoices and related_invoices|length > 1 %}
-            <button id="print-all-invoices" 
+            <button id="print-all-invoices"
                 data-print-url="{% if related_invoices|length > 0 %}{{ url_for('billing_views.print_all_invoices', group_id=related_invoices[0].invoice_number.split('/')[2]) }}{% endif %}"
-                class="bg-blue-500 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded inline-flex items-center">
+                class="btn-primary">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                 </svg>
                 Print All
             </button>
             {% else %}
-            <button id="print-invoice" class="bg-blue-500 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded inline-flex items-center">
+            <button id="print-invoice" class="btn-primary">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                 </svg>
                 Print
             </button>
             {% endif %}
-            
+
             <!-- Payment button(s) next -->
             {% if related_invoices and related_invoices|length > 0 %}
                 {% if total_balance_due > 0 %}
-                <a href="{{ url_for('billing_views.record_invoice_payment', invoice_id=invoice.invoice_id) }}?pay_all=true" class="bg-green-500 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded inline-flex items-center">
+                <a href="{{ url_for('billing_views.record_invoice_payment', invoice_id=invoice.invoice_id) }}?pay_all=true" class="btn-success">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" />
                     </svg>
@@ -143,20 +148,20 @@
                 </a>
                 {% endif %}
             {% elif invoice.balance_due > 0 %}
-                <a href="{{ url_for('billing_views.record_invoice_payment', invoice_id=invoice.invoice_id) }}" class="bg-green-500 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded inline-flex items-center">
+                <a href="{{ url_for('billing_views.record_invoice_payment', invoice_id=invoice.invoice_id) }}" class="btn-success">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" />
                     </svg>
                     Record Payment
                 </a>
             {% endif %}
-            
-            <!-- Back button last -->
-            <a href="{{ url_for('billing_views.invoice_list') }}" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-white font-semibold py-2 px-4 rounded inline-flex items-center">
+
+            <!-- View Payments button -->
+            <a href="{{ url_for('universal_views.universal_list_view', entity_type='patient_payments', invoice_id=invoice.invoice_id) }}" class="btn-info">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
-                Back to Invoices
+                View Payments
             </a>
         </div>
     </div>  
@@ -544,15 +549,18 @@
                                 <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">Taxable</th>
                                 <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">GST</th>
                                 {% endif %}
-                                <th class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-right">Total</th>
+                                <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">Total</th>
+                                <th class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-center">Status</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% if invoice.line_items %}
                                 {% for item in invoice.line_items %}
-                                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 {% if item.is_discontinued %}bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500{% endif %}">
                                         <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">
-                                            {{ item.item_name }}
+                                            <div class="{% if item.is_discontinued %}text-gray-600 dark:text-gray-400{% endif %}">
+                                                {{ item.item_name }}
+                                            </div>
                                             {% if item.item_type == 'Medicine' and item.batch %}
                                                 <div class="text-xs text-gray-500 dark:text-gray-400">
                                                     Batch: {{ item.batch }}
@@ -566,8 +574,29 @@
                                                     Included in consultation
                                                 </div>
                                             {% endif %}
+                                            {% if item.is_discontinued %}
+                                                <div class="text-xs mt-1">
+                                                    <span class="text-red-600 dark:text-red-400 font-medium">{{ item.status_icon }} Discontinued</span>
+                                                    {% if item.credit_note_number %}
+                                                        <span class="text-gray-600 dark:text-gray-400"> | </span>
+                                                        <a href="{{ url_for('universal_views.universal_detail_view', entity_type='package_payment_plans', item_id=item.plan_id) }}"
+                                                           class="text-blue-600 dark:text-blue-400 hover:underline">
+                                                            Credit Note: {{ item.credit_note_number }}
+                                                        </a>
+                                                    {% endif %}
+                                                </div>
+                                                {% if item.discontinuation_reason %}
+                                                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-1 italic">
+                                                        Reason: {{ item.discontinuation_reason[:80] }}{% if item.discontinuation_reason|length > 80 %}...{% endif %}
+                                                    </div>
+                                                {% endif %}
+                                            {% endif %}
                                         </td>
-                                        <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">{{ item.item_type }}</td>
+                                        <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">
+                                            <span class="badge badge-{% if item.item_type == 'Package' %}primary{% else %}secondary{% endif %}">
+                                                {{ item.item_type }}
+                                            </span>
+                                        </td>
                                         {% if invoice.is_gst_invoice %}
                                         <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">{{ item.hsn_sac_code or '-' }}</td>
                                         {% endif %}
@@ -585,7 +614,7 @@
                                         {% if invoice.is_gst_invoice %}
                                         <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">{{ invoice.currency_code }} {{ "%.2f"|format(item.taxable_amount|float) }}</td>
                                         <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">
-                                            {{ item.gst_rate }}% 
+                                            {{ item.gst_rate }}%
                                             {% if not invoice.is_interstate %}
                                             ({{ "%.2f"|format(item.cgst_amount|float + item.sgst_amount|float) }})
                                             {% else %}
@@ -593,7 +622,24 @@
                                             {% endif %}
                                         </td>
                                         {% endif %}
-                                        <td class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-right font-semibold">{{ invoice.currency_code }} {{ "%.2f"|format(item.line_total|float) }}</td>
+                                        <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">
+                                            {% if item.is_discontinued %}
+                                                <div class="text-gray-400 dark:text-gray-500 line-through text-sm">{{ invoice.currency_code }} {{ "%.2f"|format(item.line_total|float) }}</div>
+                                                <div class="text-red-600 dark:text-red-400 text-sm">-{{ invoice.currency_code }} {{ "%.2f"|format(item.refund_amount|float) }}</div>
+                                                <div class="font-semibold text-gray-900 dark:text-white">{{ invoice.currency_code }} {{ "%.2f"|format(item.net_amount|float) }}</div>
+                                            {% else %}
+                                                <div class="font-semibold">{{ invoice.currency_code }} {{ "%.2f"|format(item.line_total|float) }}</div>
+                                            {% endif %}
+                                        </td>
+                                        <td class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-center">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                                {% if item.status_badge == 'warning' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300
+                                                {% elif item.status_badge == 'success' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300
+                                                {% elif item.status_badge == 'info' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300
+                                                {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300{% endif %}">
+                                                {{ item.status_icon }} {{ item.status_text }}
+                                            </span>
+                                        </td>
                                     </tr>
                                 {% endfor %}
                             {% else %}
@@ -608,25 +654,45 @@
             
             <!-- Payment History -->
             <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
-                <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Payment History</h2>
-                
-                <!-- Tabs for viewing payments by invoice or consolidated -->
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Payment Information</h2>
+
+                <!-- Tabs for viewing payments by invoice or patient history -->
                 <div class="mb-4 border-b border-gray-200 dark:border-gray-700">
-                    {% if related_invoices and related_invoices|length > 1 and all_payments and all_payments|length > 0 %}
                     <ul class="flex flex-wrap -mb-px">
                         <li class="mr-2">
-                            <a href="#" class="payment-tab active inline-block py-2 px-4 text-blue-600 border-b-2 border-blue-600 rounded-t-lg" data-target="current-invoice-payments">Current Invoice</a>
+                            <a href="#" class="payment-tab active inline-block py-2 px-4 text-blue-600 border-b-2 border-blue-600 rounded-t-lg" data-target="current-invoice-payments">
+                                <span class="flex items-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    Invoice Payments
+                                </span>
+                            </a>
                         </li>
                         <li class="mr-2">
-                            <a href="#" class="payment-tab inline-block py-2 px-4 text-gray-500 hover:text-gray-700 border-b-2 border-transparent rounded-t-lg" data-target="all-invoices-payments">All Related Invoices</a>
+                            <a href="#" class="payment-tab inline-block py-2 px-4 text-gray-500 hover:text-gray-700 border-b-2 border-transparent rounded-t-lg" data-target="patient-payment-history">
+                                <span class="flex items-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Patient Payment History
+                                </span>
+                            </a>
                         </li>
                     </ul>
-                    {% endif %}
                 </div>
                 
-                <!-- Current Invoice Payments -->
+                <!-- Current Invoice Payments (Allocated to THIS invoice) -->
                 <div id="current-invoice-payments" class="payment-tab-content">
                     {% if invoice.payments and invoice.payments|length > 0 %}
+                        <div class="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
+                            <p class="text-sm text-blue-800 dark:text-blue-200">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                Showing payments allocated to invoice <strong>{{ invoice.invoice_number }}</strong> via FIFO allocation
+                            </p>
+                        </div>
                         <div class="overflow-x-auto">
                             <table class="min-w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700">
                                 <thead>
@@ -634,7 +700,8 @@
                                         <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Date</th>
                                         <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Payment Method</th>
                                         <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Reference</th>
-                                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">Amount</th>
+                                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">Total Payment</th>
+                                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">Allocated to Invoice</th>
                                         <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-center">Status</th>
                                         <th class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-center">Actions</th>
                                     </tr>
@@ -661,6 +728,11 @@
                                                 {% endif %}
                                             </td>
                                             <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">{{ payment.currency_code }} {{ "%.2f"|format(payment.total_amount|float) }}</td>
+                                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">
+                                                <span class="font-semibold text-blue-600 dark:text-blue-400">
+                                                    {{ payment.currency_code }} {{ "%.2f"|format(payment.allocated_to_invoice|float) if payment.allocated_to_invoice else "0.00" }}
+                                                </span>
+                                            </td>
                                             <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-center">
                                                 {% if payment.refunded_amount > 0 %}
                                                     {% if payment.refunded_amount == payment.total_amount %}
@@ -703,49 +775,61 @@
                     {% endif %}
                 </div>
                 
-                <!-- All Related Invoices Payments -->
-                <div id="all-invoices-payments" class="payment-tab-content hidden">
-                    {% if all_payments and all_payments|length > 0 %}
+                <!-- Patient Payment History (All payments by patient) -->
+                <div id="patient-payment-history" class="payment-tab-content hidden">
+                    {% if all_patient_payments and all_patient_payments|length > 0 %}
+                        <div class="mb-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded">
+                            <p class="text-sm text-green-800 dark:text-green-200">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Complete payment history for patient <strong>{{ patient.name }}</strong>
+                            </p>
+                        </div>
                         <div class="overflow-x-auto">
-                            <table class="min-w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700">
+                            <table class="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700" style="table-layout: fixed;">
                                 <thead>
                                     <tr class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
-                                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Date</th>
-                                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Invoice</th>
-                                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Payment Method</th>
-                                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-left">Reference</th>
-                                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">Amount</th>
-                                        <th class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-center">Status</th>
+                                        <th class="py-2 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-left" style="width: 10%;">Date</th>
+                                        <th class="py-2 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-left" style="width: 15%;">Invoice</th>
+                                        <th class="py-2 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-left" style="width: 15%;">Method</th>
+                                        <th class="py-2 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-left" style="width: 20%;">Reference</th>
+                                        <th class="py-2 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-right" style="width: 12%;">Amount</th>
+                                        <th class="py-2 px-2 border-b border-gray-300 dark:border-gray-700 text-center" style="width: 10%;">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for payment in all_payments %}
+                                    {% for payment in all_patient_payments %}
                                         <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 {% if payment.invoice_id == invoice.invoice_id %}bg-blue-50 dark:bg-blue-900/10{% endif %}">
-                                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">{{ payment.payment_date.strftime('%d-%b-%Y') }}</td>
-                                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">
-                                                <a href="{{ url_for('billing_views.view_invoice', invoice_id=payment.invoice_id) }}" class="text-blue-600 hover:underline">
+                                            <td class="py-2 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-sm">
+                                                {{ payment.payment_date.strftime('%d-%b-%y') }}
+                                            </td>
+                                            <td class="py-2 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-sm truncate">
+                                                <a href="{{ url_for('billing_views.view_invoice', invoice_id=payment.invoice_id) }}" class="text-blue-600 hover:underline" title="{{ payment.invoice_number }}">
                                                     {{ payment.invoice_number }}
                                                 </a>
                                             </td>
-                                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700">
+                                            <td class="py-2 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-sm truncate">
                                                 {% if payment.cash_amount > 0 %}Cash{% endif %}
-                                                {% if payment.credit_card_amount > 0 %}{% if payment.cash_amount > 0 %}, {% endif %}Credit Card{% endif %}
-                                                {% if payment.debit_card_amount > 0 %}{% if payment.cash_amount > 0 or payment.credit_card_amount > 0 %}, {% endif %}Debit Card{% endif %}
+                                                {% if payment.credit_card_amount > 0 %}{% if payment.cash_amount > 0 %}, {% endif %}Card{% endif %}
+                                                {% if payment.debit_card_amount > 0 %}{% if payment.cash_amount > 0 or payment.credit_card_amount > 0 %}, {% endif %}Debit{% endif %}
                                                 {% if payment.upi_amount > 0 %}{% if payment.cash_amount > 0 or payment.credit_card_amount > 0 or payment.debit_card_amount > 0 %}, {% endif %}UPI{% endif %}
                                             </td>
-                                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 truncate">
+                                            <td class="py-2 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-sm truncate" title="{% if payment.reference_number %}{{ payment.reference_number }}{% elif payment.card_number_last4 %}{{ payment.card_type }} ({{ payment.card_number_last4 }}){% elif payment.upi_id %}{{ payment.upi_id }}{% else %}-{% endif %}">
                                                 {% if payment.reference_number %}
-                                                    {{ payment.reference_number }}
+                                                    {{ payment.reference_number[:15] }}...
                                                 {% elif payment.card_number_last4 %}
-                                                    {{ payment.card_type }} ({{ payment.card_number_last4 }})
+                                                    {{ payment.card_type }} (...{{ payment.card_number_last4 }})
                                                 {% elif payment.upi_id %}
-                                                    {{ payment.upi_id }}
+                                                    {{ payment.upi_id[:15] }}...
                                                 {% else %}
                                                     -
                                                 {% endif %}
                                             </td>
-                                            <td class="py-2 px-4 border-b border-r border-gray-300 dark:border-gray-700 text-right">{{ payment.currency_code }} {{ "%.2f"|format(payment.total_amount|float) }}</td>
-                                            <td class="py-2 px-4 border-b border-gray-300 dark:border-gray-700 text-center">
+                                            <td class="py-2 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-right text-sm">
+                                                {{ payment.currency_code }} {{ "%.2f"|format(payment.total_amount|float) }}
+                                            </td>
+                                            <td class="py-2 px-2 border-b border-gray-300 dark:border-gray-700 text-center">
                                                 {% if payment.refunded_amount > 0 %}
                                                     {% if payment.refunded_amount == payment.total_amount %}
                                                         <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300">Refunded</span>
@@ -762,7 +846,12 @@
                             </table>
                         </div>
                     {% else %}
-                        <p class="text-gray-600 dark:text-gray-400">No payments recorded for any of the related invoices yet</p>
+                        <div class="p-6 text-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                            <p class="text-gray-600 dark:text-gray-400">No payment history found for this patient</p>
+                        </div>
                     {% endif %}
                 </div>
             </div>

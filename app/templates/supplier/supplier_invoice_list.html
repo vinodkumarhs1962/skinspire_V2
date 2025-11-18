@@ -329,7 +329,7 @@
                                 </a>
                                 
                                 {% if invoice.payment_status != 'paid' and invoice.payment_status != 'cancelled' %}
-                                <a href="{{ url_for('supplier_views.record_payment', invoice_id=invoice.invoice_id) }}" 
+                                <a href="{{ url_for('supplier_views.record_payment', invoice_id=invoice.invoice_id) }}"
                                 class="action-link success" title="Record Payment">
                                     <i class="fas fa-money-bill"></i>
                                 </a>

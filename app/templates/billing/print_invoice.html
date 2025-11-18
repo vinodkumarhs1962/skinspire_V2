@@ -144,13 +144,27 @@
         <!-- Determine if we have any items of each type -->
         {% set service_items = [] %}
         {% set medicine_items = [] %}
+        {% set consolidated_prescription_items = [] %}
         {% set has_discount_item = false %}
+        {% set consolidated_groups = {} %}
 
         {% for item in invoice.line_items %}
-            {% if item.item_type in ['Service', 'Package'] %}
+            {# Check if this is a prescription item that should be consolidated #}
+            {% if item.is_prescription_item and item.print_as_consolidated and item.consolidation_group_id %}
+                {# Group consolidated prescription items by consolidation_group_id #}
+                {% set group_id = item.consolidation_group_id|string %}
+                {% if group_id not in consolidated_groups %}
+                    {% set _ = consolidated_groups.update({group_id: {'items': [], 'total': 0}}) %}
+                {% endif %}
+                {% set _ = consolidated_groups[group_id]['items'].append(item) %}
+                {% set _ = consolidated_groups[group_id].update({'total': consolidated_groups[group_id]['total'] + item.line_total}) %}
+            {% elif item.item_type in ['Service', 'Package'] %}
                 {% set _ = service_items.append(item) %}
             {% elif item.item_type in ['Medicine', 'Prescription'] %}
-                {% set _ = medicine_items.append(item) %}
+                {# Only add to medicine_items if NOT consolidated #}
+                {% if not (item.is_prescription_item and item.print_as_consolidated) %}
+                    {% set _ = medicine_items.append(item) %}
+                {% endif %}
             {% endif %}
             {% if item.discount_amount and item.discount_amount > 0 %}
                 {% set has_discount_item = true %}
@@ -297,8 +311,47 @@
         </div>
         {% endif %}
 
+        <!-- Consolidated Prescription Items (Doctor's Examination and Treatment) -->
+        {% if consolidated_groups %}
+        <div style="margin-bottom: 15px;">
+            <div style="font-weight: bold; margin-bottom: 5px;">Doctor's Examination and Treatment:</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 5%;">S. No.</th>
+                        <th class="item-description" style="width: 50%;">Service Description</th>
+                        <th style="width: 10%;">Qty</th>
+                        <th style="width: 10%;">UOM</th>
+                        <th style="width: 15%;">Amount</th>
+                        <th style="width: 10%;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for group_id, group in consolidated_groups.items() %}
+                        <tr>
+                            <td class="text-center">{{ loop.index }}</td>
+                            <td class="item-description">
+                                <strong>Doctor's Examination and Treatment</strong>
+                                <div style="font-size: 9px; color: #666; font-style: italic; margin-top: 3px;">
+                                    Includes: {{ group['items']|length }} prescription medicine(s)
+                                </div>
+                            </td>
+                            <td class="text-center">1</td>
+                            <td class="text-center">Service</td>
+                            <td class="text-right">{{ "%.2f"|format(group.total) }}</td>
+                            <td class="text-right">{{ "%.2f"|format(group.total) }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <div style="font-size: 9px; color: #666; margin-top: 5px; padding: 5px; background-color: #f8f9fa; border-left: 3px solid #ffc107;">
+                <strong>Note:</strong> This service includes prescription medicines dispensed as part of the consultation treatment. GST exempted as per medical consultation services.
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Display message if no items -->
-        {% if not service_items and not medicine_items %}
+        {% if not service_items and not medicine_items and not consolidated_groups %}
         <div style="text-align: center; padding: 20px; color: #666;">
             No line items available
         </div>

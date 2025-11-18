@@ -659,6 +659,191 @@ def get_category_tree(self, parent_id: Optional[str] = None, **kwargs) -> List[D
 
 ---
 
+## CRITICAL: Session Management and Database Patterns ⚠️
+
+### **Pattern 1: Nested Service Calls - Session Boundary Management**
+
+**Problem**: Calling service methods that create their own sessions from within an active session causes transaction conflicts.
+
+#### ❌ **WRONG - Nested Session Conflict**
+
+```python
+def get_invoice_items_for_payment(self, payment_id, **kwargs):
+    with get_db_session() as session:
+        # Session is active here
+        ar_entries = session.query(ARSubledger).all()
+
+        # ERROR: This function creates its own session!
+        invoice_data = line_items_handler.get_patient_invoice_line_items(...)
+        # Transaction conflict: "Can't operate on closed transaction"
+```
+
+#### ✅ **CORRECT - Session Boundary Pattern**
+
+```python
+def get_invoice_items_for_payment(self, payment_id, **kwargs):
+    # Step 1: Extract IDs in your session
+    with get_db_session() as session:
+        ar_entries = session.query(ARSubledger).all()
+        invoice_ids = [extract_invoice_id(ar) for ar in ar_entries]
+    # Session closed here ✅
+
+    # Step 2: Call other services with primitive values
+    all_items = []
+    for invoice_id in invoice_ids:
+        # Safe - creates its own session
+        invoice_data = line_items_handler.get_patient_invoice_line_items(invoice_id)
+        all_items.extend(invoice_data)
+
+    return all_items
+```
+
+**Rule**:
+- Extract **primitive values** (IDs, strings, numbers) within your session
+- **Close session** before calling other service methods
+- Pass primitives to service methods, **not ORM objects**
+
+---
+
+### **Pattern 2: Multi-Source Field Population in Views**
+
+**Problem**: Entity can reference different sources (e.g., single invoice vs multi-invoice payment).
+
+#### Use Case: Multi-Invoice Payment
+
+```sql
+-- Payment can have invoice_id (single) OR invoice_id = NULL (multi)
+-- Need patient_id and branch_id from EITHER source
+```
+
+#### ✅ **COALESCE Pattern for NULL Foreign Keys**
+
+```sql
+-- Get patient_id from invoice header (single) OR ar_subledger (multi)
+COALESCE(
+    ih.patient_id,  -- Try invoice header first (for single-invoice)
+    (
+        -- Fall back to AR subledger (for multi-invoice)
+        SELECT DISTINCT ih2.patient_id
+        FROM ar_subledger ar
+        JOIN invoice_line_item ili ON ar.reference_line_item_id = ili.line_item_id
+        JOIN invoice_header ih2 ON ili.invoice_id = ih2.invoice_id
+        WHERE ar.reference_id = pd.payment_id
+          AND ar.reference_type = 'payment'
+        LIMIT 1
+    )
+) AS patient_id
+```
+
+**When to Use**:
+- Field might come from different tables based on business logic
+- Polymorphic relationships (reference_type pattern)
+- Optional vs required relationships
+- NULL foreign keys indicating special cases
+
+---
+
+### **Pattern 3: Context Functions for Dynamic Display**
+
+**Use Case**: Show different values based on record type (single vs multi-invoice payment).
+
+#### ✅ **Context Function Pattern**
+
+```python
+# In service class
+def get_payment_reference_display(self, item_id=None, item=None, **kwargs) -> Dict:
+    """
+    Dynamic display based on payment type
+    Returns: dict with 'value' key
+    """
+    with get_db_session() as session:
+        payment = session.query(PaymentDetail).filter_by(payment_id=payment_uuid).first()
+
+        if payment.invoice_id is None:  # Multi-invoice
+            # Query AR subledger for all invoice numbers
+            invoices = get_invoice_numbers_from_ar(payment_uuid, session)
+            return {'value': f"Multi-Invoice: {', '.join(invoices)}"}
+        else:  # Single invoice
+            return {'value': payment.reference_number or '-'}
+```
+
+**Configuration**:
+```python
+FieldDefinition(
+    name="invoice_numbers_display",
+    field_type=FieldType.CUSTOM,
+    custom_renderer=CustomRenderer(
+        template="components/fields/text_display.html",
+        context_function="get_payment_reference_display"  # Calls service method
+    )
+)
+```
+
+---
+
+### **Pattern 4: Workflow Field Population Timing**
+
+**Populate audit/workflow fields at appropriate state transitions**:
+
+```python
+# During creation
+payment.created_by = recorded_by or 'system'
+payment.created_at = datetime.now(timezone.utc)
+
+# Only set submission fields when NOT draft
+if workflow_status != 'draft':
+    payment.submitted_by = recorded_by or 'system'
+    payment.submitted_at = datetime.now(timezone.utc)
+
+# During state transitions
+if workflow_status == 'approved':
+    payment.approved_by = recorded_by or 'system'
+    payment.approved_at = datetime.now(timezone.utc)
+
+# On every update
+payment.updated_by = recorded_by  # Always update on changes
+```
+
+**Pattern Summary**:
+- `created_by/created_at` → Always set at creation
+- `submitted_by/submitted_at` → Set when status != 'draft'
+- `approved_by/approved_at` → Set when status becomes 'approved'
+- `updated_by` → Set on every update/state change
+
+---
+
+### **Pattern 5: Conditional Section Display**
+
+Show detail sections only when they contain data:
+
+```python
+# Summary section - always visible
+"payment_methods": SectionDefinition(
+    columns=2,
+    collapsible=False
+),
+
+# Detail sections - conditional
+"cash_details": SectionDefinition(
+    columns=2,
+    collapsible=True,
+    conditional_display="cash_amount > 0"  # Only show if cash used
+),
+
+"card_details": SectionDefinition(
+    columns=2,
+    collapsible=True,
+    conditional_display="credit_card_amount > 0 or debit_card_amount > 0"
+),
+```
+
+**Benefits**:
+- Cleaner UI - no empty sections
+- Better UX - only show relevant information
+- Scalable to many payment types
+
+---
+
 ## Troubleshooting
 
 ### Common Issues and Solutions

@@ -1,0 +1,339 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}Config to Master Sync - SkinSpire{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-1">
+                        <i class="fas fa-sync-alt text-primary mr-2"></i>
+                        Config to Master Sync
+                    </h2>
+                    <p class="text-muted mb-0">
+                        Sync currently effective pricing and GST configurations from entity_pricing_tax_config to master tables
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sync Configuration Card -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cog mr-2"></i>
+                        Sync Configuration
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="syncForm">
+                        <!-- Entity Type Filter -->
+                        <div class="form-group">
+                            <label for="entityType">Entity Type</label>
+                            <select class="form-control" id="entityType" name="entity_type">
+                                <option value="">All Types</option>
+                                <option value="medicine">Medicines Only</option>
+                                <option value="service">Services Only</option>
+                                <option value="package">Packages Only</option>
+                            </select>
+                            <small class="form-text text-muted">
+                                Select which entity types to sync (leave blank for all)
+                            </small>
+                        </div>
+
+                        <!-- Update Options -->
+                        <div class="form-group">
+                            <label>Update Options</label>
+                            <div class="custom-control custom-checkbox">
+                                <input type="checkbox" class="custom-control-input" id="updatePricing" checked>
+                                <label class="custom-control-label" for="updatePricing">
+                                    Update Pricing (MRP, selling price, cost price)
+                                </label>
+                            </div>
+                            <div class="custom-control custom-checkbox">
+                                <input type="checkbox" class="custom-control-input" id="updateGST" checked>
+                                <label class="custom-control-label" for="updateGST">
+                                    Update GST Rates (GST, CGST, SGST, IGST)
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Dry Run Mode -->
+                        <div class="form-group">
+                            <div class="custom-control custom-switch">
+                                <input type="checkbox" class="custom-control-input" id="dryRun" checked>
+                                <label class="custom-control-label" for="dryRun">
+                                    <strong>Dry Run Mode (Preview Only)</strong>
+                                </label>
+                            </div>
+                            <small class="form-text text-warning">
+                                <i class="fas fa-exclamation-triangle mr-1"></i>
+                                When enabled, shows what would be updated without making actual changes
+                            </small>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="form-group mb-0">
+                            <button type="button" class="btn btn-primary btn-block" id="btnSync">
+                                <i class="fas fa-sync-alt mr-2"></i>
+                                Run Sync
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Info Card -->
+            <div class="card shadow-sm mt-4">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        How It Works
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ol class="mb-0 pl-3">
+                        <li class="mb-2">Finds all currently effective configs (effective_to = NULL or ≥ today)</li>
+                        <li class="mb-2">Compares config values with master table values</li>
+                        <li class="mb-2">Updates only fields that have changed</li>
+                        <li class="mb-0">Generates detailed change report</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Panel -->
+        <div class="col-md-6">
+            <!-- Summary Card (hidden initially) -->
+            <div class="card shadow-sm" id="summaryCard" style="display: none;">
+                <div class="card-header" id="summaryHeader">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-bar mr-2"></i>
+                        <span id="summaryTitle">Sync Summary</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <div class="mb-2">
+                                <i class="fas fa-check-circle fa-2x text-success"></i>
+                            </div>
+                            <h4 class="mb-0" id="totalUpdated">0</h4>
+                            <small class="text-muted">Updated</small>
+                        </div>
+                        <div class="col-4">
+                            <div class="mb-2">
+                                <i class="fas fa-minus-circle fa-2x text-secondary"></i>
+                            </div>
+                            <h4 class="mb-0" id="totalSkipped">0</h4>
+                            <small class="text-muted">Skipped</small>
+                        </div>
+                        <div class="col-4">
+                            <div class="mb-2">
+                                <i class="fas fa-exclamation-circle fa-2x text-danger"></i>
+                            </div>
+                            <h4 class="mb-0" id="totalErrors">0</h4>
+                            <small class="text-muted">Errors</small>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <small class="text-muted">Medicines</small>
+                            <h5 class="mb-0" id="medicinesUpdated">0</h5>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted">Services</small>
+                            <h5 class="mb-0" id="servicesUpdated">0</h5>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted">Packages</small>
+                            <h5 class="mb-0" id="packagesUpdated">0</h5>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Changes Report Card (hidden initially) -->
+            <div class="card shadow-sm mt-4" id="changesCard" style="display: none;">
+                <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="fas fa-list-ul mr-2"></i>
+                        Change Details
+                    </h6>
+                    <button type="button" class="btn btn-sm btn-light" id="btnCopyReport">
+                        <i class="fas fa-copy mr-1"></i>
+                        Copy Report
+                    </button>
+                </div>
+                <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                    <div id="changesReport"></div>
+                </div>
+            </div>
+
+            <!-- Loading Spinner (hidden initially) -->
+            <div class="card shadow-sm" id="loadingCard" style="display: none;">
+                <div class="card-body text-center py-5">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="sr-only">Loading...</span>
+                    </div>
+                    <h5 class="text-muted">Running sync...</h5>
+                    <p class="text-muted mb-0">Please wait while we process the sync operation</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    $('#btnSync').on('click', function() {
+        runSync();
+    });
+
+    $('#btnCopyReport').on('click', function() {
+        const reportText = $('#changesReport').text();
+        navigator.clipboard.writeText(reportText).then(() => {
+            showToast('Report copied to clipboard', 'success');
+        });
+    });
+
+    function runSync() {
+        const entityType = $('#entityType').val() || null;
+        const dryRun = $('#dryRun').is(':checked');
+        const updatePricing = $('#updatePricing').is(':checked');
+        const updateGST = $('#updateGST').is(':checked');
+
+        // Show loading
+        $('#summaryCard').hide();
+        $('#changesCard').hide();
+        $('#loadingCard').show();
+
+        // Make API call
+        $.ajax({
+            url: '/api/admin/sync-config-to-masters',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                entity_type: entityType,
+                dry_run: dryRun,
+                update_pricing: updatePricing,
+                update_gst: updateGST
+            }),
+            success: function(response) {
+                $('#loadingCard').hide();
+
+                if (response.success) {
+                    displayResults(response, dryRun);
+                } else {
+                    showToast('Sync failed: ' + response.error, 'error');
+                }
+            },
+            error: function(xhr, status, error) {
+                $('#loadingCard').hide();
+                showToast('Error: ' + error, 'error');
+            }
+        });
+    }
+
+    function displayResults(response, dryRun) {
+        const summary = response.summary;
+
+        // Update summary card
+        $('#summaryTitle').text(dryRun ? 'Dry Run Summary (Preview)' : 'Sync Summary');
+        $('#summaryHeader').removeClass('bg-primary bg-success').addClass(dryRun ? 'bg-primary' : 'bg-success');
+        $('#summaryHeader').find('h5').removeClass('text-white').addClass('text-white');
+
+        $('#totalUpdated').text(summary.total_updated);
+        $('#totalSkipped').text(summary.total_skipped);
+        $('#totalErrors').text(summary.total_errors);
+        $('#medicinesUpdated').text(summary.medicines_updated);
+        $('#servicesUpdated').text(summary.services_updated);
+        $('#packagesUpdated').text(summary.packages_updated);
+
+        $('#summaryCard').show();
+
+        // Display changes
+        if (response.changes && response.changes.length > 0) {
+            displayChanges(response.changes, dryRun);
+            $('#changesCard').show();
+        } else {
+            $('#changesCard').hide();
+        }
+
+        // Show toast
+        if (dryRun) {
+            showToast(`Dry run complete: ${summary.total_updated} records would be updated`, 'info');
+        } else {
+            showToast(`Sync complete: ${summary.total_updated} records updated`, 'success');
+        }
+    }
+
+    function displayChanges(changes, dryRun) {
+        let html = '<div class="list-group">';
+
+        changes.forEach(change => {
+            const actionText = dryRun ? 'Would update' : 'Updated';
+            const actionClass = dryRun ? 'info' : 'success';
+
+            html += `
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="mb-1">
+                                <span class="badge badge-${actionClass}">${change.entity_type}</span>
+                                ${change.entity_name || change.entity_id}
+                            </h6>
+                            <p class="mb-1">
+                                <strong>${change.field}:</strong>
+                                <span class="text-danger">${change.old_value || 'null'}</span>
+                                →
+                                <span class="text-success">${change.new_value}</span>
+                            </p>
+                            ${change.config_id ? `<small class="text-muted">Config ID: ${change.config_id}</small>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        $('#changesReport').html(html);
+    }
+
+    function showToast(message, type) {
+        const bgClass = type === 'success' ? 'bg-success' : type === 'error' ? 'bg-danger' : 'bg-info';
+        const toast = `
+            <div class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-autohide="true" data-delay="5000">
+                <div class="toast-header ${bgClass} text-white">
+                    <strong class="mr-auto">Sync Status</strong>
+                    <button type="button" class="ml-2 mb-1 close text-white" data-dismiss="toast" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="toast-body">
+                    ${message}
+                </div>
+            </div>
+        `;
+
+        // Add toast to container (you may need to add a toast container to your base template)
+        if ($('#toastContainer').length === 0) {
+            $('body').append('<div id="toastContainer" class="position-fixed" style="top: 20px; right: 20px; z-index: 9999;"></div>');
+        }
+        $('#toastContainer').append(toast);
+        $('.toast').last().toast('show');
+    }
+});
+</script>
+{% endblock %}

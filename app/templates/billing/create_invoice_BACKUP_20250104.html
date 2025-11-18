@@ -1,0 +1,542 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block head %}
+{{ super() }}
+{% if auth_token %}
+<meta name="auth-token" content="{{ auth_token }}">
+{% endif %}
+<!-- Include centralized invoice CSS -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/invoice.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    
+    <!-- Flash messages section -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+        <div class="bg-{{ 'green' if category == 'success' else 'red' if category == 'error' else 'blue' }}-100 border-l-4 border-{{ 'green' if category == 'success' else 'red' if category == 'error' else 'blue' }}-500 text-{{ 'green' if category == 'success' else 'red' if category == 'error' else 'blue' }}-700 p-4 mb-6" role="alert">
+            <p>{{ message }}</p>
+        </div>
+        {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <!-- Inventory error specific message -->
+    {% if inventory_error %}
+    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-3 mb-6 text-sm" role="alert">
+        <div class="flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+                <p class="font-bold text-sm">Inventory Issue</p>
+                <p class="text-sm">{{ inventory_error }}</p>
+                <p class="text-xs mt-1">Please adjust the quantity or select a different batch or medicine.</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Create New Invoice</h1>
+        <a href="{{ url_for('billing_views.invoice_list') }}" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-white font-semibold py-2 px-4 rounded inline-flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+            </svg>
+            Back to Invoices
+        </a>
+    </div>
+
+    <form id="invoice-form" method="POST" class="invoice-container">
+        {{ form.csrf_token }}
+        
+        <!-- Invoice Header -->
+        <div class="invoice-header">
+            <!-- Patient Selection -->
+            <div class="col-span-1 md:col-span-2 lg:col-span-1">
+                <div class="mb-4">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2">
+                        Patient
+                    </label>
+                    <div class="relative">
+                        <input type="text" id="patient-search" 
+                            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
+                            placeholder="Search patient..."
+                            autocomplete="off">
+
+                        <!-- Hidden fields -->
+                        {{ form.patient_id(class="hidden", id="patient_id") }}
+                        {{ form.patient_name(class="hidden", id="patient_name") }}
+                    </div>
+                    <div id="patient-search-results" class="absolute z-10 bg-white dark:bg-gray-700 shadow-md rounded w-full overflow-y-auto hidden" style="max-width: 400px; max-height: 300px !important; border: 1px solid #ddd; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"></div>
+                </div>
+                <div id="selected-patient-info" class="patient-info hidden">
+                    <h3 class="font-semibold text-gray-800 dark:text-white" id="patient-name-display"></h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-300" id="patient-mrn-display"></p>
+                    <p class="text-sm text-gray-600 dark:text-gray-300" id="patient-contact-display"></p>
+                </div>
+            </div>
+
+            <!-- Invoice Details -->
+            <div>
+                <div class="mb-4">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ form.invoice_date.id }}">
+                        Invoice Date
+                    </label>
+                    {{ form.invoice_date(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                    {% if form.invoice_date.errors %}
+                        <p class="text-red-500 text-xs italic">{{ form.invoice_date.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ form.invoice_type.id }}">
+                        Invoice Type
+                    </label>
+                    {{ form.invoice_type(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                    {% if form.invoice_type.errors %}
+                        <p class="text-red-500 text-xs italic">{{ form.invoice_type.errors[0] }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- GST and Currency -->
+            <input type="hidden" name="branch_id" value="{{ branches[0].branch_id if branches and branches|length > 0 else '' }}">
+                <div class="mb-4">
+                    <div class="flex items-center">
+                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mr-2" for="is_gst_invoice">
+                            GST Invoice
+                        </label>
+                        {{ form.is_gst_invoice(class="form-checkbox h-5 w-5 text-blue-600", id="is_gst_invoice") }}
+                        {% if form.is_gst_invoice.errors %}
+                            <p class="text-red-500 text-xs italic">{{ form.is_gst_invoice.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="mb-4 gst-element">
+                    <div class="flex items-center">
+                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mr-2" for="is_interstate">
+                            Interstate
+                        </label>
+                        {{ form.is_interstate(class="form-checkbox h-5 w-5 text-blue-600", id="is_interstate") }}
+                        {% if form.is_interstate.errors %}
+                            <p class="text-red-500 text-xs italic">{{ form.is_interstate.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Place of Supply and Currency in a grid -->
+                <div style="display: grid; grid-template-columns: 60% 40%; gap: 1rem;">
+                    <!-- Place of Supply -->
+                    <div class="mb-4 gst-element">
+                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ form.place_of_supply.id }}">
+                            Place of Supply (State Code)
+                        </label>
+                        <div class="flex">
+                            <select id="{{ form.place_of_supply.id }}" name="place_of_supply" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                            <option value="">Select State</option>
+                            <option value="35">Andaman & Nicobar Islands (35)</option>
+                            <option value="28">Andhra Pradesh (28)</option>
+                            <option value="37">Andhra Pradesh (New) (37)</option>
+                            <option value="12">Arunachal Pradesh (12)</option>
+                            <option value="18">Assam (18)</option>
+                            <option value="10">Bihar (10)</option>
+                            <option value="04">Chandigarh (04)</option>
+                            <option value="22">Chhattisgarh (22)</option>
+                            <option value="26">Dadra & Nagar Haveli (26)</option>
+                            <option value="25">Daman & Diu (25)</option>
+                            <option value="07">Delhi (07)</option>
+                            <option value="30">Goa (30)</option>
+                            <option value="24">Gujarat (24)</option>
+                            <option value="06">Haryana (06)</option>
+                            <option value="02">Himachal Pradesh (02)</option>
+                            <option value="01">Jammu & Kashmir (01)</option>
+                            <option value="20">Jharkhand (20)</option>
+                            <option value="29" selected>Karnataka (29)</option>
+                            <option value="32">Kerala (32)</option>
+                            <option value="31">Lakshadweep (31)</option>
+                            <option value="23">Madhya Pradesh (23)</option>
+                            <option value="27">Maharashtra (27)</option>
+                            <option value="14">Manipur (14)</option>
+                            <option value="17">Meghalaya (17)</option>
+                            <option value="15">Mizoram (15)</option>
+                            <option value="13">Nagaland (13)</option>
+                            <option value="21">Odisha (21)</option>
+                            <option value="97">Other Territory (97)</option>
+                            <option value="34">Puducherry (34)</option>
+                            <option value="03">Punjab (03)</option>
+                            <option value="08">Rajasthan (08)</option>
+                            <option value="11">Sikkim (11)</option>
+                            <option value="33">Tamil Nadu (33)</option>
+                            <option value="36">Telangana (36)</option>
+                            <option value="16">Tripura (16)</option>
+                            <option value="05">Uttarakhand (05)</option>
+                            <option value="09">Uttar Pradesh (09)</option>
+                            <option value="19">West Bengal (19)</option>
+                            </select>
+                            {% if form.place_of_supply.errors %}
+                                <p class="text-red-500 text-xs italic">{{ form.place_of_supply.errors[0] }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Currency -->
+                    <div class="mb-4">
+                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ form.currency_code.id }}">
+                            Currency
+                        </label>
+                        {{ form.currency_code(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline") }}
+                        {% if form.currency_code.errors %}
+                            <p class="text-red-500 text-xs italic">{{ form.currency_code.errors[0] }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Line Items -->
+        <div class="line-items-section">
+            <div class="line-items-header" style="display: flex; justify-content: space-between; width: 100%; margin-bottom: 1rem;">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-white">Line Items</h2>
+                <div>
+                    <button type="button" id="add-line-item" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded text-sm">
+                        Add Item
+                    </button>
+                </div>
+            </div>
+            
+            <div class="invoice-table-wrapper">
+                <table class="invoice-table w-full">
+                    <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs w-full">
+                            <th class="py-1 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-center">Sr.</th>
+                            <th class="py-1 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-left">Type</th>
+                            <th class="py-1 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-left">Item</th>
+                            <th class="py-1 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-center">Qty</th>
+                            <th class="py-1 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-right">Price</th>
+                            <th class="py-1 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-right">Disc %</th>
+                            <th class="py-1 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-right gst-column">GST</th>
+                            <th class="py-1 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-right">Total</th>
+                            <th class="py-1 px-2 border-b border-gray-300 dark:border-gray-700 text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="line-items-container" class="text-xs w-full">
+                        <tr id="no-items-row" class="w-full">
+                            <td colspan="9" class="py-2 px-2 text-center text-gray-500 dark:text-gray-400">No items added. Click "Add Item" to add products or services.</td>
+                        </tr>
+                    </tbody>
+                    <tfoot class="text-xs font-semibold w-full">
+                        <tr class="bg-gray-50 dark:bg-gray-800">
+                            <td colspan="7" class="py-2 px-2 text-right border-t border-gray-300 dark:border-gray-700">Subtotal:</td>
+                            <td class="py-2 px-2 text-right border-t border-gray-300 dark:border-gray-700" id="subtotal">0.00</td>
+                            <td class="border-t border-gray-300 dark:border-gray-700"></td>
+                        </tr>
+                        <tr class="bg-gray-50 dark:bg-gray-800">
+                            <td colspan="7" class="py-2 px-2 text-right border-b border-gray-300 dark:border-gray-700">Total Discount:</td>
+                            <td class="py-2 px-2 text-right border-b border-gray-300 dark:border-gray-700" id="total-discount">0.00</td>
+                            <td class="border-b border-gray-300 dark:border-gray-700"></td>
+                        </tr>
+                        <tr class="bg-gray-50 dark:bg-gray-800 gst-element gst-row">
+                            <td colspan="7" class="py-2 px-2 text-right border-b border-gray-300 dark:border-gray-700">CGST:</td>
+                            <td class="py-2 px-2 text-right border-b border-gray-300 dark:border-gray-700" id="total-cgst">0.00</td>
+                            <td class="border-b border-gray-300 dark:border-gray-700"></td>
+                        </tr>
+                        <tr class="bg-gray-50 dark:bg-gray-800 gst-element gst-row">
+                            <td colspan="7" class="py-2 px-2 text-right border-b border-gray-300 dark:border-gray-700">SGST:</td>
+                            <td class="py-2 px-2 text-right border-b border-gray-300 dark:border-gray-700" id="total-sgst">0.00</td>
+                            <td class="border-b border-gray-300 dark:border-gray-700"></td>
+                        </tr>
+                        <tr class="bg-gray-50 dark:bg-gray-800 gst-element gst-row">
+                            <td colspan="7" class="py-2 px-2 text-right border-b border-gray-300 dark:border-gray-700">IGST:</td>
+                            <td class="py-2 px-2 text-right border-b border-gray-300 dark:border-gray-700" id="total-igst">0.00</td>
+                            <td class="border-b border-gray-300 dark:border-gray-700"></td>
+                        </tr>
+                        <tr class="bg-gray-50 dark:bg-gray-800 font-bold">
+                            <td colspan="7" class="py-2 px-2 text-right border-b border-gray-300 dark:border-gray-700">Grand Total:</td>
+                            <td class="py-2 px-2 text-right border-b border-gray-300 dark:border-gray-700" id="grand-total">0.00</td>
+                            <td class="border-b border-gray-300 dark:border-gray-700"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- Additional Information -->
+        <div class="mb-6">
+            <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" for="{{ form.notes.id }}">
+                Notes
+            </label>
+            {{ form.notes(class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline h-24") }}
+            {% if form.notes.errors %}
+                <p class="text-red-500 text-xs italic">{{ form.notes.errors[0] }}</p>
+            {% endif %}
+        </div>
+
+        <!-- Submit Button -->
+        <div class="flex justify-end">
+            <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded focus:outline-none focus:shadow-outline">
+                Create Invoice
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Line item template for JavaScript -->
+<template id="line-item-template">
+    <tr class="line-item-row text-xs">
+        <td class="py-1 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-center line-number"></td>
+        <td class="py-1 px-2 border-b border-r border-gray-300 dark:border-gray-700">
+            <select name="line_items-{index}-item_type" class="item-type w-full bg-transparent text-xs">
+                <option value="Package">Package</option>
+                <option value="Service">Service</option>
+                <option value="Medicine">Medicine</option>
+                <option value="Prescription">Prescription</option>
+            </select>
+            <input type="hidden" name="line_items-{index}-item_id" class="item-id">
+        </td>
+        <td class="py-1 px-2 border-b border-r border-gray-300 dark:border-gray-700">
+            <div class="relative">
+                <input type="text" class="item-search w-full bg-transparent text-xs" placeholder="Search...">
+                <input type="hidden" name="line_items-{index}-item_name" class="item-name">
+                <div class="item-search-results absolute z-50 bg-white dark:bg-gray-700 shadow-md rounded w-64 max-h-40 overflow-y-auto hidden text-xs"></div>
+            </div>
+            <!-- Medicine specific fields -->
+            <div class="medicine-fields mt-1 hidden">
+                <div class="flex space-x-1">
+                    <select name="line_items-{index}-batch" class="batch-select w-full text-xs bg-transparent">
+                        <option value="">Select Batch</option>
+                    </select>
+                    <input type="date" name="line_items-{index}-expiry_date" class="expiry-date w-1/2 text-xs bg-transparent" readonly>
+                </div>
+                <input type="hidden" name="line_items-{index}-included_in_consultation" class="included-in-consultation" value="false">
+            </div>
+        </td>
+        <td class="py-1 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-center">
+            <input type="number" name="line_items-{index}-quantity" class="quantity w-full text-center bg-transparent text-xs" value="1" min="0.01" step="0.01">
+        </td>
+        <td class="py-1 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-right">
+            <input type="number" name="line_items-{index}-unit_price" class="unit-price w-full text-right bg-transparent text-xs" value="0.00" min="0" step="0.01">
+        </td>
+        <td class="py-1 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-right">
+            <input type="number" name="line_items-{index}-discount_percent" class="discount-percent w-full text-right bg-transparent text-xs" value="0" min="0" max="100" step="0.01">
+        </td>
+        <td class="py-1 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-right gst-column">
+            <span class="gst-amount">0.00</span>
+            <input type="hidden" class="gst-rate" value="0">
+            <input type="hidden" class="is-gst-exempt" value="false">
+        </td>
+        <td class="py-1 px-2 border-b border-r border-gray-300 dark:border-gray-700 text-right line-total">0.00</td>
+        <td class="py-1 px-2 border-b border-gray-300 dark:border-gray-700 text-center">
+            <button type="button" class="remove-line-item text-red-500 hover:text-red-700">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+            </button>
+        </td>
+    </tr>
+</template>
+{% endblock %}
+
+{% block dashboard_scripts %}
+{{ super() }}
+<!-- Include JavaScript files -->
+<script src="{{ url_for('static', filename='js/components/invoice_item.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/invoice.js') }}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize patient search component (using the new component)
+        new PatientSearch({
+            containerSelector: '#invoice-form',
+            inputSelector: '#patient-search',
+            resultsSelector: '#patient-search-results',
+            patientIdField: 'patient_id',
+            patientNameField: 'patient_name',
+            searchEndpoint: '/invoice/web_api/patient/search',
+            onSelect: function(patient) {
+                // Update the patient info display
+                const patientInfo = document.getElementById('selected-patient-info');
+                const nameDisplay = document.getElementById('patient-name-display');
+                const mrnDisplay = document.getElementById('patient-mrn-display');
+                const contactDisplay = document.getElementById('patient-contact-display');
+                
+                if (nameDisplay) nameDisplay.textContent = patient.name;
+                if (mrnDisplay) mrnDisplay.textContent = `MRN: ${patient.mrn || 'N/A'}`;
+                if (contactDisplay) contactDisplay.textContent = patient.contact || '';
+                if (patientInfo) patientInfo.classList.remove('hidden');
+                
+                console.log("Patient selected:", patient.name, "ID:", patient.id);
+            }
+        });
+        
+        // Form submission safety net
+        const form = document.getElementById('invoice-form');
+        const patientSearchInput = document.getElementById('patient-search');
+        const patientNameInput = document.getElementById('patient_name');
+        
+        if (form && patientSearchInput && patientNameInput) {
+            form.addEventListener('submit', function(e) {
+                // Ensure patient_name is set if it's empty but we have a search value
+                if (!patientNameInput.value && patientSearchInput.value) {
+                    patientNameInput.value = patientSearchInput.value;
+                    console.log("Set patient_name to:", patientSearchInput.value);
+                }
+            });
+        }
+    });
+</script>
+
+<!-- SINGLE CONSOLIDATED BATCH VALIDATION SCRIPT - REPLACE ALL OTHERS -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log("Initializing consolidated batch validation");
+    
+    // Function to get batch inventory directly from server
+    function getBatchInventory(medicineId, batch, callback) {
+        if (!medicineId || !batch) {
+            callback(0);
+            return;
+        }
+        
+        // Call the inventory endpoint to get accurate data
+        const url = `/invoice/web_api/medicine/${medicineId}/batches?quantity=1`;
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                console.log("Batch inventory data received:", data);
+                
+                // Find the matching batch
+                let availableQty = 0;
+                if (Array.isArray(data)) {
+                    // Find the batch that matches
+                    const batchData = data.find(item => item.batch === batch);
+                    if (batchData) {
+                        availableQty = parseFloat(batchData.available_quantity);
+                    }
+                }
+                
+                console.log(`Available quantity for batch ${batch}: ${availableQty}`);
+                callback(availableQty);
+            })
+            .catch(error => {
+                console.error("Error fetching batch inventory:", error);
+                callback(0);
+            });
+    }
+    
+    // Function to validate batch quantity with server data
+    function validateBatchQuantity(row) {
+        const batchSelect = row.querySelector('.batch-select');
+        const quantityInput = row.querySelector('.quantity');
+        const itemIdInput = row.querySelector('.item-id');
+        
+        if (!batchSelect || !quantityInput || !itemIdInput) {
+            console.log("Missing required elements for validation");
+            return;
+        }
+        
+        if (batchSelect.selectedIndex <= 0) {
+            console.log("No batch selected");
+            return;
+        }
+        
+        const selectedBatch = batchSelect.value;
+        const medicineId = itemIdInput.value;
+        const requestedQty = parseFloat(quantityInput.value || 1);
+        
+        console.log(`Validating quantity for batch ${selectedBatch}, medicine ${medicineId}, requested ${requestedQty}`);
+        
+        // Get accurate inventory data from server
+        getBatchInventory(medicineId, selectedBatch, function(availableQty) {
+            console.log(`Server reports available quantity: ${availableQty}`);
+            
+            // Only show zero stock warning if truly zero
+            if (availableQty <= 0) {
+                alert("Warning: This batch has no available stock. Please select a different batch or item.");
+                return;
+            }
+            
+            // Only adjust if requested quantity exceeds available
+            if (requestedQty > availableQty) {
+                console.log(`Adjusting quantity from ${requestedQty} to ${availableQty}`);
+                quantityInput.value = availableQty;
+                alert(`Quantity adjusted to maximum available stock: ${availableQty}`);
+                
+                // Recalculate totals
+                if (window.invoiceComponentFunctions && typeof window.invoiceComponentFunctions.calculateLineTotal === 'function') {
+                    window.invoiceComponentFunctions.calculateLineTotal(row);
+                    window.invoiceComponentFunctions.calculateTotals();
+                }
+            } else {
+                console.log(`Quantity ${requestedQty} is within available stock ${availableQty}`);
+            }
+        });
+    }
+    
+    // Event listeners for validation
+    document.addEventListener('change', function(event) {
+        // For batch selection changes
+        if (event.target.classList.contains('batch-select')) {
+            console.log("Batch selection changed");
+            const row = event.target.closest('.line-item-row');
+            if (row) {
+                // Add delay to ensure all data is loaded
+                setTimeout(function() {
+                    validateBatchQuantity(row);
+                }, 300);
+            }
+        }
+        
+        // For quantity changes
+        if (event.target.classList.contains('quantity')) {
+            console.log("Quantity changed");
+            const row = event.target.closest('.line-item-row');
+            if (row) {
+                const itemType = row.querySelector('.item-type')?.value;
+                if (itemType === 'Medicine' || itemType === 'Prescription') {
+                    setTimeout(function() {
+                        validateBatchQuantity(row);
+                    }, 300);
+                }
+            }
+        }
+    });
+    
+    // Hook into original fetchBatches function if it exists
+    if (typeof window.fetchBatches === 'function') {
+        console.log("Enhancing fetchBatches function");
+        const originalFetchBatches = window.fetchBatches;
+        
+        window.fetchBatches = function(medicineId, quantityInput, batchSelect, expiryDateInput) {
+            console.log(`fetchBatches called for medicine ${medicineId}`);
+            
+            // Call original function
+            originalFetchBatches(medicineId, quantityInput, batchSelect, expiryDateInput);
+            
+            // After batches are loaded, validate
+            setTimeout(function() {
+                const row = batchSelect.closest('.line-item-row');
+                if (row) {
+                    validateBatchQuantity(row);
+                }
+            }, 800);
+        };
+    }
+    
+    console.log("Batch validation system initialized");
+});
+</script>
+
+<!-- Add any preserved line item script if needed -->
+{% if preserved_line_items %}
+<script type="text/javascript">
+document.addEventListener('DOMContentLoaded', function() {
+    console.log("Restoring preserved line items");
+    // ... (existing code for preserved line items)
+});
+</script>
+{% endif %}
+{% endblock %}

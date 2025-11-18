@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}Reverse Payment{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+
+    <!-- Header -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+        <div class="flex items-center space-x-4 mb-4">
+            <div class="flex-shrink-0">
+                <i class="fas fa-exchange-alt text-5xl text-orange-500"></i>
+            </div>
+            <div class="flex-1">
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Reverse Payment</h1>
+                <p class="text-gray-600 dark:text-gray-400 mt-1">
+                    Reverse this approved payment and restore invoice balance
+                </p>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div>
+            <!-- Standard Back Button (Always First) -->
+            <button onclick="window.history.back()" type="button" class="btn-back">
+                <i class="fas fa-arrow-left icon-left"></i>Back
+            </button>
+        </div>
+    </div>
+
+    <!-- Payment Details Summary -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+        <h2 class="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Payment Details</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Invoice Number</label>
+                <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-gray-100">{{ invoice.invoice_number }}</p>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Payment Amount</label>
+                <p class="mt-1 text-lg font-bold text-red-600">₹{{ "%.2f"|format(payment.total_amount) }}</p>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Patient</label>
+                <p class="mt-1 text-gray-900 dark:text-gray-100">
+                    {{ patient.full_name or 'Unknown' }}
+                    {% if patient.mrn %}
+                    <span class="text-sm text-gray-600 dark:text-gray-400">(MRN: {{ patient.mrn }})</span>
+                    {% endif %}
+                </p>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Payment Date</label>
+                <p class="mt-1 text-gray-900 dark:text-gray-100">
+                    {{ payment.payment_date.strftime('%d/%b/%Y') if payment.payment_date else 'N/A' }}
+                </p>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Approved By</label>
+                <p class="mt-1 text-gray-900 dark:text-gray-100">
+                    {{ payment.approved_by }} on {{ payment.approved_at.strftime('%d/%b/%Y %H:%M') if payment.approved_at else 'N/A' }}
+                </p>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">GL Posted</label>
+                <p class="mt-1 text-gray-900 dark:text-gray-100">
+                    {% if payment.gl_posted %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        <i class="fas fa-check-circle mr-1"></i> Yes
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                        No
+                    </span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+
+        <!-- Payment Method Breakdown -->
+        {% if (payment.cash_amount and payment.cash_amount > 0) or (payment.credit_card_amount and payment.credit_card_amount > 0) or (payment.debit_card_amount and payment.debit_card_amount > 0) or (payment.upi_amount and payment.upi_amount > 0) %}
+        <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <h3 class="text-md font-semibold mb-3 text-gray-900 dark:text-gray-100">Payment Method Breakdown</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                {% if payment.cash_amount > 0 %}
+                <div>
+                    <span class="text-gray-600 dark:text-gray-400">Cash:</span>
+                    <span class="ml-2 font-semibold text-gray-900 dark:text-gray-100">₹{{ "%.2f"|format(payment.cash_amount) }}</span>
+                </div>
+                {% endif %}
+                {% if payment.credit_card_amount > 0 %}
+                <div>
+                    <span class="text-gray-600 dark:text-gray-400">Credit Card:</span>
+                    <span class="ml-2 font-semibold text-gray-900 dark:text-gray-100">₹{{ "%.2f"|format(payment.credit_card_amount) }}</span>
+                    {% if payment.card_number_last4 %}
+                    <br><span class="text-xs text-gray-500 dark:text-gray-400">XXXX{{ payment.card_number_last4 }}</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% if payment.debit_card_amount > 0 %}
+                <div>
+                    <span class="text-gray-600 dark:text-gray-400">Debit Card:</span>
+                    <span class="ml-2 font-semibold text-gray-900 dark:text-gray-100">₹{{ "%.2f"|format(payment.debit_card_amount) }}</span>
+                    {% if payment.card_number_last4 %}
+                    <br><span class="text-xs text-gray-500 dark:text-gray-400">XXXX{{ payment.card_number_last4 }}</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% if payment.upi_amount > 0 %}
+                <div>
+                    <span class="text-gray-600 dark:text-gray-400">UPI:</span>
+                    <span class="ml-2 font-semibold text-gray-900 dark:text-gray-100">₹{{ "%.2f"|format(payment.upi_amount) }}</span>
+                    {% if payment.upi_id %}
+                    <br><span class="text-xs text-gray-500 dark:text-gray-400">{{ payment.upi_id }}</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Warning Information -->
+    <div class="bg-orange-50 dark:bg-orange-900/20 border-l-4 border-orange-500 p-4 mb-6">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <i class="fas fa-exclamation-triangle text-orange-500"></i>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-orange-800 dark:text-orange-200">What happens when you reverse this payment?</h3>
+                <div class="mt-2 text-sm text-orange-700 dark:text-orange-300">
+                    <ul class="list-disc list-inside space-y-1">
+                        <li>Payment status will be changed to "Reversed"</li>
+                        <li>Reversing GL entries will be created (opposite signs of original entries)</li>
+                        <li>Invoice balance will be restored (increased by ₹{{ "%.2f"|format(payment.total_amount) }})</li>
+                        <li>AR subledger will be updated with reversal entry</li>
+                        <li><strong class="text-orange-900 dark:text-orange-100">This action CANNOT be undone</strong></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GL Impact Summary -->
+    {% if payment.gl_posted %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+        <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">
+            <i class="fas fa-balance-scale mr-2"></i>GL Posting Impact
+        </h3>
+        <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+            <p class="text-sm text-gray-700 dark:text-gray-300 mb-3">
+                <strong>Original GL Entries:</strong>
+            </p>
+            <div class="grid grid-cols-2 gap-4 text-sm mb-3">
+                <div class="bg-green-50 dark:bg-green-900/20 p-3 rounded">
+                    <p class="text-green-800 dark:text-green-200 font-medium">Debit (DR)</p>
+                    <p class="text-gray-700 dark:text-gray-300">Cash/Bank: ₹{{ "%.2f"|format(payment.total_amount) }}</p>
+                </div>
+                <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded">
+                    <p class="text-blue-800 dark:text-blue-200 font-medium">Credit (CR)</p>
+                    <p class="text-gray-700 dark:text-gray-300">Accounts Receivable: ₹{{ "%.2f"|format(payment.total_amount) }}</p>
+                </div>
+            </div>
+
+            <p class="text-sm text-gray-700 dark:text-gray-300 mb-3">
+                <strong>Reversal GL Entries (to be created):</strong>
+            </p>
+            <div class="grid grid-cols-2 gap-4 text-sm">
+                <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded">
+                    <p class="text-blue-800 dark:text-blue-200 font-medium">Debit (DR)</p>
+                    <p class="text-gray-700 dark:text-gray-300">Accounts Receivable: ₹{{ "%.2f"|format(payment.total_amount) }}</p>
+                </div>
+                <div class="bg-green-50 dark:bg-green-900/20 p-3 rounded">
+                    <p class="text-green-800 dark:text-green-200 font-medium">Credit (CR)</p>
+                    <p class="text-gray-700 dark:text-gray-300">Cash/Bank: ₹{{ "%.2f"|format(payment.total_amount) }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Form -->
+    <form method="POST" action="{{ url_for('billing_views.reverse_payment_view', payment_id=payment.payment_id) }}">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+            <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">
+                Reversal Reason <span class="text-red-500">*</span>
+            </h3>
+            <div class="mb-4">
+                <textarea
+                    name="reversal_reason"
+                    rows="3"
+                    required
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    placeholder="Enter reason for reversal (required - e.g., 'Duplicate payment', 'Patient refund requested', etc.)"></textarea>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    This reason will be recorded in the audit trail and is important for accounting purposes
+                </p>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex justify-end space-x-4">
+            <a href="{{ url_for('billing_views.view_invoice', invoice_id=invoice.invoice_id) }}"
+               class="px-6 py-2 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-600">
+                <i class="fas fa-times mr-2"></i>Cancel
+            </a>
+
+            <button type="submit"
+                    class="px-6 py-2 border border-transparent rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                <i class="fas fa-exchange-alt mr-2"></i>Reverse Payment
+            </button>
+        </div>
+    </form>
+
+</div>
+{% endblock %}

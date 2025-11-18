@@ -412,11 +412,25 @@ def create_invoice_api_web():
         with get_db_session() as session:
             # Get request data
             data = request.json if request.is_json else request.form
-            
+
+            # DEBUG: Log received data
+            logger.info(f"DEBUG - Received patient_id: {data.get('patient_id')}")
+            logger.info(f"DEBUG - Received patient_name: {data.get('patient_name')}")
+
             # Extract required parameters
             hospital_id = current_user.hospital_id
             branch_id = uuid.UUID(data.get('branch_id')) if data.get('branch_id') else None
-            patient_id = uuid.UUID(data.get('patient_id'))
+
+            # FIX: Ensure we're getting patient_id (UUID), not patient_name
+            patient_id_raw = data.get('patient_id')
+
+            # Check if patient_id is actually a name (contains spaces, not a UUID format)
+            if patient_id_raw and (' ' in patient_id_raw or not '-' in patient_id_raw):
+                # This looks like a patient name, not a UUID - need to look up by name
+                logger.error(f"❌ Received patient NAME instead of UUID: '{patient_id_raw}'")
+                raise ValueError(f"Invalid patient_id format. Received: '{patient_id_raw}'. Expected UUID format.")
+
+            patient_id = uuid.UUID(patient_id_raw)
             invoice_date_str = data.get('invoice_date')
             invoice_date = datetime.strptime(invoice_date_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
             notes = data.get('notes')
@@ -481,9 +495,46 @@ def create_invoice_api_web():
                     'success': False,
                     'message': 'No invoices created. Please check your line items.'
                 }), 400
+    except ValueError as e:
+        # Business logic errors (validation, inventory, etc.)
+        current_app.logger.error(f"Validation error creating invoice: {str(e)}", exc_info=True)
+
+        # Store form data in session to preserve on redirect
+        from flask import session as flask_session
+        flask_session['invoice_error_data'] = {
+            'branch_id': str(branch_id) if branch_id else None,
+            'patient_id': str(patient_id),
+            'invoice_date': invoice_date_str,
+            'notes': notes,
+            'line_items': data.get('line_items', [])  # Keep original line items data
+        }
+        flask_session['invoice_error_message'] = str(e)
+
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'preserveData': True  # Signal to frontend to preserve data
+        }), 400
     except Exception as e:
-        current_app.logger.error(f"Error creating invoice: {str(e)}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        # Unexpected errors
+        current_app.logger.error(f"Unexpected error creating invoice: {str(e)}", exc_info=True)
+
+        # Still preserve data for unexpected errors
+        from flask import session as flask_session
+        flask_session['invoice_error_data'] = {
+            'branch_id': str(branch_id) if branch_id else None,
+            'patient_id': str(patient_id),
+            'invoice_date': invoice_date_str,
+            'notes': notes,
+            'line_items': data.get('line_items', [])
+        }
+        flask_session['invoice_error_message'] = f"System Error: {str(e)}"
+
+        return jsonify({
+            'success': False,
+            'error': f"An unexpected error occurred: {str(e)}",
+            'preserveData': True
+        }), 500
 
 @billing_api_bp.route('/invoice/<uuid:invoice_id>_web', methods=['GET'])
 @login_required
@@ -558,3 +609,326 @@ def search_invoices_api_web():
     except Exception as e:
         current_app.logger.error(f"Error searching invoices: {str(e)}", exc_info=True)
         return jsonify({'error': 'Error searching invoices'}), 500
+
+
+# ============================================================================
+# ENHANCED PAYMENT FORM API ENDPOINTS
+# ============================================================================
+
+@billing_api_bp.route('/billing/patient/<patient_id>/outstanding-invoices', methods=['GET'])
+@login_required
+def get_patient_outstanding_invoices(patient_id):
+    """
+    Get all outstanding (unpaid and partially paid) invoices for a patient
+    WITH line items and associated package installments for unified payment view
+
+    Used by enhanced payment form
+    """
+    try:
+        from app.models.transaction import InvoiceLineItem, PackagePaymentPlan, InstallmentPayment
+        from app.services.subledger_service import get_line_item_ar_balance
+
+        hospital_id = current_user.hospital_id
+
+        with get_db_session() as session:
+            # Get sort parameter (default: latest first)
+            sort_order = request.args.get('sort', 'desc')  # 'asc' or 'desc'
+
+            # Query all invoices with balance due > 0
+            invoices_query = session.query(InvoiceHeader).filter(
+                InvoiceHeader.hospital_id == hospital_id,
+                InvoiceHeader.patient_id == patient_id,
+                InvoiceHeader.is_cancelled == False,
+                InvoiceHeader.balance_due > 0
+            )
+
+            # ✅ Sort by invoice date (default: latest first)
+            if sort_order == 'asc':
+                invoices = invoices_query.order_by(InvoiceHeader.invoice_date.asc()).all()
+            else:
+                invoices = invoices_query.order_by(InvoiceHeader.invoice_date.desc()).all()
+
+            # Convert to dictionaries with line items and installments
+            invoice_list = []
+            for invoice in invoices:
+                invoice_dict = get_entity_dict(invoice)
+
+                # Get line items for this invoice
+                line_items = session.query(InvoiceLineItem).filter(
+                    InvoiceLineItem.invoice_id == invoice.invoice_id
+                ).order_by(InvoiceLineItem.line_item_id).all()
+
+                line_items_data = []
+                for line_item in line_items:
+                    line_dict = get_entity_dict(line_item)
+
+                    # Get AR balance for this line item
+                    try:
+                        line_balance = get_line_item_ar_balance(
+                            hospital_id=hospital_id,
+                            patient_id=patient_id,
+                            line_item_id=line_item.line_item_id,
+                            session=session
+                        )
+                    except:
+                        line_balance = line_dict['line_total']
+
+                    # Check if this line item is a package with installments
+                    installments_data = []
+                    if line_dict['item_type'] == 'Package' and line_item.package_id:
+                        # Find package plan linked to THIS SPECIFIC package (not just any package in the invoice)
+                        package_plan = session.query(PackagePaymentPlan).filter(
+                            PackagePaymentPlan.invoice_id == invoice.invoice_id,
+                            PackagePaymentPlan.package_id == line_item.package_id,  # ✅ FIX: Filter by specific package
+                            PackagePaymentPlan.status == 'active'
+                        ).first()
+
+                        if package_plan:
+                            # Get pending installments for this package
+                            installments = session.query(InstallmentPayment).filter(
+                                InstallmentPayment.plan_id == package_plan.plan_id,
+                                InstallmentPayment.status.in_(['pending', 'partial', 'overdue'])
+                            ).order_by(InstallmentPayment.due_date.asc()).all()
+
+                            for inst in installments:
+                                inst_dict = get_entity_dict(inst)
+                                inst_balance = float(inst_dict['amount']) - float(inst_dict.get('paid_amount', 0))
+
+                                # Payable amount is limited by invoice balance
+                                payable_amount = min(inst_balance, float(invoice.balance_due))
+
+                                installments_data.append({
+                                    'installment_id': str(inst_dict['installment_id']),
+                                    'installment_number': inst_dict['installment_number'],
+                                    'due_date': inst_dict['due_date'].isoformat() if inst_dict.get('due_date') else None,
+                                    'amount': float(inst_dict['amount']),
+                                    'paid_amount': float(inst_dict.get('paid_amount', 0)),
+                                    'balance_amount': inst_balance,
+                                    'payable_amount': payable_amount if payable_amount > 0 else 0,
+                                    'status': inst_dict['status']
+                                })
+
+                    line_items_data.append({
+                        'line_item_id': str(line_dict['line_item_id']),
+                        'item_type': line_dict['item_type'],
+                        'item_name': line_dict['item_name'],
+                        'line_total': float(line_dict['line_total']),
+                        'line_balance': float(line_balance),
+                        'has_installments': len(installments_data) > 0,
+                        'installments': installments_data
+                    })
+
+                invoice_list.append({
+                    'invoice_id': str(invoice_dict['invoice_id']),
+                    'invoice_number': invoice_dict['invoice_number'],
+                    'invoice_date': invoice_dict['invoice_date'].isoformat() if invoice_dict.get('invoice_date') else None,
+                    'invoice_type': invoice_dict.get('invoice_type', ''),
+                    'is_gst_invoice': invoice_dict.get('is_gst_invoice', False),
+                    'grand_total': float(invoice_dict['grand_total']),
+                    'paid_amount': float(invoice_dict.get('paid_amount', 0)),
+                    'balance_due': float(invoice_dict['balance_due']),
+                    'currency_code': invoice_dict.get('currency_code', 'INR'),
+                    'line_items': line_items_data
+                })
+
+            return jsonify({
+                'success': True,
+                'invoices': invoice_list,
+                'count': len(invoice_list)
+            })
+
+    except Exception as e:
+        logger.error(f"Error fetching outstanding invoices for patient {patient_id}: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Failed to fetch outstanding invoices',
+            'message': str(e)
+        }), 500
+
+
+@billing_api_bp.route('/billing/patient/<patient_id>/advance-balance', methods=['GET'])
+@login_required
+def get_patient_advance_balance_api(patient_id):
+    """
+    Get current advance balance for a patient
+    Used by enhanced payment form
+    """
+    try:
+        from app.services.billing_service import get_patient_advance_balance
+
+        hospital_id = current_user.hospital_id
+
+        # Get advance balance using existing service
+        balance = get_patient_advance_balance(
+            hospital_id=hospital_id,
+            patient_id=patient_id
+        )
+
+        return jsonify({
+            'success': True,
+            'balance': float(balance),
+            'patient_id': str(patient_id)
+        })
+
+    except Exception as e:
+        logger.error(f"Error fetching advance balance for patient {patient_id}: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Failed to fetch advance balance',
+            'message': str(e)
+        }), 500
+
+
+@billing_api_bp.route('/billing/patient/<patient_id>/pending-installments', methods=['GET'])
+@login_required
+def get_patient_pending_installments(patient_id):
+    """
+    Get all pending package installments for a patient
+    Used by enhanced payment form
+    """
+    try:
+        from app.models.transaction import PackagePaymentPlan, InstallmentPayment
+
+        hospital_id = current_user.hospital_id
+
+        with get_db_session() as session:
+            # Query pending installments from active packages with invoice balance
+            from app.models.master import InvoiceHeader
+
+            installments = session.query(
+                InstallmentPayment,
+                PackagePaymentPlan.package_name,
+                InvoiceHeader.balance_due.label('invoice_balance')
+            ).join(
+                PackagePaymentPlan,
+                InstallmentPayment.plan_id == PackagePaymentPlan.plan_id
+            ).outerjoin(
+                InvoiceHeader,
+                PackagePaymentPlan.invoice_id == InvoiceHeader.invoice_id
+            ).filter(
+                InstallmentPayment.hospital_id == hospital_id,
+                PackagePaymentPlan.patient_id == patient_id,
+                PackagePaymentPlan.status == 'active',
+                InstallmentPayment.status.in_(['pending', 'partial', 'overdue'])
+            ).order_by(InstallmentPayment.due_date.asc()).all()
+
+            # Convert to dictionaries and filter based on invoice balance
+            installment_list = []
+            for installment, package_name, invoice_balance in installments:
+                installment_dict = get_entity_dict(installment)
+
+                # Calculate installment balance
+                installment_balance = float(installment_dict['amount']) - float(installment_dict.get('paid_amount', 0))
+
+                # If linked to an invoice, check invoice balance
+                if invoice_balance is not None:
+                    invoice_balance_float = float(invoice_balance)
+
+                    # Skip if invoice is fully paid
+                    if invoice_balance_float <= 0:
+                        logger.debug(f"Skipping installment {installment_dict['installment_id']} - invoice fully paid")
+                        continue
+
+                    # Payable amount is minimum of installment balance and invoice balance
+                    payable_amount = min(installment_balance, invoice_balance_float)
+                else:
+                    # No invoice link - use full installment balance
+                    payable_amount = installment_balance
+
+                installment_list.append({
+                    'installment_id': str(installment_dict['installment_id']),
+                    'plan_id': str(installment_dict['plan_id']),
+                    'package_name': package_name,
+                    'installment_number': installment_dict['installment_number'],
+                    'due_date': installment_dict['due_date'].isoformat() if installment_dict.get('due_date') else None,
+                    'amount': float(installment_dict['amount']),
+                    'paid_amount': float(installment_dict.get('paid_amount', 0)),
+                    'balance_amount': installment_balance,
+                    'payable_amount': payable_amount,  # ✅ NEW: Actual amount that can be paid
+                    'invoice_balance': invoice_balance_float if invoice_balance is not None else None,  # ✅ NEW: Invoice balance for reference
+                    'status': installment_dict['status']
+                })
+
+            return jsonify({
+                'success': True,
+                'installments': installment_list,
+                'count': len(installment_list)
+            })
+
+    except Exception as e:
+        logger.error(f"Error fetching pending installments for patient {patient_id}: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Failed to fetch pending installments',
+            'message': str(e)
+        }), 500
+
+
+@billing_api_bp.route('/ar-statement/<patient_id>', methods=['GET'])
+@login_required
+def get_ar_statement(patient_id):
+    """
+    Get patient AR statement with complete transaction history
+
+    Query Parameters:
+        highlight_id (optional): Transaction ID to highlight (invoice_id, payment_id, credit_note_id, or plan_id)
+
+    Returns:
+        JSON with patient info, transactions list, and summary totals
+    """
+    try:
+        hospital_id = current_user.hospital_id
+        highlight_id = request.args.get('highlight_id')
+
+        from app.services.ar_statement_service import ARStatementService
+
+        service = ARStatementService()
+        result = service.get_patient_ar_statement(
+            patient_id=patient_id,
+            hospital_id=hospital_id,
+            highlight_reference_id=highlight_id
+        )
+
+        if result.get('success'):
+            return jsonify(result)
+        else:
+            return jsonify(result), 404
+
+    except Exception as e:
+        logger.error(f"Error fetching AR statement for patient {patient_id}: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Failed to fetch AR statement',
+            'message': str(e)
+        }), 500
+
+
+@billing_api_bp.route('/patient-balance/<patient_id>', methods=['GET'])
+@login_required
+def get_patient_balance(patient_id):
+    """
+    Get current balance for a patient (quick query)
+
+    Returns:
+        JSON with current balance and balance type
+    """
+    try:
+        hospital_id = current_user.hospital_id
+
+        from app.services.ar_statement_service import ARStatementService
+
+        service = ARStatementService()
+        result = service.get_patient_balance(
+            patient_id=patient_id,
+            hospital_id=hospital_id
+        )
+
+        return jsonify(result)
+
+    except Exception as e:
+        logger.error(f"Error fetching patient balance: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Failed to fetch patient balance',
+            'message': str(e)
+        }), 500

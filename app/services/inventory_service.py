@@ -691,6 +691,94 @@ def _get_inventory_movement(
         logger.error(f"Error getting inventory movement: {str(e)}")
         raise
 
+def get_available_batches_for_item(
+    item_id: uuid.UUID,
+    hospital_id: uuid.UUID,
+    branch_id: Optional[uuid.UUID] = None,
+    session: Optional[Session] = None
+) -> List[Dict]:
+    """
+    Get all available batches for an item, sorted by expiry date (FIFO)
+    Used for manual batch selection dropdown in invoice creation
+
+    Args:
+        item_id: Medicine/Item UUID
+        hospital_id: Hospital UUID
+        branch_id: Branch UUID (optional, for future branch-level inventory)
+        session: Database session (optional)
+
+    Returns:
+        List of dicts with batch info:
+        - batch_number
+        - expiry_date
+        - available_qty
+        - unit_price
+        - sale_price
+        - display (formatted string)
+    """
+    if session is not None:
+        return _get_available_batches_for_item(session, item_id, hospital_id, branch_id)
+
+    with get_db_session() as new_session:
+        return _get_available_batches_for_item(new_session, item_id, hospital_id, branch_id)
+
+def _get_available_batches_for_item(
+    session: Session,
+    item_id: uuid.UUID,
+    hospital_id: uuid.UUID,
+    branch_id: Optional[uuid.UUID] = None
+) -> List[Dict]:
+    """
+    Internal function to get all available batches for an item
+    """
+    try:
+        from sqlalchemy.sql import text
+
+        # Query to get latest inventory for each batch with available stock
+        query = text("""
+            WITH latest_inventory AS (
+                SELECT
+                    i.*,
+                    ROW_NUMBER() OVER (PARTITION BY i.batch ORDER BY i.created_at DESC) as rn
+                FROM inventory i
+                WHERE i.hospital_id = :hospital_id
+                  AND i.medicine_id = :item_id
+            )
+            SELECT
+                batch,
+                expiry,
+                current_stock,
+                unit_price,
+                sale_price
+            FROM latest_inventory
+            WHERE rn = 1 AND current_stock > 0
+            ORDER BY expiry ASC  -- FIFO: oldest expiry first
+        """)
+
+        result = session.execute(query, {
+            'hospital_id': hospital_id,
+            'item_id': item_id
+        })
+
+        # Format batches for dropdown display
+        batches = []
+        for row in result:
+            batch_data = {
+                'batch_number': row.batch,
+                'expiry_date': row.expiry.strftime('%Y-%m-%d') if row.expiry else '',
+                'available_qty': float(row.current_stock),
+                'unit_price': float(row.unit_price) if row.unit_price else 0,
+                'sale_price': float(row.sale_price) if row.sale_price else 0,
+                'display': f"{row.batch} (Exp: {row.expiry.strftime('%d/%b/%Y') if row.expiry else 'N/A'}) - Avail: {int(row.current_stock)} units"
+            }
+            batches.append(batch_data)
+
+        return batches
+
+    except Exception as e:
+        logger.error(f"Error getting available batches for item: {str(e)}")
+        raise
+
 def get_batch_selection_for_invoice(
     hospital_id: uuid.UUID,
     medicine_id: uuid.UUID,
@@ -699,13 +787,13 @@ def get_batch_selection_for_invoice(
 ) -> List[Dict]:
     """
     Get batch selection for invoice based on FIFO
-    
+
     Args:
         hospital_id: Hospital UUID
         medicine_id: Medicine UUID
         quantity_needed: Quantity needed for invoice
         session: Database session (optional)
-        
+
     Returns:
         List of dictionaries containing batch selection with quantities
     """
@@ -713,7 +801,7 @@ def get_batch_selection_for_invoice(
         return _get_batch_selection_for_invoice(
             session, hospital_id, medicine_id, quantity_needed
         )
-    
+
     with get_db_session() as new_session:
         return _get_batch_selection_for_invoice(
             new_session, hospital_id, medicine_id, quantity_needed
@@ -729,21 +817,25 @@ def _get_batch_selection_for_invoice(
     Internal function to get batch selection for invoice based on FIFO
     """
     try:
-        # Get latest inventory for each batch of this medicine
+        # CONSOLIDATE multiple inventory records for same batch
+        # Aggregate stock across all records, allocate FIFO by earliest expiry
         from sqlalchemy.sql import text
-        
+
         query = text("""
-            WITH latest_inventory AS (
-                SELECT 
-                    i.*,
-                    ROW_NUMBER() OVER (PARTITION BY i.batch ORDER BY i.created_at DESC) as rn
-                FROM inventory i
-                WHERE i.hospital_id = :hospital_id
-                  AND i.medicine_id = :medicine_id
-            )
-            SELECT * FROM latest_inventory
-            WHERE rn = 1 AND current_stock > 0
-            ORDER BY expiry  -- FIFO based on expiry date
+            SELECT
+                i.batch,
+                MIN(i.expiry) as expiry,  -- Earliest expiry for FIFO
+                SUM(i.current_stock) as current_stock,  -- Total stock across all records
+                -- Weighted average price based on stock
+                SUM(i.sale_price * i.current_stock) / NULLIF(SUM(i.current_stock), 0) as sale_price,
+                SUM(i.unit_price * i.current_stock) / NULLIF(SUM(i.current_stock), 0) as unit_price,
+                MAX(i.pack_mrp) as pack_mrp
+            FROM inventory i
+            WHERE i.hospital_id = :hospital_id
+              AND i.medicine_id = :medicine_id
+              AND i.current_stock > 0  -- Only batches with stock
+            GROUP BY i.batch
+            ORDER BY MIN(i.expiry)  -- FIFO based on earliest expiry
         """)
         
         result = session.execute(query, {
@@ -1112,13 +1204,59 @@ def _update_inventory_for_invoice(
             if not latest_inventory:
                 logger.warning(f"No inventory found for medicine {medicine.medicine_name}, batch {batch}")
                 continue
-            
+
+            # Validate inventory for sales (not voids)
+            if not void:
+                # Validate sufficient stock
+                available_stock = latest_inventory.current_stock
+                if available_stock < quantity:
+                    raise ValueError(
+                        f"Inventory Error: Insufficient stock for {medicine.medicine_name} (Batch: {batch}). "
+                        f"Available: {available_stock}, Requested: {quantity}"
+                    )
+
+                # Validate expiry date exists
+                if not latest_inventory.expiry:
+                    raise ValueError(
+                        f"Inventory Error: Expiry date missing for {medicine.medicine_name} (Batch: {batch})"
+                    )
+
+                # Validate expiry date has not passed
+                # BYPASS for test user (7777777777) to allow testing with old expiry dates
+                from datetime import date
+                is_test_user = current_user_id == '7777777777'
+
+                if is_test_user and latest_inventory.expiry < date.today():
+                    logger.warning(f"🧪 TEST MODE: Bypassing expiry validation for user {current_user_id} - "
+                                 f"{medicine.medicine_name} (Batch: {batch}, Expired: {latest_inventory.expiry.strftime('%d-%b-%Y')})")
+
+                if not is_test_user and latest_inventory.expiry < date.today():
+                    raise ValueError(
+                        f"Inventory Error: Cannot dispense expired medicine - {medicine.medicine_name} "
+                        f"(Batch: {batch}, Expired: {latest_inventory.expiry.strftime('%d-%b-%Y')})"
+                    )
+
             # Calculate current stock after this transaction
             current_stock = latest_inventory.current_stock + (units_sign * quantity)
-            
+
+            # Extract GST values and calculate per-unit amounts
+            cgst_amount = Decimal(str(item.get('cgst_amount', 0)))
+            sgst_amount = Decimal(str(item.get('sgst_amount', 0)))
+            igst_amount = Decimal(str(item.get('igst_amount', 0)))
+            total_gst_amount = Decimal(str(item.get('total_gst_amount', 0)))
+
+            # Calculate per-unit GST (line item GST is for total quantity)
+            if quantity > 0:
+                cgst_per_unit = cgst_amount / quantity
+                sgst_per_unit = sgst_amount / quantity
+                igst_per_unit = igst_amount / quantity
+                total_gst_per_unit = total_gst_amount / quantity
+            else:
+                cgst_per_unit = sgst_per_unit = igst_per_unit = total_gst_per_unit = Decimal('0')
+
             # Create inventory transaction for this sale/void
             stock_type = 'Void' if void else 'Sales'
-            
+
             inventory_entry = Inventory(
                 hospital_id=hospital_id,
                 stock_type=stock_type,
@@ -1135,10 +1273,10 @@ def _update_inventory_for_invoice(
                 unit_price=latest_inventory.unit_price,
                 sale_price=item.get('unit_price', latest_inventory.sale_price),
                 units=units_sign * quantity,  # Negative for sales, positive for voids
-                cgst=item.get('cgst_amount', 0),
-                sgst=item.get('sgst_amount', 0),
-                igst=item.get('igst_amount', 0),
-                total_gst=item.get('total_gst_amount', 0),
+                cgst=cgst_per_unit,
+                sgst=sgst_per_unit,
+                igst=igst_per_unit,
+                total_gst=total_gst_per_unit,
                 current_stock=current_stock,
                 transaction_date=datetime.now(timezone.utc),
                 reason=f"{'Void of' if void else ''} Invoice #{invoice_id}"

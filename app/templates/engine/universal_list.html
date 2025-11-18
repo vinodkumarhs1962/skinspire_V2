@@ -9,10 +9,11 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
 <div class="container mx-auto px-4 py-6" data-entity-type="{{ assembled_data.entity_config.entity_type if assembled_data and assembled_data.entity_config and assembled_data.entity_config.entity_type else 'supplier_payments' }}">
     {% set auto_submit_enabled = assembled_data.entity_config.get('enable_auto_submit', True) if assembled_data and assembled_data.entity_config else True %}
     <!-- ✅ Page Header using gold standard structure -->
-    <div class="flex flex-col md:flex-row items-start md:items-center justify-between mb-6">
-        <div>
-            <!-- First Line: Hospital and Branch (bold, bigger fonts, spaced) -->
-            <div class="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+    <div class="mb-6">
+        <!-- First Row: Hospital/Branch and Date/Time -->
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-between mb-3">
+            <!-- Left: Hospital and Branch (bold, bigger fonts, spaced) -->
+            <div class="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {% if assembled_data and assembled_data.get('hospital_name') and assembled_data.get('branch_name') %}
                     {{ assembled_data.hospital_name }} <span class="mx-3">•</span> {{ assembled_data.branch_name }}
                 {% elif assembled_data and assembled_data.get('hospital_name') %}
@@ -21,9 +22,9 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                     Hospital • Branch
                 {% endif %}
             </div>
-            
-            <!-- Current Date and Day (Right aligned on same line) -->
-            <div class="text-right ml-4">
+
+            <!-- Right: Current Date and Day (Top-right corner) -->
+            <div class="text-right mt-2 md:mt-0">
                 <div class="text-lg font-semibold text-gray-900 dark:text-gray-100" id="current-date">
                     <!-- Date will be set by JavaScript -->
                 </div>
@@ -31,31 +32,38 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                     <!-- Day will be set by JavaScript -->
                 </div>
             </div>
+        </div>
 
-            <!-- Second Line: Entity Title with colored icon (left aligned) -->
+        <!-- Second Row: Entity Title and Description -->
+        <div class="mb-3">
+            <!-- Entity Title with colored icon (left aligned) -->
             <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">
                 <i class="{{ assembled_data.entity_config.icon if assembled_data and assembled_data.entity_config and assembled_data.entity_config.icon else 'fas fa-money-bill-wave' }} text-blue-600"></i>
                 {{ assembled_data.entity_config.page_title if assembled_data and assembled_data.entity_config and assembled_data.entity_config.page_title else 'Universal List' }}
             </h1>
-            
-            <!-- Third Line: Description (left aligned) -->
+
+            <!-- Description (left aligned) -->
             <p class="text-gray-600 dark:text-gray-400">
                 {{ assembled_data.entity_config.description if assembled_data and assembled_data.entity_config and assembled_data.entity_config.description else 'Universal entity management' }}
             </p>
         </div>
-        
 
+        <!-- Third Row: Action Buttons -->
+        <div class="flex flex-wrap gap-2">
+                <!-- Standard Back Button (Always First) -->
+                <button onclick="window.history.back()" type="button" class="btn-back">
+                    <i class="fas fa-arrow-left icon-left"></i>Back
+                </button>
 
-        <!-- ✅ Action buttons using existing btn classes -->
-        <div class="flex space-x-2 mt-4 md:mt-0">
             {% if assembled_data and assembled_data.entity_config and assembled_data.entity_config.actions %}
                 {% set has_create_action = false %}
                 {% for action in assembled_data.entity_config.actions %}
-                    {% if action.show_in_toolbar %}
+                    {# Show actions configured for LIST page toolbar #}
+                    {% if action.show_in_list_toolbar %}
                         {% if action.id == 'create' %}
                             {% set has_create_action = true %}
                         {% endif %}
-                        <a href="{{ action.get_url({}, assembled_data.entity_config) }}" 
+                        <a href="{{ action.get_url(assembled_data, assembled_data.entity_config) }}"
                         class="{{ action.button_type.value }}">
                             <i class="{{ action.icon }} icon-left"></i>{{ action.label }}
                         </a>
@@ -82,11 +90,37 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                     {% endif %}
                 {% endif %}
             {% endif %}
-            <button class="btn-secondary" onclick="handleUniversalExport('csv')">
-                <i class="fas fa-download icon-left"></i>Export
-            </button>
         </div>
     </div>
+
+    <!-- ✅ GENERIC: Info Card (Config-driven, entity-agnostic) -->
+    {% if assembled_data.entity_config.get('show_info_card', False) and assembled_data.get('info_card') %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-6" style="padding: 1.25rem !important;">
+        <!-- Name Section -->
+        <div style="margin-bottom: 1rem !important; padding-bottom: 0.75rem !important; border-bottom: 1px solid rgb(229 231 235) !important;">
+            <h3 style="font-size: 1.5rem !important; font-weight: 700 !important; color: rgb(17 24 39) !important; line-height: 1.2 !important; margin: 0 !important;" class="dark:text-gray-100">
+                {{ assembled_data.info_card.title }}
+            </h3>
+        </div>
+
+        <!-- Fields Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3" style="gap: 1rem !important;">
+            {% for field in assembled_data.info_card.fields %}
+            {% if field.value %}
+            <div class="flex items-start {% if field.full_width %}col-span-1 md:col-span-2 xl:col-span-3{% endif %}" style="gap: 0.875rem !important; padding: 0.75rem !important; background: rgb(249 250 251) !important; border-radius: 0.5rem !important;" class="dark:bg-gray-700">
+                <i class="{{ field.icon }} {{ field.icon_color }}" style="flex-shrink: 0 !important; font-size: 1.25rem !important; margin-top: 0.125rem !important;"></i>
+                <div style="flex-grow: 1 !important; min-width: 0 !important;">
+                    <div style="font-size: 0.75rem !important; font-weight: 600 !important; color: rgb(107 114 128) !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; margin-bottom: 0.375rem !important;" class="dark:text-gray-400">{{ field.label }}</div>
+                    <div style="font-size: 1rem !important; font-weight: 600 !important; color: rgb(17 24 39) !important; line-height: 1.4 !important; word-break: break-word !important;" class="dark:text-gray-100">
+                        {{ field.value }}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 
     <!-- ✅ FIXED: Summary Cards with dictionary access instead of attribute access -->
     {% set safe_summary = assembled_data.get('summary', {}) if assembled_data else {} %}
@@ -188,6 +222,7 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
     {% endif %}
 
     <!-- ✅ FIXED: Filter Card with proper horizontal layout -->
+    {% if assembled_data.entity_config.get('show_filter_card', True) %}
     <div class="universal-filter-card-header">
         <h3 class="universal-filter-card-title">
             <i class="fas fa-filter"></i>Filter {{ assembled_data.entity_config.plural_name if assembled_data and assembled_data.entity_config and assembled_data.entity_config.plural_name else 'Records' }}
@@ -262,18 +297,50 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                                                  data-placeholder="{{ field.placeholder }}"
                                                  data-entity-config='{{ field.entity_config | tojson }}'>
                                                 <!-- Dropdown will be initialized by JavaScript -->
-                                                <input type="hidden" 
-                                                       name="{{ field.name }}" 
+                                                <input type="hidden"
+                                                       name="{{ field.name }}"
                                                        value="{{ field.value }}"
                                                        class="entity-dropdown-hidden-input">
-                                                <input type="text" 
+                                                <input type="text"
                                                        class="universal-form-input entity-dropdown-search"
                                                        placeholder="{{ field.placeholder }}"
                                                        value="{{ field.display_value }}">
                                                 <div class="entity-dropdown-results" style="display: none;"></div>
                                             </div>
                                         </div>
-                                    
+
+                                    {% elif field.type == 'autocomplete' %}
+                                        <div class="universal-form-group">
+                                            <label class="universal-form-label">{{ field.label }}</label>
+                                            <div class="universal-autocomplete-wrapper" style="position: relative;">
+                                                <!-- Search input with name attribute (submits the filter) -->
+                                                <!-- When item selected, stores UUID in value, displays name as placeholder/data attribute -->
+                                                <input type="text"
+                                                       id="{{ field.display_name }}_search"
+                                                       name="{{ field.display_name }}"
+                                                       class="universal-form-input universal-autocomplete-search"
+                                                       placeholder="{{ field.placeholder }}"
+                                                       autocomplete="off"
+                                                       value="{{ field.value or '' }}"
+                                                       data-autocomplete-type="{{ field.autocomplete_config.entity_type }}"
+                                                       data-value-field="{{ field.autocomplete_config.value_field }}"
+                                                       data-display-field="{{ field.display_name }}"
+                                                       data-display-text=""
+                                                       data-config='{{ field.autocomplete_config | tojson }}'>
+
+                                                <!-- Dropdown results -->
+                                                <div id="{{ field.display_name }}_dropdown"
+                                                     class="universal-autocomplete-dropdown absolute z-50 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg hidden mt-1 max-h-60 overflow-y-auto">
+                                                </div>
+
+                                                <!-- Loading indicator -->
+                                                <div id="{{ field.display_name }}_loading"
+                                                     class="absolute right-3 top-3 hidden">
+                                                    <i class="fas fa-spinner fa-spin text-gray-400"></i>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                     {% elif field.type == 'select' and field.options|length > 0 %}
                                         <div class="universal-form-group">
                                             <label class="universal-form-label">{{ field.label }}</label>
@@ -489,6 +556,7 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
             </div>
         </div>
     </div>
+    {% endif %}
 
     <!-- ✅ FIXED: Data Table with proper data access -->
     {% if safe_items and safe_items|length > 0 %}
@@ -541,7 +609,7 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                     {% if items_list and items_list|length > 0 %}
                         {% for item in items_list %}
                         {% set outer_loop_index = loop.index0 %}
-                        <tr class="universal-table-row universal-clickable-row {% if item.is_deleted %}deleted-row{% endif %}" 
+                        <tr class="universal-table-row universal-clickable-row {% if item.is_deleted %}deleted-row{% endif %}"
                             {% if item.is_deleted %}title="This record has been deleted"{% endif %}>
                             
                             <!-- DYNAMIC CELLS BASED ON COLUMNS -->
@@ -560,7 +628,7 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                                         {% set cell_value = item.get(column.name, '') %}
                                     {% endif %}
                                 {% endif %}
-                                <td class="{{ column.css_class }} {{ column.css_classes }}" 
+                                <td class="{{ column.css_class }} {{ column.css_classes }}"
                                     onclick="handleRowClick(event, '{{ item.get(assembled_data.entity_config.primary_key, '') }}')"
                                     style="{% if column.width and column.width != 'auto' %}width: {{ column.width }};{% endif %} text-align: {% if column.field_type in ['currency', 'amount', 'decimal', 'number'] %}right{% else %}{{ column.align|default('left') }}{% endif %};"
                                     title="{{ cell_value|striptags if cell_value and cell_value not in ['', '—', '&mdash;', 'â€"'] else '' }}">
@@ -643,17 +711,23 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                                         <!-- Status badges need safe filter to render HTML -->
                                         {{ cell_value|safe }}
                                     {% else %}
-                                        {# ✅ NEW: Middle truncation for text fields - shows first 10 and last 4 chars #}
-                                        {% set cell_text = cell_value|default('—', true)|string %}
-                                        {% if cell_text and cell_text not in ['—', '', '&mdash;'] and cell_text|length > 15 %}
-                                            {% set start_chars = cell_text[:10] %}
-                                            {% set end_chars = cell_text[-4:] %}
-                                            <span class="truncate-middle-wrapper" title="{{ cell_text }}">
-                                                <span class="truncate-middle-start">{{ start_chars }}</span><span class="truncate-middle-ellipsis">...</span><span class="truncate-middle-end">{{ end_chars }}</span>
-                                            </span>
-                                        {% else %}
-                                            <!-- Default text display for short text -->
+                                        {# Check if column is configured for text wrapping (respect configuration) #}
+                                        {% if column.css_classes and 'text-wrap' in column.css_classes %}
+                                            <!-- Config says wrap - show full text, let CSS handle wrapping -->
                                             {{ cell_value|default('—', true)|safe if '&' in (cell_value|string) else cell_value|default('—', true) }}
+                                        {% else %}
+                                            {# DEFAULT: Middle truncation for text fields - shows first 10 and last 4 chars #}
+                                            {% set cell_text = cell_value|default('—', true)|string %}
+                                            {% if cell_text and cell_text not in ['—', '', '&mdash;'] and cell_text|length > 15 %}
+                                                {% set start_chars = cell_text[:10] %}
+                                                {% set end_chars = cell_text[-4:] %}
+                                                <span class="truncate-middle-wrapper" title="{{ cell_text }}">
+                                                    <span class="truncate-middle-start">{{ start_chars }}</span><span class="truncate-middle-ellipsis">...</span><span class="truncate-middle-end">{{ end_chars }}</span>
+                                                </span>
+                                            {% else %}
+                                                <!-- Default text display for short text -->
+                                                {{ cell_value|default('—', true)|safe if '&' in (cell_value|string) else cell_value|default('—', true) }}
+                                            {% endif %}
                                         {% endif %}
                                     {% endif %}
                                 </td>
@@ -679,12 +753,19 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                                                             {# Skip virtual fields that might not exist #}
                                                         {% else %}
                                                             {% set field_value = item.get(field) %}
+                                                            {# DEBUG: Log condition evaluation for delete action #}
+                                                            {% if action.id == 'delete_row' or action.id == 'delete' %}
+                                                                <!-- DEBUG: Action {{ action.id }}, Field {{ field }}={{ field_value }}, Allowed={{ allowed_values }} -->
+                                                            {% endif %}
                                                             {# ✅ FIXED: Handle None case for is_deleted - treat as False #}
                                                             {% if field == 'is_deleted' and field_value is none %}
                                                                 {% set field_value = false %}
                                                             {% endif %}
                                                             {% if field_value not in allowed_values %}
                                                                 {% set show_action = false %}
+                                                                {% if action.id == 'delete_row' or action.id == 'delete' %}
+                                                                    <!-- DEBUG: Hiding {{ action.id }} because {{ field }}={{ field_value }} not in {{ allowed_values }} -->
+                                                                {% endif %}
                                                             {% endif %}
                                                         {% endif %}
                                                     {% endfor %}
@@ -936,25 +1017,49 @@ function removeFilter(filterName) {
 }
 
 /**
- * Handle table row click to open payment view
+ * Handle table row click to open entity detail view
+ * Generic function that works with any entity type in Universal Engine
  */
-function handleRowClick(event, paymentId) {
-    console.log('🔍 Row clicked with payment ID:', paymentId);
-    console.log('🔍 Payment ID type:', typeof paymentId);
-    console.log('🔍 Payment ID length:', paymentId ? paymentId.length : 'undefined');
-    
-    if (!paymentId) {
-        console.warn('❌ No payment ID provided for row click');
+function handleRowClick(event, itemId) {
+    console.log('🔍 Row clicked with item ID:', itemId);
+    console.log('🔍 Item ID type:', typeof itemId);
+    console.log('🔍 Item ID length:', itemId ? itemId.length : 'undefined');
+
+    if (!itemId) {
+        console.warn('❌ No item ID provided for row click');
         return;
     }
-    
+
+    // Prevent navigation if clicking on button or link
+    if (event.target.closest('button, a, .btn, .dropdown-toggle')) {
+        console.log('🔍 Clicked on button/link, ignoring row click');
+        return;
+    }
+
     // Get entity type from page data
-    const entityType = document.querySelector('[data-entity-type]')?.dataset.entityType || 'supplier_payments';
-    
-    // Use universal view route
-    const targetUrl = `/universal/${entityType}/view/${paymentId}`;
+    const entityType = document.querySelector('[data-entity-type]')?.dataset.entityType;
+
+    if (!entityType) {
+        console.warn('❌ No entity type found on page');
+        return;
+    }
+
+    // Special handling for different entity types
+    let targetUrl;
+
+    if (entityType === 'consolidated_invoice_detail') {
+        // In consolidated detail view: clicking on child invoice row → navigate to individual patient invoice detail
+        targetUrl = `/universal/patient_invoices/detail/${itemId}`;
+    } else if (entityType === 'consolidated_patient_invoices') {
+        // In consolidated list view: clicking on parent invoice row → navigate to consolidated invoice detail
+        targetUrl = `/universal/consolidated_invoice_detail/${itemId}`;
+    } else {
+        // Default: use standard Universal Engine detail route
+        targetUrl = `/universal/${entityType}/detail/${itemId}`;
+    }
+
     console.log('🔍 Navigating to URL:', targetUrl);
-    
+
     window.location.href = targetUrl;
 }
 
@@ -1069,22 +1174,278 @@ function getCSRFToken() {
     // Try to get CSRF token from various sources
     const csrfInput = document.querySelector('[name=csrf_token]');
     if (csrfInput) return csrfInput.value;
-    
+
     const csrfMeta = document.querySelector('meta[name="csrf-token"]');
     if (csrfMeta) return csrfMeta.content;
-    
+
     // Get from cookie if available
     const cookies = document.cookie.split(';');
     for (let cookie of cookies) {
         const [name, value] = cookie.trim().split('=');
         if (name === 'csrf_token') return value;
     }
-    
+
     return '';
 }
 
+// =================================================================
+// UNIVERSAL AUTOCOMPLETE FILTER IMPLEMENTATION
+// =================================================================
+class UniversalAutocompleteFilter {
+    constructor(searchInput) {
+        this.searchInput = searchInput;
+        this.config = JSON.parse(searchInput.dataset.config);
+        this.entityType = searchInput.dataset.autocompleteType;
+        this.valueField = searchInput.dataset.valueField;
+        this.displayField = searchInput.dataset.displayField;
+
+        // No longer using hidden input - UUID is stored in search input value
+        this.dropdown = document.getElementById(`${this.displayField}_dropdown`);
+        this.loadingIcon = document.getElementById(`${this.displayField}_loading`);
+
+        this.searchTimeout = null;
+        this.searchCache = new Map();
+
+        this.init();
+    }
+
+    init() {
+        // Handle input with debounce
+        this.searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.trim();
+            clearTimeout(this.searchTimeout);
+
+            if (query.length === 0) {
+                // Show initial list when cleared
+                this.searchTimeout = setTimeout(() => {
+                    this.performSearch('', this.config.initial_load_limit);
+                }, 200);
+            } else if (query.length >= this.config.min_chars) {
+                this.searchTimeout = setTimeout(() => {
+                    this.performSearch(query, this.config.search_limit);
+                }, 300);
+            } else {
+                this.hideDropdown();
+            }
+        });
+
+        // Show initial list on focus
+        this.searchInput.addEventListener('focus', () => {
+            if (this.searchInput.value.trim().length === 0) {
+                this.performSearch('', this.config.initial_load_limit);
+            }
+        });
+
+        // Hide dropdown on outside click
+        document.addEventListener('click', (e) => {
+            if (!this.searchInput.contains(e.target) && !this.dropdown.contains(e.target)) {
+                this.hideDropdown();
+            }
+        });
+
+        console.log(`✅ Universal autocomplete filter initialized for ${this.displayField} (entity: ${this.entityType})`);
+    }
+
+    async performSearch(query, limit) {
+        const cacheKey = `${query}_${limit}`;
+
+        // Check cache
+        if (this.searchCache.has(cacheKey)) {
+            this.displayResults(this.searchCache.get(cacheKey));
+            return;
+        }
+
+        this.showLoading();
+
+        try {
+            const url = `${this.config.api_endpoint}?q=${encodeURIComponent(query)}&limit=${limit}`;
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.success && data.results) {
+                this.searchCache.set(cacheKey, data.results);
+                this.displayResults(data.results);
+            } else {
+                this.showNoResults();
+            }
+        } catch (error) {
+            console.error('Patient search error:', error);
+            this.showError();
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    displayResults(results) {
+        if (!results || results.length === 0) {
+            this.showNoResults();
+            return;
+        }
+
+        this.dropdown.innerHTML = '';
+
+        results.forEach(patient => {
+            const item = document.createElement('div');
+            item.className = 'universal-autocomplete-item';
+
+            // Build status badge HTML if status exists
+            let statusBadge = '';
+            if (patient.status && patient.status !== 'active') {
+                const badgeColor = patient.status === 'deleted' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+                statusBadge = `<span class="text-xs px-2 py-0.5 rounded ${badgeColor} ml-2">${patient.status.toUpperCase()}</span>`;
+            }
+
+            item.innerHTML = `
+                <div class="patient-name">
+                    ${patient.display || patient.patient_name}
+                    ${statusBadge}
+                </div>
+                ${patient.mrn ? `<div class="patient-mrn">MRN: ${patient.mrn}</div>` : ''}
+            `;
+
+            item.addEventListener('click', () => {
+                this.selectPatient(patient);
+            });
+
+            this.dropdown.appendChild(item);
+        });
+
+        this.showDropdown();
+    }
+
+    selectPatient(patient) {
+        // Store UUID in the input value (this gets submitted as patient_name=uuid)
+        const uuidValue = patient[this.config.value_field] || patient.value;
+        this.searchInput.value = uuidValue;
+
+        // Store display name in data attribute for reference
+        const displayName = patient.display || patient.patient_name || patient.label;
+        this.searchInput.dataset.displayText = displayName;
+
+        this.hideDropdown();
+
+        console.log(`✅ ${this.entityType} selected: ${displayName} (UUID: ${uuidValue})`);
+
+        // ✅ CRITICAL: Submit filter form to apply the filter
+        const filterForm = this.searchInput.closest('form');
+        if (filterForm) {
+            console.log(`✅ Submitting filter form for ${this.entityType} filter (patient_name=${uuidValue})`);
+            filterForm.submit();
+        }
+    }
+
+    showLoading() {
+        this.loadingIcon?.classList.remove('hidden');
+    }
+
+    hideLoading() {
+        this.loadingIcon?.classList.add('hidden');
+    }
+
+    showDropdown() {
+        this.dropdown.classList.remove('hidden');
+    }
+
+    hideDropdown() {
+        this.dropdown.classList.add('hidden');
+    }
+
+    showNoResults() {
+        this.dropdown.innerHTML = '<div class="patient-autocomplete-item text-center text-gray-500 dark:text-gray-400">No patients found</div>';
+        this.showDropdown();
+    }
+
+    showError() {
+        this.dropdown.innerHTML = '<div class="patient-autocomplete-item text-center text-red-500">Search failed. Please try again.</div>';
+        this.showDropdown();
+    }
+}
+
+// Auto-initialize all universal autocomplete filters
+document.addEventListener('DOMContentLoaded', function() {
+    const autocompleteSearchInputs = document.querySelectorAll('.universal-autocomplete-search');
+
+    autocompleteSearchInputs.forEach(input => {
+        new UniversalAutocompleteFilter(input);
+    });
+
+    if (autocompleteSearchInputs.length > 0) {
+        console.log(`✅ Initialized ${autocompleteSearchInputs.length} universal autocomplete filter(s)`);
+    }
+});
+
 
 </script>
+
+<style>
+/* Universal Autocomplete Filter Styles - v3.0 UNIVERSAL */
+.universal-autocomplete-wrapper {
+    position: relative;
+    overflow: visible !important;  /* CRITICAL: Allow dropdown to extend */
+}
+
+/* CRITICAL: Allow dropdown to extend beyond filter card */
+.universal-filter-panel,
+.filter-panel-content,
+.universal-form-group {
+    overflow: visible !important;
+}
+
+.universal-autocomplete-dropdown {
+    position: absolute !important;
+    top: 100% !important;
+    left: 0 !important;
+    right: 0 !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 99999 !important;  /* CRITICAL: High z-index */
+}
+
+.universal-autocomplete-item {
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    transition: background-color 0.15s ease-in-out;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.dark .universal-autocomplete-item {
+    border-bottom-color: #374151;
+}
+
+.universal-autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+.universal-autocomplete-item:hover {
+    background-color: #f3f4f6;
+}
+
+.dark .universal-autocomplete-item:hover {
+    background-color: #374151;
+}
+
+.universal-autocomplete-item .patient-name,
+.universal-autocomplete-item .item-name {
+    font-weight: 500;
+    color: #111827;
+}
+
+.dark .universal-autocomplete-item .patient-name,
+.dark .universal-autocomplete-item .item-name {
+    color: #f9fafb;
+}
+
+.universal-autocomplete-item .patient-mrn,
+.universal-autocomplete-item .item-code {
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+
+.dark .patient-autocomplete-item .patient-mrn {
+    color: #9ca3af;
+}
+</style>
 
 </div> <!-- ✅ Close main container -->
 

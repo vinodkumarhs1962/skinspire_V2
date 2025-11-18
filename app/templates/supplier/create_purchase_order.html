@@ -261,10 +261,10 @@
     <!-- Quick Actions Bar with all buttons in one row -->
     <div class="quick-actions-bar">
         <div class="quick-actions-left">
-            <a href="{{ url_for('universal_views.universal_list_view', entity_type='purchase_orders') }}" class="btn-secondary">
-                <i class="fas fa-arrow-left mr-2"></i>
-                Back
-            </a>
+            <!-- Standard Back Button (Always First) -->
+            <button onclick="window.history.back()" type="button" class="btn-back">
+                <i class="fas fa-arrow-left icon-left"></i>Back
+            </button>
             <a href="{{ url_for('universal_views.universal_list_view', entity_type='purchase_orders') }}" class="btn-outline">
                 <i class="fas fa-list mr-2"></i>
                 Purchase Orders

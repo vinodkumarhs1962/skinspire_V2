@@ -8,7 +8,8 @@ from datetime import datetime, timezone, timedelta, date
 import decimal
 from decimal import Decimal, InvalidOperation
 from num2words import num2words
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, or_
+
 
 from flask import current_app as app
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, current_app, session as flask_session
@@ -23,9 +24,12 @@ from wtforms.validators import DataRequired, Optional, Length, NumberRange, Vali
 from app.controllers.billing_controllers import AdvancePaymentController, PaymentFormController 
 from app.forms.billing_forms import InvoiceForm, PaymentForm, AdvancePaymentForm
 from app.services.billing_service import (
-    create_invoice, 
+    create_invoice,
     get_invoice_by_id,
     record_payment,
+    approve_payment,
+    reject_payment,
+    reverse_payment,
     search_invoices,
     void_invoice,
     issue_refund,
@@ -40,7 +44,7 @@ from app.security.authorization.permission_validator import has_permission, perm
 from app.services.database_service import get_db_session, get_detached_copy, get_entity_dict
 from app.security.authentication.auth_manager import AuthManager
 from app.models.master import Hospital, Branch, Medicine, Package, Service, Patient
-from app.models.transaction import User, InvoiceHeader, Inventory, PaymentDetail, PatientAdvancePayment, AdvanceAdjustment
+from app.models.transaction import User, InvoiceHeader, InvoiceLineItem, Inventory, PaymentDetail, PatientAdvancePayment, AdvanceAdjustment, ARSubledger
 
 # For email functionality
 from app.services.email_service import send_email_with_attachment
@@ -48,9 +52,16 @@ from app.services.email_service import send_email_with_attachment
 # For WhatsApp functionality
 from app.services.whatsapp_service import send_whatsapp_message
 
-# For PDF generation and temporary file storage
-from app.utils.pdf_utils import generate_invoice_pdf
-from app.utils.file_utils import store_temporary_file
+# For PDF generation and temporary file storage (optional - requires xhtml2pdf)
+try:
+    from app.utils.pdf_utils import generate_invoice_pdf
+    from app.utils.file_utils import store_temporary_file
+    PDF_AVAILABLE = True
+except ImportError as e:
+    logging.warning(f"PDF generation not available: {str(e)}")
+    PDF_AVAILABLE = False
+    generate_invoice_pdf = None
+    store_temporary_file = None
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -169,8 +180,17 @@ def create_invoice_view():
     from sqlalchemy import or_, and_
     from decimal import InvalidOperation
     
-    # Clear any cached patient ID to ensure fresh selection each time
-    if 'temp_patient_id' in flask_session:
+    # Check for error data from previous submission (form data preservation)
+    error_data = flask_session.pop('invoice_error_data', None)
+    error_message = flask_session.pop('invoice_error_message', None)
+
+    # Display error message if present
+    if error_message:
+        flash(error_message, 'error')
+        logger.info(f"Displaying preserved error: {error_message}")
+
+    # Clear any cached patient ID to ensure fresh selection each time (unless we have error data)
+    if 'temp_patient_id' in flask_session and not error_data:
         flask_session.pop('temp_patient_id', None)
 
     # Prepare patient choices
@@ -203,9 +223,9 @@ def create_invoice_view():
             # Create detached copies of patients
             patients = [get_detached_copy(patient) for patient in patients]
 
-            # Add patients to choices
+            # Add patients to choices - SIMPLIFIED: first_name + last_name only
             patient_choices.extend([
-                (str(patient.patient_id), f"{patient.full_name} - {patient.mrn or 'No MRN'}") 
+                (str(patient.patient_id), f"{patient.first_name} {patient.last_name} - {patient.mrn or 'No MRN'}")
                 for patient in patients
             ])
     except Exception as e:
@@ -255,6 +275,15 @@ def create_invoice_view():
     # Get menu items for dashboard
     menu_items = get_menu_items(current_user)
 
+    # Get user's batch allocation mode preference (manual or auto)
+    user_batch_mode = 'manual'  # Default to manual
+    if current_user.ui_preferences:
+        ui_prefs = current_user.ui_preferences
+        if isinstance(ui_prefs, str):
+            import json
+            ui_prefs = json.loads(ui_prefs)
+        user_batch_mode = ui_prefs.get('invoice_batch_mode', 'manual')
+
     # Process form submission
     if request.method == 'POST':
         # Import CSRF validation utilities if needed
@@ -278,7 +307,17 @@ def create_invoice_view():
         # Check for patient_id in form data or data attributes
         patient_id = request.form.get('patient_id')
         patient_name = request.form.get('patient_name')
-        
+
+        # FIX: Detect if patient_id contains a NAME instead of UUID
+        if patient_id and (' ' in patient_id or '-' not in patient_id):
+            # This looks like a name, not a UUID
+            logger.warning(f"❌ DETECTED: patient_id field contains a NAME instead of UUID: '{patient_id}'")
+            # Move it to patient_name and clear patient_id
+            if not patient_name:
+                patient_name = patient_id
+            patient_id = None
+            logger.info(f"Moved name to patient_name field, will lookup UUID below")
+
         # Check for cached patient ID from previous attempts
         temp_patient_id = flask_session.get('temp_patient_id')
         if temp_patient_id and not patient_id:
@@ -365,11 +404,15 @@ def create_invoice_view():
                 
                 # If line_items is still empty, process manually
                 if not line_items:
+                    current_app.logger.info("📋 Processing line items manually from form data")
+                    current_app.logger.info(f"📋 Form keys: {list(request.form.keys())}")
+
                     for key in request.form:
                         if key.startswith('line_items-') and key.endswith('-item_type'):
                             # Extract index from key
                             index = key.split('-')[1]
-                            
+                            current_app.logger.info(f"📋 Found line item at index {index}")
+
                             try:
                                 item = {
                                     'item_type': request.form.get(f'line_items-{index}-item_type'),
@@ -382,11 +425,14 @@ def create_invoice_view():
                                     'discount_percent': Decimal(request.form.get(f'line_items-{index}-discount_percent', '0')),
                                     'included_in_consultation': bool(request.form.get(f'line_items-{index}-included_in_consultation'))
                                 }
-                                
+
+                                current_app.logger.info(f"📋 Line item {index}: {item}")
                                 line_items.append(item)
                             except (ValueError, TypeError, decimal.InvalidOperation) as e:
                                 current_app.logger.error(f"Error processing line item {index}: {str(e)}")
                                 raise ValueError(f"Invalid data in line item {int(index)+1}")
+
+                    current_app.logger.info(f"📋 Total line items extracted: {len(line_items)}")
                 
                 # Convert invoice_date to datetime with timezone
                 invoice_date = form.invoice_date.data
@@ -433,76 +479,89 @@ def create_invoice_view():
                 
                 # Create the invoice(s)
                 result = create_invoice(**invoice_data)
-                
-                # Single invoice case
+
+                # Single invoice case (not split)
                 if len(result['invoices']) == 1:
                     invoice = result['invoices'][0]
                     flash(f"Invoice {invoice['invoice_number']} created successfully", "success")
-                    return redirect(url_for('billing_views.view_invoice', invoice_id=invoice['invoice_id']))
-                
-                # Multiple invoices case
+                    # Redirect to universal engine detail view
+                    return redirect(url_for('universal_views.universal_detail_view',
+                                          entity_type='patient_invoices',
+                                          item_id=invoice['invoice_id']))
+
+                # Multiple invoices case (Phase 3 split invoices)
                 if len(result['invoices']) > 1:
-                    flash(f"{len(result['invoices'])} invoices created successfully", "success")
-                    # Redirect to invoice list filtered for this patient
-                    return redirect(url_for('billing_views.invoice_list', 
-                                        patient_id=invoice_data['patient_id'],
-                                        created_multiple=True))
-                
+                    parent_id = result.get('parent_invoice_id')
+                    current_app.logger.info(f"Multiple invoices created. Parent ID from result: {parent_id}")
+
+                    if not parent_id:
+                        # Fallback: Use first invoice ID as parent
+                        parent_id = result['invoices'][0].get('invoice_id')
+                        current_app.logger.warning(f"Parent invoice ID was None! Using first invoice ID: {parent_id}")
+
+                    flash(f"✓ {len(result['invoices'])} consolidated invoices created successfully", "success")
+                    # Redirect to consolidated invoice detail view (Universal Engine)
+                    return redirect(url_for('universal_views.consolidated_invoice_detail_view',
+                                          parent_invoice_id=parent_id))
+
                 # No invoices created
                 flash("No invoices were created. Please check the form and try again.", "warning")
                 return render_template('billing/create_invoice.html', form=form, auth_token=auth_token)
                 
             except Exception as e:
                 current_app.logger.error(f"Error creating invoice: {str(e)}")
-                # Check if it's an inventory-related error
+
+                # Preserve line items to prevent data loss (for ALL errors)
+                preserved_line_items = []
+                for key in request.form:
+                    if key.startswith('line_items-') and key.endswith('-item_type'):
+                        # Extract index from key
+                        index = key.split('-')[1]
+
+                        try:
+                            # Get expiry date and handle format
+                            expiry_date_str = request.form.get(f'line_items-{index}-expiry_date', '')
+
+                            item = {
+                                'index': index,
+                                'item_type': request.form.get(f'line_items-{index}-item_type', ''),
+                                'item_id': request.form.get(f'line_items-{index}-item_id', ''),
+                                'item_name': request.form.get(f'line_items-{index}-item_name', ''),
+                                'batch': request.form.get(f'line_items-{index}-batch', ''),
+                                'expiry_date': expiry_date_str if expiry_date_str else '',
+                                'quantity': request.form.get(f'line_items-{index}-quantity', '1'),
+                                'unit_price': request.form.get(f'line_items-{index}-unit_price', '0'),
+                                'discount_percent': request.form.get(f'line_items-{index}-discount_percent', '0'),
+                                'gst_rate': request.form.get(f'line_items-{index}-gst_rate', '0'),
+                                'included_in_consultation': bool(request.form.get(f'line_items-{index}-included_in_consultation', False))
+                            }
+
+                            # Only add if there's actual data
+                            if item['item_id'] or item['item_name']:
+                                preserved_line_items.append(item)
+                                current_app.logger.info(f"Preserved line item {index}: {item['item_name']}")
+                        except Exception as item_error:
+                            current_app.logger.error(f"Error preserving line item {index}: {str(item_error)}")
+
+                # Determine error type for better messaging
                 if "Insufficient stock" in str(e):
                     flash(f"Inventory Error: {str(e)}", "error")
-                    
-                    # Preserve line items to prevent data loss
-                    preserved_line_items = []
-                    for key in request.form:
-                        if key.startswith('line_items-') and key.endswith('-item_type'):
-                            # Extract index from key
-                            index = key.split('-')[1]
-                            
-                            try:
-                                item = {
-                                    'index': index,
-                                    'item_type': request.form.get(f'line_items-{index}-item_type'),
-                                    'item_id': request.form.get(f'line_items-{index}-item_id'),
-                                    'item_name': request.form.get(f'line_items-{index}-item_name'),
-                                    'batch': request.form.get(f'line_items-{index}-batch'),
-                                    'expiry_date': parse_date(request.form.get(f'line_items-{index}-expiry_date')),
-                                    'quantity': request.form.get(f'line_items-{index}-quantity', '1'),
-                                    'unit_price': request.form.get(f'line_items-{index}-unit_price', '0'),
-                                    'discount_percent': request.form.get(f'line_items-{index}-discount_percent', '0'),
-                                    'included_in_consultation': bool(request.form.get(f'line_items-{index}-included_in_consultation'))
-                                }
-                                preserved_line_items.append(item)
-                            except Exception as item_error:
-                                current_app.logger.error(f"Error preserving line item {index}: {str(item_error)}")
-                    
-                    # Return template with preserved data
-                    return render_template(
-                        'billing/create_invoice.html',
-                        form=form,
-                        branches=branches,
-                        menu_items=menu_items,
-                        page_title="Create Invoice",
-                        auth_token=auth_token,
-                        inventory_error=str(e),
-                        preserved_line_items=preserved_line_items
-                    )
+                    inventory_error = str(e)
                 else:
                     flash(f"Error creating invoice: {str(e)}", "error")
-                
+                    inventory_error = None
+
+                # Return template with preserved data
                 return render_template(
                     'billing/create_invoice.html',
                     form=form,
                     branches=branches,
                     menu_items=menu_items,
                     page_title="Create Invoice",
-                    auth_token=auth_token
+                    auth_token=auth_token,
+                    user_batch_mode=user_batch_mode,
+                    inventory_error=inventory_error,
+                    preserved_line_items=preserved_line_items
                 )
         else:
             # Handle validation failures
@@ -653,15 +712,25 @@ def create_invoice_view():
                             if len(result['invoices']) == 1:
                                 invoice = result['invoices'][0]
                                 flash(f"Invoice {invoice['invoice_number']} created successfully", "success")
-                                return redirect(url_for('billing_views.view_invoice', invoice_id=invoice['invoice_id']))
-                            
-                            # Multiple invoices case
+                                # Redirect to universal engine detail view
+                                return redirect(url_for('universal_views.universal_detail_view',
+                                                      entity_type='patient_invoices',
+                                                      item_id=invoice['invoice_id']))
+
+                            # Multiple invoices case (Phase 3 split invoices)
                             if len(result['invoices']) > 1:
-                                flash(f"{len(result['invoices'])} invoices created successfully", "success")
-                                # Fix: Use the correct route name (invoice_list instead of list_invoices)
-                                # and pass parameters as query string
-                                return redirect(url_for('billing_views.invoice_list') + 
-                                            f"?patient_id={invoice_data['patient_id']}&created_multiple=true")
+                                parent_id = result.get('parent_invoice_id')
+                                current_app.logger.info(f"Multiple invoices created. Parent ID from result: {parent_id}")
+
+                                if not parent_id:
+                                    # Fallback: Use first invoice ID as parent
+                                    parent_id = result['invoices'][0].get('invoice_id')
+                                    current_app.logger.warning(f"Parent invoice ID was None! Using first invoice ID: {parent_id}")
+
+                                flash(f"✓ {len(result['invoices'])} consolidated invoices created successfully", "success")
+                                # Redirect to consolidated invoice detail view (Universal Engine)
+                                return redirect(url_for('universal_views.consolidated_invoice_detail_view',
+                                                      parent_invoice_id=parent_id))
                         except Exception as e:
                             current_app.logger.error(f"Error creating invoice: {str(e)}")
                             flash(f"Error creating invoice: {str(e)}", "error")
@@ -676,7 +745,9 @@ def create_invoice_view():
                 branches=branches,
                 menu_items=menu_items,
                 page_title="Create Invoice",
-                auth_token=auth_token  # Pass token to template
+                auth_token=auth_token,  # Pass token to template
+                user_batch_mode=user_batch_mode,
+                error_data=error_data  # Pass preserved data from failed submission
             )
 
     return render_template(
@@ -685,7 +756,9 @@ def create_invoice_view():
         branches=branches,
         menu_items=menu_items,
         page_title="Create Invoice",
-        auth_token=auth_token  # Pass token to template
+        auth_token=auth_token,  # Pass token to template
+        user_batch_mode=user_batch_mode,  # Pass batch mode preference
+        error_data=error_data  # Pass preserved data from failed submission
     )
 
 @billing_views_bp.route('/list', methods=['GET'])
@@ -906,36 +979,73 @@ def view_invoice(invoice_id):
                    f"total_paid_amount={total_paid_amount}, "
                    f"total_balance_due={total_balance_due}")
         
-        # Get all payments for all invoices for display in the payment history tab
-        all_payments = []
+        # Get payments allocated to THIS specific invoice (from AR subledger)
+        invoice_payments = []
         try:
-            # Get invoice IDs for all related invoices
-            invoice_ids = [invoice_id]
-            for related in related_invoices:
-                if 'invoice_id' in related:
-                    try:
-                        invoice_ids.append(uuid.UUID(related['invoice_id']))
-                    except Exception as e:
-                        logger.warning(f"Failed to convert invoice_id {related['invoice_id']} to UUID: {str(e)}")
-            
-            # Get all payments for these invoices
+            with get_db_session() as session:
+                # Query AR subledger for payment allocations to this invoice
+                ar_entries = session.query(ARSubledger).filter(
+                    ARSubledger.hospital_id == current_user.hospital_id,
+                    ARSubledger.entry_type == 'payment',
+                    ARSubledger.reference_type == 'payment'
+                ).join(
+                    PaymentDetail,
+                    ARSubledger.reference_id == PaymentDetail.payment_id
+                ).filter(
+                    # Get allocations where line items belong to this invoice
+                    ARSubledger.reference_line_item_id.in_(
+                        session.query(InvoiceLineItem.line_item_id).filter(
+                            InvoiceLineItem.invoice_id == invoice_id
+                        ).subquery()
+                    )
+                ).order_by(ARSubledger.transaction_date.desc()).all()
+
+                # Group by payment and aggregate amounts
+                payment_allocations = {}
+                for ar_entry in ar_entries:
+                    payment_id = str(ar_entry.reference_id)
+                    if payment_id not in payment_allocations:
+                        payment_allocations[payment_id] = {
+                            'ar_entry': ar_entry,
+                            'total_allocated': 0
+                        }
+                    payment_allocations[payment_id]['total_allocated'] += float(ar_entry.credit_amount or 0)
+
+                # Get full payment details for each unique payment
+                for payment_id, alloc_data in payment_allocations.items():
+                    payment_record = session.query(PaymentDetail).filter_by(
+                        hospital_id=current_user.hospital_id,
+                        payment_id=uuid.UUID(payment_id)
+                    ).first()
+
+                    if payment_record:
+                        payment_copy = get_detached_copy(payment_record)
+                        payment_copy.allocated_to_invoice = alloc_data['total_allocated']
+                        invoice_payments.append(payment_copy)
+
+        except Exception as e:
+            logger.error(f"Error getting invoice payments from AR subledger: {str(e)}", exc_info=True)
+
+        # Get ALL payments made by this patient (payment history)
+        all_patient_payments = []
+        try:
             with get_db_session() as session:
                 payment_records = session.query(PaymentDetail).filter(
                     PaymentDetail.hospital_id == current_user.hospital_id,
-                    PaymentDetail.invoice_id.in_(invoice_ids)
+                    PaymentDetail.patient_id == invoice['patient_id']
                 ).order_by(PaymentDetail.payment_date.desc()).all()
-                
-                all_payments = [get_detached_copy(payment) for payment in payment_records]
+
+                all_patient_payments = [get_detached_copy(payment) for payment in payment_records]
         except Exception as e:
-            logger.error(f"Error getting all payments: {str(e)}", exc_info=True)
+            logger.error(f"Error getting patient payment history: {str(e)}", exc_info=True)
         
         # Make sure values are properly converted to float for the template - create new variables to avoid any reference issues
         final_total_amount = float(total_amount)
         final_total_balance_due = float(total_balance_due)
         final_total_paid_amount = float(total_paid_amount)
-        
-        # Add payments to the invoice dictionary
-        invoice['payments'] = all_payments
+
+        # Add payments allocated to THIS invoice
+        invoice['payments'] = invoice_payments
 
         return render_template(
             'billing/view_invoice.html',
@@ -946,7 +1056,8 @@ def view_invoice(invoice_id):
             page_title=f"Invoice #{invoice['invoice_number']}",
             is_consolidated_prescription=invoice.get('is_consolidated_prescription', False),
             related_invoices=related_invoices,
-            all_payments=all_payments,
+            invoice_payments=invoice_payments,  # Payments allocated to this invoice
+            all_patient_payments=all_patient_payments,  # All patient payments (history)
 
             # Pass explicit total values
             total_amount=final_total_amount,
@@ -962,6 +1073,35 @@ def view_invoice(invoice_id):
 
 # Identify and fix the redirect loop in record_invoice_payment function in billing_views.py
 # Focus on the pay_all handling section (around line 580)
+
+@billing_views_bp.route('/payment/new', methods=['GET'])
+@login_required
+@permission_required('billing', 'create')
+def new_payment():
+    """
+    Generic payment screen with patient selection
+    User selects patient first, then proceeds to payment with all outstanding invoices
+    """
+    try:
+        # Just render the patient selection screen
+        return render_template(
+            'billing/payment_patient_selection.html',
+            title='Record New Payment'
+        )
+    except Exception as e:
+        flash(f'Error loading payment screen: {str(e)}', 'error')
+        logger.error(f"Error in new_payment: {str(e)}", exc_info=True)
+        return redirect(url_for('auth_views.dashboard'))
+
+
+# Alias route for menu compatibility
+@billing_views_bp.route('/payment/patient-selection', methods=['GET'])
+@login_required
+@permission_required('billing', 'create')
+def payment_patient_selection():
+    """Alias for new_payment - for menu compatibility"""
+    return new_payment()
+
 
 @billing_views_bp.route('/<uuid:invoice_id>/payment', methods=['GET', 'POST'])
 @login_required
@@ -1199,6 +1339,388 @@ def void_invoice_view(invoice_id):
         logger.error(f"Error processing void request: {str(e)}", exc_info=True)
         return redirect(url_for('billing_views.view_invoice', invoice_id=invoice_id))
 
+@billing_views_bp.route('/<uuid:invoice_id>/payment-enhanced', methods=['GET', 'POST'])
+@login_required
+@permission_required('billing', 'create')
+def record_invoice_payment_enhanced(invoice_id):
+    """
+    Enhanced payment form with FIFO allocation, advance usage, and package installments
+    Handles multi-invoice payments with user-configurable allocation
+    """
+    logger.info(f"🔴 record_invoice_payment_enhanced called - Method: {request.method}, Invoice: {invoice_id}")
+    try:
+        if request.method == 'GET':
+            logger.info(f"📖 GET request - Loading payment form for invoice {invoice_id}")
+            # Display enhanced payment form
+            from app.services.billing_service import get_invoice_by_id, get_patient_advance_balance
+
+            # Get invoice details
+            invoice = get_invoice_by_id(
+                hospital_id=current_user.hospital_id,
+                invoice_id=invoice_id
+            )
+
+            if not invoice:
+                flash('Invoice not found', 'error')
+                return redirect(url_for('universal_views.universal_list_view', entity_type='patient_invoices'))
+
+            # Get patient details
+            with get_db_session() as session:
+                from app.models.master import Patient
+                patient = session.query(Patient).filter_by(
+                    hospital_id=current_user.hospital_id,
+                    patient_id=invoice['patient_id']
+                ).first()
+
+                if not patient:
+                    flash('Patient not found', 'error')
+                    return redirect(url_for('universal_views.universal_list_view', entity_type='patient_invoices'))
+
+                patient_dict = get_entity_dict(patient)
+
+            # Get approval threshold
+            approval_threshold = float(current_app.config.get('APPROVAL_THRESHOLD_L1', '100000.00'))
+
+            # Render enhanced payment form
+            return render_template(
+                'billing/payment_form_enhanced.html',
+                invoice=invoice,
+                patient=patient_dict,
+                approval_threshold=approval_threshold,
+                menu_items=get_menu_items(current_user)
+            )
+
+        else:  # POST - Process payment
+            logger.info("=" * 80)
+            logger.info(f"🔵 PAYMENT FORM SUBMITTED - Invoice ID: {invoice_id}")
+            logger.info(f"🔵 Request method: {request.method}")
+            logger.info(f"🔵 Form data keys: {list(request.form.keys())}")
+            logger.info("=" * 80)
+
+            # Get invoice to extract patient_id for redirect after payment
+            from app.services.billing_service import get_invoice_by_id
+            invoice_for_redirect = get_invoice_by_id(
+                hospital_id=current_user.hospital_id,
+                invoice_id=invoice_id
+            )
+            patient_id_for_redirect = invoice_for_redirect.get('patient_id') if invoice_for_redirect else None
+
+            # Helper function to safely convert to Decimal
+            def safe_decimal(value, default='0'):
+                """Convert value to Decimal, handling empty strings and None"""
+                if not value or value == '':
+                    return Decimal(default)
+                try:
+                    return Decimal(str(value).strip())
+                except (InvalidOperation, ValueError, decimal.ConversionSyntax):
+                    return Decimal(default)
+
+            # Get form data
+            payment_date = request.form.get('payment_date')
+            logger.info(f"📅 Payment date: {payment_date}")
+            cash_amount = safe_decimal(request.form.get('cash_amount'))
+            credit_card_amount = safe_decimal(request.form.get('credit_card_amount'))
+            debit_card_amount = safe_decimal(request.form.get('debit_card_amount'))
+            upi_amount = safe_decimal(request.form.get('upi_amount'))
+            advance_amount = safe_decimal(request.form.get('advance_amount'))
+
+            logger.info(f"💵 Cash: ₹{cash_amount}, Card: ₹{credit_card_amount}, Debit: ₹{debit_card_amount}, UPI: ₹{upi_amount}, Advance: ₹{advance_amount}")
+
+            card_number_last4 = request.form.get('card_number_last4')
+            card_type = request.form.get('card_type')
+            upi_id = request.form.get('upi_id')
+            reference_number = request.form.get('reference_number')
+
+            save_as_draft = request.form.get('save_as_draft') == 'true'
+
+            # Calculate total payment
+            total_payment = cash_amount + credit_card_amount + debit_card_amount + upi_amount
+
+            logger.info(f"💰 Total payment: ₹{total_payment}, Save as draft: {save_as_draft}")
+
+            if total_payment == 0 and advance_amount == 0:
+                logger.warning("❌ No payment amount entered")
+                flash('Please enter a payment amount', 'error')
+                return redirect(url_for('billing_views.record_invoice_payment_enhanced', invoice_id=invoice_id))
+
+            # Get invoice allocations from form
+            invoice_allocations = {}
+            for key in request.form.keys():
+                if key.startswith('invoice_allocations['):
+                    # Extract invoice_id from key like "invoice_allocations[uuid]"
+                    inv_id = key.split('[')[1].split(']')[0]
+                    amount = safe_decimal(request.form.get(key))
+                    if amount > 0:
+                        invoice_allocations[inv_id] = float(amount)
+
+            # Get installment allocations from form
+            installment_allocations = {}
+            for key in request.form.keys():
+                if key.startswith('installment_allocations['):
+                    # Extract installment_id from key
+                    inst_id = key.split('[')[1].split(']')[0]
+                    amount = safe_decimal(request.form.get(key))
+                    if amount > 0:
+                        installment_allocations[inst_id] = float(amount)
+
+            # If no specific allocations provided, allocate to current invoice
+            if not invoice_allocations and not installment_allocations:
+                invoice_allocations[str(invoice_id)] = float(total_payment + advance_amount)
+
+            logger.info(f"📋 Invoice allocations: {invoice_allocations}")
+            logger.info(f"📦 Installment allocations: {installment_allocations}")
+
+            # Get approval threshold
+            approval_threshold = Decimal(str(current_app.config.get('APPROVAL_THRESHOLD_L1', '100000.00')))
+
+            # Process payment using enhanced service
+            from app.services.billing_service import record_multi_invoice_payment, apply_advance_payment
+
+            try:
+                payment_date_obj = datetime.strptime(payment_date, '%Y-%m-%d').date() if payment_date else datetime.now().date()
+
+                # Calculate total allocated
+                total_allocated = sum(invoice_allocations.values()) + sum(installment_allocations.values())
+
+                # Initialize payment_id tracking
+                last_payment_id = None
+
+                # ========================================================================
+                # STEP 1: Apply advance payments (if any)
+                # ========================================================================
+                if advance_amount > 0:
+                    for inv_id_str, allocated_amount in invoice_allocations.items():
+                        if allocated_amount > 0:
+                            inv_uuid = uuid.UUID(inv_id_str)
+
+                            # Calculate advance portion for this invoice
+                            advance_portion = (advance_amount * Decimal(allocated_amount) / Decimal(total_allocated)) if total_allocated > 0 else Decimal('0')
+
+                            if advance_portion > 0:
+                                try:
+                                    apply_advance_payment(
+                                        hospital_id=current_user.hospital_id,
+                                        invoice_id=inv_uuid,
+                                        amount=advance_portion,
+                                        adjustment_date=payment_date_obj,
+                                        notes="Applied from enhanced payment form",
+                                        current_user_id=current_user.user_id
+                                    )
+                                    logger.info(f"Applied advance payment of ₹{advance_portion} to invoice {inv_id_str}")
+                                except Exception as e:
+                                    logger.error(f"Error applying advance payment: {str(e)}")
+                                    flash(f'Error applying advance payment: {str(e)}', 'error')
+                                    return redirect(url_for('billing_views.record_invoice_payment_enhanced', invoice_id=invoice_id))
+
+                # ========================================================================
+                # STEP 2: Record payment methods (invoices and installments use SAME payment)
+                # ========================================================================
+                # User has manually allocated total_payment across invoices and installments
+                # We create ONE payment record and allocate it at line-item level
+
+                if total_payment > 0:
+                    logger.info(f"💰 Total payment: ₹{total_payment} to be allocated across invoices and installments")
+
+                    # Build invoice_allocations list (use direct allocation amounts from user)
+                    invoice_alloc_list = []
+                    for inv_id_str, allocated_amount in invoice_allocations.items():
+                        if allocated_amount > 0:
+                            invoice_alloc_list.append({
+                                'invoice_id': inv_id_str,
+                                'allocated_amount': Decimal(str(allocated_amount))
+                            })
+
+                    # ========================================================================
+                    # ✅ CRITICAL FIX: Use SINGLE session for entire payment operation
+                    # This ensures atomicity - either ALL succeeds or ALL rolls back
+                    # ========================================================================
+
+                    try:
+                        with get_db_session() as session:
+                            # SCENARIO 1: Payment has invoice allocations
+                            if invoice_alloc_list:
+                                logger.info(f"📋 Recording payment for {len(invoice_alloc_list)} invoices with allocations: {[(i['invoice_id'][:8], float(i['allocated_amount'])) for i in invoice_alloc_list]}")
+
+                                # ✅ Check if user confirmed overpayment (if needed)
+                                allow_overpayment = request.form.get('allow_overpayment') == 'true'
+
+                                # ✅ Call record_multi_invoice_payment with shared session
+                                # Pass TOTAL payment amounts - function will allocate to line items
+                                result = record_multi_invoice_payment(
+                                    hospital_id=current_user.hospital_id,
+                                    invoice_allocations=invoice_alloc_list,
+                                    payment_date=payment_date_obj,
+                                    cash_amount=cash_amount,
+                                    credit_card_amount=credit_card_amount,
+                                    debit_card_amount=debit_card_amount,
+                                    upi_amount=upi_amount,
+                                    card_number_last4=card_number_last4,
+                                    card_type=card_type,
+                                    upi_id=upi_id,
+                                    reference_number=reference_number,
+                                    recorded_by=current_user.user_id,
+                                    save_as_draft=save_as_draft,
+                                    approval_threshold=approval_threshold,
+                                    allow_overpayment=allow_overpayment,  # ✅ NEW: Pass overpayment confirmation
+                                    session=session  # ✅ Pass shared session
+                                )
+
+                                # ✅ Check if overpayment confirmation required
+                                if result.get('requires_confirmation'):
+                                    # Don't commit - return warning to user
+                                    session.rollback()
+                                    logger.warning("⚠️ Overpayment detected - requiring user confirmation")
+
+                                    # Return JSON with warnings for AJAX handling
+                                    return jsonify({
+                                        'success': False,
+                                        'requires_confirmation': True,
+                                        'error': result.get('error'),
+                                        'message': result.get('message'),
+                                        'overpayment_warnings': result.get('overpayment_warnings', [])
+                                    }), 400
+
+                                # Track the payment_id for installment payments
+                                if result and result.get('success') and 'payment_id' in result:
+                                    last_payment_id = result['payment_id']
+                                    logger.info(f"✓ Created multi-invoice payment {last_payment_id} for ₹{total_payment}")
+                                elif result and not result.get('success'):
+                                    # Payment creation failed for other reasons
+                                    raise ValueError(result.get('error', 'Payment creation failed'))
+
+                            # SCENARIO 2: Payment has ONLY installment allocations (no invoices)
+                            elif installment_allocations:
+                                logger.info(f"📦 Package-only payment: Treating as payment against package invoice")
+
+                                # Get the plan's invoice and create invoice allocation
+                                first_installment_id = list(installment_allocations.keys())[0]
+                                from app.models.transaction import InstallmentPayment, PackagePaymentPlan
+
+                                installment = session.query(InstallmentPayment).filter(
+                                    InstallmentPayment.installment_id == first_installment_id
+                                ).first()
+
+                                if not installment:
+                                    raise ValueError(f"Installment {first_installment_id} not found")
+
+                                plan = session.query(PackagePaymentPlan).filter(
+                                    PackagePaymentPlan.plan_id == installment.plan_id
+                                ).first()
+
+                                if not plan:
+                                    raise ValueError(f"Payment plan for installment {first_installment_id} not found")
+
+                                if not plan.invoice_id:
+                                    raise ValueError(f"Payment plan {plan.plan_id} is not linked to an invoice")
+
+                                # ✅ Build invoice allocation list using the plan's invoice
+                                invoice_alloc_list = [{
+                                    'invoice_id': str(plan.invoice_id),
+                                    'allocated_amount': total_payment
+                                }]
+
+                                logger.info(f"📋 Package installment payment treated as invoice payment to {plan.invoice_id}")
+
+                                # ✅ For package installment payments, automatically allow overpayment
+                                # The invoice might already be paid by other installments, and this payment
+                                # should be recorded as advance against the patient's account
+                                allow_overpayment = True
+                                logger.info("📦 Package installment payment: Auto-allowing overpayment (will record as advance if invoice paid)")
+
+                                # ✅ Call record_multi_invoice_payment with the package invoice
+                                result = record_multi_invoice_payment(
+                                    hospital_id=current_user.hospital_id,
+                                    invoice_allocations=invoice_alloc_list,
+                                    payment_date=payment_date_obj,
+                                    cash_amount=cash_amount,
+                                    credit_card_amount=credit_card_amount,
+                                    debit_card_amount=debit_card_amount,
+                                    upi_amount=upi_amount,
+                                    card_number_last4=card_number_last4,
+                                    card_type=card_type,
+                                    upi_id=upi_id,
+                                    reference_number=reference_number,
+                                    recorded_by=current_user.user_id,
+                                    save_as_draft=save_as_draft,
+                                    approval_threshold=approval_threshold,
+                                    allow_overpayment=allow_overpayment,  # ✅ NEW: Pass overpayment confirmation
+                                    session=session  # ✅ Pass shared session
+                                )
+
+                                # Track the payment_id for installment payments
+                                if result and result.get('success') and 'payment_id' in result:
+                                    last_payment_id = result['payment_id']
+                                    logger.info(f"✓ Created package invoice payment {last_payment_id} for ₹{total_payment}")
+                                elif result and not result.get('success'):
+                                    # Payment creation failed for other reasons
+                                    raise ValueError(result.get('error', 'Package payment creation failed'))
+
+                            # Handle package installments if any (using the SAME session)
+                            if installment_allocations and last_payment_id:
+                                from app.services.package_payment_service import PackagePaymentService
+                                package_service = PackagePaymentService()
+
+                                logger.info(f"📦 Processing {len(installment_allocations)} installment allocation(s)")
+
+                                for installment_id, amount in installment_allocations.items():
+                                    installment_result = package_service.record_installment_payment(
+                                        installment_id=installment_id,
+                                        paid_amount=amount,
+                                        payment_id=last_payment_id,
+                                        hospital_id=current_user.hospital_id,
+                                        session=session  # ✅ Pass shared session
+                                    )
+
+                                    if not installment_result['success']:
+                                        # Raise exception to trigger rollback
+                                        raise ValueError(f"Failed to record installment payment: {installment_result.get('error')}")
+                                    else:
+                                        logger.info(f"✓ Recorded payment of ₹{amount} for installment {installment_id}, status: {installment_result.get('new_status')}")
+
+                            # ✅ COMMIT TRANSACTION - All operations succeeded
+                            session.commit()
+                            logger.info("✅ All payment operations committed successfully")
+
+                            # Invalidate cache after successful commit
+                            try:
+                                from app.engine.universal_service_cache import invalidate_service_cache_for_entity
+                                invalidate_service_cache_for_entity('patient_payment_receipts', cascade=False)
+                                if installment_allocations:
+                                    invalidate_service_cache_for_entity('package_payment_plans', cascade=False)
+                                    invalidate_service_cache_for_entity('installment_payments', cascade=False)
+                                logger.info("Cache invalidated after payment")
+                            except Exception as e:
+                                logger.warning(f"Failed to invalidate cache: {str(e)}")
+
+                    except Exception as e:
+                        logger.error(f"Error recording payment (transaction rolled back): {str(e)}", exc_info=True)
+                        flash(f'Error recording payment: {str(e)}', 'error')
+                        return redirect(url_for('billing_views.record_invoice_payment_enhanced', invoice_id=invoice_id))
+
+                flash('Payment recorded successfully!', 'success')
+                # Redirect to universal payment list for this patient
+                if patient_id_for_redirect:
+                    return redirect(url_for('universal_views.universal_list_view',
+                                           entity_type='patient_payments',
+                                           patient_id=str(patient_id_for_redirect)))
+                # Fallback to invoice view if we can't get patient_id
+                return redirect(url_for('billing_views.view_invoice', invoice_id=invoice_id))
+
+            except (ValueError, decimal.InvalidOperation, decimal.ConversionSyntax) as e:
+                flash(f'Payment error: {str(e)}', 'error')
+                logger.error(f"Enhanced payment validation error: {str(e)}", exc_info=True)
+                return redirect(url_for('billing_views.record_invoice_payment_enhanced', invoice_id=invoice_id))
+
+    except (ValueError, decimal.InvalidOperation, decimal.ConversionSyntax) as e:
+        flash(f'Invalid payment data: {str(e)}', 'error')
+        logger.error(f"Enhanced payment data error: {str(e)}", exc_info=True)
+        return redirect(url_for('billing_views.record_invoice_payment_enhanced', invoice_id=invoice_id))
+    except Exception as e:
+        flash(f'Error processing payment: {str(e)}', 'error')
+        logger.error(f"Enhanced payment error: {str(e)}", exc_info=True)
+        return redirect(url_for('universal_views.universal_list_view', entity_type='patient_invoices'))
+
+
 @billing_views_bp.route('/payment/<uuid:payment_id>/refund', methods=['POST'])
 @login_required
 @permission_required('billing', 'delete')
@@ -1237,6 +1759,251 @@ def issue_payment_refund(payment_id):
         logger.error(f"Error issuing refund: {str(e)}", exc_info=True)
     
     return redirect(url_for('billing_views.view_invoice', invoice_id=invoice_id))
+
+
+# ============================================================================
+# PAYMENT WORKFLOW ROUTES
+# ============================================================================
+
+@billing_views_bp.route('/payment/<uuid:payment_id>/approve', methods=['GET', 'POST'])
+@login_required
+@permission_required('billing', 'approve')
+def approve_payment_view(payment_id):
+    """Approve a pending payment"""
+    try:
+        if request.method == 'GET':
+            # Show approval confirmation page
+            with get_db_session() as session:
+                payment = session.query(PaymentDetail).filter_by(
+                    payment_id=payment_id,
+                    hospital_id=current_user.hospital_id
+                ).first()
+
+                if not payment:
+                    flash('Payment not found', 'error')
+                    return redirect(url_for('billing_views.invoice_list'))
+
+                if payment.workflow_status != 'pending_approval':
+                    flash(f'Payment is not pending approval (current status: {payment.workflow_status})', 'warning')
+                    return redirect(url_for('billing_views.view_invoice', invoice_id=payment.invoice_id))
+
+                # Get invoice details
+                invoice = session.query(InvoiceHeader).filter_by(
+                    invoice_id=payment.invoice_id
+                ).first()
+
+                # Get patient details
+                patient = session.query(Patient).filter_by(
+                    patient_id=invoice.patient_id
+                ).first()
+
+                payment_dict = get_entity_dict(payment)
+                invoice_dict = get_entity_dict(invoice)
+                patient_dict = get_entity_dict(patient) if patient else None
+
+                return render_template(
+                    'billing/payment_approval.html',
+                    payment=payment_dict,
+                    invoice=invoice_dict,
+                    patient=patient_dict,
+                    action='approve',
+                    menu_items=get_menu_items(current_user)
+                )
+
+        # POST: Process approval
+        result = approve_payment(
+            payment_id=payment_id,
+            approved_by=current_user.user_id,
+            hospital_id=current_user.hospital_id
+        )
+
+        if result.get('success'):
+            flash('Payment approved and GL entries posted successfully', 'success')
+        else:
+            flash(f"Error approving payment: {result.get('error')}", 'error')
+
+        # Get invoice_id to redirect
+        with get_db_session() as session:
+            payment = session.query(PaymentDetail).filter_by(
+                payment_id=payment_id
+            ).first()
+            invoice_id = payment.invoice_id if payment else None
+
+        if invoice_id:
+            return redirect(url_for('billing_views.view_invoice', invoice_id=invoice_id))
+        else:
+            return redirect(url_for('billing_views.invoice_list'))
+
+    except Exception as e:
+        flash(f'Error processing approval: {str(e)}', 'error')
+        logger.error(f"Error processing approval: {str(e)}", exc_info=True)
+        return redirect(url_for('billing_views.invoice_list'))
+
+
+@billing_views_bp.route('/payment/<uuid:payment_id>/reject', methods=['GET', 'POST'])
+@login_required
+@permission_required('billing', 'approve')
+def reject_payment_view(payment_id):
+    """Reject a pending payment"""
+    try:
+        if request.method == 'GET':
+            # Show rejection confirmation page
+            with get_db_session() as session:
+                payment = session.query(PaymentDetail).filter_by(
+                    payment_id=payment_id,
+                    hospital_id=current_user.hospital_id
+                ).first()
+
+                if not payment:
+                    flash('Payment not found', 'error')
+                    return redirect(url_for('billing_views.invoice_list'))
+
+                if payment.workflow_status != 'pending_approval':
+                    flash(f'Payment is not pending approval (current status: {payment.workflow_status})', 'warning')
+                    return redirect(url_for('billing_views.view_invoice', invoice_id=payment.invoice_id))
+
+                # Get invoice details
+                invoice = session.query(InvoiceHeader).filter_by(
+                    invoice_id=payment.invoice_id
+                ).first()
+
+                # Get patient details
+                patient = session.query(Patient).filter_by(
+                    patient_id=invoice.patient_id
+                ).first()
+
+                payment_dict = get_entity_dict(payment)
+                invoice_dict = get_entity_dict(invoice)
+                patient_dict = get_entity_dict(patient) if patient else None
+
+                return render_template(
+                    'billing/payment_approval.html',
+                    payment=payment_dict,
+                    invoice=invoice_dict,
+                    patient=patient_dict,
+                    action='reject',
+                    menu_items=get_menu_items(current_user)
+                )
+
+        # POST: Process rejection
+        rejection_reason = request.form.get('rejection_reason')
+        if not rejection_reason:
+            flash('Rejection reason is required', 'error')
+            return redirect(url_for('billing_views.reject_payment_view', payment_id=payment_id))
+
+        result = reject_payment(
+            payment_id=payment_id,
+            rejected_by=current_user.user_id,
+            rejection_reason=rejection_reason,
+            hospital_id=current_user.hospital_id
+        )
+
+        if result.get('success'):
+            flash('Payment rejected successfully', 'success')
+        else:
+            flash(f"Error rejecting payment: {result.get('error')}", 'error')
+
+        # Get invoice_id to redirect
+        with get_db_session() as session:
+            payment = session.query(PaymentDetail).filter_by(
+                payment_id=payment_id
+            ).first()
+            invoice_id = payment.invoice_id if payment else None
+
+        if invoice_id:
+            return redirect(url_for('billing_views.view_invoice', invoice_id=invoice_id))
+        else:
+            return redirect(url_for('billing_views.invoice_list'))
+
+    except Exception as e:
+        flash(f'Error processing rejection: {str(e)}', 'error')
+        logger.error(f"Error processing rejection: {str(e)}", exc_info=True)
+        return redirect(url_for('billing_views.invoice_list'))
+
+
+@billing_views_bp.route('/payment/<uuid:payment_id>/reverse', methods=['GET', 'POST'])
+@login_required
+@permission_required('billing', 'delete')
+def reverse_payment_view(payment_id):
+    """Reverse an approved payment"""
+    try:
+        if request.method == 'GET':
+            # Show reversal confirmation page
+            with get_db_session() as session:
+                payment = session.query(PaymentDetail).filter_by(
+                    payment_id=payment_id,
+                    hospital_id=current_user.hospital_id
+                ).first()
+
+                if not payment:
+                    flash('Payment not found', 'error')
+                    return redirect(url_for('billing_views.invoice_list'))
+
+                if payment.workflow_status != 'approved':
+                    flash(f'Only approved payments can be reversed (current status: {payment.workflow_status})', 'warning')
+                    return redirect(url_for('billing_views.view_invoice', invoice_id=payment.invoice_id))
+
+                if payment.is_reversed:
+                    flash('Payment is already reversed', 'warning')
+                    return redirect(url_for('billing_views.view_invoice', invoice_id=payment.invoice_id))
+
+                # Get invoice details
+                invoice = session.query(InvoiceHeader).filter_by(
+                    invoice_id=payment.invoice_id
+                ).first()
+
+                # Get patient details
+                patient = session.query(Patient).filter_by(
+                    patient_id=invoice.patient_id
+                ).first()
+
+                payment_dict = get_entity_dict(payment)
+                invoice_dict = get_entity_dict(invoice)
+                patient_dict = get_entity_dict(patient) if patient else None
+
+                return render_template(
+                    'billing/payment_reversal.html',
+                    payment=payment_dict,
+                    invoice=invoice_dict,
+                    patient=patient_dict,
+                    menu_items=get_menu_items(current_user)
+                )
+
+        # POST: Process reversal
+        reversal_reason = request.form.get('reversal_reason')
+        if not reversal_reason:
+            flash('Reversal reason is required', 'error')
+            return redirect(url_for('billing_views.reverse_payment_view', payment_id=payment_id))
+
+        result = reverse_payment(
+            payment_id=payment_id,
+            reversed_by=current_user.user_id,
+            reversal_reason=reversal_reason,
+            hospital_id=current_user.hospital_id
+        )
+
+        if result.get('success'):
+            flash('Payment reversed successfully and GL entries reversed', 'success')
+        else:
+            flash(f"Error reversing payment: {result.get('error')}", 'error')
+
+        # Get invoice_id to redirect
+        with get_db_session() as session:
+            payment = session.query(PaymentDetail).filter_by(
+                payment_id=payment_id
+            ).first()
+            invoice_id = payment.invoice_id if payment else None
+
+        if invoice_id:
+            return redirect(url_for('billing_views.view_invoice', invoice_id=invoice_id))
+        else:
+            return redirect(url_for('billing_views.invoice_list'))
+
+    except Exception as e:
+        flash(f'Error processing reversal: {str(e)}', 'error')
+        logger.error(f"Error processing reversal: {str(e)}", exc_info=True)
+        return redirect(url_for('billing_views.invoice_list'))
+
 
 @billing_views_bp.route('/web_api/patient/search', methods=['GET'])
 @login_required
@@ -1388,42 +2155,90 @@ def web_api_patient_search():
 def web_api_item_search():
     """Web-friendly item search that uses Flask-Login"""
     try:
-       
+
         with get_db_session() as session:
             # Get query parameters
             query = request.args.get('q', '')
             item_type = request.args.get('type', '')
-            
+
             if not item_type:
                 return jsonify([])
-            
+
             hospital_id = current_user.hospital_id
+
+            # Get invoice date (for date-based GST/pricing lookup)
+            # If not provided, use today's date (for new invoices being created now)
+            invoice_date_str = request.args.get('invoice_date')
+            if invoice_date_str:
+                from datetime import datetime
+                try:
+                    applicable_date = datetime.strptime(invoice_date_str, '%Y-%m-%d').date()
+                    current_app.logger.debug(f"[ITEM SEARCH] Using invoice_date={applicable_date} for pricing lookup")
+                except ValueError:
+                    current_app.logger.warning(f"[ITEM SEARCH] Invalid invoice_date format: {invoice_date_str}. Using today.")
+                    from datetime import datetime, timezone
+                    applicable_date = datetime.now(timezone.utc).date()
+            else:
+                from datetime import datetime, timezone
+                applicable_date = datetime.now(timezone.utc).date()
             
             # Search based on item type
             results = []
             
             if item_type == 'Package':
-                # Check if Package has is_active attribute, if not, filter without it
-                if hasattr(Package, 'is_active'):
-                    packages = session.query(Package).filter(
-                        Package.hospital_id == hospital_id,
-                        Package.is_active == True,
-                        Package.package_name.ilike(f'%{query}%')
-                    ).limit(10).all()
-                else:
-                    packages = session.query(Package).filter(
-                        Package.hospital_id == hospital_id,
-                        Package.package_name.ilike(f'%{query}%')
-                    ).limit(10).all()
-                
+                # Package uses 'status' field instead of 'is_active'
+                packages = session.query(Package).filter(
+                    Package.hospital_id == hospital_id,
+                    Package.package_name.ilike(f'%{query}%')
+                ).filter(
+                    or_(Package.status == 'active', Package.status.is_(None))
+                ).order_by(Package.package_name).limit(20).all()
+
+                current_app.logger.info(f"Package search for '{query}': found {len(packages)} results")
+
+                # Use date-based pricing/GST service
+                # Use the applicable_date (invoice_date or today) set earlier
+                from app.services.pricing_tax_service import get_applicable_pricing_and_tax
+
                 for package in packages:
+                    # Get pricing and GST applicable on the invoice date
+                    try:
+                        pricing_tax = get_applicable_pricing_and_tax(
+                            session=session,
+                            hospital_id=hospital_id,
+                            entity_type='package',
+                            entity_id=package.package_id,
+                            applicable_date=applicable_date
+                        )
+
+                        gst_rate = float(pricing_tax['gst_rate']) if pricing_tax['gst_rate'] else 0.0
+                        is_gst_exempt = pricing_tax['is_gst_exempt']
+                        price = float(pricing_tax.get('price', 0)) if pricing_tax.get('price') else 0.0
+
+                        # Override GST rate to 0 if item is GST exempt (avoid misleading display)
+                        if is_gst_exempt:
+                            gst_rate = 0.0
+
+                        current_app.logger.debug(f"Package '{package.package_name}': Using {pricing_tax['source']} - "
+                                               f"gst_rate={gst_rate}%, price={price}")
+                    except Exception as e:
+                        current_app.logger.warning(f"Failed to get date-based pricing for package {package.package_id}: {e}. Using master table values.")
+                        gst_rate = float(package.gst_rate) if hasattr(package, 'gst_rate') and package.gst_rate else 0.0
+                        is_gst_exempt = package.is_gst_exempt if hasattr(package, 'is_gst_exempt') else False
+                        price = float(package.price) if hasattr(package, 'price') and package.price else 0.0
+
+                        # Override GST rate to 0 if item is GST exempt (avoid misleading display)
+                        if is_gst_exempt:
+                            gst_rate = 0.0
+
                     results.append({
                         'id': str(package.package_id),
                         'name': package.package_name,
                         'type': 'Package',
-                        'price': float(package.price) if package.price else 0.0,
-                        'gst_rate': float(package.gst_rate) if package.gst_rate else 0.0,
-                        'is_gst_exempt': package.is_gst_exempt if hasattr(package, 'is_gst_exempt') else False
+                        'price': price,
+                        'gst_rate': gst_rate,
+                        'is_gst_exempt': is_gst_exempt,
+                        'gst_inclusive': False  # Packages are GST exclusive by default
                     })
             
             elif item_type == 'Service':
@@ -1433,91 +2248,126 @@ def web_api_item_search():
                         Service.hospital_id == hospital_id,
                         Service.is_active == True,
                         Service.service_name.ilike(f'%{query}%')
-                    ).limit(10).all()
+                    ).order_by(Service.service_name).limit(20).all()
                 else:
                     services = session.query(Service).filter(
                         Service.hospital_id == hospital_id,
                         Service.service_name.ilike(f'%{query}%')
-                    ).limit(10).all()
-                
+                    ).order_by(Service.service_name).limit(20).all()
+
+                # Use date-based pricing/GST service
+                # Use the applicable_date (invoice_date or today) set earlier
+                from app.services.pricing_tax_service import get_applicable_pricing_and_tax
+
                 for service in services:
+                    # Get pricing and GST applicable on the invoice date
+
+                    try:
+                        pricing_tax = get_applicable_pricing_and_tax(
+                            session=session,
+                            hospital_id=hospital_id,
+                            entity_type='service',
+                            entity_id=service.service_id,
+                            applicable_date=applicable_date
+                        )
+
+                        gst_rate = float(pricing_tax['gst_rate']) if pricing_tax['gst_rate'] else 0.0
+                        is_gst_exempt = pricing_tax['is_gst_exempt']
+                        price = float(pricing_tax.get('price', 0)) if pricing_tax.get('price') else 0.0
+
+                        # Override GST rate to 0 if item is GST exempt (avoid misleading display)
+                        if is_gst_exempt:
+                            gst_rate = 0.0
+
+                        current_app.logger.debug(f"Service '{service.service_name}': Using {pricing_tax['source']} - "
+                                               f"gst_rate={gst_rate}%, price={price}")
+                    except Exception as e:
+                        current_app.logger.warning(f"Failed to get date-based pricing for service {service.service_id}: {e}. Using master table values.")
+                        gst_rate = float(service.gst_rate) if hasattr(service, 'gst_rate') and service.gst_rate else 0.0
+                        is_gst_exempt = service.is_gst_exempt if hasattr(service, 'is_gst_exempt') else False
+                        price = float(service.price) if hasattr(service, 'price') and service.price else 0.0
+
+                        # Override GST rate to 0 if item is GST exempt (avoid misleading display)
+                        if is_gst_exempt:
+                            gst_rate = 0.0
+
                     results.append({
                         'id': str(service.service_id),
                         'name': service.service_name,
                         'type': 'Service',
-                        'price': float(service.price) if service.price else 0.0,
-                        'gst_rate': float(service.gst_rate) if hasattr(service, 'gst_rate') else 0.0,
-                        'is_gst_exempt': service.is_gst_exempt if hasattr(service, 'is_gst_exempt') else False,
+                        'price': price,
+                        'gst_rate': gst_rate,
+                        'is_gst_exempt': is_gst_exempt,
+                        'gst_inclusive': False,  # Services are GST exclusive by default
                         'sac_code': service.sac_code if hasattr(service, 'sac_code') else None
                     })
             
-            elif item_type == 'Medicine':
-                # For Medicine type, exclude prescription-required medicines
-                medicine_filter = Medicine.medicine_name.ilike(f'%{query}%')
-                
-                # Add prescription filter if attribute exists
-                if hasattr(Medicine, 'prescription_required'):
-                    medicine_filter = and_(
-                        medicine_filter, 
-                        Medicine.prescription_required == False
-                    )
-                
-                # Add active filter if it exists
-                if hasattr(Medicine, 'is_active'):
-                    medicines = session.query(Medicine).filter(
-                        Medicine.hospital_id == hospital_id,
-                        Medicine.is_active == True,
-                        medicine_filter
-                    ).limit(10).all()
-                else:
-                    medicines = session.query(Medicine).filter(
-                        Medicine.hospital_id == hospital_id,
-                        medicine_filter
-                    ).limit(10).all()
-                
+            elif item_type in ['OTC', 'Prescription', 'Product', 'Consumable']:
+                # All medicine-based item types use medicine_type field
+                # Only show medicines that have inventory in stock
+
+                # First, get medicine IDs that have stock
+                medicine_ids_with_stock = session.query(Inventory.medicine_id).filter(
+                    Inventory.hospital_id == hospital_id,
+                    Inventory.current_stock > 0
+                ).distinct().subquery()
+
+                # Query medicines with stock only
+                base_filter = and_(
+                    Medicine.hospital_id == hospital_id,
+                    Medicine.medicine_type == item_type,
+                    Medicine.medicine_id.in_(medicine_ids_with_stock)
+                )
+
+                # Add search query if provided
+                if query:
+                    base_filter = and_(base_filter, Medicine.medicine_name.ilike(f'%{query}%'))
+
+                medicines = session.query(Medicine).filter(base_filter).order_by(Medicine.medicine_name).limit(20).all()
+
+                current_app.logger.info(f"{item_type} search for '{query}': found {len(medicines)} results (with stock only)")
+
+                # Use date-based pricing/GST service for medicines
+                # Use the applicable_date (invoice_date or today) set earlier
+                from app.services.pricing_tax_service import get_applicable_pricing_and_tax
+
                 # Convert to result format
                 for medicine in medicines:
+                    # Get pricing and GST applicable on the invoice date
+                    try:
+                        pricing_tax = get_applicable_pricing_and_tax(
+                            session=session,
+                            hospital_id=hospital_id,
+                            entity_type='medicine',
+                            entity_id=medicine.medicine_id,
+                            applicable_date=applicable_date
+                        )
+
+                        gst_rate = float(pricing_tax['gst_rate']) if pricing_tax['gst_rate'] else 0.0
+                        is_gst_exempt = pricing_tax['is_gst_exempt']
+
+                        # Override GST rate to 0 if item is GST exempt (avoid misleading display)
+                        if is_gst_exempt:
+                            gst_rate = 0.0
+
+                        current_app.logger.debug(f"Medicine '{medicine.medicine_name}': Using {pricing_tax['source']} - "
+                                               f"gst_rate={gst_rate}%")
+                    except Exception as e:
+                        current_app.logger.warning(f"Failed to get date-based pricing for medicine {medicine.medicine_id}: {e}. Using master table values.")
+                        gst_rate = float(medicine.gst_rate) if hasattr(medicine, 'gst_rate') and medicine.gst_rate else 0.0
+                        is_gst_exempt = medicine.is_gst_exempt if hasattr(medicine, 'is_gst_exempt') else False
+
+                        # Override GST rate to 0 if item is GST exempt (avoid misleading display)
+                        if is_gst_exempt:
+                            gst_rate = 0.0
+
                     results.append({
                         'id': str(medicine.medicine_id),
                         'name': medicine.medicine_name,
-                        'type': 'Medicine',
-                        'gst_rate': float(medicine.gst_rate) if hasattr(medicine, 'gst_rate') else 0.0,
-                        'is_gst_exempt': medicine.is_gst_exempt if hasattr(medicine, 'is_gst_exempt') else False,
-                        'hsn_code': medicine.hsn_code if hasattr(medicine, 'hsn_code') else None
-                    })
-            
-            elif item_type == 'Prescription':
-                # For Prescription type, only show prescription-required medicines
-                prescription_filter = Medicine.medicine_name.ilike(f'%{query}%')
-                
-                # Add prescription filter if attribute exists
-                if hasattr(Medicine, 'prescription_required'):
-                    prescription_filter = and_(
-                        prescription_filter, 
-                        Medicine.prescription_required == True
-                    )
-                
-                # Add active filter if it exists
-                if hasattr(Medicine, 'is_active'):
-                    medicines = session.query(Medicine).filter(
-                        Medicine.hospital_id == hospital_id,
-                        Medicine.is_active == True,
-                        prescription_filter
-                    ).limit(10).all()
-                else:
-                    medicines = session.query(Medicine).filter(
-                        Medicine.hospital_id == hospital_id,
-                        prescription_filter
-                    ).limit(10).all()
-                
-                # Convert to result format
-                for medicine in medicines:
-                    results.append({
-                        'id': str(medicine.medicine_id),
-                        'name': medicine.medicine_name,
-                        'type': 'Prescription',  # Set type as Prescription
-                        'gst_rate': float(medicine.gst_rate) if hasattr(medicine, 'gst_rate') else 0.0,
-                        'is_gst_exempt': medicine.is_gst_exempt if hasattr(medicine, 'is_gst_exempt') else False,
+                        'type': item_type,  # Return the actual type (OTC, Prescription, Product, Consumable)
+                        'gst_rate': gst_rate,
+                        'is_gst_exempt': is_gst_exempt,
+                        'gst_inclusive': medicine.gst_inclusive if hasattr(medicine, 'gst_inclusive') else False,  # ✅ Add gst_inclusive flag
                         'hsn_code': medicine.hsn_code if hasattr(medicine, 'hsn_code') else None
                     })
             
@@ -1536,62 +2386,411 @@ def web_api_medicine_batches(medicine_id):
             # Get query parameters
             quantity = Decimal(request.args.get('quantity', '1'))
             hospital_id = current_user.hospital_id
-            
-            # Get medicine details
-            if hasattr(Medicine, 'is_active'):
-                medicine = session.query(Medicine).filter_by(
-                    hospital_id=hospital_id,
-                    medicine_id=medicine_id,
-                    is_active=True
-                ).first()
+
+            # Get invoice date (for date-based GST/pricing lookup)
+            # If not provided, use today's date (for new invoices being created now)
+            invoice_date_str = request.args.get('invoice_date')
+            if invoice_date_str:
+                from datetime import datetime
+                try:
+                    applicable_date = datetime.strptime(invoice_date_str, '%Y-%m-%d').date()
+                    current_app.logger.info(f"[BATCH LOOKUP] Using invoice_date={applicable_date} for pricing lookup")
+                except ValueError:
+                    current_app.logger.warning(f"[BATCH LOOKUP] Invalid invoice_date format: {invoice_date_str}. Using today.")
+                    applicable_date = datetime.now(timezone.utc).date()
             else:
-                medicine = session.query(Medicine).filter_by(
-                    hospital_id=hospital_id,
-                    medicine_id=medicine_id
-                ).first()
+                from datetime import datetime, timezone
+                applicable_date = datetime.now(timezone.utc).date()
+                current_app.logger.debug(f"[BATCH LOOKUP] No invoice_date provided, using today: {applicable_date}")
+
+            # DEBUG: Log the lookup attempt
+            current_app.logger.info(f"[BATCH LOOKUP] Searching for medicine_id={medicine_id} (type={type(medicine_id).__name__}), hospital_id={hospital_id} (type={type(hospital_id).__name__}), user={current_user.user_id}")
+
+            # Get medicine details
+            # Don't filter by is_active - it causes comparison issues
+            # The search endpoint doesn't filter by is_active either
+            medicine = session.query(Medicine).filter(
+                Medicine.hospital_id == hospital_id,
+                Medicine.medicine_id == medicine_id
+            ).first()
             
             if not medicine:
+                current_app.logger.warning(f"[BATCH LOOKUP] Medicine NOT FOUND: medicine_id={medicine_id}, hospital_id={hospital_id}")
+
+                # DEBUG: Check if medicine exists with different filters
+                # Test 1: Just medicine_id with filter()
+                test1 = session.query(Medicine).filter(Medicine.medicine_id == medicine_id).first()
+                current_app.logger.warning(f"[BATCH LOOKUP] Test1 (filter medicine_id only): {'FOUND' if test1 else 'NOT FOUND'}")
+
+                # Test 2: Just hospital_id with filter()
+                test2 = session.query(Medicine).filter(Medicine.hospital_id == hospital_id).first()
+                current_app.logger.warning(f"[BATCH LOOKUP] Test2 (filter hospital_id only): {'FOUND' if test2 else 'NOT FOUND'}")
+
+                # Test 3: Both with filter()
+                test3 = session.query(Medicine).filter(
+                    Medicine.hospital_id == hospital_id,
+                    Medicine.medicine_id == medicine_id
+                ).first()
+                current_app.logger.warning(f"[BATCH LOOKUP] Test3 (filter both, no is_active): {'FOUND' if test3 else 'NOT FOUND'}")
+
+                if test3:
+                    current_app.logger.warning(f"[BATCH LOOKUP] Test3 medicine: name={test3.medicine_name}, is_active={getattr(test3, 'is_active', 'N/A')}")
+
                 return jsonify({'error': 'Medicine not found'}), 404
+
+            current_app.logger.info(f"[BATCH LOOKUP] Medicine FOUND: {medicine.medicine_name}, hospital_id={medicine.hospital_id}")
+
+            # CONSOLIDATE multiple records for same batch into one entry
+            # Show aggregated stock, use weighted average price, earliest expiry
+            # Backend FIFO allocation will handle distribution across multiple records
+            from sqlalchemy.sql import text
+
+            query = text("""
+                SELECT
+                    i.batch,
+                    MIN(i.expiry) as expiry,  -- Earliest expiry for FIFO
+                    SUM(i.current_stock) as current_stock,  -- Total stock across all records
+                    -- Weighted average price based on stock
+                    SUM(i.sale_price * i.current_stock) / NULLIF(SUM(i.current_stock), 0) as sale_price,
+                    MAX(i.pack_mrp) as pack_mrp,  -- Use highest MRP
+                    MAX(i.cgst) as cgst,  -- GST for reference
+                    MAX(i.sgst) as sgst,
+                    MAX(i.igst) as igst,
+                    COUNT(*) as record_count  -- How many records consolidated
+                FROM inventory i
+                WHERE i.hospital_id = :hospital_id
+                  AND i.medicine_id = :medicine_id
+                  AND i.current_stock > 0  -- Only batches with stock
+                GROUP BY i.batch
+                ORDER BY MIN(i.expiry)  -- FIFO based on earliest expiry
+            """)
+
+            result_proxy = session.execute(query, {
+                'hospital_id': hospital_id,
+                'medicine_id': medicine_id
+            })
+
+            # Convert result proxy to list of consolidated batch records
+            consolidated_batches = []
+            for row in result_proxy:
+                # Create a namespace object to mimic ORM record
+                from types import SimpleNamespace
+                record = SimpleNamespace(**{column: getattr(row, column) for column in row._mapping.keys()})
+                consolidated_batches.append(record)
+
+                # Log consolidation info
+                if record.record_count > 1:
+                    price_str = f"{record.sale_price:.2f}" if record.sale_price else "0.00"
+                    current_app.logger.info(f"[BATCH CONSOLIDATION] Batch '{record.batch}' consolidated {record.record_count} inventory records: "
+                                          f"Total Stock={record.current_stock}, Avg Price={price_str}")
+
+            current_app.logger.info(f"[BATCH LOOKUP] Found {len(consolidated_batches)} unique batches for {medicine.medicine_name}")
             
-            # Simple query to get the most recent inventory records for this medicine
-            # Order by created_at desc and filter for positive stock
-            inventory_records = session.query(Inventory).filter(
-                Inventory.hospital_id == hospital_id,
-                Inventory.medicine_id == medicine_id,
-                Inventory.current_stock > 0  # Only include batches with positive stock
-            ).order_by(
-                Inventory.batch,  # Group by batch
-                Inventory.created_at.desc()  # Latest entries first
-            ).all()
-            
-            # Manually filter for unique batches (since we get the first/latest for each batch)
-            seen_batches = set()
-            unique_records = []
-            
-            for record in inventory_records:
-                if record.batch not in seen_batches:
-                    seen_batches.add(record.batch)
-                    unique_records.append(record)
-            
+            # IMPORTANT: Get GST rate from pricing_tax_service, NOT from inventory
+            # Inventory GST is historical and may not reflect current config
+            # Use the applicable_date (invoice_date or today) set earlier
+            from app.services.pricing_tax_service import get_applicable_pricing_and_tax
+
+            try:
+                pricing_tax = get_applicable_pricing_and_tax(
+                    session=session,
+                    hospital_id=hospital_id,
+                    entity_type='medicine',
+                    entity_id=medicine_id,
+                    applicable_date=applicable_date
+                )
+
+                medicine_gst_rate = pricing_tax['gst_rate']
+                medicine_is_gst_exempt = pricing_tax['is_gst_exempt']
+                medicine_mrp = pricing_tax.get('mrp', 0)  # ✅ Get MRP from pricing_tax_service
+                medicine_pack_mrp = pricing_tax.get('pack_mrp', 0)  # ✅ Get pack_mrp from config
+
+                # Override GST rate to 0 if item is GST exempt (avoid misleading display)
+                if medicine_is_gst_exempt:
+                    medicine_gst_rate = 0.0
+
+                current_app.logger.info(f"[BATCH LOOKUP] Medicine pricing from {pricing_tax['source']}: "
+                                       f"gst_rate={medicine_gst_rate}%, is_gst_exempt={medicine_is_gst_exempt}, "
+                                       f"MRP={medicine_mrp}, pack_MRP={medicine_pack_mrp}")
+            except Exception as e:
+                current_app.logger.warning(f"[BATCH LOOKUP] Failed to get pricing_tax for medicine {medicine_id}: {e}. "
+                                         f"Using medicine master table as fallback.")
+                # Fallback to medicine master table
+                medicine_gst_rate = float(medicine.gst_rate) if medicine.gst_rate else 0.0
+                medicine_is_gst_exempt = medicine.is_gst_exempt if hasattr(medicine, 'is_gst_exempt') else False
+                medicine_mrp = float(medicine.mrp) if hasattr(medicine, 'mrp') and medicine.mrp else 0.0
+                medicine_pack_mrp = float(medicine.pack_mrp) if hasattr(medicine, 'pack_mrp') and medicine.pack_mrp else 0.0
+
+                # Override GST rate to 0 if item is GST exempt (avoid misleading display)
+                if medicine_is_gst_exempt:
+                    medicine_gst_rate = 0.0
+
             # Format the response
             result = []
-            for record in unique_records:
+            for record in consolidated_batches:
+                # NOTE: Inventory CGST/SGST/IGST are for reference only (historical transaction data)
+                # The ACTUAL GST rate to use comes from pricing_tax_service above
+                inventory_cgst = float(record.cgst) if record.cgst else 0
+                inventory_sgst = float(record.sgst) if record.sgst else 0
+                inventory_igst = float(record.igst) if record.igst else 0
+                inventory_pack_mrp = float(record.pack_mrp) if record.pack_mrp else 0  # Backup only
+
                 result.append({
                     'batch': record.batch,
                     'expiry_date': record.expiry.strftime('%Y-%m-%d') if record.expiry else None,
                     'available_quantity': float(record.current_stock) if record.current_stock else 0,
-                    'unit_price': float(record.sale_price) if record.sale_price else 0,
-                    'is_sufficient': record.current_stock >= quantity  # Add flag to indicate if stock is sufficient
+                    'unit_price': float(record.sale_price) if record.sale_price else 0,  # Weighted average price
+                    'mrp': float(medicine_mrp) if medicine_mrp else inventory_pack_mrp,  # ✅ From pricing_tax_service, inventory as fallback
+                    'gst_rate': medicine_gst_rate,  # ✅ From pricing_tax_service, NOT inventory
+                    'is_gst_exempt': medicine_is_gst_exempt,  # ✅ From pricing_tax_service
+                    'gst_inclusive': medicine.gst_inclusive if hasattr(medicine, 'gst_inclusive') else False,  # ✅ From medicine master
+                    # Include inventory data for reference only (not used for calculation)
+                    'inventory_cgst': inventory_cgst,
+                    'inventory_sgst': inventory_sgst,
+                    'inventory_igst': inventory_igst,
+                    'inventory_pack_mrp': inventory_pack_mrp,  # ✅ Historical MRP for reference
+                    'is_sufficient': record.current_stock >= quantity,
+                    'is_consolidated': record.record_count > 1,  # ✅ Indicates multiple records consolidated
+                    'record_count': record.record_count  # ✅ How many records behind this batch
                 })
             
             # Sort by expiry date (FIFO)
             result.sort(key=lambda x: x.get('expiry_date', '9999-12-31'))
             
             return jsonify(result)
-            
+
     except Exception as e:
         current_app.logger.error(f"Error getting medicine batches: {str(e)}", exc_info=True)
         return jsonify({'error': 'Error getting medicine batches'}), 500
+
+@billing_views_bp.route('/web_api/medicine/<uuid:medicine_id>/fifo-allocation', methods=['GET'])
+@login_required
+def web_api_medicine_fifo_allocation(medicine_id):
+    """
+    Get FIFO batch allocation for a medicine based on required quantity
+    Uses existing FIFO service from inventory_service.py
+    """
+    try:
+        # Import inventory service here to avoid circular imports
+        from app.services.inventory_service import get_batch_selection_for_invoice
+
+        with get_db_session() as session:
+            # Get parameters
+            quantity_str = request.args.get('quantity', '1')
+            try:
+                quantity = Decimal(quantity_str)
+            except (InvalidOperation, ValueError):
+                return jsonify({
+                    'success': False,
+                    'message': 'Invalid quantity parameter'
+                }), 400
+
+            hospital_id = current_user.hospital_id
+
+            # Get invoice date (for date-based GST/pricing lookup)
+            # If not provided, use today's date (for new invoices being created now)
+            invoice_date_str = request.args.get('invoice_date')
+            if invoice_date_str:
+                from datetime import datetime
+                try:
+                    applicable_date = datetime.strptime(invoice_date_str, '%Y-%m-%d').date()
+                    current_app.logger.info(f"[FIFO ALLOCATION] Using invoice_date={applicable_date} for pricing lookup")
+                except ValueError:
+                    current_app.logger.warning(f"[FIFO ALLOCATION] Invalid invoice_date format: {invoice_date_str}. Using today.")
+                    from datetime import datetime, timezone
+                    applicable_date = datetime.now(timezone.utc).date()
+            else:
+                from datetime import datetime, timezone
+                applicable_date = datetime.now(timezone.utc).date()
+                current_app.logger.debug(f"[FIFO ALLOCATION] No invoice_date provided, using today: {applicable_date}")
+
+            # Verify medicine exists
+            medicine = session.query(Medicine).filter_by(
+                hospital_id=hospital_id,
+                medicine_id=medicine_id
+            ).first()
+
+            if not medicine:
+                return jsonify({
+                    'success': False,
+                    'message': 'Medicine not found'
+                }), 404
+
+            # Get pricing/tax from pricing_tax_service (date-based config)
+            # Use the applicable_date (invoice_date or today) set earlier
+            from app.services.pricing_tax_service import get_applicable_pricing_and_tax
+
+            try:
+                pricing_tax = get_applicable_pricing_and_tax(
+                    session=session,
+                    hospital_id=hospital_id,
+                    entity_type='medicine',
+                    entity_id=medicine_id,
+                    applicable_date=applicable_date
+                )
+
+                medicine_gst_rate = float(pricing_tax['gst_rate'])
+                medicine_is_gst_exempt = pricing_tax['is_gst_exempt']
+                medicine_mrp = float(pricing_tax.get('mrp', 0))
+                medicine_cgst = float(pricing_tax.get('cgst_rate', 0))
+                medicine_sgst = float(pricing_tax.get('sgst_rate', 0))
+                medicine_igst = float(pricing_tax.get('igst_rate', 0))
+
+                # Override GST rate to 0 if item is GST exempt (avoid misleading display)
+                if medicine_is_gst_exempt:
+                    medicine_gst_rate = 0.0
+                    medicine_cgst = 0.0
+                    medicine_sgst = 0.0
+                    medicine_igst = 0.0
+
+                current_app.logger.info(f"[FIFO ALLOCATION] Using pricing from {pricing_tax['source']}: "
+                                      f"GST={medicine_gst_rate}%, MRP={medicine_mrp}")
+            except Exception as e:
+                current_app.logger.warning(f"[FIFO ALLOCATION] Failed to get pricing_tax: {e}. Using medicine master table.")
+                medicine_gst_rate = float(medicine.gst_rate) if medicine.gst_rate else 0.0
+                medicine_is_gst_exempt = medicine.is_gst_exempt if hasattr(medicine, 'is_gst_exempt') else False
+                medicine_mrp = float(medicine.mrp) if hasattr(medicine, 'mrp') and medicine.mrp else 0.0
+                medicine_cgst = medicine_gst_rate / 2 if medicine_gst_rate else 0.0
+                medicine_sgst = medicine_gst_rate / 2 if medicine_gst_rate else 0.0
+                medicine_igst = 0.0
+
+                # Override GST rate to 0 if item is GST exempt (avoid misleading display)
+                if medicine_is_gst_exempt:
+                    medicine_gst_rate = 0.0
+                    medicine_cgst = 0.0
+                    medicine_sgst = 0.0
+                    medicine_igst = 0.0
+
+            # Get FIFO batch allocation using existing service
+            batch_allocations = get_batch_selection_for_invoice(
+                hospital_id=hospital_id,
+                medicine_id=medicine_id,
+                quantity_needed=quantity,
+                session=session
+            )
+
+            # Format response for frontend
+            formatted_batches = []
+            for batch in batch_allocations:
+                # Query inventory for additional details (stock, historical MRP for reference)
+                inventory = session.query(Inventory).filter(
+                    Inventory.hospital_id == hospital_id,
+                    Inventory.medicine_id == medicine_id,
+                    Inventory.batch == batch['batch']
+                ).order_by(Inventory.created_at.desc()).first()
+
+                inventory_pack_mrp = float(inventory.pack_mrp) if inventory and inventory.pack_mrp else 0
+
+                formatted_batches.append({
+                    'batch': batch['batch'],
+                    'expiry_date': batch['expiry_date'].strftime('%Y-%m-%d') if batch.get('expiry_date') else None,
+                    'quantity': float(batch['quantity']),
+                    'available_stock': float(inventory.current_stock) if inventory else 0,
+                    'unit_price': float(batch.get('unit_price', 0)),
+                    'sale_price': float(batch.get('sale_price', 0)),
+                    'mrp': medicine_mrp if medicine_mrp else inventory_pack_mrp,  # ✅ From pricing_tax_service, inventory as fallback
+                    'gst_rate': medicine_gst_rate,  # ✅ From pricing_tax_service
+                    'cgst': medicine_cgst,  # ✅ From pricing_tax_service
+                    'sgst': medicine_sgst,  # ✅ From pricing_tax_service
+                    'igst': medicine_igst,  # ✅ From pricing_tax_service
+                    'hsn_code': medicine.hsn_code if hasattr(medicine, 'hsn_code') and medicine.hsn_code else '',
+                    'is_gst_exempt': medicine_is_gst_exempt,  # ✅ From pricing_tax_service
+                    'inventory_pack_mrp': inventory_pack_mrp  # Historical MRP for reference
+                })
+
+            # Calculate totals
+            total_allocated = sum(b['quantity'] for b in formatted_batches)
+            is_sufficient = total_allocated >= float(quantity)
+
+            return jsonify({
+                'success': True,
+                'batches': formatted_batches,
+                'total_allocated': float(total_allocated),
+                'quantity_requested': float(quantity),
+                'is_sufficient': is_sufficient,
+                'shortage': float(quantity - total_allocated) if not is_sufficient else 0
+            })
+
+    except Exception as e:
+        current_app.logger.error(f"Error getting FIFO allocation: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'message': 'Error calculating FIFO allocation. Please try again.'
+        }), 500
+
+@billing_views_bp.route('/web_api/patient/<uuid:patient_id>/state', methods=['GET'])
+@login_required
+def get_patient_state(patient_id):
+    """Get patient's state for interstate calculation"""
+    try:
+        from app.config.core_definitions import INDIAN_STATES
+
+        with get_db_session() as session:
+            # Get patient
+            patient = session.query(Patient).filter_by(
+                patient_id=patient_id,
+                hospital_id=current_user.hospital_id
+            ).first()
+
+            if not patient:
+                return jsonify({'success': False, 'message': 'Patient not found'}), 404
+
+            # Extract patient state from contact_info JSONB
+            patient_state_code = None
+            patient_state_name = None
+            if patient.contact_info:
+                if isinstance(patient.contact_info, dict):
+                    patient_state_code = patient.contact_info.get('state_code') or patient.contact_info.get('state')
+
+            # Get hospital state
+            hospital = session.query(Hospital).filter_by(
+                hospital_id=current_user.hospital_id
+            ).first()
+
+            # Get branch state from session
+            branch_state_code = None
+            branch_id = flask_session.get('branch_id')
+            if branch_id:
+                branch = session.query(Branch).filter_by(
+                    branch_id=branch_id,
+                    hospital_id=current_user.hospital_id
+                ).first()
+                if branch:
+                    branch_state_code = branch.state_code
+
+            # Fallback to hospital state
+            hospital_state_code = hospital.state_code if hospital else None
+            if not branch_state_code:
+                branch_state_code = hospital_state_code
+
+            # Get state name from code
+            if patient_state_code:
+                for state in INDIAN_STATES:
+                    if state.get('value') == patient_state_code:
+                        patient_state_name = state.get('label', patient_state_code)
+                        break
+
+            # Calculate interstate flag
+            is_interstate = False
+            if patient_state_code and branch_state_code:
+                is_interstate = (patient_state_code != branch_state_code)
+
+            current_app.logger.info(
+                f"Patient state info: patient_state={patient_state_code}, "
+                f"branch_state={branch_state_code}, interstate={is_interstate}"
+            )
+
+            return jsonify({
+                'success': True,
+                'patient_state_code': patient_state_code or '',
+                'patient_state_name': patient_state_name or '',
+                'hospital_state_code': branch_state_code or '',
+                'is_interstate': is_interstate
+            })
+
+    except Exception as e:
+        current_app.logger.error(f"Error getting patient state: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @billing_views_bp.route('/<uuid:invoice_id>/print', methods=['GET'])
 @login_required
@@ -1816,6 +3015,190 @@ def print_all_invoices(group_id):
         flash(f'Error preparing invoices for printing: {str(e)}', 'error')
         logger.error(f"Error preparing invoices for printing: {str(e)}", exc_info=True)
         return redirect(url_for('billing_views.invoice_list'))
+
+
+@billing_views_bp.route('/consolidated_invoice/print_all/<uuid:parent_invoice_id>', methods=['GET'])
+@login_required
+def print_consolidated_invoices(parent_invoice_id):
+    """
+    Print all split invoices for a consolidated invoice
+
+    Features:
+    - Fetches all split invoices for the parent
+    - Checks pharmacy license (branch → hospital fallback)
+    - Consolidates prescription items if no license
+    - Single PDF with patient header and footer only once
+    """
+    try:
+        from app.services.billing_service import number_to_words
+        from app.models.master import Hospital, Patient, Branch
+        from app.models.transaction import InvoiceHeader, InvoiceLineItem
+        from app.services.database_service import get_db_session, get_entity_dict
+
+        with get_db_session() as session:
+            # Get parent invoice to find all related invoices
+            parent_invoice = session.query(InvoiceHeader).filter(
+                InvoiceHeader.hospital_id == current_user.hospital_id,
+                InvoiceHeader.invoice_id == parent_invoice_id
+            ).first()
+
+            if not parent_invoice:
+                flash('Consolidated invoice not found.', 'error')
+                return redirect(url_for('universal_views.universal_list', entity_type='consolidated_patient_invoices'))
+
+            # Find all invoices in this split group (parent + children)
+            # If this is a parent, get all children
+            # If this is a child, get parent and all siblings
+            if parent_invoice.parent_transaction_id:
+                # This is a child, get parent
+                actual_parent_id = parent_invoice.parent_transaction_id
+            else:
+                # This is the parent
+                actual_parent_id = parent_invoice_id
+
+            # Get all invoices (parent + children)
+            all_invoices = session.query(InvoiceHeader).filter(
+                InvoiceHeader.hospital_id == current_user.hospital_id,
+                or_(
+                    InvoiceHeader.invoice_id == actual_parent_id,
+                    InvoiceHeader.parent_transaction_id == actual_parent_id
+                )
+            ).order_by(InvoiceHeader.split_sequence).all()
+
+            if not all_invoices:
+                flash('No invoices found for this consolidated invoice.', 'error')
+                return redirect(url_for('universal_views.universal_list', entity_type='consolidated_patient_invoices'))
+
+            # Get patient and hospital details
+            patient_id = all_invoices[0].patient_id
+            branch_id = all_invoices[0].branch_id
+
+            patient = session.query(Patient).filter_by(
+                hospital_id=current_user.hospital_id,
+                patient_id=patient_id
+            ).first()
+
+            hospital = session.query(Hospital).filter_by(
+                hospital_id=current_user.hospital_id
+            ).first()
+
+            branch = None
+            if branch_id:
+                branch = session.query(Branch).filter_by(
+                    hospital_id=current_user.hospital_id,
+                    branch_id=branch_id
+                ).first()
+
+            # Check pharmacy license (branch → hospital fallback)
+            has_pharmacy_license = False
+            if branch and branch.pharmacy_registration_number:
+                # Check branch license validity
+                if hasattr(branch, 'pharmacy_registration_valid_until') and branch.pharmacy_registration_valid_until:
+                    if branch.pharmacy_registration_valid_until >= datetime.now(timezone.utc).date():
+                        has_pharmacy_license = True
+                elif hasattr(branch, 'pharmacy_reg_valid_until') and branch.pharmacy_reg_valid_until:
+                    if branch.pharmacy_reg_valid_until >= datetime.now(timezone.utc).date():
+                        has_pharmacy_license = True
+            elif hospital and hospital.pharmacy_registration_number:
+                # Fallback to hospital license
+                if hasattr(hospital, 'pharmacy_registration_valid_until') and hospital.pharmacy_registration_valid_until:
+                    if hospital.pharmacy_registration_valid_until >= datetime.now(timezone.utc).date():
+                        has_pharmacy_license = True
+                elif hasattr(hospital, 'pharmacy_reg_valid_until') and hospital.pharmacy_reg_valid_until:
+                    if hospital.pharmacy_reg_valid_until >= datetime.now(timezone.utc).date():
+                        has_pharmacy_license = True
+
+            logger.info(f"Pharmacy license check: {has_pharmacy_license}")
+
+            # Prepare invoice data
+            invoices_data = []
+            for invoice in all_invoices:
+                # Skip cancelled invoices
+                if getattr(invoice, 'is_cancelled', False):
+                    continue
+
+                invoice_dict = get_entity_dict(invoice)
+
+                # Get line items
+                line_items = session.query(InvoiceLineItem).filter_by(
+                    hospital_id=current_user.hospital_id,
+                    invoice_id=invoice.invoice_id
+                ).all()
+
+                invoice_dict['line_items'] = [get_entity_dict(item) for item in line_items]
+
+                # Generate tax groups
+                tax_groups = {}
+                for item in invoice_dict['line_items']:
+                    gst_rate = item.get('gst_rate', 0)
+                    if gst_rate not in tax_groups:
+                        tax_groups[gst_rate] = {
+                            'taxable_value': 0,
+                            'cgst_amount': 0,
+                            'sgst_amount': 0,
+                            'igst_amount': 0
+                        }
+                    tax_groups[gst_rate]['taxable_value'] += item.get('taxable_amount', 0)
+                    tax_groups[gst_rate]['cgst_amount'] += item.get('cgst_amount', 0)
+                    tax_groups[gst_rate]['sgst_amount'] += item.get('sgst_amount', 0)
+                    tax_groups[gst_rate]['igst_amount'] += item.get('igst_amount', 0)
+
+                invoice_dict['tax_groups'] = tax_groups
+                invoice_dict['amount_in_words'] = number_to_words(invoice.grand_total)
+
+                # If this is prescription invoice and no pharmacy license, consolidate
+                if invoice.invoice_type == 'Prescription' and not has_pharmacy_license:
+                    # Mark for consolidation
+                    invoice_dict['consolidate_prescription'] = True
+                    # Calculate total prescription amount
+                    prescription_total = sum(item.get('line_total', 0) for item in invoice_dict['line_items'])
+                    invoice_dict['prescription_consolidated_total'] = prescription_total
+                else:
+                    invoice_dict['consolidate_prescription'] = False
+
+                invoices_data.append(invoice_dict)
+
+            # Prepare patient data
+            patient_data = {
+                'name': patient.full_name if patient else 'Unknown',
+                'mrn': patient.mrn if patient else 'N/A',
+                'contact_info': patient.contact_info if patient else {}
+            }
+
+            # Prepare hospital data
+            hospital_data = {
+                'hospital_id': str(current_user.hospital_id),  # Add hospital_id for logo path
+                'name': hospital.name if hospital else 'Hospital',
+                'address': hospital.address.get('full_address', '') if hospital and hospital.address else '',
+                'phone': hospital.contact_details.get('phone', '') if hospital and hospital.contact_details else '',
+                'email': hospital.contact_details.get('email', '') if hospital and hospital.contact_details else '',
+                'gst_registration_number': hospital.gst_registration_number if hospital else '',
+                'pharmacy_registration_number': hospital.pharmacy_registration_number if hospital else ''
+            }
+
+            # Add pharmacy license validity
+            if hospital:
+                if hasattr(hospital, 'pharmacy_registration_valid_until'):
+                    hospital_data['pharmacy_registration_valid_until'] = hospital.pharmacy_registration_valid_until
+                elif hasattr(hospital, 'pharmacy_reg_valid_until'):
+                    hospital_data['pharmacy_reg_valid_until'] = hospital.pharmacy_reg_valid_until
+
+            # Render combined template
+            return render_template(
+                'billing/print_consolidated_invoices.html',
+                invoices=invoices_data,
+                patient=patient_data,
+                hospital=hospital_data,
+                has_pharmacy_license=has_pharmacy_license,
+                parent_invoice_id=str(actual_parent_id),
+                logo_url=None  # Can be enhanced later
+            )
+
+    except Exception as e:
+        flash(f'Error preparing consolidated invoices for printing: {str(e)}', 'error')
+        logger.error(f"Error preparing consolidated invoices for printing: {str(e)}", exc_info=True)
+        return redirect(url_for('universal_views.universal_list', entity_type='consolidated_patient_invoices'))
+
 
 @billing_views_bp.route('/create_diagnostic', methods=['GET', 'POST'])
 @login_required
@@ -2229,8 +3612,77 @@ def advance_payment_list():
             menu_items=menu_items,
             page_title="Advance Payments"
         )
-        
+
     except Exception as e:
         flash(f"Error retrieving advance payments: {str(e)}", "error")
         logger.error(f"Error retrieving advance payments: {str(e)}", exc_info=True)
         return redirect(url_for('billing_views.invoice_list'))
+
+
+# =============================================================================
+# UNIVERSAL ENGINE MIGRATION ROUTES (Phase 4/5)
+# =============================================================================
+# The following routes redirect old billing routes to Universal Engine
+# These maintain backward compatibility while migrating to Universal Engine
+
+@billing_views_bp.route('/universal/list', methods=['GET'])
+@login_required
+@permission_required('billing', 'view')
+def universal_invoice_list():
+    """
+    Redirect to Universal Engine invoice list
+
+    NEW ROUTE: Use this for Universal Engine-powered invoice list
+    Provides enhanced filtering, sorting, and export capabilities
+    """
+    # Forward query parameters to Universal Engine
+    return redirect(url_for('universal_views.universal_list_view',
+                          entity_type='patient_invoices',
+                          **request.args))
+
+
+@billing_views_bp.route('/universal/<uuid:invoice_id>', methods=['GET'])
+@login_required
+@permission_required('billing', 'view')
+def universal_view_invoice(invoice_id):
+    """
+    Redirect to Universal Engine invoice detail view
+
+    NEW ROUTE: Use this for Universal Engine-powered invoice detail
+    Provides tabbed interface with line items, payments, and GL posting info
+    """
+    return redirect(url_for('universal_views.universal_detail_view',
+                          entity_type='patient_invoices',
+                          item_id=invoice_id))
+
+
+# =============================================================================
+# DEPRECATION NOTES
+# =============================================================================
+"""
+MIGRATION PLAN:
+
+Old Routes (to be deprecated):
+- /invoice/list -> Currently uses billing_service.search_invoices()
+- /invoice/<uuid:invoice_id> -> Currently uses billing_service.get_invoice_by_id()
+
+New Routes (Universal Engine):
+- /universal/patient_invoices/list -> Uses PatientInvoiceService.search_data()
+- /universal/patient_invoices/detail/<item_id> -> Uses PatientInvoiceService.get_by_id()
+
+Migration Steps:
+1. ✅ Phase 1-3: Created PatientInvoiceView, PatientInvoiceService, Configuration
+2. ✅ Phase 4: Updated menu to point to Universal Engine routes
+3. ✅ Phase 5: Added redirect routes for backward compatibility
+4. TODO: Update internal links to use Universal Engine routes
+5. TODO: Deprecate old routes after confirming no usage
+
+Backward Compatibility Routes:
+- /invoice/universal/list -> Redirects to /universal/patient_invoices/list
+- /invoice/universal/<uuid> -> Redirects to /universal/patient_invoices/detail/<uuid>
+
+Notes:
+- Create, Edit, Delete, Payment routes remain in billing_views.py
+- Only List and Detail views are migrated to Universal Engine
+- All business logic functions remain in billing_service.py
+"""

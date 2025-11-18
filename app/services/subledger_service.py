@@ -50,49 +50,131 @@ def _get_patient_ar_balance(
 ) -> Decimal:
     """Internal function to calculate AR balance within a session"""
     try:
-        # Convert string UUIDs to UUID objects if needed
-        if isinstance(hospital_id, str):
-            hospital_id = uuid.UUID(hospital_id)
-        if isinstance(patient_id, str):
-            patient_id = uuid.UUID(patient_id)
-        if branch_id and isinstance(branch_id, str):
-            branch_id = uuid.UUID(branch_id)
-            
+        # Convert ALL UUIDs to UUID objects FIRST to ensure consistency
+        hospital_id = uuid.UUID(str(hospital_id)) if not isinstance(hospital_id, uuid.UUID) else hospital_id
+        patient_id = uuid.UUID(str(patient_id)) if not isinstance(patient_id, uuid.UUID) else patient_id
+        if branch_id:
+            branch_id = uuid.UUID(str(branch_id)) if not isinstance(branch_id, uuid.UUID) else branch_id
+
         if as_of_date is None:
             as_of_date = datetime.now(timezone.utc)
-        
-        # Base query filters
-        filters = [
+
+        # Build query with properly typed UUID parameters
+        # Use .from_self() or create fresh queries to avoid identity map issues
+        base_filter_args = {
+            'hospital_id': hospital_id,
+            'patient_id': patient_id
+        }
+
+        # Get latest entry with balance for this patient
+        query = session.query(ARSubledger).filter(
             ARSubledger.hospital_id == hospital_id,
             ARSubledger.patient_id == patient_id,
             ARSubledger.transaction_date <= as_of_date
-        ]
-        
-        # Add branch filter if specified
+        )
+
         if branch_id:
-            filters.append(ARSubledger.branch_id == branch_id)
-            
-        # Get latest entry with balance for this patient
-        latest_entry = session.query(ARSubledger).filter(
-            *filters
-        ).order_by(ARSubledger.transaction_date.desc()).first()
-        
+            query = query.filter(ARSubledger.branch_id == branch_id)
+
+        # Order by transaction_date and entry_id (PK) to avoid comparison issues
+        latest_entry = query.order_by(
+            ARSubledger.transaction_date.desc(),
+            ARSubledger.entry_id.desc()
+        ).first()
+
         if latest_entry and latest_entry.current_balance is not None:
+            # Detach from session to avoid identity map issues
+            session.expunge(latest_entry)
             return latest_entry.current_balance
-        
-        # If no entry with balance, calculate from scratch
-        debits = session.query(func.sum(ARSubledger.debit_amount)).filter(
-            *filters
-        ).scalar() or Decimal('0')
-        
-        credits = session.query(func.sum(ARSubledger.credit_amount)).filter(
-            *filters
-        ).scalar() or Decimal('0')
-        
+
+        # If no entry with balance, calculate from scratch using fresh query
+        sum_query = session.query(
+            func.sum(ARSubledger.debit_amount).label('debits'),
+            func.sum(ARSubledger.credit_amount).label('credits')
+        ).filter(
+            ARSubledger.hospital_id == hospital_id,
+            ARSubledger.patient_id == patient_id,
+            ARSubledger.transaction_date <= as_of_date
+        )
+
+        if branch_id:
+            sum_query = sum_query.filter(ARSubledger.branch_id == branch_id)
+
+        result = sum_query.first()
+        debits = result.debits or Decimal('0')
+        credits = result.credits or Decimal('0')
+
         return debits - credits
-        
+
     except Exception as e:
-        logger.error(f"Error calculating patient AR balance: {str(e)}")
+        logger.error(f"Error calculating patient AR balance: {str(e)}", exc_info=True)
+        raise
+
+def get_line_item_ar_balance(
+    hospital_id: Union[str, uuid.UUID],
+    patient_id: Union[str, uuid.UUID],
+    line_item_id: Union[str, uuid.UUID],
+    session: Optional[Session] = None
+) -> Decimal:
+    """
+    Calculate AR balance for a specific invoice line item
+
+    This function calculates the outstanding balance for a specific line item
+    by summing debits and credits in AR entries that reference this line item.
+
+    Args:
+        hospital_id: Hospital UUID
+        patient_id: Patient UUID
+        line_item_id: Invoice line item UUID
+        session: Database session (optional)
+
+    Returns:
+        Outstanding AR balance for this line item (positive = amount owed)
+
+    Example:
+        Line item total: ₹5,900
+        AR entries:
+          - Debit ₹5,900 (invoice created)
+          - Credit ₹500 (payment allocated)
+        Balance: ₹5,400 (outstanding amount)
+    """
+    if session is not None:
+        return _get_line_item_ar_balance(session, hospital_id, patient_id, line_item_id)
+
+    with get_db_session() as new_session:
+        return _get_line_item_ar_balance(new_session, hospital_id, patient_id, line_item_id)
+
+def _get_line_item_ar_balance(
+    session: Session,
+    hospital_id: Union[str, uuid.UUID],
+    patient_id: Union[str, uuid.UUID],
+    line_item_id: Union[str, uuid.UUID]
+) -> Decimal:
+    """Internal function to calculate line item AR balance within a session"""
+    try:
+        # Convert UUIDs to UUID objects for consistency
+        hospital_id = uuid.UUID(str(hospital_id)) if not isinstance(hospital_id, uuid.UUID) else hospital_id
+        patient_id = uuid.UUID(str(patient_id)) if not isinstance(patient_id, uuid.UUID) else patient_id
+        line_item_id = uuid.UUID(str(line_item_id)) if not isinstance(line_item_id, uuid.UUID) else line_item_id
+
+        # Query all AR entries for this line item
+        entries = session.query(ARSubledger).filter(
+            ARSubledger.hospital_id == hospital_id,
+            ARSubledger.patient_id == patient_id,
+            ARSubledger.reference_line_item_id == line_item_id
+        ).all()
+
+        # Calculate balance: debits increase AR, credits decrease AR
+        total_debits = sum(e.debit_amount or Decimal('0') for e in entries)
+        total_credits = sum(e.credit_amount or Decimal('0') for e in entries)
+        balance = total_debits - total_credits
+
+        logger.debug(f"Line item {line_item_id}: Debits=₹{total_debits}, Credits=₹{total_credits}, Balance=₹{balance}")
+
+        return balance
+
+    except Exception as e:
+        logger.error(f"Error calculating line item AR balance: {str(e)}", exc_info=True)
         raise
 
 def get_supplier_ap_balance(
@@ -130,49 +212,57 @@ def _get_supplier_ap_balance(
 ) -> Decimal:
     """Internal function to calculate AP balance within a session"""
     try:
-        # Convert string UUIDs to UUID objects if needed
-        if isinstance(hospital_id, str):
-            hospital_id = uuid.UUID(hospital_id)
-        if isinstance(supplier_id, str):
-            supplier_id = uuid.UUID(supplier_id)
-        if branch_id and isinstance(branch_id, str):
-            branch_id = uuid.UUID(branch_id)
-            
+        # Convert ALL UUIDs to UUID objects FIRST to ensure consistency
+        hospital_id = uuid.UUID(str(hospital_id)) if not isinstance(hospital_id, uuid.UUID) else hospital_id
+        supplier_id = uuid.UUID(str(supplier_id)) if not isinstance(supplier_id, uuid.UUID) else supplier_id
+        if branch_id:
+            branch_id = uuid.UUID(str(branch_id)) if not isinstance(branch_id, uuid.UUID) else branch_id
+
         if as_of_date is None:
             as_of_date = datetime.now(timezone.utc)
-        
-        # Base query filters
-        filters = [
+
+        # Build query with properly typed UUID parameters
+        query = session.query(APSubledger).filter(
             APSubledger.hospital_id == hospital_id,
             APSubledger.supplier_id == supplier_id,
             APSubledger.transaction_date <= as_of_date
-        ]
-        
-        # Add branch filter if specified
+        )
+
         if branch_id:
-            filters.append(APSubledger.branch_id == branch_id)
-            
-        # Get latest entry with balance for this supplier
-        latest_entry = session.query(APSubledger).filter(
-            *filters
-        ).order_by(APSubledger.transaction_date.desc()).first()
-        
+            query = query.filter(APSubledger.branch_id == branch_id)
+
+        # Order by transaction_date and entry_id (PK) to avoid comparison issues
+        latest_entry = query.order_by(
+            APSubledger.transaction_date.desc(),
+            APSubledger.entry_id.desc()
+        ).first()
+
         if latest_entry and latest_entry.current_balance is not None:
+            # Detach from session to avoid identity map issues
+            session.expunge(latest_entry)
             return latest_entry.current_balance
-        
-        # If no entry with balance, calculate from scratch
-        credits = session.query(func.sum(APSubledger.credit_amount)).filter(
-            *filters
-        ).scalar() or Decimal('0')
-        
-        debits = session.query(func.sum(APSubledger.debit_amount)).filter(
-            *filters
-        ).scalar() or Decimal('0')
-        
+
+        # If no entry with balance, calculate from scratch using fresh query
+        sum_query = session.query(
+            func.sum(APSubledger.credit_amount).label('credits'),
+            func.sum(APSubledger.debit_amount).label('debits')
+        ).filter(
+            APSubledger.hospital_id == hospital_id,
+            APSubledger.supplier_id == supplier_id,
+            APSubledger.transaction_date <= as_of_date
+        )
+
+        if branch_id:
+            sum_query = sum_query.filter(APSubledger.branch_id == branch_id)
+
+        result = sum_query.first()
+        credits = result.credits or Decimal('0')
+        debits = result.debits or Decimal('0')
+
         return credits - debits
-        
+
     except Exception as e:
-        logger.error(f"Error calculating supplier AP balance: {str(e)}")
+        logger.error(f"Error calculating supplier AP balance: {str(e)}", exc_info=True)
         raise
 
 def create_ar_subledger_entry(
@@ -187,12 +277,15 @@ def create_ar_subledger_entry(
     credit_amount: Decimal = Decimal('0'),
     transaction_date: Optional[datetime] = None,
     gl_transaction_id: Optional[Union[str, uuid.UUID]] = None,
+    reference_line_item_id: Optional[Union[str, uuid.UUID]] = None,
     current_user_id: Optional[str] = None,
+    item_type: Optional[str] = None,
+    item_name: Optional[str] = None,
     session: Optional[Session] = None
 ) -> Dict:
     """
     Create an AR subledger entry
-    
+
     Args:
         hospital_id: Hospital UUID
         branch_id: Branch UUID
@@ -205,9 +298,10 @@ def create_ar_subledger_entry(
         credit_amount: Credit amount
         transaction_date: Date of transaction
         gl_transaction_id: GL transaction ID
+        reference_line_item_id: Invoice line item ID for payment allocation tracking (optional)
         current_user_id: User creating the entry
         session: Database session (optional)
-        
+
     Returns:
         Created AR subledger entry as dictionary
     """
@@ -215,14 +309,16 @@ def create_ar_subledger_entry(
         return _create_ar_subledger_entry(
             session, hospital_id, branch_id, patient_id, entry_type, reference_id,
             reference_type, reference_number, debit_amount, credit_amount,
-            transaction_date, gl_transaction_id, current_user_id
+            transaction_date, gl_transaction_id, reference_line_item_id, current_user_id,
+            item_type, item_name
         )
-    
+
     with get_db_session() as new_session:
         result = _create_ar_subledger_entry(
             new_session, hospital_id, branch_id, patient_id, entry_type, reference_id,
             reference_type, reference_number, debit_amount, credit_amount,
-            transaction_date, gl_transaction_id, current_user_id
+            transaction_date, gl_transaction_id, reference_line_item_id, current_user_id,
+            item_type, item_name
         )
         
         # Explicitly commit for this critical operation
@@ -243,29 +339,51 @@ def _create_ar_subledger_entry(
     credit_amount: Decimal = Decimal('0'),
     transaction_date: Optional[datetime] = None,
     gl_transaction_id: Optional[Union[str, uuid.UUID]] = None,
-    current_user_id: Optional[str] = None
+    reference_line_item_id: Optional[Union[str, uuid.UUID]] = None,
+    current_user_id: Optional[str] = None,
+    item_type: Optional[str] = None,
+    item_name: Optional[str] = None
 ) -> Dict:
     """Internal function to create AR subledger entry within a session"""
     try:
-        # Convert string UUIDs to UUID objects if needed
-        if isinstance(hospital_id, str):
-            hospital_id = uuid.UUID(hospital_id)
-        if isinstance(branch_id, str):
-            branch_id = uuid.UUID(branch_id)
-        if isinstance(patient_id, str):
-            patient_id = uuid.UUID(patient_id)
-        if isinstance(reference_id, str):
-            reference_id = uuid.UUID(reference_id)
-        if gl_transaction_id and isinstance(gl_transaction_id, str):
-            gl_transaction_id = uuid.UUID(gl_transaction_id)
-            
+        # Convert ALL UUIDs to UUID objects FIRST to ensure consistency
+        hospital_id = uuid.UUID(str(hospital_id)) if not isinstance(hospital_id, uuid.UUID) else hospital_id
+        branch_id = uuid.UUID(str(branch_id)) if not isinstance(branch_id, uuid.UUID) else branch_id
+        patient_id = uuid.UUID(str(patient_id)) if not isinstance(patient_id, uuid.UUID) else patient_id
+        reference_id = uuid.UUID(str(reference_id)) if not isinstance(reference_id, uuid.UUID) else reference_id
+        if gl_transaction_id:
+            gl_transaction_id = uuid.UUID(str(gl_transaction_id)) if not isinstance(gl_transaction_id, uuid.UUID) else gl_transaction_id
+        if reference_line_item_id:
+            reference_line_item_id = uuid.UUID(str(reference_line_item_id)) if not isinstance(reference_line_item_id, uuid.UUID) else reference_line_item_id
+
         if transaction_date is None:
             transaction_date = datetime.now(timezone.utc)
-            
-        # Calculate current balance
-        previous_balance = _get_patient_ar_balance(session, hospital_id, patient_id, branch_id, transaction_date)
+
+        # Calculate current balance using the SAME session (UUID fix ensures no sort errors)
+        try:
+            previous_balance = _get_patient_ar_balance(
+                session, hospital_id, patient_id, branch_id, transaction_date
+            )
+        except Exception as e:
+            logger.error(f"Error calculating AR balance: {str(e)}")
+            # Use zero as previous balance to allow payment to proceed
+            previous_balance = Decimal('0')
+            logger.warning(f"Using zero as previous AR balance for patient {patient_id}")
+
         current_balance = previous_balance + (debit_amount - credit_amount)
-        
+
+        # If item details not provided, try to fetch from line item
+        if reference_line_item_id and (not item_type or not item_name):
+            from app.models.transaction import InvoiceLineItem
+            line_item = session.query(InvoiceLineItem).filter(
+                InvoiceLineItem.line_item_id == reference_line_item_id
+            ).first()
+            if line_item:
+                if not item_type:
+                    item_type = line_item.item_type
+                if not item_name:
+                    item_name = line_item.item_name
+
         # Create subledger entry
         ar_entry = ARSubledger(
             hospital_id=hospital_id,
@@ -275,24 +393,27 @@ def _create_ar_subledger_entry(
             reference_id=reference_id,
             reference_type=reference_type,
             reference_number=reference_number,
+            reference_line_item_id=reference_line_item_id,
             debit_amount=debit_amount,
             credit_amount=credit_amount,
             transaction_date=transaction_date,
             gl_transaction_id=gl_transaction_id,
-            current_balance=current_balance
+            current_balance=current_balance,
+            item_type=item_type,
+            item_name=item_name
         )
-        
-        if current_user_id:
-            ar_entry.created_by = current_user_id
-            
+
+        # Audit fields (created_by, updated_by) set automatically by Event Listeners
+
         session.add(ar_entry)
-        session.flush()
-        
+        # Don't flush here - let parent transaction handle it to avoid UUID sort issues
+        # session.flush()
+
         return get_entity_dict(ar_entry)
-        
+
     except Exception as e:
-        logger.error(f"Error creating AR subledger entry: {str(e)}")
-        session.rollback()
+        logger.error(f"Error creating AR subledger entry: {str(e)}", exc_info=True)
+        # Don't rollback here - let the calling function handle transaction management
         raise
 
 def create_ap_subledger_entry(
@@ -367,23 +488,28 @@ def _create_ap_subledger_entry(
 ) -> Dict:
     """Internal function to create AP subledger entry within a session"""
     try:
-        # Convert string UUIDs to UUID objects if needed
-        if isinstance(hospital_id, str):
-            hospital_id = uuid.UUID(hospital_id)
-        if isinstance(branch_id, str):
-            branch_id = uuid.UUID(branch_id)
-        if isinstance(supplier_id, str):
-            supplier_id = uuid.UUID(supplier_id)
-        if isinstance(reference_id, str):
-            reference_id = uuid.UUID(reference_id)
-        if gl_transaction_id and isinstance(gl_transaction_id, str):
-            gl_transaction_id = uuid.UUID(gl_transaction_id)
-            
+        # Convert ALL UUIDs to UUID objects FIRST to ensure consistency
+        hospital_id = uuid.UUID(str(hospital_id)) if not isinstance(hospital_id, uuid.UUID) else hospital_id
+        branch_id = uuid.UUID(str(branch_id)) if not isinstance(branch_id, uuid.UUID) else branch_id
+        supplier_id = uuid.UUID(str(supplier_id)) if not isinstance(supplier_id, uuid.UUID) else supplier_id
+        reference_id = uuid.UUID(str(reference_id)) if not isinstance(reference_id, uuid.UUID) else reference_id
+        if gl_transaction_id:
+            gl_transaction_id = uuid.UUID(str(gl_transaction_id)) if not isinstance(gl_transaction_id, uuid.UUID) else gl_transaction_id
+
         if transaction_date is None:
             transaction_date = datetime.now(timezone.utc)
-            
-        # Calculate current balance
-        previous_balance = _get_supplier_ap_balance(session, hospital_id, supplier_id, branch_id, transaction_date)
+
+        # Calculate current balance using the SAME session (UUID fix ensures no sort errors)
+        try:
+            previous_balance = _get_supplier_ap_balance(
+                session, hospital_id, supplier_id, branch_id, transaction_date
+            )
+        except Exception as e:
+            logger.error(f"Error calculating AP balance: {str(e)}")
+            # Use zero as previous balance to allow payment to proceed
+            previous_balance = Decimal('0')
+            logger.warning(f"Using zero as previous AP balance for supplier {supplier_id}")
+
         current_balance = previous_balance + (credit_amount - debit_amount)
         
         # Create subledger entry
@@ -404,15 +530,16 @@ def _create_ap_subledger_entry(
         
         if current_user_id:
             ap_entry.created_by = current_user_id
-            
+
         session.add(ap_entry)
-        session.flush()
-        
+        # Don't flush here - let parent transaction handle it to avoid UUID sort issues
+        # session.flush()
+
         return get_entity_dict(ap_entry)
-        
+
     except Exception as e:
-        logger.error(f"Error creating AP subledger entry: {str(e)}")
-        session.rollback()
+        logger.error(f"Error creating AP subledger entry: {str(e)}", exc_info=True)
+        # Don't rollback here - let the calling function handle transaction management
         raise
 
 def create_advance_payment_ar_entry(

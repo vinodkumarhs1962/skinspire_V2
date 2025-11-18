@@ -736,234 +736,316 @@ PURCHASE_ORDER_VIEW_LAYOUT = ViewLayoutConfiguration(
 # ACTIONS CONFIGURATION
 # =============================================================================
 
-# UPDATED: Actions with proper route configurations
+# UPDATED: Actions with new explicit toolbar flags following standardization
 PURCHASE_ORDER_ACTIONS = [
+
+    # =============================================================================
+    # LIST PAGE - TOOLBAR ACTIONS (Navigation to other lists, create)
+    # =============================================================================
+
+    # Back button (would be added by template)
+
     ActionDefinition(
-        id="view",
-        label="View Details",
+        id="goto_suppliers_list",
+        label="Suppliers",
+        icon="fas fa-building",
+        button_type=ButtonType.SECONDARY,
+        route_name="universal_views.universal_list_view",
+        route_params={"entity_type": "suppliers"},
+        show_in_list=False,
+        show_in_list_toolbar=True,
+        show_in_detail_toolbar=False,
+        display_type=ActionDisplayType.BUTTON,
+        permission="suppliers_view",
+        order=1
+    ),
+
+    ActionDefinition(
+        id="goto_supplier_invoices_list",
+        label="Supplier Invoices",
+        icon="fas fa-file-invoice",
+        button_type=ButtonType.SECONDARY,
+        route_name="universal_views.universal_list_view",
+        route_params={"entity_type": "supplier_invoices"},
+        show_in_list=False,
+        show_in_list_toolbar=True,
+        show_in_detail_toolbar=False,
+        display_type=ActionDisplayType.BUTTON,
+        permission="supplier_invoice_view",
+        order=2
+    ),
+
+    ActionDefinition(
+        id="goto_supplier_payments_list",
+        label="Supplier Payments",
+        icon="fas fa-money-bill",
+        button_type=ButtonType.SECONDARY,
+        route_name="universal_views.universal_list_view",
+        route_params={"entity_type": "supplier_payments"},
+        show_in_list=False,
+        show_in_list_toolbar=True,
+        show_in_detail_toolbar=False,
+        display_type=ActionDisplayType.BUTTON,
+        permission="supplier_payment_view",
+        order=3
+    ),
+
+    ActionDefinition(
+        id="create_po",
+        label="Create PO",
+        icon="fas fa-plus",
+        button_type=ButtonType.PRIMARY,
+        url_pattern="/supplier/purchase-order/add",
+        show_in_list=False,
+        show_in_list_toolbar=True,
+        show_in_detail_toolbar=False,
+        display_type=ActionDisplayType.BUTTON,
+        permission="purchase_order_create",
+        order=4
+    ),
+
+    # =============================================================================
+    # LIST PAGE - ROW ACTIONS (Per-record actions in table)
+    # =============================================================================
+
+    ActionDefinition(
+        id="view_row",
+        label="View",
         icon="fas fa-eye",
         button_type=ButtonType.INFO,
-        route_name="universal_entity.view",
-        route_params={"entity_type": "purchase_orders"},
-        show_in_list=False,
-        show_in_detail=False,
+        route_name="universal_views.universal_detail_view",
+        route_params={"entity_type": "purchase_orders", "item_id": "{po_id}"},
+        show_in_list=True,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=False,
         display_type=ActionDisplayType.BUTTON,
         permission="purchase_order_view",
         order=1
     ),
-    # List view navigation actions
+
     ActionDefinition(
-        id="invoices",
-        label="Invoices",
+        id="approve_row",
+        label="Approve",
+        icon="fas fa-check-circle",
+        button_type=ButtonType.SUCCESS,
+        url_pattern="/supplier/purchase-order/approve/{po_id}",
+        show_in_list=True,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=False,
+        display_type=ActionDisplayType.BUTTON,
+        conditions={
+            "po_status": ["draft"],
+            "is_deleted": [False]
+        },
+        permission="purchase_order_approve",
+        order=2,
+        confirmation_required=True,
+        confirmation_message="Are you sure you want to approve this purchase order?"
+    ),
+
+    ActionDefinition(
+        id="delete_row",
+        label="Delete",
+        icon="fas fa-trash",
+        button_type=ButtonType.DANGER,
+        url_pattern="/supplier/purchase-order/delete/{po_id}",
+        show_in_list=True,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=False,
+        display_type=ActionDisplayType.BUTTON,
+        conditions={
+            "po_status": ["draft"],
+            "is_deleted": [False, None]
+        },
+        permission="purchase_order_delete",
+        order=3,
+        confirmation_required=True,
+        confirmation_message="Are you sure you want to delete this purchase order? This will also delete all line items."
+    ),
+
+    # =============================================================================
+    # DETAIL/VIEW PAGE - TOOLBAR ACTIONS (Navigation buttons)
+    # =============================================================================
+
+    # Back button (would be added by template)
+
+    ActionDefinition(
+        id="goto_po_list",
+        label="Purchase Orders",
         icon="fas fa-file-invoice",
         button_type=ButtonType.SECONDARY,
-        url_pattern="/supplier/invoice/list",
+        route_name="universal_views.universal_list_view",
+        route_params={"entity_type": "purchase_orders"},
         show_in_list=False,
-        show_in_detail=False,
-        show_in_toolbar=True,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
         display_type=ActionDisplayType.BUTTON,
-        order=2
+        permission="purchase_order_view",
+        order=1
     ),
+
     ActionDefinition(
-        id="suppliers",
+        id="goto_suppliers_detail",
         label="Suppliers",
         icon="fas fa-building",
         button_type=ButtonType.SECONDARY,
-        url_pattern="/supplier/list",
+        route_name="universal_views.universal_list_view",
+        route_params={"entity_type": "suppliers"},
         show_in_list=False,
-        show_in_detail=False,
-        show_in_toolbar=True,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
         display_type=ActionDisplayType.BUTTON,
+        permission="suppliers_view",
+        order=2
+    ),
+
+    ActionDefinition(
+        id="goto_invoices_detail",
+        label="Supplier Invoices",
+        icon="fas fa-file-invoice",
+        button_type=ButtonType.SECONDARY,
+        route_name="universal_views.universal_list_view",
+        route_params={"entity_type": "supplier_invoices"},
+        show_in_list=False,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
+        display_type=ActionDisplayType.BUTTON,
+        permission="supplier_invoice_view",
         order=3
     ),
+
     ActionDefinition(
-        id="payments",
-        label="Payments",
+        id="goto_payments_detail",
+        label="Supplier Payments",
         icon="fas fa-money-bill",
         button_type=ButtonType.SECONDARY,
-        url_pattern="/supplier/payment/list",
+        route_name="universal_views.universal_list_view",
+        route_params={"entity_type": "supplier_payments"},
         show_in_list=False,
-        show_in_detail=False,
-        show_in_toolbar=True,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
         display_type=ActionDisplayType.BUTTON,
+        permission="supplier_payment_view",
         order=4
     ),
-    # Detail view actions
+
     ActionDefinition(
-        id="print",
-        label="Print",
+        id="print_po",
+        label="Print PO",
         icon="fas fa-print",
-        button_type=ButtonType.SECONDARY,
-        route_name="universal_views.universal_document_view",  # ✅ Universal Engine
+        button_type=ButtonType.INFO,
+        route_name="universal_views.universal_document_view",
         route_params={
             "entity_type": "purchase_orders",
             "item_id": "{po_id}",
-            "doc_type": "invoice"  # Matches PURCHASE_ORDER_DOCUMENT_CONFIGS key
+            "doc_type": "invoice"
         },
         show_in_list=False,
-        show_in_detail=True,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
         display_type=ActionDisplayType.BUTTON,
         permission="purchase_order_print",
         order=5
     ),
 
+    # =============================================================================
+    # DETAIL/VIEW PAGE - DROPDOWN ACTIONS (Edit, Delete, Approve, etc.)
+    # =============================================================================
+
     ActionDefinition(
-        id="edit",
-        label="Edit Purchase Order",
+        id="edit_po",
+        label="Edit PO",
         icon="fas fa-edit",
-        button_type=ButtonType.PRIMARY,
+        button_type=ButtonType.WARNING,
         url_pattern="/supplier/purchase-order/edit/{po_id}",
         show_in_list=False,
-        show_in_detail=True,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
         display_type=ActionDisplayType.DROPDOWN_ITEM,
-        conditions={"po_status": ["draft"],
-                    "is_deleted": [False]  # ✅ NEW: Don't show for deleted records
-                    },
-        permission="purchase_order_edit",
-        order=6
-    ),
-    ActionDefinition(
-        id="approve",
-        label="Approve",
-        icon="fas fa-check-circle",
-        button_type=ButtonType.SUCCESS,
-        url_pattern="/supplier/purchase-order/approve/{po_id}",
-        show_in_list=True,  # Show in list
-        show_in_detail=True,
-        display_type=ActionDisplayType.BUTTON,  # Changed to BUTTON for inline
         conditions={
             "po_status": ["draft"],
             "is_deleted": [False]
-            # Removed can_be_approved check
         },
-        permission="purchase_order_approve",
-        order=6,
-        confirmation_required=True,
-        confirmation_message="Are you sure you want to approve this purchase order?"
+        permission="purchase_order_edit",
+        order=1
     ),
-    
-    # ✅ NEW: Unapprove action for approved POs
+
     ActionDefinition(
-        id="unapprove",
-        label="Unapprove", 
-        icon="fas fa-undo",
-        button_type=ButtonType.WARNING,  # ✅ Verified in core_definitions.py
-        url_pattern="/supplier/purchase-order/unapprove/{po_id}",
-        show_in_list=False,
-        show_in_detail=True,
-        display_type=ActionDisplayType.DROPDOWN_ITEM,
-        conditions={
-            "po_status": ["approved"],  # ✅ Use correct field name from PurchaseOrderView
-            "is_deleted": [False],
-            "can_be_unapproved": [True]  # ✅ Check no invoices exist
-        },
-        permission="purchase_order_approve",  # Same permission as approve
-        order=7,
-        confirmation_required=True,
-        confirmation_message="Are you sure you want to unapprove this purchase order?"
-    ),
-    
-    # ✅ Delete action for draft POs
-    ActionDefinition(
-        id="delete",
-        label="Delete",
+        id="delete_po",
+        label="Delete PO",
         icon="fas fa-trash",
         button_type=ButtonType.DANGER,
-        url_pattern="/supplier/purchase-order/delete/{po_id}",  # Use actual route
+        url_pattern="/supplier/purchase-order/delete/{po_id}",
         show_in_list=False,
-        show_in_detail=True,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
         display_type=ActionDisplayType.DROPDOWN_ITEM,
         conditions={
+            "po_status": ["draft"],
             "is_deleted": [False, None]
         },
         permission="purchase_order_delete",
-        order=12,
+        order=2,
         confirmation_required=True,
         confirmation_message="Are you sure you want to delete this purchase order? This will also delete all line items."
     ),
-    
-    # ✅ NEW: Restore action for deleted records
+
     ActionDefinition(
-        id="restore",
+        id="approve_po",
+        label="Approve PO",
+        icon="fas fa-check-circle",
+        button_type=ButtonType.SUCCESS,
+        url_pattern="/supplier/purchase-order/approve/{po_id}",
+        show_in_list=False,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
+        display_type=ActionDisplayType.DROPDOWN_ITEM,
+        conditions={
+            "po_status": ["draft"],
+            "is_deleted": [False]
+        },
+        permission="purchase_order_approve",
+        order=3,
+        confirmation_required=True,
+        confirmation_message="Are you sure you want to approve this purchase order?"
+    ),
+
+    ActionDefinition(
+        id="create_invoice_from_po",
+        label="Create Invoice from PO",
+        icon="fas fa-file-invoice-dollar",
+        button_type=ButtonType.PRIMARY,
+        url_pattern="/supplier/invoice/add?po_id={po_id}",
+        show_in_list=False,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
+        display_type=ActionDisplayType.DROPDOWN_ITEM,
+        conditions={
+            "po_status": ["approved"],
+            "is_deleted": [False]
+        },
+        permission="supplier_invoice_create",
+        order=4
+    ),
+
+    ActionDefinition(
+        id="restore_po",
         label="Restore",
         icon="fas fa-undo",
         button_type=ButtonType.SUCCESS,
-        url_pattern="/supplier/purchase-order/restore/{po_id}",  # ✅ Matches delete pattern
+        url_pattern="/supplier/purchase-order/restore/{po_id}",
         show_in_list=False,
-        show_in_detail=True,
+        show_in_list_toolbar=False,
+        show_in_detail_toolbar=True,
         display_type=ActionDisplayType.DROPDOWN_ITEM,
         conditions={
             "is_deleted": [True]
         },
         permission="purchase_order_delete",
-        order=9,
+        order=5,
         confirmation_required=True,
         confirmation_message="Are you sure you want to restore this purchase order?"
-    ),
-    
-    # ✅ UPDATED: Cancel action with enhanced conditions  
-    ActionDefinition(
-        id="cancel",
-        label="Cancel",
-        icon="fas fa-times-circle",
-        button_type=ButtonType.DANGER,
-        url_pattern="/supplier/purchase-order/cancel/{po_id}",
-        show_in_list=True,   # ✅ NEW: Show in list
-        show_in_detail=True,
-        display_type=ActionDisplayType.BUTTON,
-        conditions={
-            "po_status": ["draft", "approved"],  # ✅ FIXED: Use correct field name
-            "is_deleted": [False],  # ✅ NEW: Don't show for deleted
-            "has_invoice": [False]  # ✅ NEW: Only if no invoices
-        },
-        confirmation_required=True,
-        confirmation_message="Are you sure you want to cancel this purchase order?",
-        permission="purchase_order_edit",
-        order=11
-    ),
-    
-    ActionDefinition(
-        id="create_invoice",
-        label="Create Invoice",
-        icon="fas fa-file-invoice-dollar",
-        button_type=ButtonType.WARNING,
-        url_pattern="/supplier/invoice/add?po_id={po_id}",
-        show_in_list=True,
-        show_in_detail=True,
-        display_type=ActionDisplayType.BUTTON,
-        conditions={
-            "po_status": ["approved"],  # ✅ FIXED: Use po_status not status
-            "is_deleted": [False]
-        },
-        permission="supplier_invoice_create",
-        order=9
-    ),
-    ActionDefinition(
-        id="view_payment",
-        label="View Payment",
-        icon="fas fa-money-check",
-        button_type=ButtonType.INFO,
-        url_pattern="/supplier/payment/view/{payment_id}",
-        show_in_list=False,
-        show_in_detail=True,
-        display_type=ActionDisplayType.DROPDOWN_ITEM,
-        conditional_display="item.payment_id",  # Only show if payment exists
-        permission="supplier_payment_view",
-        order=9
     )
-    # ActionDefinition(
-    #     id="export",
-    #     label="Export",
-    #     icon="fas fa-download",
-    #     button_type=ButtonType.SECONDARY,
-    #     url_pattern="/universal/purchase_orders/export",
-    #     show_in_list=True,
-    #     show_in_detail=False,
-    #     show_in_toolbar=True,
-    #     display_type=ActionDisplayType.BUTTON,
-    #     permission="purchase_order_export",
-    #     order=10
-    # )
 ]
 # =============================================================================
 # SUMMARY CARDS CONFIGURATION

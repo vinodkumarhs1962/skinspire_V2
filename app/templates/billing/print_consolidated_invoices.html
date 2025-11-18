@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consolidated Invoice - {{ patient.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/components/invoice.css') }}">
+    <style>
+        @page {
+            size: A4;
+            margin: 12mm;
+            orphans: 3;
+            widows: 3;
+        }
+
+        html, body {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto !important;
+            padding: 0 !important;
+            overflow: visible !important;
+        }
+
+        .print-container {
+            width: 186mm !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
+            box-sizing: border-box !important;
+        }
+
+        /* Compact header with logo and patient info */
+        .compact-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #333;
+        }
+
+        .logo-section {
+            flex: 0 0 120px;
+        }
+
+        .logo-section img {
+            max-height: 70px;
+            max-width: 120px;
+        }
+
+        .hospital-details {
+            flex: 1;
+            padding: 0 15px;
+            font-size: 10px;
+            line-height: 1.4;
+        }
+
+        .hospital-details h2 {
+            margin: 0 0 5px 0;
+            font-size: 14px;
+        }
+
+        .patient-info-box {
+            flex: 0 0 220px;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            line-height: 1.6;
+            text-align: right;
+        }
+
+        .patient-info-box strong {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+            color: #333;
+            font-weight: bold;
+        }
+
+        /* Invoice separator - no page break, just visual separator */
+        .invoice-separator {
+            page-break-inside: avoid;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px dashed #999;
+        }
+
+        .invoice-separator:first-child {
+            margin-top: 0;
+            padding-top: 0;
+            border-top: none;
+        }
+
+        /* Prevent table splitting */
+        table {
+            page-break-inside: avoid;
+        }
+
+        /* Invoice meta info - full width */
+        .invoice-meta-full {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .invoice-title {
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+            margin: 10px 0;
+            padding: 5px;
+            background: #f0f0f0;
+        }
+
+        /* Footer should appear only once */
+        .global-footer {
+            page-break-inside: avoid;
+            margin-top: 30px;
+            font-size: 9px;
+        }
+
+        /* Hide print buttons when printing */
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+        }
+
+        /* Compact table styling */
+        table {
+            font-size: 9px;
+        }
+
+        th, td {
+            padding: 4px 6px;
+        }
+
+        /* Table column alignment */
+        .text-right {
+            text-align: right;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .text-left {
+            text-align: left;
+        }
+
+        /* GST amount display - two line format */
+        .gst-display {
+            text-align: right;
+        }
+
+        .gst-rate {
+            display: block;
+            font-weight: bold;
+        }
+
+        .gst-amount {
+            display: block;
+            font-size: 8px;
+            color: #666;
+        }
+
+        /* Remove browser print header/footer */
+        @page {
+            margin: 12mm;
+        }
+
+        /* Additional styles to hide browser header/footer */
+        body {
+            margin: 0;
+        }
+
+        /* Pre-printed stationery layout */
+        .preprinted-mode .compact-header .logo-section,
+        .preprinted-mode .compact-header .hospital-details {
+            display: none !important;
+        }
+
+        .preprinted-mode .patient-info-box {
+            flex: 1;
+            text-align: left;
+            margin-left: 0;
+        }
+
+        /* Add space for pre-printed header and footer */
+        .preprinted-mode .compact-header {
+            margin-top: 60mm;  /* Space for pre-printed header */
+        }
+
+        .preprinted-mode .global-footer {
+            margin-bottom: 40mm;  /* Space for pre-printed footer */
+        }
+
+        /* Plain stationery layout (default) */
+        .plain-mode .compact-header {
+            display: flex;
+        }
+
+        /* Totals table styling */
+        .totals-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        .totals-table td {
+            padding: 5px 10px;
+        }
+
+        .totals-table .label-col {
+            text-align: right;
+            width: 75%;
+            padding-right: 20px;
+        }
+
+        .totals-table .amount-col {
+            text-align: right;
+            width: 25%;
+            font-weight: 500;
+        }
+
+        .totals-table .total-row {
+            font-weight: bold;
+            border-top: 2px solid #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print" style="padding: 10px; background-color: #f8f9fa; margin: 0;">
+        <div style="text-align: center; margin-bottom: 10px;">
+            <button onclick="window.print()" style="padding: 5px 10px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                Print All Invoices
+            </button>
+            <button onclick="window.close()" style="padding: 5px 10px; background-color: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">
+                Close
+            </button>
+        </div>
+
+        <div style="margin-top: 10px; padding: 10px; background: #e3f2fd; border-radius: 4px; text-align: center;">
+            <strong style="margin-right: 15px;">Stationery Type:</strong>
+            <label style="margin-right: 20px; cursor: pointer;">
+                <input type="radio" name="stationery" value="plain" checked onchange="toggleStationery()">
+                Plain Stationery (with logo & header)
+            </label>
+            <label style="cursor: pointer;">
+                <input type="radio" name="stationery" value="preprinted" onchange="toggleStationery()">
+                Pre-printed Stationery (no logo/header)
+            </label>
+        </div>
+
+        <div style="margin-top: 10px; padding: 8px; background: #fff3cd; border-radius: 4px; font-size: 12px; color: #856404; text-align: center;">
+            <strong>Print Settings:</strong> In print dialog, disable "Headers and Footers" for clean output
+        </div>
+    </div>
+
+    <div class="print-container plain-mode" id="printContainer">
+        <!-- Compact Header with Logo, Hospital Details, and Patient Info (shown once at top) -->
+        <div class="compact-header">
+            <div class="logo-section">
+                {% if hospital.hospital_id %}
+                    <img src="{{ url_for('static', filename='uploads/hospital_logos/' + hospital.hospital_id|string + '/medium_3da15aa2-4a2f-4ace-901b-d4d89d1ff66f.jpg') }}"
+                         alt="{{ hospital.name }}"
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                    <div style="display: none; font-weight: bold; font-size: 12px;">{{ hospital.name }}</div>
+                {% else %}
+                    <div style="font-weight: bold; font-size: 12px;">{{ hospital.name }}</div>
+                {% endif %}
+            </div>
+
+            <div class="hospital-details">
+                <h2>{{ hospital.name }}</h2>
+                <div>{{ hospital.address }}</div>
+                <div>Phone: {{ hospital.phone }} | Email: {{ hospital.email }}</div>
+                {% if hospital.gst_registration_number %}
+                <div>GSTIN: {{ hospital.gst_registration_number }}</div>
+                {% endif %}
+                {% if hospital.pharmacy_registration_number %}
+                <div>Pharmacy Reg: {{ hospital.pharmacy_registration_number }}
+                    {% if hospital.pharmacy_registration_valid_until %}
+                    (Valid: {{ hospital.pharmacy_registration_valid_until.strftime('%d-%b-%Y') }})
+                    {% elif hospital.pharmacy_reg_valid_until %}
+                    (Valid: {{ hospital.pharmacy_reg_valid_until.strftime('%d-%b-%Y') }})
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="patient-info-box">
+                <strong>PATIENT DETAILS</strong>
+                <div>{{ patient.name }}</div>
+                <div>MRN: {{ patient.mrn }}</div>
+                {% if patient.contact_info and patient.contact_info.phone %}
+                <div>Ph: {{ patient.contact_info.phone }}</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Loop through all invoices -->
+        {% for invoice in invoices %}
+        <div class="invoice-separator">
+            <div class="invoice-title">
+                {{ "TAX INVOICE" if invoice.is_gst_invoice else "INVOICE" }}
+            </div>
+
+            <!-- Full-width invoice metadata -->
+            <div class="invoice-meta-full">
+                <div><strong>Invoice #:</strong> {{ invoice.invoice_number }}</div>
+                <div><strong>Date:</strong> {{ invoice.invoice_date.strftime('%d-%b-%Y') if invoice.invoice_date is not string else invoice.invoice_date }}</div>
+                <div><strong>Type:</strong> {{ invoice.invoice_type }}</div>
+                <div><strong>Supply:</strong> {{ "Interstate" if invoice.is_interstate else "Intrastate" }}</div>
+            </div>
+
+            <!-- Line Items Table -->
+            {% if invoice.consolidate_prescription %}
+                <!-- Consolidated Prescription as "Doctor's Examination and Treatment" -->
+                <div style="margin-bottom: 15px; margin-top: 15px;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="text-center" style="width: 5%;">S. No.</th>
+                                <th class="text-left item-description" style="width: 60%;">Service Description</th>
+                                <th class="text-center" style="width: 10%;">Qty</th>
+                                <th class="text-right" style="width: 15%;">Amount</th>
+                                <th class="text-right" style="width: 10%;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="text-center">1</td>
+                                <td class="item-description">
+                                    <strong>Doctor's Examination and Treatment</strong>
+                                    <div style="font-size: 9px; color: #666; font-style: italic; margin-top: 3px;">
+                                        Includes: {{ invoice.line_items|length }} prescription medicine(s)
+                                    </div>
+                                </td>
+                                <td class="text-center">1</td>
+                                <td class="text-right">{{ "%.2f"|format(invoice.prescription_consolidated_total) }}</td>
+                                <td class="text-right">{{ "%.2f"|format(invoice.prescription_consolidated_total) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="font-size: 9px; color: #666; margin-top: 5px; padding: 5px; background-color: #f8f9fa; border-left: 3px solid #ffc107;">
+                        <strong>Note:</strong> This service includes prescription medicines dispensed as part of the consultation treatment. GST exempted as per medical consultation services.
+                    </div>
+                </div>
+            {% else %}
+                <!-- Regular Line Items -->
+                <div style="margin-bottom: 15px; margin-top: 15px;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="text-center" style="width: 5%;">S. No.</th>
+                                <th class="text-left item-description" style="width: 25%;">Item Description</th>
+                                {% if invoice.is_gst_invoice %}
+                                <th class="text-center" style="width: 10%;">HSN/SAC</th>
+                                {% endif %}
+                                <th class="text-center" style="width: 7%;">Qty</th>
+                                <th class="text-center" style="width: 5%;">UOM</th>
+                                {% if invoice.invoice_type == 'Product' or invoice.invoice_type == 'Prescription' %}
+                                <th class="text-center" style="width: 8%;">Batch</th>
+                                <th class="text-center" style="width: 8%;">Expiry</th>
+                                {% endif %}
+                                <th class="text-right" style="width: 10%;">Price</th>
+                                {% if invoice.is_gst_invoice %}
+                                <th class="text-right" style="width: 10%;">GST Amount</th>
+                                {% endif %}
+                                <th class="text-right" style="width: 10%;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in invoice.line_items %}
+                            <tr>
+                                <td class="text-center">{{ loop.index }}</td>
+                                <td class="item-description">{{ item.item_name }}</td>
+                                {% if invoice.is_gst_invoice %}
+                                <td class="text-center">{{ item.hsn_sac_code or '-' }}</td>
+                                {% endif %}
+                                <td class="text-center">{{ item.quantity }}</td>
+                                <td class="text-center">{{ item.uom or 'Nos' }}</td>
+                                {% if invoice.invoice_type == 'Product' or invoice.invoice_type == 'Prescription' %}
+                                <td class="text-center">{{ item.batch or '-' }}</td>
+                                <td class="text-center">
+                                    {% if item.expiry_date %}
+                                        {% if item.expiry_date is string %}{{ item.expiry_date }}{% else %}{{ item.expiry_date.strftime('%d-%b-%Y') }}{% endif %}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                {% endif %}
+                                <td class="text-right">{{ "%.2f"|format(item.unit_price) }}</td>
+                                {% if invoice.is_gst_invoice %}
+                                <td class="gst-display">
+                                    <span class="gst-rate">{{ item.gst_rate|int }}%</span>
+                                    <span class="gst-amount">({{ "%.2f"|format(item.cgst_amount + item.sgst_amount + item.igst_amount) }})</span>
+                                </td>
+                                {% endif %}
+                                <td class="text-right">{{ "%.2f"|format(item.line_total) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+
+            <!-- Invoice Totals -->
+            <table class="totals-table">
+                <tr>
+                    <td colspan="2" style="border: 1px solid #ddd; background-color: #f9f9f9; padding: 8px;">
+                        <strong>Amount in Words:</strong> INR {{ invoice.amount_in_words }} only
+                    </td>
+                </tr>
+                <tr>
+                    <td class="label-col">Subtotal:</td>
+                    <td class="amount-col">{{ "%.2f"|format(invoice.total_amount) }}</td>
+                </tr>
+
+                {% if invoice.total_discount and invoice.total_discount > 0 %}
+                <tr>
+                    <td class="label-col">Total Discount:</td>
+                    <td class="amount-col">{{ "%.2f"|format(invoice.total_discount) }}</td>
+                </tr>
+                {% endif %}
+
+                {% if invoice.is_gst_invoice %}
+                <tr>
+                    <td class="label-col">Taxable Value:</td>
+                    <td class="amount-col">{{ "%.2f"|format(invoice.total_taxable_value) }}</td>
+                </tr>
+
+                {% if not invoice.is_interstate %}
+                <tr>
+                    <td class="label-col">CGST:</td>
+                    <td class="amount-col">{{ "%.2f"|format(invoice.total_cgst_amount) }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">SGST:</td>
+                    <td class="amount-col">{{ "%.2f"|format(invoice.total_sgst_amount) }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td class="label-col">IGST:</td>
+                    <td class="amount-col">{{ "%.2f"|format(invoice.total_igst_amount) }}</td>
+                </tr>
+                {% endif %}
+                {% endif %}
+
+                <tr class="total-row">
+                    <td class="label-col">GRAND TOTAL:</td>
+                    <td class="amount-col">{{ "%.2f"|format(invoice.grand_total) }}</td>
+                </tr>
+            </table>
+
+            <!-- GST Summary (if applicable) -->
+            {% if invoice.is_gst_invoice and invoice.tax_groups %}
+            <div class="gst-details" style="margin-top: 20px;">
+                <div style="font-weight: bold; margin-bottom: 5px; font-size: 10px;">GST Summary:</div>
+                <table class="tax-summary" style="width: 100%;">
+                    <thead>
+                        <tr>
+                            <th class="text-left">Description</th>
+                            <th class="text-right">Taxable Value</th>
+                            <th class="text-center">GST Rate</th>
+                            {% if not invoice.is_interstate %}
+                            <th class="text-right">CGST Amount</th>
+                            <th class="text-right">SGST Amount</th>
+                            {% else %}
+                            <th class="text-right">IGST Amount</th>
+                            {% endif %}
+                            <th class="text-right">Total Tax</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rate, values in invoice.tax_groups.items() %}
+                        <tr>
+                            <td>GST {{ rate }}%</td>
+                            <td class="text-right">{{ "%.2f"|format(values.taxable_value) }}</td>
+                            <td class="text-center">{{ rate }}%</td>
+                            {% if not invoice.is_interstate %}
+                            <td class="text-right">{{ "%.2f"|format(values.cgst_amount) }}</td>
+                            <td class="text-right">{{ "%.2f"|format(values.sgst_amount) }}</td>
+                            {% else %}
+                            <td class="text-right">{{ "%.2f"|format(values.igst_amount) }}</td>
+                            {% endif %}
+                            <td class="text-right">{{ "%.2f"|format(values.cgst_amount + values.sgst_amount + values.igst_amount) }}</td>
+                        </tr>
+                        {% endfor %}
+
+                        <!-- Total row (only show if multiple GST rates) -->
+                        {% if invoice.tax_groups|length > 1 %}
+                        <tr style="font-weight: bold; border-top: 2px solid #333;">
+                            <td>Total</td>
+                            <td class="text-right">{{ "%.2f"|format(invoice.total_taxable_value) }}</td>
+                            <td class="text-center">-</td>
+                            {% if not invoice.is_interstate %}
+                            <td class="text-right">{{ "%.2f"|format(invoice.total_cgst_amount) }}</td>
+                            <td class="text-right">{{ "%.2f"|format(invoice.total_sgst_amount) }}</td>
+                            {% else %}
+                            <td class="text-right">{{ "%.2f"|format(invoice.total_igst_amount) }}</td>
+                            {% endif %}
+                            <td class="text-right">{{ "%.2f"|format(invoice.total_cgst_amount + invoice.total_sgst_amount + invoice.total_igst_amount) }}</td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <!-- FOOTER - SHOWN ONLY ONCE AT THE END -->
+        <div class="global-footer">
+            <!-- Terms & Conditions -->
+            <div class="terms">
+                <div style="font-weight: bold; margin-bottom: 5px;">Terms & Conditions:</div>
+                <ol style="margin: 0; padding-left: 15px;">
+                    <li>All payments are non-refundable except as per the clinic's cancellation policy.</li>
+                    <li>Payments are due immediately upon receipt of invoice unless otherwise specified.</li>
+                    <li>This is a computer-generated invoice and does not require physical signature.</li>
+                    <li>GST calculation as per current rates applicable.</li>
+                    <li>Subject to local jurisdiction.</li>
+                </ol>
+            </div>
+
+            <!-- Authorized Signature -->
+            <div class="authorized-signature">
+                <div style="margin-bottom: 30px;">
+                    For {{ hospital.name }}
+                </div>
+                <div>
+                    Authorized Signatory
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleStationery() {
+            const container = document.getElementById('printContainer');
+            const stationeryType = document.querySelector('input[name="stationery"]:checked').value;
+
+            // Remove both classes
+            container.classList.remove('plain-mode', 'preprinted-mode');
+
+            // Add the selected class
+            if (stationeryType === 'preprinted') {
+                container.classList.add('preprinted-mode');
+            } else {
+                container.classList.add('plain-mode');
+            }
+
+            // Save preference to localStorage
+            localStorage.setItem('stationeryType', stationeryType);
+        }
+
+        // Load saved preference on page load
+        window.addEventListener('DOMContentLoaded', function() {
+            const savedType = localStorage.getItem('stationeryType');
+            if (savedType) {
+                const radio = document.querySelector(`input[name="stationery"][value="${savedType}"]`);
+                if (radio) {
+                    radio.checked = true;
+                    toggleStationery();
+                }
+            }
+        });
+    </script>
+</body>
+</html>

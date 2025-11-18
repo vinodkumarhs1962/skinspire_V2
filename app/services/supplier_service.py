@@ -654,7 +654,7 @@ def create_purchase_order(
     else:
         logger.debug("Skipping server-side validation (backward compatibility mode)")
     
-    # Proceed with PO creation using existing logic
+    # Proceed with PO creation using existing logic    
     if session is not None:
         logger.debug("Using provided session")
         return _create_purchase_order(session, hospital_id, po_data, current_user_id)
@@ -3055,14 +3055,18 @@ def _search_supplier_invoices(
         if po_id:
             query = query.filter(SupplierInvoice.po_id == po_id)
         if payment_status:
-            query = query.filter(SupplierInvoice.payment_status == payment_status)  # ✅ CORRECT
+            # FIXED: Handle both single value and list of values
+            if isinstance(payment_status, list):
+                query = query.filter(SupplierInvoice.payment_status.in_(payment_status))
+            else:
+                query = query.filter(SupplierInvoice.payment_status == payment_status)  # ✅ CORRECT
         if start_date:
             query = query.filter(SupplierInvoice.invoice_date >= start_date)  # ✅ CORRECT
         if end_date:
             query = query.filter(SupplierInvoice.invoice_date <= end_date)  # ✅ CORRECT
         if branch_id:
             query = query.filter(SupplierInvoice.branch_id == branch_id)  # ✅ CORRECT
-        
+
         query = query.order_by(desc(SupplierInvoice.invoice_date))  # ✅ CORRECT
         
         # Get total and paginated results
@@ -6440,7 +6444,7 @@ def _get_supplier_payment_by_id(
         supplier = session.query(Supplier).filter_by(supplier_id=payment.supplier_id).first()
         if supplier:
             payment_dict['supplier_name'] = supplier.supplier_name
-            payment_dict['supplier_code'] = getattr(supplier, supplier.supplier_id)
+            payment_dict['supplier_code'] = getattr(supplier, 'supplier_code', '')
         
         # Add branch information
         if payment.branch_id:

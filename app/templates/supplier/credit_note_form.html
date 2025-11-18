@@ -18,7 +18,7 @@
             </p>
         </div>
         <div class="mt-4 md:mt-0 flex flex-wrap gap-2">
-            <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) if payment else url_for('supplier_views.payment_list') }}" 
+            <a href="{{ url_for('universal_views.universal_detail_view', entity_type='supplier_payments', item_id=payment.payment_id) if payment else url_for('universal_views.universal_list_view', entity_type='supplier_payments') }}"
                class="btn-secondary">
                 <i class="fas fa-arrow-left mr-2"></i> Back to Payment
             </a>
@@ -186,7 +186,7 @@
                 
                 <!-- Form Actions -->
                 <div class="flex justify-end space-x-3 pt-6 border-t border-gray-200 dark:border-gray-700">
-                    <a href="{{ url_for('supplier_views.view_payment', payment_id=payment.payment_id) if payment else url_for('supplier_views.payment_list') }}"
+                    <a href="{{ url_for('universal_views.universal_detail_view', entity_type='supplier_payments', item_id=payment.payment_id) if payment else url_for('universal_views.universal_list_view', entity_type='supplier_payments') }}"
                        class="btn-secondary">
                         Cancel
                     </a>

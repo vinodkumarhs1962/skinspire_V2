@@ -47,11 +47,10 @@
                 
                 <!-- Row 3: Action Buttons -->
                 <div class="flex justify-between items-center">
-                    <a href="{{ url_for('universal_views.universal_list_view', entity_type=entity_type) }}" 
-                       class="btn-secondary">
-                        <i class="fas fa-arrow-left"></i>
-                        <span class="ml-2">Back to List</span>
-                    </a>
+                    <!-- Standard Back Button (Always First) -->
+                    <button onclick="window.history.back()" type="button" class="btn-back">
+                        <i class="fas fa-arrow-left icon-left"></i>Back
+                    </button>
                     <div class="flex gap-2">
                         <a href="{{ url_for('universal_views.universal_detail_view', entity_type=entity_type, item_id=item_id) }}"
                            class="btn-secondary">
@@ -174,14 +173,12 @@
                                                     </div>
                                                     
                                                 {% elif field.field_type.value == 'select' or field.name == 'status' %}
-                                                    <select class="universal-form-input" 
-                                                            id="{{ field.name }}" 
+                                                    <select class="universal-form-input"
+                                                            id="{{ field.name }}"
                                                             name="{{ field.name }}"
                                                             {% if field.name in entity_config.required_fields %}required{% endif %}>
-                                                        {% if field.name == 'status' %}
-                                                            <option value="active" {% if current_value == 'active' %}selected{% endif %}>Active</option>
-                                                            <option value="inactive" {% if current_value == 'inactive' %}selected{% endif %}>Inactive</option>
-                                                        {% elif field.options %}
+                                                        {% if field.options %}
+                                                            <!-- Use field-specific options if defined -->
                                                             <option value="">Select {{ field.label }}</option>
                                                             {% for option in field.options %}
                                                                 {% if option is mapping %}
@@ -194,6 +191,10 @@
                                                                     </option>
                                                                 {% endif %}
                                                             {% endfor %}
+                                                        {% elif field.name == 'status' %}
+                                                            <!-- Fallback for status field without options -->
+                                                            <option value="active" {% if current_value == 'active' %}selected{% endif %}>Active</option>
+                                                            <option value="inactive" {% if current_value == 'inactive' %}selected{% endif %}>Inactive</option>
                                                         {% endif %}
                                                     </select>
                                                     
@@ -381,6 +382,270 @@
         </div>
     </div>
 </div>
+
+<!-- Discontinuation Confirmation Modal -->
+<div id="discontinuationModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-10 mx-auto p-6 border w-full max-w-2xl shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl leading-6 font-bold text-red-600">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    Confirm Plan Discontinuation
+                </h3>
+                <button onclick="closeDiscontinuationModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <div class="px-7 py-3">
+                <!-- Loading State -->
+                <div id="discontinuation-loading" class="text-center py-8">
+                    <i class="fas fa-spinner fa-spin text-4xl text-blue-500 mb-3"></i>
+                    <p class="text-gray-600">Loading discontinuation details...</p>
+                </div>
+
+                <!-- Preview Content -->
+                <div id="discontinuation-content" class="hidden">
+                    <!-- Patient and Package Info -->
+                    <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4">
+                        <div class="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                                <strong>Patient:</strong> <span id="preview-patient-name"></span>
+                            </div>
+                            <div>
+                                <strong>Package:</strong> <span id="preview-package-name"></span>
+                            </div>
+                            <div>
+                                <strong>Invoice:</strong> <span id="preview-invoice-number"></span>
+                            </div>
+                            <div>
+                                <strong>Plan:</strong> <span id="preview-plan-number"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Financial Impact -->
+                    <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-4">
+                        <h4 class="font-bold text-gray-800 mb-3">Financial Impact</h4>
+                        <div class="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                                <span class="text-gray-600">Total Package Amount:</span>
+                                <span class="font-semibold float-right" id="preview-total-amount"></span>
+                            </div>
+                            <div>
+                                <span class="text-gray-600">Per-Session Cost:</span>
+                                <span class="font-semibold float-right text-blue-600" id="preview-session-value"></span>
+                            </div>
+                            <div>
+                                <span class="text-gray-600">Total Sessions:</span>
+                                <span class="font-semibold float-right" id="preview-total-sessions"></span>
+                            </div>
+                            <div>
+                                <span class="text-gray-600">Completed Sessions:</span>
+                                <span class="font-semibold float-right" id="preview-completed-sessions"></span>
+                            </div>
+                            <div class="col-span-2 border-t pt-2 mt-1">
+                                <span class="text-gray-600">Patient Liability (Completed):</span>
+                                <span class="font-bold float-right text-orange-600" id="preview-patient-liability"></span>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="text-gray-600">Amount Paid:</span>
+                                <span class="font-bold float-right text-green-600" id="preview-paid-amount"></span>
+                            </div>
+                            <div class="col-span-2 border-t pt-2 mt-1">
+                                <span class="text-gray-600">Remaining Sessions:</span>
+                                <span class="font-bold text-lg float-right text-red-600" id="preview-remaining-sessions"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Items to Cancel -->
+                    <div class="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
+                        <h4 class="font-bold text-gray-800 mb-2">Items to be Cancelled</h4>
+                        <div class="text-sm">
+                            <div class="flex justify-between py-1">
+                                <span class="text-gray-600">Scheduled Sessions:</span>
+                                <span class="font-semibold" id="preview-scheduled-sessions"></span>
+                            </div>
+                            <div class="flex justify-between py-1">
+                                <span class="text-gray-600">Pending Installments:</span>
+                                <span class="font-semibold" id="preview-pending-installments"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Discontinuation Reason -->
+                    <div class="mb-4">
+                        <label for="discontinuation-reason-input" class="block text-sm font-semibold text-gray-700 mb-2">
+                            Discontinuation Reason <span class="text-red-500">*</span>
+                        </label>
+                        <textarea id="discontinuation-reason-input"
+                                  rows="3"
+                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  placeholder="Enter reason for discontinuation (required)"></textarea>
+                    </div>
+
+                    <!-- Reversal & Refund Calculation -->
+                    <div class="bg-green-50 border-l-4 border-green-500 p-4 mb-4">
+                        <h4 class="font-bold text-gray-800 mb-3">
+                            <i class="fas fa-calculator mr-2"></i>
+                            Credit Note Calculation
+                        </h4>
+
+                        <!-- Patient Liability Calculation -->
+                        <div class="bg-white p-4 rounded mb-3 border border-gray-200">
+                            <h5 class="text-sm font-bold text-gray-700 mb-3">
+                                <i class="fas fa-user-tag mr-1 text-orange-500"></i>
+                                Patient Liability (Completed Sessions):
+                            </h5>
+                            <div class="flex items-center gap-2 text-sm font-mono bg-gray-50 p-3 rounded">
+                                <input type="number"
+                                       id="per-session-cost-input"
+                                       class="w-24 px-2 py-1 border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-right font-semibold text-blue-600"
+                                       step="0.01"
+                                       min="0">
+                                <span class="text-gray-600">×</span>
+                                <input type="text"
+                                       id="completed-sessions-display"
+                                       class="w-16 px-2 py-1 bg-gray-100 border border-gray-300 rounded text-center text-gray-700"
+                                       readonly>
+                                <span class="text-gray-600">=</span>
+                                <input type="text"
+                                       id="patient-liability-calc"
+                                       class="flex-1 px-2 py-1 bg-orange-50 border border-orange-300 rounded text-right font-bold text-orange-600"
+                                       readonly>
+                            </div>
+                            <p class="text-xs text-gray-600 mt-2 ml-1">
+                                Per-session cost × Completed sessions = Patient liability
+                            </p>
+                        </div>
+
+                        <!-- Cash Refund Calculation -->
+                        <div class="bg-white p-4 rounded mb-3 border border-gray-200">
+                            <h5 class="text-sm font-bold text-gray-700 mb-3">
+                                <i class="fas fa-money-bill-wave mr-1 text-green-500"></i>
+                                Cash Refund to Patient:
+                            </h5>
+                            <div class="flex items-center gap-2 text-sm font-mono bg-gray-50 p-3 rounded">
+                                <input type="text"
+                                       id="paid-amount-display"
+                                       class="w-28 px-2 py-1 bg-gray-100 border border-gray-300 rounded text-right text-gray-700"
+                                       readonly>
+                                <span class="text-gray-600">−</span>
+                                <input type="text"
+                                       id="patient-liability-display"
+                                       class="w-28 px-2 py-1 bg-gray-100 border border-gray-300 rounded text-right text-gray-700"
+                                       readonly>
+                                <span class="text-gray-600">=</span>
+                                <input type="text"
+                                       id="cash-refund-calc"
+                                       class="flex-1 px-2 py-1 bg-green-50 border border-green-300 rounded text-right font-bold text-green-600"
+                                       readonly>
+                            </div>
+                            <p class="text-xs text-gray-600 mt-2 ml-1">
+                                Paid amount − Patient liability = Cash refund (rounded to nearest ₹)
+                            </p>
+                        </div>
+
+                        <!-- Reversal Value Calculation -->
+                        <div class="bg-white p-4 rounded mb-3 border border-gray-200">
+                            <h5 class="text-sm font-bold text-gray-700 mb-3">
+                                <i class="fas fa-undo mr-1 text-blue-500"></i>
+                                AR/GL Reversal Value (Unused Sessions):
+                            </h5>
+                            <div class="flex items-center gap-2 text-sm font-mono bg-gray-50 p-3 rounded">
+                                <input type="text"
+                                       id="per-session-cost-display"
+                                       class="w-24 px-2 py-1 bg-gray-100 border border-gray-300 rounded text-right text-gray-700"
+                                       readonly>
+                                <span class="text-gray-600">×</span>
+                                <input type="text"
+                                       id="remaining-sessions-display"
+                                       class="w-16 px-2 py-1 bg-gray-100 border border-gray-300 rounded text-center text-gray-700"
+                                       readonly>
+                                <span class="text-gray-600">=</span>
+                                <input type="text"
+                                       id="reversal-value-calc"
+                                       class="flex-1 px-2 py-1 bg-blue-50 border border-blue-300 rounded text-right font-bold text-blue-600"
+                                       readonly>
+                            </div>
+                            <p class="text-xs text-gray-600 mt-2 ml-1">
+                                Per-session cost × Remaining sessions = Reversal amount
+                            </p>
+                        </div>
+
+                        <!-- Final Adjustment -->
+                        <div class="border-t pt-3 mt-2">
+                            <p class="text-sm text-gray-600 mb-3">
+                                <strong>Final Credit Note Amount</strong> (editable for adjustments):
+                            </p>
+                            <div class="flex items-center gap-4">
+                                <div class="flex-1">
+                                    <label class="block text-sm font-semibold text-gray-700 mb-1">
+                                        Calculated Reversal:
+                                    </label>
+                                    <input type="text"
+                                           id="calculated-refund-display"
+                                           class="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-600 font-bold"
+                                           readonly>
+                                </div>
+                                <div class="flex-1">
+                                    <label class="block text-sm font-semibold text-gray-700 mb-1">
+                                        Final Amount: <span class="text-red-500">*</span>
+                                    </label>
+                                    <input type="number"
+                                           id="adjustment-amount-input"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold"
+                                           step="0.01"
+                                           min="0"
+                                           required>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2">
+                                <i class="fas fa-info-circle"></i> You can adjust the final credit note amount (e.g., deduct cancellation fees)
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Warning -->
+                    <div class="bg-red-100 border-l-4 border-red-600 p-4 mb-4">
+                        <p class="text-sm text-red-800">
+                            <i class="fas fa-exclamation-circle mr-2"></i>
+                            <strong>Warning:</strong> This action will:
+                        </p>
+                        <ul class="text-sm text-red-700 mt-2 ml-6 list-disc">
+                            <li>Cancel all scheduled sessions</li>
+                            <li>Cancel all pending installments</li>
+                            <li>Create a credit note for the adjustment amount</li>
+                            <li><strong>Reduce AR liability</strong> - Patient will only owe for completed sessions</li>
+                            <li>Post entries to AR subledger (credit entry to reduce receivable)</li>
+                            <li>Post GL entries (Dr: Package Revenue, Cr: Accounts Receivable)</li>
+                            <li>If payment was made: Mark for refund processing</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Error Display -->
+                <div id="discontinuation-error" class="hidden bg-red-100 border-l-4 border-red-600 p-4 mb-4">
+                    <p class="text-sm text-red-800">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        <strong>Error:</strong> <span id="discontinuation-error-message"></span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Modal Actions -->
+            <div class="items-center px-4 py-3 flex justify-end gap-3">
+                <button onclick="closeDiscontinuationModal()" class="btn-secondary">
+                    <i class="fas fa-times mr-2"></i>Cancel
+                </button>
+                <button id="confirmDiscontinuationBtn" onclick="confirmDiscontinuation()" class="btn-danger">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>Confirm Discontinuation
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -514,5 +779,237 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+// ============================================================================
+// DISCONTINUATION WORKFLOW FOR PACKAGE PAYMENT PLANS
+// ============================================================================
+
+let discontinuationPreviewData = null;
+let originalStatusValue = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Only activate for package_payment_plans entity
+    if (window.entityType !== 'package_payment_plans') {
+        return;
+    }
+
+    const form = document.getElementById('universal-edit-form');
+    const statusField = document.querySelector('#status');
+
+    if (!form || !statusField) {
+        return;
+    }
+
+    // Store original status value
+    originalStatusValue = statusField.value;
+
+    // Intercept form submission
+    form.addEventListener('submit', function(e) {
+        const newStatus = statusField.value;
+
+        // Check if status is being changed to 'discontinued'
+        if (newStatus === 'discontinued' && originalStatusValue !== 'discontinued') {
+            e.preventDefault(); // Stop form submission
+            e.stopPropagation();
+
+            console.log('Discontinuation detected - showing modal');
+            showDiscontinuationModal();
+        }
+    });
+});
+
+function showDiscontinuationModal() {
+    const modal = document.getElementById('discontinuationModal');
+    const loading = document.getElementById('discontinuation-loading');
+    const content = document.getElementById('discontinuation-content');
+    const error = document.getElementById('discontinuation-error');
+
+    // Show modal with loading state
+    modal.classList.remove('hidden');
+    loading.classList.remove('hidden');
+    content.classList.add('hidden');
+    error.classList.add('hidden');
+
+    // Call preview API
+    fetch(`/api/package/plan/${window.entityId}/discontinuation-preview`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        credentials: 'same-origin'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Store preview data
+            discontinuationPreviewData = data;
+
+            // Populate modal fields
+            document.getElementById('preview-patient-name').textContent = data.patient_name || 'N/A';
+            document.getElementById('preview-package-name').textContent = data.package_name || 'N/A';
+            document.getElementById('preview-invoice-number').textContent = data.invoice_number || 'N/A';
+            document.getElementById('preview-plan-number').textContent = data.plan_number || 'N/A';
+
+            document.getElementById('preview-total-amount').textContent = '₹' + parseFloat(data.total_amount).toFixed(2);
+            document.getElementById('preview-session-value').textContent = '₹' + parseFloat(data.session_value || 0).toFixed(2);
+            document.getElementById('preview-total-sessions').textContent = data.total_sessions;
+            document.getElementById('preview-completed-sessions').textContent = data.completed_sessions;
+            document.getElementById('preview-patient-liability').textContent = '₹' + parseFloat(data.patient_liability || 0).toFixed(2);
+            document.getElementById('preview-paid-amount').textContent = '₹' + parseFloat(data.paid_amount).toFixed(2);
+            document.getElementById('preview-remaining-sessions').textContent = data.remaining_sessions;
+
+            document.getElementById('preview-scheduled-sessions').textContent = data.scheduled_sessions;
+            document.getElementById('preview-pending-installments').textContent = data.pending_installments;
+
+            // Store original data for calculations
+            window.discontinuationCalcData = {
+                sessionValue: parseFloat(data.session_value || 0),
+                completedSessions: parseInt(data.completed_sessions || 0),
+                remainingSessions: parseInt(data.remaining_sessions || 0),
+                paidAmount: parseFloat(data.paid_amount || 0)
+            };
+
+            // Populate calculation fields
+            document.getElementById('per-session-cost-input').value = window.discontinuationCalcData.sessionValue.toFixed(2);
+            document.getElementById('completed-sessions-display').value = window.discontinuationCalcData.completedSessions;
+            document.getElementById('remaining-sessions-display').value = window.discontinuationCalcData.remainingSessions;
+            document.getElementById('paid-amount-display').value = '₹' + window.discontinuationCalcData.paidAmount.toFixed(2);
+
+            // Initial calculation
+            recalculateDiscontinuation();
+
+            // Add event listener for per-session cost changes
+            const perSessionInput = document.getElementById('per-session-cost-input');
+            if (perSessionInput) {
+                perSessionInput.addEventListener('input', recalculateDiscontinuation);
+            }
+
+            // Show content, hide loading
+            loading.classList.add('hidden');
+            content.classList.remove('hidden');
+        } else {
+            // Show error
+            loading.classList.add('hidden');
+            error.classList.remove('hidden');
+            document.getElementById('discontinuation-error-message').textContent = data.error || 'Failed to load discontinuation preview';
+        }
+    })
+    .catch(err => {
+        console.error('Error loading discontinuation preview:', err);
+        loading.classList.add('hidden');
+        error.classList.remove('hidden');
+        document.getElementById('discontinuation-error-message').textContent = 'Network error: ' + err.message;
+    });
+}
+
+function recalculateDiscontinuation() {
+    if (!window.discontinuationCalcData) return;
+
+    // Get current per-session cost (editable)
+    const perSessionCost = parseFloat(document.getElementById('per-session-cost-input').value) || 0;
+    const completedSessions = window.discontinuationCalcData.completedSessions;
+    const remainingSessions = window.discontinuationCalcData.remainingSessions;
+    const paidAmount = window.discontinuationCalcData.paidAmount;
+
+    // Calculate patient liability
+    const patientLiability = perSessionCost * completedSessions;
+
+    // Calculate cash refund (rounded to nearest rupee)
+    const cashRefundExact = paidAmount - patientLiability;
+    const cashRefund = Math.round(cashRefundExact);  // Round to nearest rupee
+
+    // Calculate reversal value
+    const reversalValue = perSessionCost * remainingSessions;
+
+    // Update display fields
+    document.getElementById('per-session-cost-display').value = '₹' + perSessionCost.toFixed(2);
+    document.getElementById('patient-liability-calc').value = '₹' + patientLiability.toFixed(2);
+    document.getElementById('patient-liability-display').value = '₹' + patientLiability.toFixed(2);
+    document.getElementById('cash-refund-calc').value = '₹' + cashRefund.toFixed(0);
+    document.getElementById('reversal-value-calc').value = '₹' + reversalValue.toFixed(2);
+
+    // Update final adjustment fields
+    document.getElementById('calculated-refund-display').value = '₹' + reversalValue.toFixed(2);
+    document.getElementById('adjustment-amount-input').value = reversalValue.toFixed(2);
+}
+
+function closeDiscontinuationModal() {
+    const modal = document.getElementById('discontinuationModal');
+    modal.classList.add('hidden');
+
+    // Reset status field to original value
+    const statusField = document.querySelector('#status');
+    if (statusField && originalStatusValue) {
+        statusField.value = originalStatusValue;
+    }
+
+    // Clear modal data
+    discontinuationPreviewData = null;
+    window.discontinuationCalcData = null;
+}
+
+function confirmDiscontinuation() {
+    const reasonInput = document.getElementById('discontinuation-reason-input');
+    const amountInput = document.getElementById('adjustment-amount-input');
+    const confirmBtn = document.getElementById('confirmDiscontinuationBtn');
+
+    // Validate inputs
+    const reason = reasonInput.value.trim();
+    const amount = parseFloat(amountInput.value);
+
+    if (!reason) {
+        alert('Please enter a discontinuation reason');
+        reasonInput.focus();
+        return;
+    }
+
+    if (isNaN(amount) || amount < 0) {
+        alert('Please enter a valid adjustment amount');
+        amountInput.focus();
+        return;
+    }
+
+    // Disable button and show loading
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing...';
+
+    // Call discontinue API
+    fetch(`/api/package/plan/${window.entityId}/discontinue`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+            discontinuation_reason: reason,
+            adjustment_amount: amount
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Success! Show message and redirect
+            alert('✅ Plan discontinued successfully!\n\n' +
+                  `Credit Note: ${data.credit_note ? data.credit_note.credit_note_number : 'N/A'}\n` +
+                  `Refund Amount: ₹${parseFloat(data.refund_amount).toFixed(2)}\n` +
+                  `Sessions Cancelled: ${data.sessions_cancelled}\n` +
+                  `Installments Cancelled: ${data.installments_cancelled}`);
+
+            // Redirect to detail view
+            window.location.href = `/universal/${window.entityType}/detail/${window.entityId}`;
+        } else {
+            // Show error
+            alert('❌ Discontinuation failed:\n\n' + (data.error || 'Unknown error'));
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i>Confirm Discontinuation';
+        }
+    })
+    .catch(err => {
+        console.error('Error processing discontinuation:', err);
+        alert('❌ Network error:\n\n' + err.message);
+        confirmBtn.disabled = false;
+        confirmBtn.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i>Confirm Discontinuation';
+    });
+}
 </script>
 {% endblock %}

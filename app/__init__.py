@@ -6,9 +6,31 @@ from __future__ import annotations
 import os
 import sys
 import logging
-# Set up logging early
-logging.basicConfig(level=logging.INFO)
+# Set up logging early with detailed format
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('logs/app.log'),
+        logging.StreamHandler()  # Also print to console
+    ]
+)
 logger = logging.getLogger(__name__)
+
+# Enable detailed tracebacks in development
+import sys
+if hasattr(sys, 'ps1') or os.environ.get('FLASK_ENV') == 'development':
+    # Enhanced exception handling for development
+    def excepthook(type, value, traceback_obj):
+        """Custom exception handler with full traceback"""
+        import traceback as tb
+        logger.critical("=" * 80)
+        logger.critical("UNHANDLED EXCEPTION:")
+        logger.critical("=" * 80)
+        logger.critical(''.join(tb.format_exception(type, value, traceback_obj)))
+        logger.critical("=" * 80)
+
+    sys.excepthook = excepthook
 
 # Import centralized environment module first
 try:
@@ -404,6 +426,13 @@ def register_view_blueprints(app: Flask) -> None:
         except ImportError as e:
             app.logger.warning(f"Billing views blueprint could not be loaded: {str(e)}")
 
+        try:
+            # Package views
+            from app.views.package_views import package_views_bp
+            view_blueprints.append(package_views_bp)
+        except ImportError as e:
+            app.logger.warning(f"Package views blueprint could not be loaded: {str(e)}")
+
         app.logger.info("Registered view blueprints")
     except ImportError as e:
         app.logger.warning(f"View blueprints could not be loaded: {str(e)}")
@@ -475,6 +504,20 @@ def register_api_blueprints(app: Flask) -> None:
         app.logger.warning(f"Billing API blueprint could not be loaded: {str(e)}")
 
     try:
+        # Package API
+        from .api.routes.package_api import package_api_bp
+        blueprints.append(package_api_bp)
+    except ImportError as e:
+        app.logger.warning(f"Package API blueprint could not be loaded: {str(e)}")
+
+    try:
+        # Staff API
+        from .api.routes.staff import staff_api_bp
+        blueprints.append(staff_api_bp)
+    except ImportError as e:
+        app.logger.warning(f"Staff API blueprint could not be loaded: {str(e)}")
+
+    try:
         # cache dashboard
         from app.views.cache_dashboard import cache_dashboard_bp
         blueprints.append(cache_dashboard_bp)
@@ -487,6 +530,13 @@ def register_api_blueprints(app: Flask) -> None:
         blueprints.append(universal_api_bp)
     except ImportError as e:
         app.logger.warning(f"Universal API blueprint could not be loaded: {str(e)}")
+
+    # Register patient info API blueprint
+    try:
+        from app.api.routes.patient_api_enhancement import patient_info_bp
+        blueprints.append(patient_info_bp)
+    except ImportError as e:
+        app.logger.warning(f"Patient info API blueprint could not be loaded: {str(e)}")
 
     # Register each blueprint
     for blueprint in blueprints:
