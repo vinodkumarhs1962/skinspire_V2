@@ -1,0 +1,341 @@
+{% extends "base.html" %}
+
+{% block title %}Loyalty Wallet - Tier Management{% endblock %}
+
+{% block extra_css %}
+<!-- Universal Engine CSS Components -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/universal_view.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/universal_form.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/wallet.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h1 class="h3">
+                <i class="fas fa-wallet"></i> Loyalty Wallet Management
+            </h1>
+            <p class="text-muted">Purchase or upgrade your loyalty tier to unlock exclusive benefits and rewards</p>
+        </div>
+    </div>
+
+    <!-- Current Wallet Summary (if exists) -->
+    {% if wallet %}
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="wallet-summary">
+                <div class="row">
+                    <div class="col-md-9">
+                        <h2><i class="fas fa-crown"></i> Your Wallet</h2>
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="wallet-stat">
+                                    <div class="wallet-stat-label">Available Points</div>
+                                    <div class="wallet-stat-value">{{ "{:,}".format(wallet.points_balance) }}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="wallet-stat">
+                                    <div class="wallet-stat-label">Points Value</div>
+                                    <div class="wallet-stat-value">₹{{ "{:,.2f}".format(wallet.points_value) }}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="wallet-stat">
+                                    <div class="wallet-stat-label">Total Loaded</div>
+                                    <div class="wallet-stat-value">₹{{ "{:,.0f}".format(wallet.total_amount_loaded) }}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="wallet-stat">
+                                    <div class="wallet-stat-label">Total Redeemed</div>
+                                    <div class="wallet-stat-value">{{ "{:,}".format(wallet.total_points_redeemed) }}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {% if wallet.expiry_date %}
+                        <div class="expiry-warning mt-3">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>Expiry Notice:</strong>
+                            {% if wallet.is_expiring_soon %}
+                                Your points will expire soon on {{ wallet.expiry_date }}. Use them before they expire!
+                            {% else %}
+                                Points valid until {{ wallet.expiry_date }}
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="mt-3">
+                            <a href="{{ url_for('billing.wallet_dashboard', patient_id=patient.patient_id) }}" class="btn btn-light btn-lg btn-block">
+                                <i class="fas fa-chart-line"></i> View Dashboard
+                            </a>
+                            <a href="{{ url_for('billing.wallet_transactions', patient_id=patient.patient_id) }}" class="btn btn-outline-light btn-block mt-2">
+                                <i class="fas fa-history"></i> Transaction History
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Tier Selection Cards -->
+    <div class="row">
+        {% for tier in available_tiers %}
+        <div class="col-md-4 mb-4">
+            <div class="card tier-card {% if wallet and wallet.card_type_id == tier.card_type_id|string %}current-tier{% endif %}">
+                <!-- Tier Header -->
+                <div class="tier-header {{ tier.card_type_code|lower }}">
+                    <div class="tier-icon">
+                        {% if tier.card_type_code == 'SILVER' %}
+                            <i class="fas fa-medal"></i>
+                        {% elif tier.card_type_code == 'GOLD' %}
+                            <i class="fas fa-trophy"></i>
+                        {% elif tier.card_type_code == 'PLATINUM' %}
+                            <i class="fas fa-crown"></i>
+                        {% endif %}
+                    </div>
+                    <h3 class="tier-name">{{ tier.card_type_name }}</h3>
+                </div>
+
+                <!-- Tier Body -->
+                <div class="tier-body">
+                    <!-- Price -->
+                    <div class="tier-price">
+                        <span class="currency">₹</span>
+                        <span class="amount">{{ "{:,}".format(tier.min_payment_amount|int) }}</span>
+                    </div>
+
+                    <!-- Benefits -->
+                    <ul class="tier-benefits">
+                        <li>
+                            <i class="fas fa-coins"></i>
+                            <span class="benefit-label">Points Credited</span>
+                            <span class="benefit-value">
+                                {{ "{:,}".format(tier.total_points_credited) }}
+                                <span class="bonus-badge">+{{ "{:.1f}".format(tier.bonus_percentage) }}%</span>
+                            </span>
+                        </li>
+                        <li>
+                            <i class="fas fa-percentage"></i>
+                            <span class="benefit-label">Service Discount</span>
+                            <span class="benefit-value">{{ tier.discount_percent }}%</span>
+                        </li>
+                        <li>
+                            <i class="fas fa-calendar-alt"></i>
+                            <span class="benefit-label">Validity</span>
+                            <span class="benefit-value">{{ tier.validity_months }} months</span>
+                        </li>
+                        <li>
+                            <i class="fas fa-gift"></i>
+                            <span class="benefit-label">Bonus Points</span>
+                            <span class="benefit-value">{{ "{:,}".format(tier.total_points_credited - tier.min_payment_amount|int) }}</span>
+                        </li>
+                        <li>
+                            <i class="fas fa-sync-alt"></i>
+                            <span class="benefit-label">1 Point = ₹1</span>
+                            <span class="benefit-value text-success">✓</span>
+                        </li>
+                    </ul>
+
+                    <!-- Upgrade Info -->
+                    {% if wallet and wallet.card_type_id %}
+                        {% set current_tier = available_tiers|selectattr('card_type_id', 'equalto', wallet.card_type_id)|first %}
+                        {% if tier.min_payment_amount > current_tier.min_payment_amount %}
+                        <div class="upgrade-info">
+                            <i class="fas fa-arrow-up"></i>
+                            <strong>Upgrade for ₹{{ "{:,}".format((tier.min_payment_amount - current_tier.min_payment_amount)|int) }}</strong>
+                            <br>
+                            <small>Get {{ "{:,}".format(tier.total_points_credited - current_tier.total_points_credited) }} additional points</small>
+                        </div>
+                        {% endif %}
+                    {% endif %}
+
+                    <!-- Action Button -->
+                    {% if wallet and wallet.card_type_id == tier.card_type_id|string %}
+                        <button class="btn btn-success btn-lg btn-block" disabled>
+                            <i class="fas fa-check-circle"></i> Current Tier
+                        </button>
+                    {% elif wallet and wallet.card_type_id and tier.min_payment_amount > current_tier.min_payment_amount %}
+                        <button class="btn btn-primary btn-lg btn-block btn-purchase-tier"
+                                data-tier-id="{{ tier.card_type_id }}"
+                                data-tier-name="{{ tier.card_type_name }}"
+                                data-tier-code="{{ tier.card_type_code }}"
+                                data-amount="{{ (tier.min_payment_amount - current_tier.min_payment_amount)|int }}"
+                                data-points="{{ tier.total_points_credited - current_tier.total_points_credited }}"
+                                data-is-upgrade="true">
+                            <i class="fas fa-arrow-up"></i> Upgrade to {{ tier.card_type_name }}
+                        </button>
+                    {% elif not wallet or not wallet.card_type_id %}
+                        <button class="btn btn-primary btn-lg btn-block btn-purchase-tier"
+                                data-tier-id="{{ tier.card_type_id }}"
+                                data-tier-name="{{ tier.card_type_name }}"
+                                data-tier-code="{{ tier.card_type_code }}"
+                                data-amount="{{ tier.min_payment_amount|int }}"
+                                data-points="{{ tier.total_points_credited }}"
+                                data-is-upgrade="false">
+                            <i class="fas fa-shopping-cart"></i> Purchase {{ tier.card_type_name }}
+                        </button>
+                    {% else %}
+                        <button class="btn btn-secondary btn-lg btn-block" disabled>
+                            <i class="fas fa-lock"></i> Lower Tier
+                        </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Payment Modal -->
+<div class="modal fade" id="paymentModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-credit-card"></i>
+                    <span id="modal-title">Purchase Tier</span>
+                </h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <form id="tierPurchaseForm" method="POST" action="{{ url_for('billing.process_tier_purchase') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="patient_id" value="{{ patient.patient_id }}">
+                <input type="hidden" name="card_type_id" id="selected_tier_id">
+                <input type="hidden" name="is_upgrade" id="is_upgrade_field">
+
+                <div class="modal-body">
+                    <!-- Payment Summary -->
+                    <div class="payment-summary">
+                        <h5>Payment Summary</h5>
+                        <div class="payment-summary-item">
+                            <span>Tier:</span>
+                            <span id="summary-tier-name" class="font-weight-bold"></span>
+                        </div>
+                        <div class="payment-summary-item">
+                            <span>Points to Credit:</span>
+                            <span id="summary-points" class="font-weight-bold text-success"></span>
+                        </div>
+                        <div class="payment-summary-item">
+                            <span>Total Amount:</span>
+                            <span id="summary-amount" class="font-weight-bold text-primary"></span>
+                        </div>
+                    </div>
+
+                    <!-- Payment Method -->
+                    <div class="form-group">
+                        <label>Payment Method <span class="text-danger">*</span></label>
+                        <select class="form-control" name="payment_mode" required>
+                            <option value="">-- Select Payment Method --</option>
+                            <option value="cash">Cash</option>
+                            <option value="card">Credit/Debit Card</option>
+                            <option value="upi">UPI</option>
+                            <option value="netbanking">Net Banking</option>
+                        </select>
+                    </div>
+
+                    <!-- Payment Reference -->
+                    <div class="form-group">
+                        <label>Payment Reference (Optional)</label>
+                        <input type="text" class="form-control" name="payment_reference"
+                               placeholder="Transaction ID, Check Number, etc.">
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="form-group">
+                        <label>Notes (Optional)</label>
+                        <textarea class="form-control" name="notes" rows="2"
+                                  placeholder="Any additional notes..."></textarea>
+                    </div>
+
+                    <!-- Confirmation -->
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Please Note:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Points will be valid for 12 months from purchase date</li>
+                            <li>1 Point = ₹1 when redeemed for services</li>
+                            <li>Tier discount applies automatically on all future invoices</li>
+                            <li>Points cannot be transferred to another patient</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="fas fa-check-circle"></i> Confirm Payment
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Handle tier purchase button click
+    $('.btn-purchase-tier').on('click', function() {
+        const tierId = $(this).data('tier-id');
+        const tierName = $(this).data('tier-name');
+        const tierCode = $(this).data('tier-code');
+        const amount = $(this).data('amount');
+        const points = $(this).data('points');
+        const isUpgrade = $(this).data('is-upgrade');
+
+        // Set modal title
+        if (isUpgrade) {
+            $('#modal-title').text('Upgrade to ' + tierName);
+        } else {
+            $('#modal-title').text('Purchase ' + tierName + ' Tier');
+        }
+
+        // Set hidden fields
+        $('#selected_tier_id').val(tierId);
+        $('#is_upgrade_field').val(isUpgrade);
+
+        // Set summary
+        $('#summary-tier-name').text(tierName);
+        $('#summary-points').text(points.toLocaleString() + ' points');
+        $('#summary-amount').text('₹' + amount.toLocaleString());
+
+        // Show modal
+        $('#paymentModal').modal('show');
+    });
+
+    // Form validation
+    $('#tierPurchaseForm').on('submit', function(e) {
+        const paymentMode = $('select[name="payment_mode"]').val();
+
+        if (!paymentMode) {
+            e.preventDefault();
+            alert('Please select a payment method');
+            return false;
+        }
+
+        // Confirm before submitting
+        const tierName = $('#summary-tier-name').text();
+        const amount = $('#summary-amount').text();
+
+        if (!confirm(`Confirm ${$('#modal-title').text()}?\n\nAmount: ${amount}\nTier: ${tierName}`)) {
+            e.preventDefault();
+            return false;
+        }
+
+        return true;
+    });
+});
+</script>
+{% endblock %}

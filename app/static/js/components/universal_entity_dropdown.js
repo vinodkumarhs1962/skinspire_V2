@@ -39,6 +39,8 @@
             // ADD: Safe parse with error handling
             try {
                 this.config = JSON.parse(container.dataset.entityConfig || '{}');
+                console.log('[EntityDropdown] Loaded config:', this.config);
+                console.log('[EntityDropdown] Search endpoint:', this.config.search_endpoint);
             } catch (e) {
                 console.error('Failed to parse entity config:', e);
                 this.config = {};
@@ -224,8 +226,11 @@
                     fields: JSON.stringify(this.config.search_fields || ['name'])
                 });
 
+                const searchUrl = `${this.config.search_endpoint}?${params}`;
+                console.log('[EntityDropdown] Fetching:', searchUrl);
+
                 const response = await fetch(
-                    `${this.config.search_endpoint}?${params}`,
+                    searchUrl,
                     {
                         method: 'GET',
                         headers: {
@@ -307,10 +312,10 @@
         formatDisplay(item) {
             // Use the display/label/name field directly from API response
             // Prioritize fields that contain the actual display name
-            let display = item.display || item.label || item.text || 
-                        item.name || item.supplier_name || item.patient_name || 
+            let display = item.display || item.label || item.text ||
+                        item.name || item.supplier_name || item.patient_name ||
                         item.medicine_name || '';
-            
+
             // If display is still empty or contains UUID, try to extract name
             if (!display || display.includes('-')) {
                 // Look for any field with 'name' in it
@@ -329,7 +334,29 @@
                 display = display.replace(regex, '<span class="entity-dropdown-highlight">$1</span>');
             }
 
-            return `<div class="entity-dropdown-item-primary">${display}</div>`;
+            // Build secondary info (for medicines: type, services: code, etc.)
+            let secondaryInfo = '';
+            if (item.medicine_type) {
+                secondaryInfo = `<div class="entity-dropdown-item-secondary">
+                    <span class="badge badge-sm badge-info">${item.medicine_type}</span>
+                    ${item.generic_name ? `<span class="text-muted text-sm">| ${item.generic_name}</span>` : ''}
+                </div>`;
+            } else if (item.code) {
+                secondaryInfo = `<div class="entity-dropdown-item-secondary">
+                    <span class="text-muted text-sm">Code: ${item.code}</span>
+                </div>`;
+            } else if (item.generic_name) {
+                secondaryInfo = `<div class="entity-dropdown-item-secondary">
+                    <span class="text-muted text-sm">${item.generic_name}</span>
+                </div>`;
+            }
+
+            return `
+                <div class="entity-dropdown-item-content">
+                    <div class="entity-dropdown-item-primary">${display}</div>
+                    ${secondaryInfo}
+                </div>
+            `;
         }
 
         selectItem(item) {
@@ -359,6 +386,13 @@
             // Trigger change event for auto-submit
             const changeEvent = new Event('change', { bubbles: true });
             this.hiddenInput.dispatchEvent(changeEvent);
+
+            // Dispatch custom event with full item data for cascading/auto-populate features
+            const selectedEvent = new CustomEvent('entity-selected', {
+                detail: item,
+                bubbles: true
+            });
+            this.container.dispatchEvent(selectedEvent);
 
             // If auto-submit is enabled, submit the form
             if (this.searchInput.classList.contains('universal-filter-auto-submit')) {

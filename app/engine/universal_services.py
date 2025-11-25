@@ -120,8 +120,15 @@ class UniversalServiceRegistry:
             
             # Instantiate the service
             if callable(service_class):
-                service_instance = service_class()
-                logger.debug(f"✅ Successfully instantiated {service_class.__name__} from entity_registry")
+                # ✅ FIX: Only pass entity_type if it's UniversalEntityService (backward compatible)
+                try:
+                    # Try with entity_type first (for UniversalEntityService)
+                    service_instance = service_class(entity_type)
+                    logger.debug(f"✅ Successfully instantiated {service_class.__name__} with entity_type")
+                except TypeError:
+                    # Fallback for services that don't take entity_type (backward compatible)
+                    service_instance = service_class()
+                    logger.debug(f"✅ Successfully instantiated {service_class.__name__} without entity_type")
                 return service_instance
             else:
                 # Already an instance (shouldn't happen but handle it)

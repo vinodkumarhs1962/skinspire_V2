@@ -46,6 +46,7 @@ from app.services.gl_service import (
 )
 from app.services.inventory_service import update_inventory_for_invoice
 from app.services.database_service import get_db_session, get_entity_dict, get_detached_copy
+from app.services.discount_service import DiscountService
 # from app.services.subledger_service import create_ar_subledger_entry
 
 # from app.utils.pdf_utils import generate_invoice_pdf
@@ -840,6 +841,58 @@ def _create_single_invoice_with_category(
     total_sgst_amount = Decimal('0')
     total_igst_amount = Decimal('0')
 
+    # ===================================================================
+    # APPLY AUTOMATIC DISCOUNTS (Multi-Discount System: Standard, Bulk, Loyalty, Promotion)
+    # ===================================================================
+    campaigns_applied_json = None  # Will be populated if promotions are applied
+    try:
+        logger.info("=" * 60)
+        logger.info("DISCOUNT CALCULATION: Starting multi-discount application")
+        logger.info("=" * 60)
+
+        # Apply discounts using multi-discount system (Nov 2025 upgrade)
+        line_items = DiscountService.apply_discounts_to_invoice_items_multi(
+            session=session,
+            hospital_id=str(hospital_id),
+            patient_id=str(patient_id),
+            line_items=line_items,
+            invoice_date=invoice_date.date() if isinstance(invoice_date, datetime) else invoice_date,
+            respect_max_discount=True
+        )
+
+        # Build campaigns_applied JSON for tracking
+        campaigns_applied_json = DiscountService.build_campaigns_applied_json(
+            session=session,
+            line_items=line_items
+        )
+
+        # Log discount application summary
+        items_with_discount = [
+            item for item in line_items
+            if item.get('discount_percent', 0) > 0
+        ]
+        if items_with_discount:
+            logger.info(f"✅ Applied discounts to {len(items_with_discount)} items:")
+            for item in items_with_discount:
+                discount_type = item.get('discount_type', 'unknown')
+                logger.info(
+                    f"  - {item.get('item_name')}: {discount_type} "
+                    f"discount of {item.get('discount_percent')}%"
+                )
+
+            # Log promotion tracking
+            if campaigns_applied_json:
+                promo_count = len(campaigns_applied_json.get('applied_promotions', []))
+                logger.info(f"🎯 Promotion tracking: {promo_count} promotion(s) will be recorded")
+        else:
+            logger.info("ℹ️  No automatic discounts applied (no eligible items or discounts)")
+
+        logger.info("=" * 60)
+    except Exception as e:
+        logger.error(f"❌ Error during discount calculation: {str(e)}", exc_info=True)
+        # Continue with invoice creation even if discount calculation fails
+        logger.warning("⚠️ Continuing with invoice creation without automatic discounts")
+
     # Process line items
     processed_line_items = []
     for item in line_items:
@@ -884,7 +937,9 @@ def _create_single_invoice_with_category(
         parent_transaction_id=parent_invoice_id,
         split_sequence=split_sequence,
         is_split_invoice=(parent_invoice_id is not None),
-        split_reason="TAX_COMPLIANCE_SPLIT" if parent_invoice_id else None
+        split_reason="TAX_COMPLIANCE_SPLIT" if parent_invoice_id else None,
+        # Campaign tracking (Nov 2025)
+        campaigns_applied=campaigns_applied_json
     )
 
     if current_user_id:
@@ -892,6 +947,21 @@ def _create_single_invoice_with_category(
 
     session.add(invoice)
     session.flush()
+
+    # Record promotion usage for effectiveness tracking
+    if campaigns_applied_json:
+        try:
+            DiscountService.record_promotion_usage(
+                session=session,
+                hospital_id=str(hospital_id),
+                invoice_id=str(invoice.invoice_id),
+                line_items=line_items,
+                patient_id=str(patient_id),
+                invoice_date=invoice_date.date() if isinstance(invoice_date, datetime) else invoice_date
+            )
+        except Exception as e:
+            logger.error(f"❌ Error recording promotion usage: {str(e)}", exc_info=True)
+            # Continue - promotion tracking failure shouldn't block invoice creation
 
     # Create line items
     for item_data in processed_line_items:

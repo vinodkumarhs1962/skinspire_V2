@@ -1,16 +1,29 @@
 """
-Campaign Hook Service - Plugin Architecture for Hospital-Specific Promotional Campaigns
+DEPRECATED - Campaign Hook Service (Removed 2025-11-21)
 
-This service provides a clean plugin system that allows hospitals to implement
-custom campaign logic without modifying core code.
+This service and the campaign_hook_config table have been deprecated and removed.
 
-Supports multiple hook types:
+REASON FOR DEPRECATION:
+- Campaign hooks were a plugin-based promotion system (Python/API/SQL functions)
+- This has been superseded by the promotion_campaigns table with database-driven rules
+- New system supports: simple_discount, buy_x_get_y, tiered_discount, bundle
+
+MIGRATION PATH:
+- All promotions should now use the promotion_campaigns table
+- Use discount_service.py for invoice-level discounts and promotions
+- Database: campaign_hook_config table dropped (migration: 20251121_deprecate_campaign_hooks.sql)
+
+DO NOT USE THIS FILE - It is kept only for reference purposes.
+
+Original Purpose:
+Plugin Architecture for Hospital-Specific Promotional Campaigns
 - Python modules: Call Python functions directly
 - API endpoints: HTTP calls to external services
 - SQL functions: PostgreSQL stored procedures
 
 Author: Claude Code
 Date: 2025-11-17
+Deprecated: 2025-11-21
 """
 
 from decimal import Decimal

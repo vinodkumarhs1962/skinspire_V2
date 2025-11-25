@@ -32,6 +32,9 @@ def universal_url(entity_type, action, item_id=None, **kwargs):
         'package_payment_plans',  # Added - Package payment plans
         'patients',
         'medicines',
+        'packages',  # Added - Treatment packages
+        'package_bom_items',  # Added - Package BOM Items
+        'package_session_plans',  # Added - Package Session Plans
         'users',
         'branches',
         'inventory'
@@ -102,6 +105,33 @@ def generate_menu_for_role(role):
                     'icon': 'pills',
                     'badge': 'Universal',
                     'badge_color': 'primary'
+                },
+                {
+                    'name': 'Packages',
+                    'url': '#',  # No URL for second level
+                    'icon': 'box',
+                    'badge': 'Universal',
+                    'badge_color': 'primary',
+                    'children': [  # Third level with actual URLs
+                        {
+                            'name': 'All Packages',
+                            'url': universal_url('packages', 'list'),
+                            'icon': 'list',
+                            'description': 'View all treatment packages'
+                        },
+                        {
+                            'name': 'Package BOM Items',
+                            'url': universal_url('package_bom_items', 'list'),
+                            'icon': 'boxes',
+                            'description': 'Bill of Materials for packages'
+                        },
+                        {
+                            'name': 'Package Session Plans',
+                            'url': universal_url('package_session_plans', 'list'),
+                            'icon': 'calendar-alt',
+                            'description': 'Session delivery plans for packages'
+                        }
+                    ]
                 },
                 {
                     'name': 'Users',

@@ -743,6 +743,7 @@ class EntitySearchConfiguration:
     sort_field: str = "name"                  # Default sort field
     cache_timeout: int = 300                  # Cache duration in seconds
     placeholder_template: str = "Search {entity}..."  # Search box placeholder
+    search_endpoint: Optional[str] = None     # API endpoint (auto-generated if None: /api/universal/{target_entity}/search)
 
     # Entity dropdown specific fields (all optional)
     value_field: Optional[str] = None         # Field to use as value (default: primary_key)
@@ -914,7 +915,11 @@ class EntityConfiguration:
     form_class_path: Optional[str] = field(default=None)
     create_form_template: str = field(default="engine/universal_create.html")
     edit_form_template: str = field(default="engine/universal_edit.html")
-    
+
+    # Form Scripts - Custom JavaScript for entity-specific behavior (e.g., cascading dropdowns)
+    form_scripts: List[str] = field(default_factory=list)  # List of JS file paths relative to static/
+    form_inline_script: Optional[str] = field(default=None)  # Inline JavaScript code
+
     # Field-Level CRUD Control (optional - auto-detected if not specified)
     create_fields: Optional[List[str]] = field(default=None)
     edit_fields: Optional[List[str]] = field(default=None)

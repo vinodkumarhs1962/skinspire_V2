@@ -73,15 +73,10 @@ def entity_search(entity_type: str):
         except:
             search_fields = []
         
-        # Handle singular/plural entity names for configuration lookup
-        config_entity_type = entity_type
-        if entity_type == 'medicines':
-            config_entity_type = 'medicine'  # Map plural to singular for config
-
-        # Get entity configuration
-        config = get_entity_config(config_entity_type)
+        # Get entity configuration directly (registry uses plural form)
+        config = get_entity_config(entity_type)
         if not config:
-            logger.error(f"No configuration found for entity: {config_entity_type}")
+            logger.error(f"No configuration found for entity: {entity_type}")
             return jsonify({
                 'error': f"No configuration for entity: {entity_type}",
                 'success': False,
@@ -107,7 +102,7 @@ def entity_search(entity_type: str):
         
         # Perform search based on entity type
         results = []
-        
+
         if entity_type == 'suppliers':
             # Special handling for suppliers
             results = search_suppliers(search_term, hospital_id, branch_id, limit)
@@ -116,13 +111,16 @@ def entity_search(entity_type: str):
             # active_only: True for create invoice (only active patients), False for history/lists (all patients)
             active_only = request.args.get('active_only', 'false').lower() == 'true'
             results = search_patients(search_term, hospital_id, branch_id, limit, active_only)
+        elif entity_type in ['service', 'services']:  # Handle both singular and plural
+            # Special handling for services
+            results = search_services(search_term, hospital_id, branch_id, limit)
         elif entity_type in ['medicine', 'medicines']:  # Handle both singular and plural
             # Special handling for medicines
             results = search_medicines(search_term, hospital_id, branch_id, limit)
         else:
             # Generic entity search
             results = generic_entity_search(
-                config_entity_type, search_term, hospital_id, branch_id, limit, config  # Use config_entity_type
+                entity_type, search_term, hospital_id, branch_id, limit, config
             )
         
         # Format successful response
@@ -382,7 +380,94 @@ def search_patients(search_term: str, hospital_id: uuid.UUID,
         return []
 
 
-def search_medicines(search_term: str, hospital_id: uuid.UUID, 
+def search_services(search_term: str, hospital_id: uuid.UUID,
+                    branch_id: uuid.UUID, limit: int) -> List[Dict]:
+    """
+    Search services - returns name, unit, and price for display and auto-populate
+    """
+    try:
+        from app.models.master import Service
+
+        with get_db_session() as session:
+            query = session.query(Service).filter(
+                Service.hospital_id == hospital_id
+            )
+
+            # Apply soft delete filter
+            if hasattr(Service, 'deleted_at'):
+                query = query.filter(Service.deleted_at.is_(None))
+            elif hasattr(Service, 'is_deleted'):
+                query = query.filter(Service.is_deleted == False)
+
+            # Filter active services only (if status field exists)
+            if hasattr(Service, 'status'):
+                query = query.filter(Service.status == 'active')
+
+            # Add branch filter if specified
+            if branch_id and hasattr(Service, 'branch_id'):
+                query = query.filter(Service.branch_id == branch_id)
+
+            # Add search filter only if search term provided
+            if search_term and search_term.strip():
+                search_pattern = f'%{search_term}%'
+                # Search by service name, code, and description
+                filters = [Service.service_name.ilike(search_pattern)]
+
+                if hasattr(Service, 'code'):
+                    filters.append(Service.code.ilike(search_pattern))
+                if hasattr(Service, 'description'):
+                    filters.append(Service.description.ilike(search_pattern))
+
+                from sqlalchemy import or_
+                query = query.filter(or_(*filters))
+
+            # Order by service name
+            query = query.order_by(Service.service_name)
+
+            # Limit initial load if no search term
+            if not search_term:
+                limit = min(limit, 20)  # Limit initial load to 20
+
+            # Get results
+            services = query.limit(limit).all()
+
+            # Format results - consistent with medicine pattern
+            results = []
+            for service in services:
+                # Create display name with code if available
+                display_name = service.service_name
+                if hasattr(service, 'code') and service.code:
+                    display_name = f"{service.service_name} ({service.code})"
+
+                results.append({
+                    # Multiple formats for compatibility - use name as value
+                    'id': service.service_name,              # Use name as ID for filtering
+                    'service_id': str(service.service_id),  # Keep UUID for reference
+                    'service_name': service.service_name,   # Actual name
+                    'name': service.service_name,           # Generic name field
+                    'value': service.service_name,          # Value for dropdown (NAME not UUID)
+                    'label': display_name,                  # Label for display with details
+                    'display': display_name,                # Display text
+                    'text': display_name,                   # Alternative display field
+
+                    # Additional fields for reference
+                    'uuid': str(service.service_id),        # Actual UUID if needed
+                    'code': service.code if hasattr(service, 'code') else '',
+                    'description': service.description if hasattr(service, 'description') else '',
+
+                    # Price and unit fields for auto-populate
+                    'unit': service.unit if hasattr(service, 'unit') else '',
+                    'price': float(service.price) if hasattr(service, 'price') and service.price else ''
+                })
+
+            return results
+
+    except Exception as e:
+        logger.error(f"Service search error: {str(e)}")
+        return []
+
+
+def search_medicines(search_term: str, hospital_id: uuid.UUID,
                     branch_id: uuid.UUID, limit: int) -> List[Dict]:
     """
     Search medicines - returns name for display and filtering
@@ -455,21 +540,103 @@ def search_medicines(search_term: str, hospital_id: uuid.UUID,
                     'label': display_name,                     # Label for display with details
                     'display': display_name,                   # Display text
                     'text': display_name,                      # Alternative display field
-                    
+
                     # Additional fields for reference
                     'uuid': str(medicine.medicine_id),         # Actual UUID if needed
                     'generic_name': medicine.generic_name if hasattr(medicine, 'generic_name') else '',
+                    'medicine_type': medicine.medicine_type if hasattr(medicine, 'medicine_type') else '',  # For dropdown display
                     'category': medicine.category.name if hasattr(medicine, 'category') and medicine.category else '',  # FIX: category_name → name
                     'manufacturer': medicine.manufacturer.manufacturer_name if hasattr(medicine, 'manufacturer') and medicine.manufacturer else '',
                     'dosage_form': medicine.dosage_form if hasattr(medicine, 'dosage_form') else '',
                     'strength': medicine.strength if hasattr(medicine, 'strength') else '',
-                    'medicine_code': medicine.medicine_code if hasattr(medicine, 'medicine_code') else ''
+                    'medicine_code': medicine.medicine_code if hasattr(medicine, 'medicine_code') else '',
+
+                    # Price and unit fields for auto-populate
+                    'unit_of_measure': medicine.unit_of_measure if hasattr(medicine, 'unit_of_measure') else '',
+                    'selling_price': float(medicine.selling_price) if hasattr(medicine, 'selling_price') and medicine.selling_price else ''
                 })
             
             return results
             
     except Exception as e:
         logger.error(f"Medicine search error: {str(e)}")
+        return []
+
+
+def search_packages(search_term: str, hospital_id: uuid.UUID,
+                    branch_id: uuid.UUID, limit: int) -> List[Dict]:
+    """
+    Search packages - returns package_name for display and filtering
+    """
+    try:
+        from app.models.master import Package
+
+        with get_db_session() as session:
+            query = session.query(Package).filter(
+                Package.hospital_id == hospital_id
+            )
+
+            # Apply soft delete filter
+            if hasattr(Package, 'deleted_at'):
+                query = query.filter(Package.deleted_at.is_(None))
+            elif hasattr(Package, 'is_deleted'):
+                query = query.filter(Package.is_deleted == False)
+
+            # Filter active packages only
+            if hasattr(Package, 'status'):
+                query = query.filter(Package.status == 'active')
+
+            # Add search filter only if search term provided
+            if search_term and search_term.strip():
+                search_pattern = f'%{search_term}%'
+                filters = [Package.package_name.ilike(search_pattern)]
+
+                if hasattr(Package, 'package_code'):
+                    filters.append(Package.package_code.ilike(search_pattern))
+
+                from sqlalchemy import or_
+                query = query.filter(or_(*filters))
+
+            # Order by package name
+            query = query.order_by(Package.package_name)
+
+            # Limit initial load if no search term
+            if not search_term:
+                limit = min(limit, 20)
+
+            # Get results
+            packages = query.limit(limit).all()
+
+            # Format results
+            results = []
+            for package in packages:
+                display_name = package.package_name
+                if hasattr(package, 'package_code') and package.package_code:
+                    display_name = f"{package.package_name} ({package.package_code})"
+
+                if hasattr(package, 'price') and package.price:
+                    from app.utils.filters import currencyformat
+                    price_str = currencyformat(package.price, 'INR')
+                    display_name = f"{display_name} - {price_str}"
+
+                results.append({
+                    'id': package.package_name,
+                    'package_id': str(package.package_id),
+                    'package_name': package.package_name,
+                    'name': package.package_name,
+                    'value': package.package_name,
+                    'label': display_name,
+                    'display': display_name,
+                    'text': display_name,
+                    'uuid': str(package.package_id),
+                    'package_code': package.package_code if hasattr(package, 'package_code') else '',
+                    'price': float(package.price) if hasattr(package, 'price') and package.price else 0
+                })
+
+            return results
+
+    except Exception as e:
+        logger.error(f"Package search error: {str(e)}")
         return []
 
 

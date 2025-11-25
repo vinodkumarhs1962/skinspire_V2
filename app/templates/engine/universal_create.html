@@ -6,6 +6,8 @@
 {% block styles %}
     {{ super() }}
     <!-- Universal styles are already included in app.css -->
+    <!-- Entity Dropdown Styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/components/universal_entity_dropdown.css') }}?v=2.4">
 {% endblock %}
 
 {% block content %}
@@ -59,7 +61,14 @@
         
         <!-- CSRF Token (global function) -->
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        
+
+        <!-- Hidden fields from query parameters (e.g., package_id) -->
+        {% if hidden_fields %}
+            {% for field_name, field_value in hidden_fields.items() %}
+                <input type="hidden" name="{{ field_name }}" value="{{ field_value }}">
+            {% endfor %}
+        {% endif %}
+
         <div class="info-card">
             <div class="card-header">
                 <h3 class="text-xl font-bold text-gray-700">
@@ -67,7 +76,38 @@
                     <span class="ml-2">{{ entity_config.name }} Information</span>
                 </h3>
             </div>
-            
+
+            <!-- Form Header Context (Package Info for BOM, etc.) -->
+            {% if form_header_info %}
+            <div class="card-body bg-blue-50 border-b border-blue-200 py-3">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h4 class="text-lg font-semibold text-gray-800">
+                            {{ form_header_info.title or 'Context Information' }}
+                        </h4>
+                        {% if form_header_info.subtitle %}
+                        <p class="text-sm text-gray-600 mt-1">{{ form_header_info.subtitle }}</p>
+                        {% endif %}
+                    </div>
+                    {% if form_header_info.info_fields %}
+                    <div class="flex gap-4">
+                        {% for info in form_header_info.info_fields %}
+                        <div class="flex items-center gap-2 bg-white px-3 py-2 rounded shadow-sm">
+                            {% if info.icon %}
+                            <i class="{{ info.icon }} text-blue-500"></i>
+                            {% endif %}
+                            <div>
+                                <div class="text-xs text-gray-500">{{ info.label }}</div>
+                                <div class="text-sm font-medium text-gray-800">{{ info.value }}</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
             <div class="card-body">
                 <!-- Display any form errors -->
                 {% if form_errors %}
@@ -110,6 +150,16 @@
                                     <!-- Fields for this section -->
                                     {% for section_field in form_fields|selectattr('section', 'equalto', field.section)|sort(attribute='view_order') %}
                                     <div class="{% if section_field.field_type in ['textarea', 'rich_text'] %}md:col-span-2{% endif %}">
+
+                                        <!-- Check if field has custom_renderer -->
+                                        {% if section_field.custom_renderer and section_field.custom_renderer.template %}
+                                            <!-- Use custom renderer template -->
+                                            <div class="custom-renderer-wrapper {{ section_field.custom_renderer.css_classes or '' }}">
+                                                {% set data = section_field.value if section_field.value else None %}
+                                                {% include section_field.custom_renderer.template ignore missing %}
+                                            </div>
+                                        {% else %}
+                                        <!-- Standard form field rendering -->
                                         <div class="form-group">
                                             <label for="{{ section_field.name }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                 {{ section_field.label }}
@@ -117,7 +167,7 @@
                                                 <span class="text-red-500">*</span>
                                                 {% endif %}
                                             </label>
-                                            
+
                                             <!-- Input based on field type -->
                                             {% if section_field.field_type == 'select' %}
                                                 <select class="form-control w-full" 
@@ -167,14 +217,45 @@
                                                        placeholder="{{ section_field.placeholder or '' }}"
                                                        {% if section_field.required %}required{% endif %}>
                                             {% elif section_field.field_type == 'email' %}
-                                                <input type="email" 
-                                                       class="form-control w-full" 
-                                                       id="{{ section_field.name }}" 
+                                                <input type="email"
+                                                       class="form-control w-full"
+                                                       id="{{ section_field.name }}"
                                                        name="{{ section_field.name }}"
                                                        value="{{ section_field.value or '' }}"
                                                        placeholder="{{ section_field.placeholder or '' }}"
                                                        pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
                                                        {% if section_field.required %}required{% endif %}>
+                                            {% elif section_field.field_type == 'entity_search' %}
+                                                <!-- Entity Search Dropdown -->
+                                                {% set target_ent = section_field.entity_search_config.target_entity if section_field.entity_search_config else '' %}
+                                                {% set search_ep = section_field.entity_search_config.search_endpoint if (section_field.entity_search_config and section_field.entity_search_config.search_endpoint) else ('/api/universal/' + target_ent + '/search') %}
+                                                {% set config_dict = {
+                                                    'target_entity': target_ent,
+                                                    'search_endpoint': search_ep,
+                                                    'search_fields': section_field.entity_search_config.search_fields,
+                                                    'display_template': section_field.entity_search_config.display_template,
+                                                    'value_field': section_field.entity_search_config.value_field,
+                                                    'placeholder': section_field.entity_search_config.placeholder,
+                                                    'min_chars': section_field.entity_search_config.min_chars,
+                                                    'max_results': section_field.entity_search_config.max_results,
+                                                    'preload_common': section_field.entity_search_config.preload_common,
+                                                    'cache_results': section_field.entity_search_config.cache_results
+                                                } if section_field.entity_search_config else {} %}
+                                                <div class="entity-dropdown-container"
+                                                     data-name="{{ section_field.name }}"
+                                                     data-entity-config='{{ config_dict | tojson }}'>
+                                                    <input type="hidden"
+                                                           class="entity-dropdown-hidden-input"
+                                                           name="{{ section_field.name }}"
+                                                           id="{{ section_field.name }}"
+                                                           value="{{ section_field.value or '' }}"
+                                                           {% if section_field.required %}required{% endif %}>
+                                                    <input type="text"
+                                                           class="form-control entity-dropdown-search w-full"
+                                                           placeholder="{{ section_field.entity_search_config.placeholder if section_field.entity_search_config else 'Search...' }}"
+                                                           autocomplete="off">
+                                                    <div class="entity-dropdown-results"></div>
+                                                </div>
                                             {% else %}
                                                 <input type="text" 
                                                        class="form-control w-full" 
@@ -195,6 +276,8 @@
                                                 Please provide a valid {{ section_field.label|lower }}.
                                             </div>
                                         </div>
+                                        {% endif %}
+                                        <!-- End custom_renderer check -->
                                     </div>
                                     {% endfor %}
                                 </div>
@@ -240,17 +323,67 @@
 {% block scripts %}
 {{ super() }}
 
+<!-- Include Universal Entity Dropdown (for ENTITY_SEARCH fields) -->
+<script src="{{ url_for('static', filename='js/components/universal_entity_dropdown.js') }}?v=2.4"></script>
+
 <!-- Include Universal Form CRUD JS -->
 <script src="{{ url_for('static', filename='js/components/universal_form_crud.js') }}"></script>
+
+<!-- Entity-specific scripts from configuration -->
+{% if entity_config and entity_config.form_scripts %}
+    {% for script_path in entity_config.form_scripts %}
+    <script src="{{ url_for('static', filename=script_path) }}?v=2.4"></script>
+    {% endfor %}
+{% endif %}
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Initializing Universal Create Form');
     
     // =========================================================================
+    // ENTITY DROPDOWN INITIALIZATION
+    // =========================================================================
+
+    function initializeEntityDropdowns() {
+        console.log('🔍 Checking for EntityDropdown class...');
+
+        if (typeof EntityDropdown === 'undefined') {
+            console.error('❌ EntityDropdown class not available!');
+            console.log('Available globals:', Object.keys(window).filter(k => k.includes('Entity')));
+            return;
+        }
+
+        console.log('✅ EntityDropdown class found');
+
+        const containers = document.querySelectorAll('.entity-dropdown-container');
+        console.log(`🔍 Found ${containers.length} entity dropdown containers`);
+
+        if (containers.length === 0) {
+            console.warn('⚠️ No entity dropdown containers found in DOM');
+            console.log('Looking for elements with class .entity-dropdown-container');
+        }
+
+        containers.forEach((container, index) => {
+            console.log(`📦 Container ${index + 1}:`, {
+                name: container.dataset.name,
+                hasConfig: !!container.dataset.entityConfig,
+                config: container.dataset.entityConfig ? JSON.parse(container.dataset.entityConfig) : null
+            });
+
+            try {
+                const instance = new EntityDropdown(container);
+                container._dropdownInstance = instance; // Store reference for later destruction
+                console.log(`✅ Initialized entity dropdown for: ${container.dataset.name}`);
+            } catch (error) {
+                console.error(`❌ Error initializing entity dropdown for ${container.dataset.name}:`, error);
+            }
+        });
+    }
+
+    // =========================================================================
     // COLLAPSIBLE SECTIONS HANDLER
     // =========================================================================
-    
+
     function initializeCollapsibleSections() {
         document.querySelectorAll('.form-section.collapsible .form-section-header').forEach(header => {
             header.addEventListener('click', function() {
@@ -449,8 +582,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // =========================================================================
     // INITIALIZE ALL COMPONENTS
     // =========================================================================
-    
+
     // Initialize components in order
+    initializeEntityDropdowns();    // Initialize entity search dropdowns first
     initializeCollapsibleSections();
     initializeUniversalCRUD();
     initializeSubmitButton();
@@ -478,4 +612,12 @@ document.querySelectorAll('.section-card.collapsible').forEach(section => {
     }
 });
 </script>
+
+<!-- Entity-specific inline JavaScript from configuration -->
+{% if entity_config and entity_config.form_inline_script %}
+<script>
+{{ entity_config.form_inline_script | safe }}
+</script>
+{% endif %}
+
 {% endblock %}

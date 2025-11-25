@@ -336,92 +336,20 @@ class EntityPricingTaxConfig(Base, TimestampMixin):
         return f"<EntityPricingTaxConfig {entity_info} {period} price={self.applicable_price} gst={self.gst_rate}%>"
 
 
-class CampaignHookConfig(Base, TimestampMixin):
-    """
-    Campaign Hook Configuration - Plugin architecture for hospital-specific promotional campaigns.
-
-    Allows hospitals to implement custom campaign logic without modifying core code.
-    Supports multiple hook types: API endpoints, Python modules, or SQL functions.
-    """
-    __tablename__ = 'campaign_hook_config'
-
-    hook_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
-
-    # Hospital Reference
-    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
-
-    # Hook Identification
-    hook_name = Column(String(100), nullable=False)
-    hook_description = Column(Text)
-    hook_type = Column(String(50), nullable=False)  # 'api_endpoint', 'python_module', 'sql_function'
-
-    # Hook Implementation
-    hook_endpoint = Column(String(500))  # API endpoint URL
-    hook_module_path = Column(String(500))  # Python module path
-    hook_function_name = Column(String(100))  # Function name to call
-    hook_sql_function = Column(String(200))  # SQL function name
-
-    # Hook Activation
-    is_active = Column(Boolean, default=True)
-    priority = Column(Integer, default=100)  # Lower = higher priority
-
-    # Applicability
-    applies_to_medicines = Column(Boolean, default=False)
-    applies_to_services = Column(Boolean, default=False)
-    applies_to_packages = Column(Boolean, default=False)
-
-    # Effective Period
-    effective_from = Column(Date)
-    effective_to = Column(Date)
-
-    # Hook Configuration (flexible JSON)
-    hook_config = Column(JSONB)
-
-    # Authentication (for API hooks)
-    api_auth_type = Column(String(50))  # 'none', 'basic', 'bearer', 'api_key'
-    api_auth_credentials = Column(Text)  # Encrypted credentials
-
-    # Performance & Monitoring
-    timeout_ms = Column(Integer, default=5000)
-    retry_attempts = Column(Integer, default=0)
-    cache_results = Column(Boolean, default=False)
-    cache_ttl_seconds = Column(Integer, default=300)
-
-    # Soft Delete
-    is_deleted = Column(Boolean, default=False)
-    deleted_at = Column(DateTime(timezone=True))
-    deleted_by = Column(String(100))
-
-    # Relationships
-    hospital = relationship("Hospital")
-
-    @property
-    def is_currently_effective(self):
-        """Check if hook is currently effective"""
-        if not self.is_active or self.is_deleted:
-            return False
-
-        today = date.today()
-
-        if self.effective_from and self.effective_from > today:
-            return False
-
-        if self.effective_to and self.effective_to < today:
-            return False
-
-        return True
-
-    @property
-    def applies_to_entity_type(self, entity_type: str) -> bool:
-        """Check if hook applies to given entity type"""
-        if entity_type == 'medicine':
-            return self.applies_to_medicines
-        elif entity_type == 'service':
-            return self.applies_to_services
-        elif entity_type == 'package':
-            return self.applies_to_packages
-        return False
-
-    def __repr__(self):
-        status = "active" if self.is_currently_effective else "inactive"
-        return f"<CampaignHookConfig '{self.hook_name}' type={self.hook_type} priority={self.priority} {status}>"
+# ============================================================================
+# DEPRECATED: Campaign Hook System (Removed 2025-11-21)
+# ============================================================================
+# The CampaignHookConfig model and campaign_hook_config table have been deprecated
+# and removed in favor of the promotion_campaigns system in master.py.
+#
+# OLD SYSTEM (Removed):
+# - campaign_hook_config table → Plugin-based promotions (Python/API/SQL hooks)
+# - Used by pricing_tax_service with apply_campaigns flag
+#
+# NEW SYSTEM (Active):
+# - promotion_campaigns table → Database-driven business rules
+# - Supports: simple_discount, buy_x_get_y, tiered_discount, bundle
+# - Used by discount_service.py for all invoice-level promotions
+#
+# Migration: migrations/20251121_deprecate_campaign_hooks.sql
+# ============================================================================

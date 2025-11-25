@@ -4,6 +4,7 @@
 
 {% block styles %}
 {{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/multi_discount.css') }}">
 <style>
     /* ===================================================================
        INVOICE ENHANCED STYLING - GOLD STANDARD
@@ -370,6 +371,8 @@
 {% block extra_css %}
 <!-- CRITICAL: Load invoice.css first, then override with autocomplete styles -->
 <link rel="stylesheet" href="{{ url_for('static', filename='css/components/invoice.css') }}">
+<!-- Bulk Discount Consultation Panel Styles -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/bulk_discount.css') }}">
 <style>
     /* Patient Autocomplete Dropdown Styles - v3.1 POST-INVOICE-CSS FIX */
     /* CRITICAL: This MUST come AFTER invoice.css to override its rules */
@@ -691,6 +694,7 @@
                         <div>
                             <!-- Branch (Hidden) - Use session branch or first available branch -->
                             <input type="hidden" name="branch_id" id="branch_id" value="{{ g.branch_id if g.branch_id else (branches[0]['branch_id'] if branches and branches|length > 0 else '') }}">
+                            <input type="hidden" name="hospital_id" id="hospital_id" value="{{ g.hospital_id if g.hospital_id else '' }}">
 
                             <!-- GST Invoice (Hidden - always true) -->
                             <input type="hidden" name="is_gst_invoice" id="is_gst_invoice" value="true">
@@ -766,6 +770,269 @@
                     </div>
                 </div>
             </div>
+
+            <!-- ================================================== -->
+            <!-- MULTI-DISCOUNT OPERATIONAL PANEL (STAFF VIEW) -->
+            <!-- Added: Nov 22, 2025 - Multi-discount system with Patient View -->
+            <!-- ================================================== -->
+            <div class="multi-discount-operational-panel" id="discount-panel" style="margin-bottom: 24px;">
+
+                <!-- Header Section -->
+                <div class="panel-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 16px; border-radius: 8px 8px 0 0;">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span style="font-size: 24px;">💰</span>
+                            <div>
+                                <h3 style="margin: 0; font-size: 18px; font-weight: 600;">Pricing & Discount Control</h3>
+                                <p style="margin: 4px 0 0 0; font-size: 13px; opacity: 0.9;">Real-time multi-discount calculator</p>
+                            </div>
+                        </div>
+
+                        <!-- Patient View Button -->
+                        <button
+                            type="button"
+                            onclick="openPatientView()"
+                            class="btn"
+                            style="background: rgba(255,255,255,0.2); color: white; border: 1px solid white; padding: 8px 16px; border-radius: 6px; font-size: 14px; cursor: pointer; transition: all 0.3s ease;"
+                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                            <i class="fas fa-tv" style="margin-right: 8px;"></i>
+                            Patient View
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Discount Type Controls -->
+                <div class="discount-controls" style="background: #f8fafc; border-left: 3px solid #667eea; border-right: 3px solid #667eea;">
+
+                    <!-- Collapsible Header -->
+                    <div id="discount-controls-header" style="padding: 16px 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: #e0e7ff; border-bottom: 1px solid #c7d2fe;">
+                        <div>
+                            <strong style="font-size: 14px; font-weight: 600; color: #3730a3;">💳 Discount Controls</strong>
+                            <span style="font-size: 12px; color: #6366f1; margin-left: 8px;">(Click to expand/collapse)</span>
+                        </div>
+                        <span id="discount-toggle-icon" style="font-size: 18px; color: #667eea; transition: transform 0.3s; transform: rotate(180deg);">▲</span>
+                    </div>
+
+                    <!-- Collapsible Content -->
+                    <div id="discount-controls-content" style="padding: 20px; display: block;">
+                        <div class="controls-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+
+                        <!-- Standard Discount -->
+                        <div class="discount-control-card" style="background: white; padding: 16px; border-radius: 8px; border: 2px solid #e5e7eb;">
+                            <label style="display: flex; align-items: center; cursor: pointer;">
+                                <input
+                                    type="checkbox"
+                                    id="apply-standard-discount"
+                                    checked
+                                    style="width: 18px; height: 18px; margin-right: 10px;">
+                                <div style="flex: 1;">
+                                    <span class="badge-discount-standard" style="font-size: 11px; font-weight: 600;">STANDARD</span>
+                                    <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">Item-level default discounts</div>
+                                </div>
+                                <button type="button" id="standard-eligible-toggle"
+                                    style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; padding: 4px 8px; font-size: 11px; color: #6b7280; cursor: pointer; margin-left: 8px;"
+                                    title="Show all eligible discounts">
+                                    ℹ️ Details
+                                </button>
+                            </label>
+                            <div id="standard-discount-info" style="margin-top: 12px; font-size: 13px; color: #1f2937; display: none;">
+                                <strong style="font-weight: 500;">Amount:</strong> <span id="standard-amount">Rs. 0.00</span>
+                            </div>
+                            <!-- Eligible Discounts Section -->
+                            <div id="standard-eligible-discounts" style="display: block; margin-top: 12px; padding: 12px; background: #f9fafb; border-radius: 4px; border: 1px solid #e5e7eb;">
+                                <div style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">ALL ELIGIBLE DISCOUNTS:</div>
+                                <div id="standard-eligible-list" style="font-size: 13px; color: #374151;">
+                                    Loading...
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bulk Discount -->
+                        <div class="discount-control-card" style="background: white; padding: 16px; border-radius: 8px; border: 2px solid #e5e7eb;">
+                            <label style="display: flex; align-items: center; cursor: pointer;">
+                                <input
+                                    type="checkbox"
+                                    id="bulk-discount-enabled"
+                                    style="width: 18px; height: 18px; margin-right: 10px;">
+                                <div style="flex: 1;">
+                                    <span class="badge-discount-bulk" style="font-size: 11px; font-weight: 600;">BULK</span>
+                                    <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">Volume-based discounts (5+ items)</div>
+                                </div>
+                                <button type="button" id="bulk-eligible-toggle"
+                                    style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; padding: 4px 8px; font-size: 11px; color: #6b7280; cursor: pointer; margin-left: 8px;"
+                                    title="Show all eligible discounts">
+                                    ℹ️ Details
+                                </button>
+                            </label>
+                            <div id="bulk-discount-info" style="margin-top: 12px; font-size: 13px; color: #1f2937; display: none;">
+                                <strong style="font-weight: 500;">Services:</strong> <span id="bulk-service-count">0</span> |
+                                <strong style="font-weight: 500;">Amount:</strong> <span id="bulk-amount">Rs. 0.00</span>
+                            </div>
+                            <!-- Eligible Discounts Section -->
+                            <div id="bulk-eligible-discounts" style="display: block; margin-top: 12px; padding: 12px; background: #f9fafb; border-radius: 4px; border: 1px solid #e5e7eb;">
+                                <div style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">ALL ELIGIBLE DISCOUNTS:</div>
+                                <div id="bulk-eligible-list" style="font-size: 13px; color: #374151;">
+                                    Loading...
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Loyalty Discount -->
+                        <div class="discount-control-card" style="background: white; padding: 16px; border-radius: 8px; border: 2px solid #e5e7eb;">
+                            <label style="display: flex; align-items: center; cursor: pointer;">
+                                <input
+                                    type="checkbox"
+                                    id="apply-loyalty-discount"
+                                    style="width: 18px; height: 18px; margin-right: 10px;"
+                                    disabled>
+                                <div style="flex: 1;">
+                                    <span class="badge-discount-loyalty" style="font-size: 11px; font-weight: 600;">LOYALTY</span>
+                                    <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">Membership card discounts</div>
+                                </div>
+                                <button type="button" id="loyalty-eligible-toggle"
+                                    style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; padding: 4px 8px; font-size: 11px; color: #6b7280; cursor: pointer; margin-left: 8px;"
+                                    title="Show all eligible discounts">
+                                    ℹ️ Details
+                                </button>
+                            </label>
+                            <div id="loyalty-discount-info" style="margin-top: 12px; font-size: 13px; color: #1f2937; display: none;">
+                                <strong style="font-weight: 500;">Card:</strong> <span id="loyalty-card-type">None</span> |
+                                <strong style="font-weight: 500;">Amount:</strong> <span id="loyalty-amount">Rs. 0.00</span>
+                            </div>
+                            <!-- Eligible Discounts Section -->
+                            <div id="loyalty-eligible-discounts" style="display: block; margin-top: 12px; padding: 12px; background: #f9fafb; border-radius: 4px; border: 1px solid #e5e7eb;">
+                                <div style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">ALL ELIGIBLE DISCOUNTS:</div>
+                                <div id="loyalty-eligible-list" style="font-size: 13px; color: #374151;">
+                                    Loading...
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Promotion Discount (Auto-applied) -->
+                        <div class="discount-control-card promotion-card" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); padding: 16px; border-radius: 8px; border: 2px solid #86efac;">
+                            <label style="display: flex; align-items: center;">
+                                <input
+                                    type="checkbox"
+                                    id="has-promotion-discount"
+                                    style="width: 18px; height: 18px; margin-right: 10px;"
+                                    disabled
+                                    checked>
+                                <div style="flex: 1;">
+                                    <span class="badge-discount-promotion" style="font-size: 11px; font-weight: 600;">PROMOTION 🎁</span>
+                                    <div style="font-size: 13px; color: #166534; margin-top: 4px; font-weight: 500;">Auto-applied when eligible</div>
+                                </div>
+                                <button type="button" id="promotion-eligible-toggle"
+                                    style="background: #dcfce7; border: 1px solid #86efac; border-radius: 4px; padding: 4px 8px; font-size: 11px; color: #166534; cursor: pointer; margin-left: 8px;"
+                                    title="Show all eligible discounts">
+                                    ℹ️ Details
+                                </button>
+                            </label>
+                            <div id="promotion-discount-info" style="margin-top: 12px; font-size: 13px; color: #166534; display: none;">
+                                <strong style="font-weight: 500;">Campaign:</strong> <span id="promotion-name">None</span><br>
+                                <strong style="font-weight: 500;">Amount:</strong> <span id="promotion-amount">Rs. 0.00</span>
+                            </div>
+                            <!-- Eligible Discounts Section -->
+                            <div id="promotion-eligible-discounts" style="display: block; margin-top: 12px; padding: 12px; background: #f0fdf4; border-radius: 4px; border: 1px solid #86efac;">
+                                <div style="font-size: 12px; font-weight: 600; color: #166534; margin-bottom: 8px;">ALL ELIGIBLE DISCOUNTS:</div>
+                                <div id="promotion-eligible-list" style="font-size: 13px; color: #374151;">
+                                    Loading...
+                                </div>
+                            </div>
+                        </div>
+
+                        </div>
+
+                        <!-- Priority Information -->
+                        <div class="priority-info" style="margin-top: 16px; padding: 12px; background: #fef3c7; border-radius: 6px; font-size: 13px; color: #92400e;">
+                            <strong style="font-weight: 500;">💡 Discount Priority:</strong> Promotion (1) > Bulk/Loyalty (2) > Standard (4)
+                            <br>
+                            <small style="font-size: 12px;">Note: Only the highest priority discount applies to each item</small>
+                        </div>
+
+                        <!-- Live Pricing Summary INSIDE Collapsible -->
+                        <div class="pricing-summary-compact" style="margin-top: 16px; padding: 16px; background: white; border: 2px solid #667eea; border-radius: 8px;">
+                            <div style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #1f2937; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px;">
+                                💰 LIVE PRICING SUMMARY
+                            </div>
+                            <table style="width: 100%; font-size: 13px;">
+                                <tr>
+                                    <td style="padding: 6px 0; color: #6b7280;">Original Price:</td>
+                                    <td style="padding: 6px 0; text-align: right; font-weight: 500;">
+                                        <span id="summary-original-price-collapsible">₹0.00</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 6px 0; color: #dc2626; font-weight: 500;">Total Discount:</td>
+                                    <td style="padding: 6px 0; text-align: right; font-weight: 500; color: #dc2626;">
+                                        <span id="summary-discount-collapsible">- ₹0.00</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 6px 0; color: #6b7280;">GST:</td>
+                                    <td style="padding: 6px 0; text-align: right; font-weight: 500;">
+                                        <span id="summary-gst-collapsible">₹0.00</span>
+                                    </td>
+                                </tr>
+                                <tr style="border-top: 2px solid #e5e7eb;">
+                                    <td style="padding: 10px 0 6px 0; font-size: 14px; font-weight: 600; color: #1f2937;">
+                                        Patient Pays (Incl. GST):
+                                    </td>
+                                    <td style="padding: 10px 0 6px 0; text-align: right;">
+                                        <div id="summary-final-price-collapsible" style="font-size: 20px; font-weight: 700; color: #667eea;">
+                                            ₹0.00
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Savings Badge -->
+                            <div id="savings-badge" class="savings-badge" style="display: none; margin-top: 16px; padding: 12px 20px; background: #d1fae5; color: #065f46; border-radius: 8px; text-align: center; font-weight: 600; font-size: 14px;">
+                                💰 You save ₹0!
+                            </div>
+
+                            <!-- Quick Action Buttons -->
+                            <div style="display: flex; gap: 8px; margin-top: 16px; justify-content: center;">
+                                <button
+                                    type="button"
+                                    onclick="recalculateDiscounts()"
+                                    class="btn btn-sm"
+                                    style="background: #667eea; color: white; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; transition: all 0.3s ease; white-space: nowrap;"
+                                    onmouseover="this.style.background='#5568d3'"
+                                    onmouseout="this.style.background='#667eea'">
+                                    <i class="fas fa-calculator"></i> Recalculate
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onclick="openPatientView()"
+                                    class="btn btn-sm"
+                                    style="background: white; color: #667eea; padding: 8px 16px; border-radius: 6px; border: 2px solid #667eea; cursor: pointer; font-size: 12px; transition: all 0.3s ease; white-space: nowrap;"
+                                    onmouseover="this.style.background='#f3f4f6'"
+                                    onmouseout="this.style.background='white'">
+                                    <i class="fas fa-tv"></i> Patient View
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onclick="resetDiscounts()"
+                                    class="btn btn-sm"
+                                    style="background: white; color: #ef4444; padding: 8px 16px; border-radius: 6px; border: 2px solid #ef4444; cursor: pointer; font-size: 12px; transition: all 0.3s ease; white-space: nowrap;"
+                                    onmouseover="this.style.background='#fef2f2'"
+                                    onmouseout="this.style.background='white'">
+                                    <i class="fas fa-undo"></i> Reset
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- End Collapsible Content -->
+                </div>
+
+
+            </div>
+            <!-- ================================================== -->
+            <!-- END MULTI-DISCOUNT OPERATIONAL PANEL -->
+            <!-- ================================================== -->
 
             <!-- Section 2: Line Items -->
             <div class="line-items-section">
@@ -1000,13 +1267,20 @@
         </td>
 
         <!-- Discount Percent -->
-        <td class="px-2 py-2">
+        <td class="px-2 py-2" style="position: relative;">
             <input type="number"
                    class="discount-percent form-input text-sm w-full text-right border rounded px-2 py-1"
                    value="0"
                    min="0"
                    max="100"
-                   step="0.01">
+                   step="0.01"
+                   {% if not can_edit_discount %}readonly title="Auto-calculated discount (Manager can edit)"{% endif %}
+                   style="{% if not can_edit_discount %}background-color: #f3f4f6; cursor: not-allowed;{% endif %}">
+            {% if not can_edit_discount %}
+            <span style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #9ca3af; font-size: 12px;">
+                <i class="fas fa-lock"></i>
+            </span>
+            {% endif %}
         </td>
 
         <!-- GST Rate Display -->
@@ -1041,12 +1315,20 @@
 <!-- Include JavaScript files (WORKING VERSION - RESTORED) -->
 <!-- FIFO Allocation Modal Component -->
 <script src="{{ url_for('static', filename='js/components/fifo_allocation_modal.js') }}"></script>
-<script src="{{ url_for('static', filename='js/components/invoice_item.js') }}?v=20251117_1905"></script><!-- Fixed batch API endpoint -->
+<script src="{{ url_for('static', filename='js/components/invoice_item.js') }}?v=20251120_2025"></script><!-- Fixed batch API endpoint + Added line-item-changed events -->
 <script src="{{ url_for('static', filename='js/pages/invoice.js') }}?v=20251117_1900"></script><!-- Cache bust - fixed 404 errors, corrected API endpoint -->
+<!-- Bulk Discount Real-Time Pricing -->
+<script src="{{ url_for('static', filename='js/components/invoice_bulk_discount.js') }}?v=20251121_0100"></script>
+<script src="{{ url_for('static', filename='js/components/invoice_patient_view.js') }}?v=20251122_0100"></script><!-- Patient view pop-up launcher -->
 
 <script>
 // Global auth token for API calls
 window.INVOICE_AUTH_TOKEN = '{{ auth_token }}';
+
+// Permission to manually edit discount fields
+// Front desk users: false (readonly, auto-calculated only)
+// Managers: true (can manually override)
+window.CAN_EDIT_DISCOUNT = {{ 'true' if can_edit_discount else 'false' }};
 
 // =================================================================
 // PATIENT AUTOCOMPLETE SEARCH IMPLEMENTATION
@@ -1213,6 +1495,62 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Store component globally for toggle function access
     window.invoiceItemComponent = invoiceItemComponent;
+
+    // =================================================================
+    // INITIALIZE BULK DISCOUNT MANAGER
+    // =================================================================
+    const bulkDiscountManager = new BulkDiscountManager();
+    const hospitalId = '{{ current_user.hospital_id }}';
+    const patientId = document.querySelector('[name="patient_id"]')?.value || null;
+
+    bulkDiscountManager.initialize(hospitalId, patientId);
+    window.bulkDiscountManager = bulkDiscountManager;
+    console.log("✅ BulkDiscountManager initialized successfully");
+
+    // =================================================================
+    // DISCOUNT CONTROLS COLLAPSE/EXPAND TOGGLE
+    // =================================================================
+    const discountHeader = document.getElementById('discount-controls-header');
+    const discountContent = document.getElementById('discount-controls-content');
+    const discountToggleIcon = document.getElementById('discount-toggle-icon');
+
+    if (discountHeader && discountContent && discountToggleIcon) {
+        discountHeader.addEventListener('click', function() {
+            if (discountContent.style.display === 'none') {
+                discountContent.style.display = 'block';
+                discountToggleIcon.textContent = '▲';
+                discountToggleIcon.style.transform = 'rotate(180deg)';
+            } else {
+                discountContent.style.display = 'none';
+                discountToggleIcon.textContent = '▼';
+                discountToggleIcon.style.transform = 'rotate(0deg)';
+            }
+        });
+    }
+
+    // =================================================================
+    // ELIGIBLE DISCOUNTS TOGGLE BUTTONS
+    // =================================================================
+    const bulkToggleBtn = document.getElementById('bulk-eligible-toggle');
+    if (bulkToggleBtn && bulkDiscountManager) {
+        bulkToggleBtn.addEventListener('click', function() {
+            bulkDiscountManager.toggleEligibleDiscountsDisplay('bulk');
+        });
+    }
+
+    const loyaltyToggleBtn = document.getElementById('loyalty-eligible-toggle');
+    if (loyaltyToggleBtn && bulkDiscountManager) {
+        loyaltyToggleBtn.addEventListener('click', function() {
+            bulkDiscountManager.toggleEligibleDiscountsDisplay('loyalty');
+        });
+    }
+
+    const standardToggleBtn = document.getElementById('standard-eligible-toggle');
+    if (standardToggleBtn && bulkDiscountManager) {
+        standardToggleBtn.addEventListener('click', function() {
+            bulkDiscountManager.toggleEligibleDiscountsDisplay('standard');
+        });
+    }
 
     // =================================================================
     // RESTORE PRESERVED LINE ITEMS (after validation errors)
@@ -1535,6 +1873,51 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         updateTotalsDisplay();
     }
+
+    // =================================================================
+    // DISCOUNT CONTROL BUTTON FUNCTIONS
+    // =================================================================
+
+    // Recalculate discounts - trigger discount API call
+    function recalculateDiscounts() {
+        if (window.bulkDiscountManager) {
+            console.log('🔄 Recalculating discounts...');
+            window.bulkDiscountManager.updatePricing();
+        } else {
+            console.error('BulkDiscountManager not initialized');
+        }
+    }
+
+    // Reset all discounts to default
+    function resetDiscounts() {
+        if (window.bulkDiscountManager) {
+            console.log('🔄 Resetting discounts...');
+
+            // Clear all discounts
+            window.bulkDiscountManager.clearDiscounts();
+
+            // Reset checkboxes to default state
+            const standardCheckbox = document.getElementById('apply-standard-discount');
+            const bulkCheckbox = document.getElementById('bulk-discount-enabled');
+            const loyaltyCheckbox = document.getElementById('apply-loyalty-discount');
+
+            if (standardCheckbox) standardCheckbox.checked = true;
+            if (bulkCheckbox) bulkCheckbox.checked = false;
+            if (loyaltyCheckbox && window.bulkDiscountManager.currentPatientLoyalty) {
+                loyaltyCheckbox.checked = true;
+            }
+
+            // Recalculate with default settings
+            window.bulkDiscountManager.updatePricing();
+
+            console.log('✅ Discounts reset to default');
+        } else {
+            console.error('BulkDiscountManager not initialized');
+        }
+    }
+
+    // Patient view function is defined in invoice_patient_view.js
+    // DO NOT define openPatientView() here - it will override the proper implementation!
 
     // =================================================================
     // 9. INTEGRATE WITH EXISTING INVOICE.JS FUNCTIONS

@@ -1,0 +1,412 @@
+<!--
+Package BOM Items Table
+Displays Bill of Materials for a package
+Used in package detail view
+-->
+
+<div class="container-fluid px-0" style="max-width: 100%;">
+
+{% if data and data.bom_items and data.bom_items|length > 0 %}
+<!-- BOM Items Section -->
+<div class="line-items-container" style="width: 100%;">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="mb-0">
+            <i class="fas fa-boxes text-primary me-2"></i>
+            Bill of Materials
+        </h5>
+        <div>
+            <span class="badge bg-secondary me-2">
+                Items: {{ data.bom_items|length }}
+            </span>
+            {% if data.summary and data.summary.total_cost %}
+            <span class="badge bg-success me-2">
+                Est. Cost: ₹{{ '{:,.2f}'.format(data.summary.total_cost) }}
+            </span>
+            {% endif %}
+            {% if data and data.package_id %}
+            <a href="/universal/package_bom_items/create?package_id={{ data.package_id }}" class="btn btn-sm btn-primary">
+                <i class="fas fa-plus"></i> Add BOM Item
+            </a>
+            {% elif item and item.package_id %}
+            <a href="/universal/package_bom_items/create?package_id={{ item.package_id }}" class="btn btn-sm btn-primary">
+                <i class="fas fa-plus"></i> Add BOM Item
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="table-responsive" style="width: 100%;">
+        <table class="table table-bordered table-hover invoice-items-table table-sm" style="width: 100%; table-layout: fixed;">
+            <thead class="table-light">
+                <tr>
+                    <th width="3%" style="text-align: left !important;">#</th>
+                    <th width="8%">Type</th>
+                    <th width="10%">Status</th>
+                    <th width="17%" style="text-align: left !important;">Item Name</th>
+                    <th width="7%" class="text-end">Qty</th>
+                    <th width="7%">Unit</th>
+                    <th width="10%">Supply</th>
+                    <th width="9%" class="text-end">Price</th>
+                    <th width="9%" class="text-end">Total</th>
+                    <th width="5%" class="text-center">Opt</th>
+                    <th width="15%" class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in data.bom_items %}
+                <tr class="{% if item.deleted_at %}deleted-row{% elif item.status == 'rejected' %}rejected-row{% elif item.status == 'pending_approval' %}pending-row{% endif %}">
+                    <td style="text-align: left !important;">{{ loop.index }}</td>
+                    <td>
+                        <div class="truncate-text" title="{{ item.item_type|title }}">
+                            <span class="badge bg-{% if item.item_type == 'service' %}info{% elif item.item_type == 'medicine' %}success{% else %}secondary{% endif %}" style="font-size: 0.85rem; padding: 0.3rem 0.5rem;">
+                                {{ item.item_type|title }}
+                            </span>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="truncate-text">
+                            {% if item.status == 'draft' %}
+                            <span class="badge bg-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.4rem;">
+                                <i class="fas fa-edit"></i> DRAFT
+                            </span>
+                            {% elif item.status == 'pending_approval' %}
+                            <span class="badge bg-warning text-dark" style="font-size: 0.75rem; padding: 0.25rem 0.4rem;">
+                                <i class="fas fa-clock"></i> PENDING
+                            </span>
+                            {% elif item.status == 'approved' %}
+                            <span class="badge bg-success" style="font-size: 0.75rem; padding: 0.25rem 0.4rem;">
+                                <i class="fas fa-check-circle"></i> APPROVED
+                            </span>
+                            {% elif item.status == 'rejected' %}
+                            <span class="badge bg-danger" style="font-size: 0.75rem; padding: 0.25rem 0.4rem;">
+                                <i class="fas fa-times-circle"></i> REJECTED
+                            </span>
+                            {% endif %}
+
+                            {% if item.deleted_at %}
+                            <span class="badge bg-danger ms-1" style="font-size: 0.75rem; padding: 0.25rem 0.4rem;">
+                                <i class="fas fa-trash-alt"></i> DELETED
+                            </span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="text-left item-name-cell">
+                        <div class="truncate-text" title="{{ item.item_name or 'N/A' }}{% if item.resolved_item %}{% if item.item_type == 'service' and item.resolved_item.code %} (Code: {{ item.resolved_item.code }}){% elif item.item_type == 'medicine' and item.resolved_item.generic_name %} ({{ item.resolved_item.generic_name }}){% endif %}{% endif %}">
+                            <strong class="{% if item.deleted_at %}text-decoration-line-through{% endif %}">{{ item.item_name or 'N/A' }}</strong>
+                            {% if item.resolved_item %}
+                            <small class="text-muted d-block">
+                                {% if item.item_type == 'service' and item.resolved_item.code %}
+                                    {{ item.resolved_item.code }}
+                                {% elif item.item_type == 'medicine' and item.resolved_item.generic_name %}
+                                    {{ item.resolved_item.generic_name }}
+                                {% endif %}
+                            </small>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="text-end">{{ '{:,.2f}'.format(item.quantity|float) if item.quantity else '0.00' }}</td>
+                    <td>
+                        <div class="truncate-text" title="{{ item.unit_of_measure or '-' }}">
+                            {{ item.unit_of_measure or '-' }}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="truncate-text" title="{{ item.supply_method or 'per_package' }}">
+                            <span class="badge bg-light text-dark" style="font-size: 0.85rem; padding: 0.3rem 0.5rem;">{{ item.supply_method or 'per_package' }}</span>
+                        </div>
+                    </td>
+                    <td class="text-end">₹{{ '{:,.2f}'.format(item.current_price|float) if item.current_price else '0.00' }}</td>
+                    <td class="text-end fw-bold">₹{{ '{:,.2f}'.format(item.line_total|float) if item.line_total else '0.00' }}</td>
+                    <td class="text-center">
+                        {% if item.is_optional %}
+                            <i class="fas fa-check-circle text-warning" title="Optional"></i>
+                        {% else %}
+                            <i class="fas fa-times-circle text-muted" title="Required"></i>
+                        {% endif %}
+                    </td>
+                    <td class="text-center" style="white-space: nowrap;">
+                        {% if not item.deleted_at %}
+                        <a href="/universal/package_bom_items/edit/{{ item.bom_item_id }}" class="btn btn-sm btn-primary me-1" title="Edit" style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                        <a href="/universal/package_bom_items/delete/{{ item.bom_item_id }}"
+                           class="btn btn-sm btn-danger bom-delete-btn"
+                           title="Delete"
+                           data-confirm-message="Are you sure you want to delete this BOM item?"
+                           style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">
+                            <i class="fas fa-trash"></i>
+                        </a>
+                        {% else %}
+                        <a href="/universal/package_bom_items/undelete/{{ item.bom_item_id }}"
+                           class="btn btn-sm btn-success bom-restore-btn"
+                           title="Restore"
+                           data-confirm-message="Are you sure you want to restore this BOM item?"
+                           style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">
+                            <i class="fas fa-undo"></i> Restore
+                        </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% if item.notes %}
+                <tr class="table-light">
+                    <td></td>
+                    <td colspan="9">
+                        <small class="text-muted">
+                            <i class="fas fa-sticky-note me-1"></i>
+                            {{ item.notes }}
+                        </small>
+                    </td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+            <tfoot class="table-light">
+                <!-- Total Items Row -->
+                <tr>
+                    <td colspan="9" class="text-end"><strong>Total BOM Cost:</strong></td>
+                    <td class="text-end"><strong class="text-primary">₹{{ '{:,.2f}'.format(data.summary.total_cost|default(0, true)) if data.summary else '0.00' }}</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+{% else %}
+<!-- No BOM Items -->
+<div class="alert alert-info d-flex justify-content-between align-items-center">
+    <div>
+        <i class="fas fa-info-circle me-2"></i>
+        No Bill of Materials items defined for this package yet.
+    </div>
+    {% if data and data.package_id %}
+    <a href="/universal/package_bom_items/create?package_id={{ data.package_id }}" class="btn btn-sm btn-primary">
+        <i class="fas fa-plus"></i> Add BOM Item
+    </a>
+    {% elif item and item.package_id %}
+    <a href="/universal/package_bom_items/create?package_id={{ item.package_id }}" class="btn btn-sm btn-primary">
+        <i class="fas fa-plus"></i> Add BOM Item
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+
+</div>
+
+<style>
+/* BOM Items Table uses invoice-items-table class for consistency */
+.invoice-items-table {
+    font-size: 0.9rem;
+    width: 100% !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.invoice-items-table thead th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    border-bottom: 2px solid #dee2e6;
+    font-size: 0.875rem;
+}
+
+.invoice-items-table th,
+.invoice-items-table td {
+    padding: 0.4rem 0.5rem !important;
+    vertical-align: middle;
+    font-size: 0.9rem;
+}
+
+/* Truncate text with ellipsis */
+.truncate-text {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+/* Item name column - special handling */
+.item-name-cell {
+    position: relative;
+}
+
+.item-name-cell .truncate-text {
+    max-width: 100%;
+}
+
+/* Show full text on hover for item name */
+.item-name-cell:hover .truncate-text {
+    overflow: visible;
+    white-space: normal;
+    word-wrap: break-word;
+    background-color: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    z-index: 100;
+    position: absolute;
+    left: 0;
+    padding: 0.4rem;
+    min-width: 250px;
+    max-width: 400px;
+}
+
+/* Hover tooltip for all truncated cells */
+.truncate-text[title] {
+    cursor: help;
+}
+
+.bom-items-table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Full width container fixes */
+.line-items-container {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.table-responsive {
+    width: 100% !important;
+    overflow-x: auto;
+}
+
+.table {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.fw-bold {
+    font-weight: bold !important;
+}
+
+.text-end {
+    text-align: right !important;
+}
+
+.text-left {
+    text-align: left !important;
+}
+
+.d-block {
+    display: block !important;
+}
+
+/* Deleted row styling */
+.deleted-row {
+    background-color: #f8d7da !important;
+    opacity: 0.7;
+}
+
+.deleted-row:hover {
+    background-color: #f5c2c7 !important;
+}
+
+.deleted-row td {
+    color: #721c24 !important;
+}
+
+/* Rejected row styling */
+.rejected-row {
+    background-color: #f8d7da !important;
+    opacity: 0.85;
+}
+
+.rejected-row:hover {
+    background-color: #f5c2c7 !important;
+}
+
+/* Pending approval row styling */
+.pending-row {
+    background-color: #fff3cd !important;
+}
+
+.pending-row:hover {
+    background-color: #ffe69c !important;
+}
+
+.text-decoration-line-through {
+    text-decoration: line-through !important;
+}
+</style>
+
+<script>
+// Handle delete button clicks
+document.addEventListener('DOMContentLoaded', function() {
+    // Delete buttons
+    document.querySelectorAll('.bom-delete-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(event) {
+            event.preventDefault();
+            const deleteUrl = this.href;
+            const confirmMessage = this.dataset.confirmMessage || 'Are you sure you want to delete this item?';
+
+            if (confirm(confirmMessage)) {
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = deleteUrl;
+
+                // Get CSRF token
+                const csrfInput = document.querySelector('[name=csrf_token]');
+                if (csrfInput) {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'csrf_token';
+                    input.value = csrfInput.value;
+                    form.appendChild(input);
+                } else {
+                    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                    if (csrfMeta) {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = 'csrf_token';
+                        input.value = csrfMeta.content;
+                        form.appendChild(input);
+                    } else {
+                        alert('Security token not found. Please refresh the page.');
+                        return;
+                    }
+                }
+
+                document.body.appendChild(form);
+                form.submit();
+            }
+        });
+    });
+
+    // Restore buttons
+    document.querySelectorAll('.bom-restore-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(event) {
+            event.preventDefault();
+            const restoreUrl = this.href;
+            const confirmMessage = this.dataset.confirmMessage || 'Are you sure you want to restore this item?';
+
+            if (confirm(confirmMessage)) {
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = restoreUrl;
+
+                // Get CSRF token
+                const csrfInput = document.querySelector('[name=csrf_token]');
+                if (csrfInput) {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'csrf_token';
+                    input.value = csrfInput.value;
+                    form.appendChild(input);
+                } else {
+                    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                    if (csrfMeta) {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = 'csrf_token';
+                        input.value = csrfMeta.content;
+                        form.appendChild(input);
+                    } else {
+                        alert('Security token not found. Please refresh the page.');
+                        return;
+                    }
+                }
+
+                document.body.appendChild(form);
+                form.submit();
+            }
+        });
+    });
+});
+</script>

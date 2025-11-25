@@ -1404,16 +1404,20 @@ def handle_universal_create_get(entity_type: str, config):
     """Handle GET request for universal create - prepare form"""
     try:
         logger.info(f"📝 Preparing create form for {entity_type}")
-        
+
+        # Get query parameters for pre-population (e.g., ?package_id=xxx)
+        query_params = request.args.to_dict()
+        logger.info(f"Query parameters: {query_params}")
+
         # Prepare form fields
         form_fields = []
         field_map = {f.name: f for f in config.fields}
-        
+
         # Get create fields from config
         create_fields = getattr(config, 'create_fields', None)
         if not create_fields:
             create_fields = [f.name for f in config.fields if f.show_in_form]
-        
+
         for field_name in create_fields:
             if field_name in field_map:
                 field_def = field_map[field_name]
@@ -1436,26 +1440,77 @@ def handle_universal_create_get(entity_type: str, config):
                         'section': getattr(field_def, 'section', 'default'),
                         'view_order': getattr(field_def, 'view_order', 0),
                         'tab_group': getattr(field_def, 'tab_group', None),
+                        'entity_search_config': getattr(field_def, 'entity_search_config', None),  # For ENTITY_SEARCH fields
+                        'custom_renderer': getattr(field_def, 'custom_renderer', None),  # For custom renderers
                     })
-        
+
+        # Add hidden fields from query parameters (e.g., package_id from ?package_id=xxx)
+        hidden_fields = {}
+        for param_name, param_value in query_params.items():
+            # Check if this parameter corresponds to a field in the config
+            if param_name in field_map:
+                field_def = field_map[param_name]
+                # Only add if it's not already in form_fields (i.e., it's a hidden field)
+                if not field_def.show_in_form:
+                    hidden_fields[param_name] = param_value
+                    logger.info(f"Adding hidden field: {param_name}={param_value}")
+
+        # ========== SPECIAL HANDLING FOR PACKAGE BOM ITEMS ==========
+        # Populate package context info for header display
+        readonly_field_values = {}
+        form_header_info = {}
+
+        if entity_type == 'package_bom_items' and 'package_id' in query_params:
+            try:
+                from app.services.package_service import PackageService
+                from app.services.database_service import get_db_session
+                pkg_svc = PackageService()
+                with get_db_session() as session:
+                    package = session.query(pkg_svc.model).filter(
+                        pkg_svc.model.package_id == query_params['package_id']
+                    ).first()
+                    if package:
+                        # Add to header info (displayed prominently)
+                        form_header_info = {
+                            'title': 'Add BOM Item',
+                            'subtitle': f"Package: {package.package_name}",
+                            'info_fields': [
+                                {'label': 'Package ID', 'value': str(package.package_id), 'icon': 'fas fa-box-open'},
+                                {'label': 'Package Name', 'value': package.package_name, 'icon': 'fas fa-tag'},
+                            ]
+                        }
+                        logger.info(f"Populated package context: {package.package_name}")
+            except Exception as e:
+                logger.error(f"Error populating package context: {e}")
+                form_header_info = {
+                    'title': 'Add BOM Item',
+                    'subtitle': 'Package: Unknown'
+                }
+
         # IMPORTANT: Create a modified config for forms
         # Use form_section_definitions if available, otherwise fall back to section_definitions
-        form_config = config
+        import copy
+        form_config = copy.copy(config)
+
+        # Set create_fields on form_config so template can iterate
+        form_config.create_fields = create_fields
+
         if hasattr(config, 'form_section_definitions') and config.form_section_definitions:
-            # Create a shallow copy of config with form sections
-            import copy
-            form_config = copy.copy(config)
+            # Use form sections for structured layout
             form_config.section_definitions = config.form_section_definitions
             logger.info(f"✅ Using form_section_definitions for create form")
         else:
             logger.info(f"ℹ️ Using default section_definitions for create form")
-        
+
         # Generate CSRF token
         def generate_csrf_token():
             try:
                 from flask_wtf.csrf import generate_csrf
-                return generate_csrf()
-            except:
+                token = generate_csrf()
+                logger.info(f"✅ CSRF token generated for GET request: {token[:20]}..." if token else "❌ No CSRF token generated")
+                return token
+            except Exception as e:
+                logger.error(f"❌ Error generating CSRF token: {e}")
                 return ''
         
         # Get current date for display in dd-mmm-yyyy format
@@ -1468,6 +1523,9 @@ def handle_universal_create_get(entity_type: str, config):
             entity_type=entity_type,
             entity_config=form_config,  # Pass modified config with form sections
             form_fields=form_fields,
+            hidden_fields=hidden_fields,  # Pass hidden fields from query params
+            readonly_field_values=readonly_field_values,  # Pass readonly field values
+            form_header_info=form_header_info,  # Pass header context info
             form_action=url_for('universal_views.universal_create_view', entity_type=entity_type),
             csrf_token=generate_csrf_token,
             form_errors=[],
@@ -1484,12 +1542,42 @@ def handle_universal_create_post(entity_type: str, config):
     """Handle POST request for universal create - process form"""
     try:
         logger.info(f"🔍 Processing create POST for {entity_type}")
-        
+
+        # CSRF validation is handled automatically by Flask-WTF's CSRFProtect
+        # The csrf token is validated before this function is called
+        # Just log for debugging
+        csrf_token = request.form.get('csrf_token')
+        logger.info(f"CSRF token present: {bool(csrf_token)}")
+        if csrf_token:
+            logger.info(f"CSRF token length: {len(csrf_token)}")
+
         # Get form data
         form_data = request.form.to_dict()
-        
+
+        # Log form data for debugging
+        logger.info(f"Form data received: {list(form_data.keys())}")
+        if 'package_id' in form_data:
+            logger.info(f"package_id in form: {form_data['package_id']}")
+        else:
+            logger.warning("package_id NOT in form data!")
+
         # Get field definitions to identify field types
         field_definitions = {field.name: field for field in config.fields}
+
+        # Special validation for package_bom_items: package_id is required
+        if entity_type == 'package_bom_items':
+            # Try to get package_id from form data first
+            if 'package_id' not in form_data or not form_data['package_id']:
+                # Fallback: check query parameters (in case hidden field wasn't rendered)
+                package_id_from_query = request.args.get('package_id')
+                if package_id_from_query:
+                    logger.info(f"package_id found in query params, adding to form_data: {package_id_from_query}")
+                    form_data['package_id'] = package_id_from_query
+                else:
+                    error_msg = "Package ID is required. BOM items can only be created from a Package detail view."
+                    logger.error(f"❌ {error_msg}")
+                    flash(error_msg, "danger")
+                    return redirect(url_for('universal_views.universal_list_view', entity_type='packages'))
         
         # Handle checkboxes and boolean fields properly
         for field_name, field_def in field_definitions.items():
@@ -1716,11 +1804,14 @@ def handle_universal_edit_get(entity_type: str, item_id: str, config, existing_e
         
         # IMPORTANT: Create a modified config for forms
         # Use form_section_definitions if available, otherwise fall back to section_definitions
-        form_config = config
+        import copy
+        form_config = copy.copy(config)
+
+        # Set edit_fields on form_config so template can iterate
+        form_config.edit_fields = edit_fields
+
         if hasattr(config, 'form_section_definitions') and config.form_section_definitions:
-            # Create a shallow copy of config with form sections
-            import copy
-            form_config = copy.copy(config)
+            # Use form sections for structured layout
             form_config.section_definitions = config.form_section_definitions
             logger.info(f"✅ Using form_section_definitions for edit form")
         else:
@@ -1770,9 +1861,14 @@ def handle_universal_edit_post(entity_type: str, item_id: str, config):
         from app.engine.universal_crud_service import UniversalCRUDService
         crud_service = UniversalCRUDService()
 
+        # Get edit fields from config
+        edit_fields = getattr(config, 'edit_fields', None)
+        if not edit_fields:
+            edit_fields = [f.name for f in config.fields if f.show_in_form and not f.readonly]
+
         # Get form data
         form_data = request.form.to_dict()
-        
+
         # Filter out virtual and readonly fields before processing
         field_definitions = {field.name: field for field in config.fields}
         filtered_form_data = {}
@@ -1809,7 +1905,7 @@ def handle_universal_edit_post(entity_type: str, item_id: str, config):
                 if field_name in filtered_form_data:
                     value = filtered_form_data[field_name]
                     filtered_form_data[field_name] = value.lower() in ('on', 'true', '1', 'yes', 'checked')
-                elif field_name in getattr(config, 'edit_fields', []) and not getattr(field_def, 'virtual', False) and not getattr(field_def, 'readonly', False):
+                elif field_name in edit_fields and not getattr(field_def, 'virtual', False) and not getattr(field_def, 'readonly', False):
                     # Checkbox exists in form but wasn't checked
                     filtered_form_data[field_name] = False
 
@@ -2030,10 +2126,192 @@ def universal_undelete_view(entity_type: str, item_id: str):
             flash(f"Failed to restore {config.name}", 'error')
             
         return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
-        
+
     except Exception as e:
         logger.error(f"Error in undelete: {str(e)}")
         flash("An error occurred while restoring", 'error')
+        return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+
+# =============================================================================
+# APPROVAL WORKFLOW ENDPOINTS
+# =============================================================================
+
+@universal_bp.route('/<entity_type>/submit_for_approval/<item_id>', methods=['POST'])
+@login_required
+@require_web_branch_permission('universal', 'edit')
+def universal_submit_for_approval_view(entity_type: str, item_id: str):
+    """Submit entity for approval"""
+    try:
+        logger.info(f"📤 Submit for approval requested for {entity_type}/{item_id}")
+
+        config = get_entity_config(entity_type)
+
+        # Get the model class from entity registry
+        from app.config.entity_registry import ENTITY_REGISTRY
+        registry_entry = ENTITY_REGISTRY.get(entity_type)
+
+        if not registry_entry or not registry_entry.model_class:
+            flash(f"Model not found for {entity_type}", 'error')
+            return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+
+        # Import the model class dynamically
+        module_path, class_name = registry_entry.model_class.rsplit('.', 1)
+        import importlib
+        module = importlib.import_module(module_path)
+        model_class = getattr(module, class_name)
+
+        # Get the entity directly from database
+        from app.services.database_service import get_db_session
+        import uuid
+
+        with get_db_session() as session:
+            # Convert item_id to UUID if needed
+            try:
+                lookup_id = uuid.UUID(item_id) if isinstance(item_id, str) else item_id
+            except ValueError:
+                lookup_id = item_id  # Not a UUID, use as-is
+
+            # Query the ORM object directly
+            item = session.query(model_class).filter_by(**{config.primary_key: lookup_id}).first()
+
+            if not item:
+                flash(f"{config.name} not found", 'error')
+                return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+
+            # Update status to pending_approval
+            item.status = 'pending_approval'
+            item.updated_by = current_user.user_id
+            session.commit()
+
+            flash(f"{config.name} submitted for approval successfully!", 'success')
+
+        # Redirect to list view to show updated status
+        return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+
+    except Exception as e:
+        logger.error(f"Error submitting for approval: {str(e)}")
+        flash("An error occurred while submitting for approval", 'error')
+        return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+
+@universal_bp.route('/<entity_type>/approve/<item_id>', methods=['POST'])
+@login_required
+@require_web_branch_permission('universal', 'approve')
+def universal_approve_view(entity_type: str, item_id: str):
+    """Approve entity"""
+    try:
+        logger.info(f"✅ Approve requested for {entity_type}/{item_id}")
+
+        config = get_entity_config(entity_type)
+
+        # Get the model class from entity registry
+        from app.config.entity_registry import ENTITY_REGISTRY
+        registry_entry = ENTITY_REGISTRY.get(entity_type)
+
+        if not registry_entry or not registry_entry.model_class:
+            flash(f"Model not found for {entity_type}", 'error')
+            return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+
+        # Import the model class dynamically
+        module_path, class_name = registry_entry.model_class.rsplit('.', 1)
+        import importlib
+        module = importlib.import_module(module_path)
+        model_class = getattr(module, class_name)
+
+        # Get the entity directly from database
+        from app.services.database_service import get_db_session
+        import uuid
+
+        with get_db_session() as session:
+            # Convert item_id to UUID if needed
+            try:
+                lookup_id = uuid.UUID(item_id) if isinstance(item_id, str) else item_id
+            except ValueError:
+                lookup_id = item_id  # Not a UUID, use as-is
+
+            # Query the ORM object directly
+            item = session.query(model_class).filter_by(**{config.primary_key: lookup_id}).first()
+
+            if not item:
+                flash(f"{config.name} not found", 'error')
+                return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+
+            # Use ApprovalMixin approve method if available
+            if hasattr(item, 'approve'):
+                item.approve(current_user.user_id)
+            else:
+                # Fallback: manually set fields
+                from datetime import datetime, timezone
+                item.status = 'approved'
+                item.approved_by = current_user.user_id
+                item.approved_at = datetime.now(timezone.utc)
+                item.updated_by = current_user.user_id
+
+            session.commit()
+
+            flash(f"{config.name} approved successfully!", 'success')
+
+        # Redirect to list view to show updated status
+        return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+
+    except Exception as e:
+        logger.error(f"Error approving: {str(e)}")
+        flash("An error occurred while approving", 'error')
+        return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+
+@universal_bp.route('/<entity_type>/reject/<item_id>', methods=['POST'])
+@login_required
+@require_web_branch_permission('universal', 'approve')
+def universal_reject_view(entity_type: str, item_id: str):
+    """Reject entity"""
+    try:
+        logger.info(f"❌ Reject requested for {entity_type}/{item_id}")
+
+        config = get_entity_config(entity_type)
+
+        # Get rejection reason from form
+        rejection_reason = request.form.get('rejection_reason', 'No reason provided')
+
+        # Get the model class from entity registry
+        from app.config.entity_registry import ENTITY_REGISTRY
+        registry_entry = ENTITY_REGISTRY.get(entity_type)
+
+        if not registry_entry or not registry_entry.model_class:
+            flash(f"Model not found for {entity_type}", 'error')
+            return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+
+        # Import the model class dynamically
+        module_path, class_name = registry_entry.model_class.rsplit('.', 1)
+        import importlib
+        module = importlib.import_module(module_path)
+        model_class = getattr(module, class_name)
+
+        # Get the entity directly from database
+        from app.services.database_service import get_db_session
+
+        with get_db_session() as session:
+            # Query the ORM object directly
+            item = session.query(model_class).filter_by(**{config.primary_key: item_id}).first()
+
+            if not item:
+                flash(f"{config.name} not found", 'error')
+                return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+
+            # Update status to rejected
+            item.status = 'rejected'
+            if hasattr(item, 'rejection_reason'):
+                item.rejection_reason = rejection_reason
+            item.updated_by = current_user.user_id
+
+            session.commit()
+
+            flash(f"{config.name} rejected successfully!", 'warning')
+
+        # Redirect to list view to show updated status
+        return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
+
+    except Exception as e:
+        logger.error(f"Error rejecting: {str(e)}")
+        flash("An error occurred while rejecting", 'error')
         return redirect(url_for('universal_views.universal_list_view', entity_type=entity_type))
 
 # =============================================================================

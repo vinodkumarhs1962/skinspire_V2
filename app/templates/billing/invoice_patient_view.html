@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice Preview - Skinspire Clinic</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        /* Patient-facing clean design */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .invoice-preview-container {
+            background: white;
+            width: 900px;
+            max-width: 95%;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .header p {
+            margin: 8px 0 0 0;
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .patient-info {
+            background: #f8fafc;
+            padding: 20px 30px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .patient-info div {
+            font-size: 15px;
+            color: #4b5563;
+        }
+
+        .patient-info strong {
+            color: #1f2937;
+        }
+
+        .line-items-section {
+            padding: 30px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .line-items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+
+        .line-items-table th {
+            background: #f1f5f9;
+            padding: 12px;
+            text-align: left;
+            font-size: 13px;
+            font-weight: 600;
+            color: #475569;
+            border-bottom: 2px solid #cbd5e1;
+        }
+
+        .line-items-table td {
+            padding: 14px 12px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 15px;
+            color: #1f2937;
+        }
+
+        .line-items-table tr:hover {
+            background: #f8fafc;
+        }
+
+        .item-name {
+            font-weight: 500;
+            color: #1f2937;
+        }
+
+        .discount-indicator {
+            font-size: 13px;
+            color: #166534;
+            background: #dcfce7;
+            padding: 4px 8px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-top: 4px;
+        }
+
+        .discount-amount {
+            color: #dc2626;
+            font-weight: 600;
+        }
+
+        .pricing-summary {
+            background: #f9fafb;
+            padding: 24px 30px;
+            border-radius: 12px;
+            margin: 0 30px 30px 30px;
+        }
+
+        .pricing-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            font-size: 16px;
+            color: #1f2937;
+        }
+
+        .pricing-row.indent {
+            padding-left: 24px;
+            font-size: 14px;
+            color: #4b5563;
+        }
+
+        .pricing-row.total {
+            border-top: 2px solid #d1d5db;
+            margin-top: 12px;
+            padding-top: 16px;
+        }
+
+        .pricing-row.grand-total {
+            border-top: 3px solid #667eea;
+            margin-top: 16px;
+            padding-top: 20px;
+            font-size: 24px;
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        .grand-total .amount {
+            color: #667eea;
+        }
+
+        .promotions-section {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border: 2px solid #86efac;
+            border-radius: 12px;
+            padding: 24px 30px;
+            margin: 0 30px 30px 30px;
+        }
+
+        .promotion-item {
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border-left: 4px solid #22c55e;
+        }
+
+        .promotion-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .promotion-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #166534;
+            margin-bottom: 6px;
+        }
+
+        .promotion-code {
+            background: #86efac;
+            color: #166534;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            margin-left: 8px;
+        }
+
+        .promotion-details {
+            font-size: 13px;
+            color: #065f46;
+            margin-top: 6px;
+        }
+
+        .promotion-savings {
+            font-size: 18px;
+            font-weight: 700;
+            color: #166534;
+        }
+
+        .savings-tips-section {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border: 2px solid #f59e0b;
+            border-radius: 12px;
+            padding: 24px 30px;
+            margin: 0 30px 30px 30px;
+        }
+
+        .savings-tip {
+            background: white;
+            padding: 14px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border-left: 4px solid #f59e0b;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .savings-tip:last-child {
+            margin-bottom: 0;
+        }
+
+        .savings-tip-icon {
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .savings-tip-content {
+            flex: 1;
+        }
+
+        .savings-tip-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #92400e;
+            margin-bottom: 4px;
+        }
+
+        .savings-tip-description {
+            font-size: 13px;
+            color: #78350f;
+            line-height: 1.5;
+        }
+
+        .savings-tip-amount {
+            font-size: 16px;
+            font-weight: 700;
+            color: #f59e0b;
+            margin-top: 6px;
+        }
+
+        .amount-in-words {
+            text-align: center;
+            padding: 20px;
+            background: #fef3c7;
+            margin: 0 30px 30px 30px;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #92400e;
+            font-style: italic;
+        }
+
+        .actions {
+            padding: 0 30px 30px 30px;
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+        }
+
+        .btn {
+            padding: 14px 32px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #475569;
+        }
+
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .invoice-preview-container {
+                box-shadow: none;
+            }
+
+            .actions {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="invoice-preview-container">
+        <!-- Header -->
+        <div class="header">
+            <h1>SKINSPIRE CLINIC</h1>
+            <p>INVOICE PREVIEW</p>
+        </div>
+
+        <!-- Patient Info -->
+        <div class="patient-info">
+            <div><strong>Patient:</strong> <span id="patient-name">Loading...</span></div>
+            <div><strong>Date:</strong> <span id="invoice-date">Loading...</span></div>
+            <div><strong>MRN:</strong> <span id="patient-mrn">Loading...</span></div>
+            <div><strong>Invoice:</strong> <span id="invoice-number">DRAFT</span></div>
+        </div>
+
+        <!-- Line Items -->
+        <div class="line-items-section">
+            <div class="section-title">LINE ITEMS</div>
+
+            <table class="line-items-table">
+                <thead>
+                    <tr>
+                        <th style="width: 5%;">#</th>
+                        <th style="width: 50%;">Item</th>
+                        <th style="width: 10%; text-align: center;">Qty</th>
+                        <th style="width: 15%; text-align: right;">Price</th>
+                        <th style="width: 20%; text-align: right;">Amount</th>
+                    </tr>
+                </thead>
+                <tbody id="line-items-body">
+                    <tr>
+                        <td colspan="5" class="text-center" style="padding: 40px;">
+                            <i class="fas fa-spinner fa-spin" style="font-size: 24px; color: #667eea;"></i>
+                            <div style="margin-top: 12px; color: #6b7280;">Loading invoice data...</div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pricing Summary -->
+        <div class="pricing-summary">
+            <div class="section-title">PRICING SUMMARY</div>
+
+            <div class="pricing-row">
+                <span>Original Price</span>
+                <span id="original-price">Rs. 0.00</span>
+            </div>
+
+            <div id="discount-breakdown">
+                <!-- Dynamically populated discount breakdown -->
+            </div>
+
+            <div class="pricing-row total">
+                <span>Total Discount</span>
+                <span class="discount-amount" id="total-discount">- Rs. 0.00</span>
+            </div>
+
+            <div class="pricing-row">
+                <span>Subtotal After Discount</span>
+                <span id="subtotal-after-discount">Rs. 0.00</span>
+            </div>
+
+            <div class="pricing-row">
+                <span>GST (CGST + SGST)</span>
+                <span id="gst-amount">Rs. 0.00</span>
+            </div>
+
+            <div class="pricing-row grand-total">
+                <span>AMOUNT TO PAY</span>
+                <span class="amount" id="grand-total">Rs. 0.00</span>
+            </div>
+        </div>
+
+        <!-- Promotions (if any) -->
+        <div id="promotions-section" style="display: none;">
+            <!-- Dynamically populated -->
+        </div>
+
+        <!-- Savings Tips Section -->
+        <div class="savings-tips-section">
+            <div class="section-title" style="color: #92400e; margin-bottom: 16px;">
+                💡 WAYS TO SAVE MORE
+            </div>
+
+            <div id="savings-tips-container">
+                <!-- Dynamically populated savings tips -->
+                <div class="text-center" style="padding: 20px; color: #92400e;">
+                    <i class="fas fa-lightbulb" style="font-size: 32px; opacity: 0.5;"></i>
+                    <div style="margin-top: 8px;">Loading savings opportunities...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Amount in Words -->
+        <div class="amount-in-words">
+            <strong>Amount in Words:</strong> <span id="amount-words-text">Loading...</span>
+        </div>
+
+        <!-- Actions -->
+        <div class="actions">
+            <button class="btn btn-primary" onclick="window.print()">
+                <i class="fas fa-print"></i> Print Invoice
+            </button>
+            <button class="btn btn-secondary" onclick="window.close()">
+                <i class="fas fa-times"></i> Close Window
+            </button>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/pages/invoice_patient_view_render.js') }}"></script>
+</body>
+</html>

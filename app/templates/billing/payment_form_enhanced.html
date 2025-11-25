@@ -896,6 +896,74 @@
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Amount to allocate from available advance balance</p>
                     </div>
 
+                    <!-- Wallet Points Section -->
+                    {% if wallet_info and wallet_info.points > 0 %}
+                    <div class="mb-4 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900 dark:to-purple-900 rounded-lg border border-indigo-200 dark:border-indigo-700">
+                        <div class="flex justify-between items-center mb-3">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                <i class="fas fa-wallet text-indigo-600 mr-2"></i>
+                                Wallet Points Redemption
+                            </label>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-{{ wallet_info.tier_code|lower }}-100 text-{{ wallet_info.tier_code|lower }}-800">
+                                {{ wallet_info.tier }}
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3 mb-3 text-sm">
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600 dark:text-gray-400">Available Points:</span>
+                                <span class="font-bold text-indigo-600 dark:text-indigo-400" id="wallet-balance-display">
+                                    {{ "{:,}".format(wallet_info.points) }}
+                                </span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600 dark:text-gray-400">Point Value:</span>
+                                <span class="font-bold text-green-600 dark:text-green-400">
+                                    ₹{{ "{:,.2f}".format(wallet_info.value) }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="relative">
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Points to Redeem
+                            </label>
+                            <input type="number" name="wallet_points_amount" id="wallet_points_amount"
+                                   min="0" max="{{ [wallet_info.points, invoice.balance_due|int]|min }}" step="1"
+                                   placeholder="Enter points (1 point = ₹1)"
+                                   class="w-full px-3 py-2 border border-indigo-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-indigo-600 dark:text-gray-100">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                Maximum: {{ [wallet_info.points, invoice.balance_due|int]|min|string }} points
+                                (Balance Due: ₹{{ "{:,.2f}".format(invoice.balance_due) }})
+                            </p>
+                        </div>
+
+                        <!-- Real-time calculation display -->
+                        <div id="wallet-calculation" class="hidden mt-3 p-2 bg-white dark:bg-gray-800 rounded border border-indigo-200 dark:border-indigo-700">
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-gray-600 dark:text-gray-400">Points:</span>
+                                <span id="calc-points" class="font-medium">0</span>
+                            </div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-gray-600 dark:text-gray-400">Wallet Payment:</span>
+                                <span id="calc-wallet-amount" class="font-medium text-green-600">₹0.00</span>
+                            </div>
+                            <div class="flex justify-between text-xs border-t border-gray-300 dark:border-gray-600 pt-1">
+                                <span class="text-gray-700 dark:text-gray-300 font-semibold">Remaining Due:</span>
+                                <span id="calc-remaining" class="font-bold text-orange-600">₹{{ "{:,.2f}".format(invoice.balance_due) }}</span>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between items-center mt-2">
+                            <a href="{{ url_for('wallet.wallet_dashboard', patient_id=invoice.patient_id) }}"
+                               class="text-xs text-indigo-600 hover:text-indigo-800 dark:text-indigo-400"
+                               target="_blank">
+                                <i class="fas fa-external-link-alt mr-1"></i> View Wallet
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
+
                     <!-- Payment Methods Grid -->
                     <div class="payment-two-column-grid mb-4">
                         <!-- Cash Amount -->
@@ -1151,6 +1219,7 @@
     // ============================================
     const form = document.getElementById('enhanced-payment-form');
     const advanceField = document.getElementById('advance_amount');
+    const walletField = document.getElementById('wallet_points_amount');
     const cashField = document.getElementById('cash_amount');
     const creditCardField = document.getElementById('credit_card_amount');
     const debitCardField = document.getElementById('debit_card_amount');
@@ -1198,7 +1267,7 @@
         ]);
 
         // Set up event listeners for payment method fields
-        [advanceField, cashField, creditCardField, debitCardField, upiField].forEach(field => {
+        [advanceField, walletField, cashField, creditCardField, debitCardField, upiField].forEach(field => {
             if (field) {
                 field.addEventListener('input', function() {
                     toggleMethodDetails();
@@ -1207,6 +1276,40 @@
                 });
             }
         });
+
+        // Wallet points real-time calculation
+        if (walletField) {
+            const walletCalcDiv = document.getElementById('wallet-calculation');
+            const calcPoints = document.getElementById('calc-points');
+            const calcWalletAmount = document.getElementById('calc-wallet-amount');
+            const calcRemaining = document.getElementById('calc-remaining');
+            const balanceDue = parseFloat('{{ invoice.balance_due|float }}');
+            const maxPoints = parseInt('{{ [wallet_info.points, invoice.balance_due|int]|min if wallet_info else 0 }}');
+
+            walletField.addEventListener('input', function() {
+                const points = parseInt(this.value) || 0;
+
+                if (points > 0 && points <= maxPoints) {
+                    // Show calculation
+                    if (walletCalcDiv) walletCalcDiv.classList.remove('hidden');
+
+                    // Update values (1 point = ₹1)
+                    const walletPayment = points;
+                    const remaining = Math.max(0, balanceDue - walletPayment);
+
+                    if (calcPoints) calcPoints.textContent = points.toLocaleString();
+                    if (calcWalletAmount) calcWalletAmount.textContent = '₹' + walletPayment.toFixed(2);
+                    if (calcRemaining) calcRemaining.textContent = '₹' + remaining.toFixed(2);
+
+                    // Validate
+                    if (points > maxPoints) {
+                        this.value = maxPoints;
+                    }
+                } else {
+                    if (walletCalcDiv) walletCalcDiv.classList.add('hidden');
+                }
+            });
+        }
 
         // ✅ Header "Select All" checkbox for invoices (Toggle behavior)
         const selectAllInvoicesCheckbox = document.getElementById('select-all-invoices');
@@ -2090,12 +2193,13 @@
     function updateSummary() {
         // Calculate payment method totals
         const advanceAmount = parseFloat(advanceField?.value) || 0;
+        const walletAmount = parseFloat(walletField?.value) || 0;
         const cashAmount = parseFloat(cashField?.value) || 0;
         const creditCardAmount = parseFloat(creditCardField?.value) || 0;
         const debitCardAmount = parseFloat(debitCardField?.value) || 0;
         const upiAmount = parseFloat(upiField?.value) || 0;
 
-        const methodTotal = advanceAmount + cashAmount + creditCardAmount + debitCardAmount + upiAmount;
+        const methodTotal = advanceAmount + walletAmount + cashAmount + creditCardAmount + debitCardAmount + upiAmount;
 
         // Calculate allocation totals
         const invoiceAllocation = Object.values(state.allocations.invoices).reduce((sum, val) => sum + val, 0);
@@ -2109,6 +2213,9 @@
 
         if (advanceAmount > 0) {
             breakdownHTML += `<div class="flex justify-between text-green-600"><span>Advance:</span><span>₹${advanceAmount.toFixed(2)}</span></div>`;
+        }
+        if (walletAmount > 0) {
+            breakdownHTML += `<div class="flex justify-between text-indigo-600"><span>Wallet Points:</span><span>₹${walletAmount.toFixed(2)}</span></div>`;
         }
         if (cashAmount > 0) {
             breakdownHTML += `<div class="flex justify-between"><span>Cash:</span><span>₹${cashAmount.toFixed(2)}</span></div>`;

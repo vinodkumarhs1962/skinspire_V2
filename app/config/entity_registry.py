@@ -38,13 +38,20 @@ ENTITY_REGISTRY: Dict[str, EntityRegistration] = {
         model_class="app.models.master.Supplier"
     ),
 
-    "medicine": EntityRegistration(
+    "medicines": EntityRegistration(
         category=EntityCategory.MASTER,
-        module="app.config.modules.medicine_config",  # You need to create this config file
-        service_class="app.services.medicine_service.MedicineService",  # Optional: custom service
+        module="app.config.modules.medicine_config",
+        service_class="app.services.medicine_service.UniversalMedicineService",
         model_class="app.models.master.Medicine"
     ),
-    
+
+    "services": EntityRegistration(
+        category=EntityCategory.MASTER,
+        module="app.config.modules.service_config",
+        service_class="app.engine.universal_entity_service.UniversalEntityService",
+        model_class="app.models.master.Service"
+    ),
+
     "patients": EntityRegistration(
         category=EntityCategory.MASTER,
         module="app.config.modules.supplier_config",
@@ -57,6 +64,20 @@ ENTITY_REGISTRY: Dict[str, EntityRegistration] = {
         module="app.config.modules.package_config",  # Minimal config for autocomplete and basic CRUD
         service_class="app.services.package_service.PackageService",
         model_class="app.models.master.Package"
+    ),
+
+    "package_bom_items": EntityRegistration(
+        category=EntityCategory.MASTER,
+        module="app.config.modules.package_bom_item_config",
+        service_class="app.services.package_service.PackageService",  # Use PackageService for custom list logic
+        model_class="app.models.master.PackageBOMItem"
+    ),
+
+    "package_session_plans": EntityRegistration(
+        category=EntityCategory.MASTER,
+        module="app.config.modules.package_session_plan_config",
+        service_class="app.engine.universal_entity_service.UniversalEntityService",
+        model_class="app.models.master.PackageSessionPlan"
     ),
 
     "package_payment_plans": EntityRegistration(

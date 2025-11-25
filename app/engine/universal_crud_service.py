@@ -194,38 +194,45 @@ class UniversalCRUDService:
             
             # Generic CRUD implementation
             logger.info(f"Using generic CRUD for {entity_type}")
-            
-            # Get branch_id
-            branch_id = self._get_branch_id(context)
-            
-            # Load model class
+
+            # Load model class first to check if branch_id is needed
             model_class = self._load_model_class(config)
-            
+
+            # Get branch_id only if the model has this field
+            branch_id = None
+            if hasattr(model_class, 'branch_id'):
+                branch_id = self._get_branch_id(context)
+
             with get_db_session() as session:
                 # Transform form data using VirtualFieldTransformer
                 transformer = VirtualFieldTransformer()
                 transformed_data = transformer.transform_for_create(data, config)
-                
+
                 # Prepare entity data
                 entity_data = {}
 
                 # Set primary key
                 pk_field = getattr(config, 'primary_key', None) or getattr(config, 'primary_key_field', 'id')
                 entity_data[pk_field] = uuid.uuid4()
-                
+
                 # Set required system fields
                 entity_data['hospital_id'] = context['hospital_id']
-                entity_data['branch_id'] = branch_id
+
+                # Only set branch_id if the model has this field
+                if hasattr(model_class, 'branch_id') and branch_id:
+                    entity_data['branch_id'] = branch_id
                 
                 # Process transformed fields (now handles virtual fields properly)
-                create_fields = getattr(config, 'create_fields', [])
+                create_fields = getattr(config, 'create_fields', None)
+                if not create_fields:
+                    create_fields = [f.name for f in config.fields if f.show_in_form]
                 field_definitions = {field.name: field for field in config.fields}
-                
+
                 for field_name in create_fields:
                     # Check if field is virtual
                     field_def = field_definitions.get(field_name)
                     is_virtual = getattr(field_def, 'virtual', False) if field_def else False
-                    
+
                     if not is_virtual and field_name in transformed_data:
                         # Regular field from transformed data
                         entity_data[field_name] = transformed_data[field_name]
@@ -233,7 +240,17 @@ class UniversalCRUDService:
                         # Regular field from original data (fallback)
                         entity_data[field_name] = data[field_name]
                     # Virtual fields are already handled in transformed_data as JSONB
-                
+
+                # Also check for hidden required fields from form data (e.g., package_id from query params)
+                # These fields have show_in_form=False but are required and passed as hidden fields
+                for field_name in data.keys():
+                    if field_name not in entity_data and field_name in field_definitions:
+                        field_def = field_definitions[field_name]
+                        is_virtual = getattr(field_def, 'virtual', False)
+                        if not is_virtual and field_def.required and not field_def.show_in_form:
+                            entity_data[field_name] = data[field_name]
+                            logger.info(f"Added hidden required field: {field_name}={data[field_name]}")
+
                 # Add JSONB fields from transformation
                 jsonb_fields = ['contact_info', 'supplier_address', 'bank_details', 'manager_contact_info']
                 for jsonb_field in jsonb_fields:
@@ -246,11 +263,25 @@ class UniversalCRUDService:
                     if field_name not in entity_data:
                         entity_data[field_name] = default_value
                 
+                # ========== SPECIAL HANDLING FOR PACKAGE BOM ITEMS ==========
+                if config.entity_type == 'package_bom_items':
+                    # 1. Calculate line_total
+                    quantity = float(entity_data.get('quantity', 0))
+                    current_price = float(entity_data.get('current_price', 0))
+                    entity_data['line_total'] = quantity * current_price
+
+                    # 2. Set default item_id if not provided (temporary workaround)
+                    # TODO: Look up actual item by item_name and item_type
+                    if 'item_id' not in entity_data or not entity_data['item_id']:
+                        # Use a fixed UUID for now (should be looked up from services/medicines/etc)
+                        entity_data['item_id'] = uuid.UUID('00000000-0000-0000-0000-000000000001')
+                        logger.warning(f"⚠️ Using dummy item_id for BOM item - needs proper item lookup")
+
                 # Add audit fields
                 entity_data['created_at'] = datetime.now(timezone.utc)
                 entity_data['created_by'] = context.get('user_id')
                 entity_data['updated_at'] = datetime.now(timezone.utc)
-                
+
                 # Create entity
                 entity = model_class(**entity_data)
                 session.add(entity)
@@ -326,9 +357,11 @@ class UniversalCRUDService:
                         logger.info(f"  JSONB {jsonb_field}: {transformed_data[jsonb_field]}")
 
                 # Update fields
-                edit_fields = getattr(config, 'edit_fields', [])
+                edit_fields = getattr(config, 'edit_fields', None)
+                if not edit_fields:
+                    edit_fields = [f.name for f in config.fields if f.show_in_form and not getattr(f, 'readonly', False)]
                 field_definitions = {field.name: field for field in config.fields}
-                
+
                 for field_name in edit_fields:
                     # Check if field is virtual
                     field_def = field_definitions.get(field_name)

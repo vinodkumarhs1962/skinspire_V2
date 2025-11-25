@@ -1333,6 +1333,250 @@ REDIS_URL=redis://localhost:6379/0
     - ✅ DO check `app/config/core_definitions.py` for valid configuration parameters
     - This prevents runtime AttributeError and saves debugging time
 
+## CRITICAL: Database Migration & Model Development Checklist
+
+**MANDATORY PROCESS - NO EXCEPTIONS**
+
+When creating new database tables or models, follow this EXACT checklist to avoid preventable errors:
+
+### ✅ Step 1: Research BEFORE Writing Code (15 minutes)
+
+**DO NOT skip this step!** Time spent here saves hours of debugging later.
+
+1. **Check if similar models exist**:
+   ```bash
+   # Search for similar table names
+   grep -r "class Package" app/models/
+   grep -r "__tablename__ = 'package" app/models/
+   ```
+
+2. **Read existing model files completely**:
+   - Open `app/models/master.py` or `app/models/transaction.py`
+   - Find similar models (e.g., if creating `PackageBOMItem`, look at `InvoiceLineItem`)
+   - Note which mixins are used: `TimestampMixin`, `SoftDeleteMixin`, `TenantMixin`, `ApprovalMixin`
+
+3. **Verify mixin requirements** in `app/models/base.py`:
+   ```python
+   # SoftDeleteMixin requires:
+   is_deleted = Column(Boolean, default=False)
+   deleted_at = Column(DateTime)
+   deleted_by = Column(String(50))
+
+   # TimestampMixin requires:
+   created_at = Column(DateTime, default=datetime.now)
+   updated_at = Column(DateTime, onupdate=datetime.now)
+   created_by = Column(String(50))
+   updated_by = Column(String(50))
+
+   # TenantMixin requires:
+   hospital_id = Column(UUID, ForeignKey('hospitals.hospital_id'))
+   ```
+
+4. **Check database schema for actual column names**:
+   ```bash
+   # Connect to database and check existing tables
+   PGPASSWORD='password' psql -h localhost -U user -d database -c "\d table_name"
+
+   # Look for actual column names (service_code vs code, mrp vs current_price)
+   # Verify relationship column names
+   ```
+
+5. **Document your findings** - Write down:
+   - ✓ Which mixins you need
+   - ✓ Actual database column names
+   - ✓ Required fields from mixins
+   - ✓ Relationship column names
+
+### ✅ Step 2: Create Migration Script
+
+**Use consistent column naming:**
+
+```sql
+-- ❌ WRONG: Inconsistent naming
+CREATE TABLE package_bom_items (
+    sequence_order INTEGER  -- Model uses display_sequence!
+);
+
+-- ✅ CORRECT: Match model exactly
+CREATE TABLE package_bom_items (
+    display_sequence INTEGER  -- Matches model Column name
+);
+```
+
+**Include ALL mixin fields:**
+
+```sql
+-- ❌ WRONG: Missing soft delete fields
+CREATE TABLE package_bom_items (
+    -- ... fields ...
+    is_deleted BOOLEAN DEFAULT FALSE
+    -- Missing: deleted_at, deleted_by
+);
+
+-- ✅ CORRECT: Complete soft delete fields
+CREATE TABLE package_bom_items (
+    -- ... fields ...
+    is_deleted BOOLEAN DEFAULT FALSE,
+    deleted_at TIMESTAMP,
+    deleted_by VARCHAR(50)
+);
+```
+
+### ✅ Step 3: Create/Update Model Class
+
+**Match migration exactly:**
+
+```python
+# ❌ WRONG: Column name doesn't match migration
+class PackageBOMItem(Base, SoftDeleteMixin):
+    sequence_order = Column(Integer)  # Migration has display_sequence!
+
+# ✅ CORRECT: Exact match
+class PackageBOMItem(Base, SoftDeleteMixin):
+    display_sequence = Column(Integer)  # Matches migration
+```
+
+**Include all fields from migration:**
+
+```python
+# ❌ WRONG: Missing fields that exist in database
+class PackageBOMItem(Base):
+    item_name = Column(String(200))
+    # Missing: current_price, line_total from migration
+
+# ✅ CORRECT: All fields from migration
+class PackageBOMItem(Base):
+    item_name = Column(String(200))
+    current_price = Column(Numeric(10, 2))
+    line_total = Column(Numeric(10, 2))
+```
+
+### ✅ Step 4: Create Service Methods
+
+**Critical: Database session scope**
+
+```python
+# ❌ WRONG: Session closed too early
+def _add_virtual_calculations(self, result, item_id, **kwargs):
+    with get_db_session() as session:
+        item = session.query(Model).filter(...).first()
+        virtual_data = {}
+
+    # Session closed here! Following queries will fail:
+    count = session.query(Model).count()  # ERROR!
+
+# ✅ CORRECT: All queries inside session context
+def _add_virtual_calculations(self, result, item_id, **kwargs):
+    with get_db_session() as session:
+        item = session.query(Model).filter(...).first()
+        virtual_data = {}
+
+        # All queries inside with block:
+        count = session.query(Model).count()  # Works!
+        virtual_data['count'] = count
+
+    # Session closed here - safe
+    return virtual_data
+```
+
+**Verify actual database field names:**
+
+```python
+# ❌ WRONG: Assuming field names
+service = session.query(Service).first()
+code = service.service_code  # Field is actually 'code'!
+category = service.category  # Field is actually 'service_type'!
+
+# ✅ CORRECT: Verified field names
+service = session.query(Service).first()
+code = service.code  # Checked in \d services
+category = service.service_type  # Checked in \d services
+```
+
+### ✅ Step 5: Test BEFORE Declaring Complete
+
+**MANDATORY: Run these tests**
+
+1. **Test migration**:
+   ```bash
+   # Run migration
+   psql -f migrations/file.sql
+
+   # Verify table structure
+   \d table_name
+
+   # Check all columns exist
+   SELECT * FROM table_name LIMIT 0;
+   ```
+
+2. **Test model import**:
+   ```bash
+   python -c "from app.models.master import NewModel; print('Model OK')"
+   ```
+
+3. **Test service methods**:
+   ```bash
+   # Test basic query
+   python -c "
+   from app.services.database_service import get_db_session
+   from app.models.master import NewModel
+   with get_db_session() as session:
+       item = session.query(NewModel).first()
+       print(f'Query OK: {item}')
+   "
+   ```
+
+4. **Test in browser**:
+   - Navigate to list view
+   - Open detail view
+   - Check browser console for errors
+   - Check `logs/app.log` for database errors
+
+### ✅ Step 6: Verify Checklist
+
+**Before saying "complete", verify:**
+
+- [ ] Migration column names EXACTLY match model Column() definitions
+- [ ] ALL mixin fields included in migration (deleted_at, deleted_by, etc.)
+- [ ] ALL fields from migration exist in model class
+- [ ] Database session context manager includes ALL queries (check indentation!)
+- [ ] Field references use ACTUAL database column names (verified with `\d`)
+- [ ] Ran migration successfully (`psql -f migrations/file.sql`)
+- [ ] Tested model import (`from app.models...`)
+- [ ] Tested basic service query (verified no DetachedInstanceError)
+- [ ] Tested in browser (list view + detail view work)
+- [ ] Checked `logs/app.log` for any errors
+
+### Real Example: Package BOM Implementation Mistakes
+
+**What Went Wrong (November 2025):**
+
+1. ❌ Migration used `sequence_order` but model had `display_sequence`
+2. ❌ Forgot `deleted_at` and `deleted_by` required by `SoftDeleteMixin`
+3. ❌ Model missing `current_price`, `line_total`, `session_description`, `prerequisites`
+4. ❌ Service method referenced `service.service_code` (actual: `service.code`)
+5. ❌ Database session closed too early - all virtual calculations failed
+6. ❌ Declared "complete" without testing in browser
+
+**Impact:**
+- 4-5 error cycles debugging preventable issues
+- User had to point out each error through logs
+- Wasted 2+ hours on issues that should have been caught in 15 minutes of verification
+
+**What Should Have Been Done:**
+
+1. ✅ Read `PackagePaymentPlan` model to see BOM-like pattern
+2. ✅ Checked `\d services` to see column names before writing code
+3. ✅ Verified `SoftDeleteMixin` requirements in `base.py`
+4. ✅ Tested migration before writing service code
+5. ✅ Tested in browser before declaring complete
+
+### Key Principle
+
+**"Measure twice, cut once"** - 15 minutes of verification prevents hours of debugging.
+
+---
+
 ## Git Workflow
 
 Recent commits show focus on:

@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+
+{% block title %}Wallet Dashboard{% endblock %}
+
+{% block extra_css %}
+<!-- Universal Engine CSS Components -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/universal_view.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/universal_form.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/wallet.css') }}">
+<style>
+    /* Page-specific dashboard styles */
+    /* Minimal dashboard-specific styles - most moved to wallet.css */
+    .dashboard-header {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        color: white;
+        padding: 2.5rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1.875rem;
+        box-shadow: 0 4px 6px rgba(99, 102, 241, 0.2);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Dashboard Header -->
+    <div class="dashboard-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <div class="tier-badge-large {{ wallet.tier_code|lower if wallet.tier_code else 'silver' }}">
+                    <i class="fas fa-crown"></i> {{ wallet.tier_name or 'No Tier' }}
+                </div>
+                <h1 class="mb-3">{{ patient.full_name }}'s Wallet</h1>
+                <div class="row">
+                    <div class="col-md-4">
+                        <h3 class="mb-1">{{ "{:,}".format(wallet.points_balance) }}</h3>
+                        <small>Available Points</small>
+                    </div>
+                    <div class="col-md-4">
+                        <h3 class="mb-1">₹{{ "{:,.2f}".format(wallet.points_value) }}</h3>
+                        <small>Points Value</small>
+                    </div>
+                    <div class="col-md-4">
+                        <h3 class="mb-1">{{ wallet.tier_discount_percent or 0 }}%</h3>
+                        <small>Tier Discount</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 text-right">
+                <a href="{{ url_for('billing.wallet_tier_management', patient_id=patient.patient_id) }}"
+                   class="btn btn-light btn-lg">
+                    <i class="fas fa-arrow-up"></i> Upgrade Tier
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Left Column: Stats and Batches -->
+        <div class="col-md-8">
+            <!-- Statistics Cards -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <div class="stat-card-icon blue">
+                            <i class="fas fa-coins"></i>
+                        </div>
+                        <div class="stat-card-label">Total Loaded</div>
+                        <div class="stat-card-value">{{ "{:,}".format(wallet.total_points_loaded) }}</div>
+                        <div class="stat-card-subtext">₹{{ "{:,.0f}".format(wallet.total_amount_loaded) }} paid</div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <div class="stat-card-icon green">
+                            <i class="fas fa-gift"></i>
+                        </div>
+                        <div class="stat-card-label">Bonus Earned</div>
+                        <div class="stat-card-value">{{ "{:,}".format(wallet.total_bonus_points) }}</div>
+                        <div class="stat-card-subtext">Extra points received</div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <div class="stat-card-icon orange">
+                            <i class="fas fa-shopping-cart"></i>
+                        </div>
+                        <div class="stat-card-label">Total Redeemed</div>
+                        <div class="stat-card-value">{{ "{:,}".format(wallet.total_points_redeemed) }}</div>
+                        <div class="stat-card-subtext">₹{{ "{:,.0f}".format(wallet.total_points_redeemed) }} worth</div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <div class="stat-card-icon red">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-card-label">Expiring Soon</div>
+                        <div class="stat-card-value">{{ "{:,}".format(wallet.points_expiring_soon or 0) }}</div>
+                        <div class="stat-card-subtext">Next 30 days</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Usage Progress -->
+            <div class="progress-card mb-4">
+                <h5 class="mb-3"><i class="fas fa-chart-line"></i> Wallet Usage</h5>
+                <div class="progress-label">
+                    <span>Points Redeemed</span>
+                    <span>{{ "{:,}".format(wallet.total_points_redeemed) }} / {{ "{:,}".format(wallet.total_points_loaded) }}</span>
+                </div>
+                <div class="progress">
+                    {% set usage_percent = (wallet.total_points_redeemed / wallet.total_points_loaded * 100) if wallet.total_points_loaded > 0 else 0 %}
+                    <div class="progress-bar bg-success" role="progressbar"
+                         style="width: {{ usage_percent }}%"
+                         aria-valuenow="{{ usage_percent }}"
+                         aria-valuemin="0"
+                         aria-valuemax="100">
+                        {{ "{:.1f}".format(usage_percent) }}%
+                    </div>
+                </div>
+            </div>
+
+            <!-- Points Batches -->
+            <div class="card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-layer-group"></i> Points Batches
+                        <small class="text-muted">(FIFO - Oldest redeemed first)</small>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if wallet.expiring_batches %}
+                        {% for batch in wallet.expiring_batches %}
+                        <div class="batch-card {{ 'expiring-soon' if batch.days_to_expiry <= 30 else 'active' }}">
+                            <div class="batch-header">
+                                <div>
+                                    <div class="batch-points">
+                                        {{ "{:,}".format(batch.points) }} points
+                                    </div>
+                                    <div class="batch-info">
+                                        Loaded on {{ batch.load_date }} • Expires {{ batch.expiry_date }}
+                                    </div>
+                                </div>
+                                <div>
+                                    {% if batch.days_to_expiry <= 30 %}
+                                    <span class="batch-status expiring">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        {{ batch.days_to_expiry }} days left
+                                    </span>
+                                    {% else %}
+                                    <span class="batch-status active">
+                                        <i class="fas fa-check-circle"></i>
+                                        Active
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            {% if batch.points_loaded > batch.points %}
+                            <div class="batch-progress">
+                                <div class="progress-label">
+                                    <span>Used</span>
+                                    <span>{{ "{:,}".format(batch.points_loaded - batch.points) }} / {{ "{:,}".format(batch.points_loaded) }}</span>
+                                </div>
+                                <div class="progress">
+                                    {% set batch_usage = ((batch.points_loaded - batch.points) / batch.points_loaded * 100) %}
+                                    <div class="progress-bar bg-info" style="width: {{ batch_usage }}%">
+                                        {{ "{:.0f}".format(batch_usage) }}%
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-inbox fa-3x mb-3"></i>
+                            <p>No active point batches</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Recent Activity and Actions -->
+        <div class="col-md-4">
+            <!-- Quick Actions -->
+            <div class="quick-actions mb-4">
+                <h5 class="mb-3"><i class="fas fa-bolt"></i> Quick Actions</h5>
+                <a href="{{ url_for('billing.wallet_tier_management', patient_id=patient.patient_id) }}"
+                   class="btn btn-primary quick-action-btn">
+                    <i class="fas fa-plus-circle"></i> Load More Points
+                </a>
+                <a href="{{ url_for('billing.create_invoice', patient_id=patient.patient_id) }}"
+                   class="btn btn-success quick-action-btn">
+                    <i class="fas fa-shopping-cart"></i> Use Points for Service
+                </a>
+                <a href="{{ url_for('billing.wallet_transactions', patient_id=patient.patient_id) }}"
+                   class="btn btn-outline-primary quick-action-btn">
+                    <i class="fas fa-history"></i> View Full History
+                </a>
+                <button class="btn btn-outline-danger quick-action-btn" data-toggle="modal" data-target="#closeWalletModal">
+                    <i class="fas fa-times-circle"></i> Close Wallet
+                </button>
+            </div>
+
+            <!-- Recent Transactions -->
+            <div class="card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0"><i class="fas fa-history"></i> Recent Activity</h5>
+                </div>
+                <div class="card-body p-0">
+                    {% if wallet.recent_transactions %}
+                        {% for txn in wallet.recent_transactions %}
+                        <div class="recent-transaction d-flex align-items-center">
+                            <div class="transaction-icon {{ txn.type }}">
+                                {% if txn.type == 'load' %}
+                                    <i class="fas fa-plus"></i>
+                                {% elif txn.type == 'redeem' %}
+                                    <i class="fas fa-shopping-cart"></i>
+                                {% elif txn.type == 'refund_service' %}
+                                    <i class="fas fa-undo"></i>
+                                {% elif txn.type == 'expire' %}
+                                    <i class="fas fa-clock"></i>
+                                {% endif %}
+                            </div>
+                            <div class="transaction-details">
+                                <div class="transaction-type">
+                                    {% if txn.type == 'load' %}
+                                        Points Loaded
+                                    {% elif txn.type == 'redeem' %}
+                                        Points Redeemed
+                                    {% elif txn.type == 'refund_service' %}
+                                        Service Refund
+                                    {% elif txn.type == 'expire' %}
+                                        Points Expired
+                                    {% endif %}
+                                </div>
+                                <div class="transaction-date">{{ txn.date }}</div>
+                            </div>
+                            <div class="transaction-amount {{ 'positive' if txn.type in ['load', 'refund_service'] else 'negative' }}">
+                                {{ '+' if txn.type in ['load', 'refund_service'] else '-' }}{{ "{:,}".format(txn.points) }}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-inbox fa-2x mb-2"></i>
+                            <p class="mb-0">No transactions yet</p>
+                        </div>
+                    {% endif %}
+                </div>
+                {% if wallet.recent_transactions|length >= 5 %}
+                <div class="card-footer bg-white text-center">
+                    <a href="{{ url_for('billing.wallet_transactions', patient_id=patient.patient_id) }}"
+                       class="btn btn-sm btn-link">
+                        View All Transactions <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Close Wallet Modal -->
+<div class="modal fade" id="closeWalletModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle"></i> Close Wallet
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <form method="POST" action="{{ url_for('billing.close_wallet') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="patient_id" value="{{ patient.patient_id }}">
+
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <strong>Warning:</strong> Closing your wallet will:
+                        <ul class="mb-0 mt-2">
+                            <li>Forfeit all remaining {{ "{:,}".format(wallet.points_balance) }} points</li>
+                            <li>Calculate cash refund based on: Amount Loaded - Points Consumed</li>
+                            <li>Permanently close your wallet (cannot be reversed)</li>
+                        </ul>
+                    </div>
+
+                    {% set estimated_refund = max(0, wallet.total_amount_loaded - wallet.total_points_redeemed) %}
+                    <div class="alert alert-info">
+                        <strong>Estimated Cash Refund:</strong> ₹{{ "{:,.2f}".format(estimated_refund) }}
+                        <br>
+                        <small>Calculation: ₹{{ "{:,.0f}".format(wallet.total_amount_loaded) }} loaded - {{ "{:,}".format(wallet.total_points_redeemed) }} points consumed</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Reason for Closure <span class="text-danger">*</span></label>
+                        <textarea class="form-control" name="closure_reason" required rows="3"
+                                  placeholder="Please provide a reason for closing your wallet..."></textarea>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-times-circle"></i> Confirm Close Wallet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Auto-refresh dashboard every 5 minutes
+    setInterval(function() {
+        location.reload();
+    }, 300000);
+});
+</script>
+{% endblock %}

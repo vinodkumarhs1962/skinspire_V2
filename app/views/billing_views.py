@@ -295,13 +295,15 @@ def create_invoice_view():
         if not csrf_token:
             logger.error("Missing CSRF token in form submission")
             flash("Form submission failed: CSRF token missing. Please try again.", "error")
+            can_edit_discount = current_user.has_permission('billing', 'edit_discount')
             return render_template(
                 'billing/create_invoice.html',
                 form=form,
                 branches=branches,
                 menu_items=menu_items,
                 page_title="Create Invoice",
-                auth_token=auth_token
+                auth_token=auth_token,
+                can_edit_discount=can_edit_discount
             )
         
         # Check for patient_id in form data or data attributes
@@ -552,6 +554,7 @@ def create_invoice_view():
                     inventory_error = None
 
                 # Return template with preserved data
+                can_edit_discount = current_user.has_permission('billing', 'edit_discount')
                 return render_template(
                     'billing/create_invoice.html',
                     form=form,
@@ -561,7 +564,8 @@ def create_invoice_view():
                     auth_token=auth_token,
                     user_batch_mode=user_batch_mode,
                     inventory_error=inventory_error,
-                    preserved_line_items=preserved_line_items
+                    preserved_line_items=preserved_line_items,
+                    can_edit_discount=can_edit_discount
                 )
         else:
             # Handle validation failures
@@ -739,6 +743,7 @@ def create_invoice_view():
                 current_app.logger.error(f"Form validation failed with errors: \n{form.errors}")
             
             # Normal case or form validation failed
+            can_edit_discount = current_user.has_permission('billing', 'edit_discount')
             return render_template(
                 'billing/create_invoice.html',
                 form=form,
@@ -747,8 +752,14 @@ def create_invoice_view():
                 page_title="Create Invoice",
                 auth_token=auth_token,  # Pass token to template
                 user_batch_mode=user_batch_mode,
-                error_data=error_data  # Pass preserved data from failed submission
+                error_data=error_data,  # Pass preserved data from failed submission
+                can_edit_discount=can_edit_discount
             )
+
+    # Check if user has permission to edit discount fields manually
+    # Front desk users can only see auto-calculated discounts
+    # Managers can manually edit discount fields
+    can_edit_discount = current_user.has_permission('billing', 'edit_discount')
 
     return render_template(
         'billing/create_invoice.html',
@@ -758,7 +769,8 @@ def create_invoice_view():
         page_title="Create Invoice",
         auth_token=auth_token,  # Pass token to template
         user_batch_mode=user_batch_mode,  # Pass batch mode preference
-        error_data=error_data  # Pass preserved data from failed submission
+        error_data=error_data,  # Pass preserved data from failed submission
+        can_edit_discount=can_edit_discount  # Permission to manually edit discount fields
     )
 
 @billing_views_bp.route('/list', methods=['GET'])
@@ -1378,6 +1390,29 @@ def record_invoice_payment_enhanced(invoice_id):
 
                 patient_dict = get_entity_dict(patient)
 
+            # Get wallet info for payment page
+            wallet_info = None
+            if invoice.get('patient_id'):
+                try:
+                    from app.services.wallet_service import WalletService
+                    wallet_data = WalletService.get_available_balance(
+                        patient_id=str(invoice['patient_id']),
+                        hospital_id=str(current_user.hospital_id)
+                    )
+                    if wallet_data and wallet_data.get('points_balance', 0) > 0:
+                        wallet_balance = wallet_data['points_balance']
+                        wallet_info = {
+                            'points': wallet_balance,
+                            'value': wallet_balance,  # 1:1 ratio
+                            'tier': wallet_data.get('tier_name', 'Member'),
+                            'tier_code': wallet_data.get('tier_code', ''),
+                            'discount_percent': wallet_data.get('tier_discount_percent', 0),
+                            'wallet_id': wallet_data.get('wallet_id')
+                        }
+                        logger.info(f"Wallet found for patient: {wallet_balance} points ({wallet_info['tier']})")
+                except Exception as e:
+                    logger.warning(f"Could not fetch wallet for patient {invoice['patient_id']}: {str(e)}")
+
             # Get approval threshold
             approval_threshold = float(current_app.config.get('APPROVAL_THRESHOLD_L1', '100000.00'))
 
@@ -1386,6 +1421,7 @@ def record_invoice_payment_enhanced(invoice_id):
                 'billing/payment_form_enhanced.html',
                 invoice=invoice,
                 patient=patient_dict,
+                wallet_info=wallet_info,
                 approval_threshold=approval_threshold,
                 menu_items=get_menu_items(current_user)
             )
@@ -1423,8 +1459,9 @@ def record_invoice_payment_enhanced(invoice_id):
             debit_card_amount = safe_decimal(request.form.get('debit_card_amount'))
             upi_amount = safe_decimal(request.form.get('upi_amount'))
             advance_amount = safe_decimal(request.form.get('advance_amount'))
+            wallet_points_amount = safe_decimal(request.form.get('wallet_points_amount'))
 
-            logger.info(f"💵 Cash: ₹{cash_amount}, Card: ₹{credit_card_amount}, Debit: ₹{debit_card_amount}, UPI: ₹{upi_amount}, Advance: ₹{advance_amount}")
+            logger.info(f"💵 Cash: ₹{cash_amount}, Card: ₹{credit_card_amount}, Debit: ₹{debit_card_amount}, UPI: ₹{upi_amount}, Advance: ₹{advance_amount}, Wallet: {wallet_points_amount} points")
 
             card_number_last4 = request.form.get('card_number_last4')
             card_type = request.form.get('card_type')
@@ -1438,7 +1475,7 @@ def record_invoice_payment_enhanced(invoice_id):
 
             logger.info(f"💰 Total payment: ₹{total_payment}, Save as draft: {save_as_draft}")
 
-            if total_payment == 0 and advance_amount == 0:
+            if total_payment == 0 and advance_amount == 0 and wallet_points_amount == 0:
                 logger.warning("❌ No payment amount entered")
                 flash('Please enter a payment amount', 'error')
                 return redirect(url_for('billing_views.record_invoice_payment_enhanced', invoice_id=invoice_id))
@@ -1465,7 +1502,7 @@ def record_invoice_payment_enhanced(invoice_id):
 
             # If no specific allocations provided, allocate to current invoice
             if not invoice_allocations and not installment_allocations:
-                invoice_allocations[str(invoice_id)] = float(total_payment + advance_amount)
+                invoice_allocations[str(invoice_id)] = float(total_payment + advance_amount + wallet_points_amount)
 
             logger.info(f"📋 Invoice allocations: {invoice_allocations}")
             logger.info(f"📦 Installment allocations: {installment_allocations}")
@@ -1510,6 +1547,59 @@ def record_invoice_payment_enhanced(invoice_id):
                                 except Exception as e:
                                     logger.error(f"Error applying advance payment: {str(e)}")
                                     flash(f'Error applying advance payment: {str(e)}', 'error')
+                                    return redirect(url_for('billing_views.record_invoice_payment_enhanced', invoice_id=invoice_id))
+
+                # ========================================================================
+                # STEP 1.5: Redeem wallet points (if any)
+                # ========================================================================
+                if wallet_points_amount > 0:
+                    for inv_id_str, allocated_amount in invoice_allocations.items():
+                        if allocated_amount > 0:
+                            inv_uuid = uuid.UUID(inv_id_str)
+
+                            # Calculate wallet portion for this invoice
+                            wallet_portion = (wallet_points_amount * Decimal(allocated_amount) / Decimal(total_allocated)) if total_allocated > 0 else Decimal('0')
+
+                            if wallet_portion > 0:
+                                try:
+                                    # Get invoice to verify patient_id
+                                    from app.services.billing_service import get_invoice_by_id
+                                    inv_data = get_invoice_by_id(
+                                        hospital_id=current_user.hospital_id,
+                                        invoice_id=inv_uuid
+                                    )
+
+                                    if not inv_data or not inv_data.get('patient_id'):
+                                        raise ValueError(f"Cannot redeem wallet points - invoice {inv_id_str} has no patient")
+
+                                    # Redeem points from wallet
+                                    from app.services.wallet_service import WalletService
+                                    redemption_result = WalletService.redeem_points(
+                                        patient_id=str(inv_data['patient_id']),
+                                        hospital_id=str(current_user.hospital_id),
+                                        points_to_redeem=int(wallet_portion),
+                                        invoice_id=inv_uuid,
+                                        invoice_number=inv_data.get('invoice_number', 'N/A'),
+                                        user_id=current_user.user_id
+                                    )
+
+                                    if not redemption_result['success']:
+                                        raise ValueError(f"Wallet redemption failed: {redemption_result['message']}")
+
+                                    wallet_transaction_id = redemption_result['transaction_id']
+                                    logger.info(f"Redeemed {int(wallet_portion)} wallet points for invoice {inv_id_str}")
+
+                                    # Create GL entries for wallet redemption
+                                    from app.services.wallet_gl_service import WalletGLService
+                                    WalletGLService.create_wallet_redemption_gl_entries(
+                                        wallet_transaction_id=wallet_transaction_id,
+                                        current_user_id=current_user.user_id
+                                    )
+                                    logger.info(f"Created GL entries for wallet redemption {wallet_transaction_id}")
+
+                                except Exception as e:
+                                    logger.error(f"Error redeeming wallet points: {str(e)}")
+                                    flash(f'Error redeeming wallet points: {str(e)}', 'error')
                                     return redirect(url_for('billing_views.record_invoice_payment_enhanced', invoice_id=invoice_id))
 
                 # ========================================================================
@@ -2791,6 +2881,21 @@ def get_patient_state(patient_id):
     except Exception as e:
         current_app.logger.error(f"Error getting patient state: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'message': str(e)}), 500
+
+@billing_views_bp.route('/patient-view', methods=['GET'])
+@login_required
+def patient_invoice_view():
+    """
+    Patient-facing invoice preview pop-up
+    Clean, read-only view for extended screen display
+    Created: Nov 22, 2025
+    URL: /invoice/patient-view (blueprint prefix /invoice + route /patient-view)
+    """
+    try:
+        return render_template('billing/invoice_patient_view.html')
+    except Exception as e:
+        current_app.logger.error(f"Error loading patient invoice view: {str(e)}", exc_info=True)
+        return f"Error loading patient view: {str(e)}", 500
 
 @billing_views_bp.route('/<uuid:invoice_id>/print', methods=['GET'])
 @login_required

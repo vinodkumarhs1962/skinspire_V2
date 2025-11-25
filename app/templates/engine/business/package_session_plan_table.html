@@ -1,0 +1,258 @@
+<!--
+Package Session Plan Table
+Displays delivery session planning with resource requirements
+Used in package detail view
+-->
+
+<div class="container-fluid px-0" style="max-width: 100%;">
+
+{% if data and data.session_plans and data.session_plans|length > 0 %}
+<!-- Session Plan Section -->
+<div class="line-items-container" style="width: 100%;">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="mb-0">
+            <i class="fas fa-calendar-check text-info me-2"></i>
+            Session Delivery Plan
+        </h5>
+        <div>
+            <span class="badge bg-secondary me-2">
+                Sessions: {{ data.session_plans|length }}
+            </span>
+            {% if data.summary and data.summary.total_duration_hours %}
+            <span class="badge bg-info me-2">
+                Total: {{ '{:,.1f}'.format(data.summary.total_duration_hours) }} hrs
+            </span>
+            {% endif %}
+            <a href="/universal/package_session_plans/create?package_id={{ data.package_id }}" class="btn btn-sm btn-primary">
+                <i class="fas fa-plus"></i> Add Session
+            </a>
+        </div>
+    </div>
+
+    <div class="table-responsive" style="width: 100%;">
+        <table class="table table-bordered table-hover invoice-items-table table-sm" style="width: 100%; table-layout: fixed;">
+            <thead class="table-light">
+                <tr>
+                    <th width="5%" style="text-align: center !important;">Sess#</th>
+                    <th width="20%" style="text-align: left !important;">Session Name</th>
+                    <th width="8%" class="text-center">Duration</th>
+                    <th width="28%">Resources</th>
+                    <th width="7%" class="text-center">Gap</th>
+                    <th width="5%" class="text-center">Mand</th>
+                    <th width="5%" class="text-center">Notes</th>
+                    <th width="15%" class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for session in data.session_plans %}
+                <tr>
+                    <td class="text-center">
+                        <span class="badge bg-primary" style="font-size: 0.85rem; padding: 0.3rem 0.5rem;">{{ session.session_number }}</span>
+                    </td>
+                    <td class="text-left item-name-cell">
+                        <div class="truncate-text" title="{{ session.session_name or 'Session ' + session.session_number|string }}{% if session.session_description %} - {{ session.session_description }}{% endif %}">
+                            <strong>{{ session.session_name or 'Session ' + session.session_number|string }}</strong>
+                            {% if session.session_description %}
+                            <small class="text-muted d-block">{{ session.session_description }}</small>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="text-center">
+                        {% if session.estimated_duration_minutes %}
+                            <div class="truncate-text" title="{{ session.estimated_duration_minutes }} minutes ({{ '{:,.1f}'.format(session.estimated_duration_hours) }} hours)">
+                                {{ session.estimated_duration_minutes }} min
+                                <br><small class="text-muted">({{ '{:,.1f}'.format(session.estimated_duration_hours) }} hrs)</small>
+                            </div>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if session.resource_requirements and session.resource_requirements|length > 0 %}
+                            <div class="small">
+                                {% for resource in session.resource_requirements %}
+                                <div class="mb-1 truncate-text" title="{{ resource.resource_type|title }}{% if resource.role %}: {{ resource.role }}{% endif %}{% if resource.duration_minutes %} ({{ resource.duration_minutes }} min){% endif %}">
+                                    <span class="badge bg-{% if resource.resource_type == 'doctor' %}success{% elif resource.resource_type == 'nurse' %}info{% elif resource.resource_type == 'therapist' %}warning{% else %}secondary{% endif %}" style="font-size: 0.85rem; padding: 0.3rem 0.5rem;">
+                                        {{ resource.resource_type|title }}
+                                    </span>
+                                    {% if resource.role %}
+                                        <strong>{{ resource.role }}</strong>
+                                    {% endif %}
+                                    {% if resource.duration_minutes %}
+                                        - {{ resource.duration_minutes }} min
+                                    {% endif %}
+                                    {% if resource.quantity and resource.quantity > 1 %}
+                                        <span class="badge bg-light text-dark" style="font-size: 0.85rem; padding: 0.3rem 0.5rem;">×{{ resource.quantity }}</span>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if session.recommended_gap_days %}
+                            {{ session.recommended_gap_days }}d
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if session.is_mandatory %}
+                            <i class="fas fa-check-circle text-success" title="Mandatory"></i>
+                        {% else %}
+                            <i class="fas fa-minus-circle text-muted" title="Optional"></i>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if session.scheduling_notes %}
+                            <i class="fas fa-sticky-note text-warning" title="{{ session.scheduling_notes }}"></i>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td class="text-center" style="white-space: nowrap;">
+                        <a href="/universal/package_session_plans/edit/{{ session.session_plan_id }}" class="btn btn-sm btn-primary me-1" title="Edit" style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                        <a href="/universal/package_session_plans/delete/{{ session.session_plan_id }}" class="btn btn-sm btn-danger" title="Delete" onclick="return confirm('Are you sure you want to delete this session plan?')" style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">
+                            <i class="fas fa-trash"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% if session.scheduling_notes %}
+                <tr class="table-light">
+                    <td></td>
+                    <td colspan="8">
+                        <small class="text-muted">
+                            <i class="fas fa-sticky-note me-1"></i>
+                            {{ session.scheduling_notes }}
+                        </small>
+                    </td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+            <tfoot class="table-light">
+                <!-- Total Sessions Row -->
+                <tr>
+                    <td colspan="7" class="text-end"><strong>Total Sessions: {{ data.session_plans|length }}</strong></td>
+                    <td class="text-end"><strong class="text-info">{{ '{:,.1f}'.format(data.summary.total_duration_hours|default(0, true)) if data.summary else '0.0' }} hrs</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+{% else %}
+<!-- No Session Plan -->
+<div class="alert alert-info d-flex justify-content-between align-items-center">
+    <div>
+        <i class="fas fa-info-circle me-2"></i>
+        No session delivery plan defined for this package yet.
+    </div>
+    <a href="/universal/package_session_plans/create?package_id={{ data.package_id }}" class="btn btn-sm btn-primary">
+        <i class="fas fa-plus"></i> Add Session
+    </a>
+</div>
+{% endif %}
+
+</div>
+
+<style>
+/* Session Plan Table uses invoice-items-table class for consistency */
+.invoice-items-table {
+    font-size: 0.9rem;
+    width: 100% !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.invoice-items-table thead th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    border-bottom: 2px solid #dee2e6;
+    font-size: 0.875rem;
+}
+
+.invoice-items-table th,
+.invoice-items-table td {
+    padding: 0.4rem 0.5rem !important;
+    vertical-align: middle;
+    font-size: 0.9rem;
+}
+
+/* Truncate text with ellipsis */
+.truncate-text {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+/* Item name column - special handling */
+.item-name-cell {
+    position: relative;
+}
+
+.item-name-cell .truncate-text {
+    max-width: 100%;
+}
+
+/* Show full text on hover for item name */
+.item-name-cell:hover .truncate-text {
+    overflow: visible;
+    white-space: normal;
+    word-wrap: break-word;
+    background-color: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    z-index: 100;
+    position: absolute;
+    left: 0;
+    padding: 0.4rem;
+    min-width: 250px;
+    max-width: 400px;
+}
+
+/* Hover tooltip for all truncated cells */
+.truncate-text[title] {
+    cursor: help;
+}
+
+.session-plan-table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Full width container fixes */
+.line-items-container {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.table-responsive {
+    width: 100% !important;
+    overflow-x: auto;
+}
+
+.table {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.fw-bold {
+    font-weight: bold !important;
+}
+
+.text-end {
+    text-align: right !important;
+}
+
+.text-left {
+    text-align: left !important;
+}
+
+.d-block {
+    display: block !important;
+}
+</style>

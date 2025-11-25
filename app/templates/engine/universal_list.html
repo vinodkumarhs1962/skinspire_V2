@@ -6,6 +6,9 @@ UNIVERSAL LIST TEMPLATE - FIXED FOR GOLD STANDARD COMPATIBILITY
 Fixed: Summary cards, Filter layout, Table data, Debug code issues
 ============================================================================= -->
 
+<!-- CSRF Token for JavaScript form submissions (needed for approval actions) -->
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
 <div class="container mx-auto px-4 py-6" data-entity-type="{{ assembled_data.entity_config.entity_type if assembled_data and assembled_data.entity_config and assembled_data.entity_config.entity_type else 'supplier_payments' }}">
     {% set auto_submit_enabled = assembled_data.entity_config.get('enable_auto_submit', True) if assembled_data and assembled_data.entity_config else True %}
     <!-- ✅ Page Header using gold standard structure -->
@@ -737,10 +740,45 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                             <td class="actions-column-fixed" onclick="event.stopPropagation()">
                                 <div class="universal-table-actions-improved">
                                     {% set item_id = item.get(assembled_data.entity_config.primary_key) %}
-                                    
+
+                                    <!-- Check if we have pre-computed row actions from data assembler -->
+                                    {% if assembled_data.table_data and assembled_data.table_data[loop.index0] %}
+                                        {% set table_row = assembled_data.table_data[loop.index0] %}
+                                        {% set precomputed_actions = table_row.get('_row_actions', []) %}
+                                    {% else %}
+                                        {% set precomputed_actions = [] %}
+                                    {% endif %}
+
                                     <!-- Only show other actions if not deleted -->
                                     {% if not item.get('is_deleted') and not item.get('deleted_flag') %}
-                                        <!-- Show configured inline actions based on conditions -->
+                                        <!-- If we have pre-computed actions, use those (supports conditional_display) -->
+                                        {% if precomputed_actions %}
+                                            {% for action in precomputed_actions %}
+                                                {% if action.javascript_handler %}
+                                                    <!-- Custom JavaScript handler (e.g., POST form submission) -->
+                                                    <a href="#"
+                                                       class="btn-action-sm btn-{{ action.get('button_type', 'info') }}"
+                                                       onclick="{{ action.javascript_handler }}('{{ action.url }}', '{{ action.confirmation_message or 'Are you sure?' }}'); return false;"
+                                                       title="{{ action.label }}">
+                                                        <i class="{{ action.icon }} action-icon-sm"></i>
+                                                    </a>
+                                                {% elif action.confirmation_required %}
+                                                    <a href="#"
+                                                       class="btn-action-sm btn-{{ action.get('button_type', 'info') }}"
+                                                       onclick="return confirm('{{ action.confirmation_message }}');"
+                                                       title="{{ action.label }}">
+                                                        <i class="{{ action.icon }} action-icon-sm"></i>
+                                                    </a>
+                                                {% else %}
+                                                    <a href="{{ action.url }}"
+                                                       class="btn-action-sm btn-{{ action.get('button_type', 'info') }}"
+                                                       title="{{ action.label }}">
+                                                        <i class="{{ action.icon }} action-icon-sm"></i>
+                                                    </a>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% else %}
+                                        <!-- Fallback: Show configured inline actions based on conditions (legacy behavior) -->
                                         {% for action in assembled_data.entity_config.actions %}
                                             {% if action.show_in_list and (not action.display_type or action.display_type.value == 'button') %}
                                                 {# Evaluate ALL conditions - all must pass #}
@@ -786,16 +824,24 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                                                 {% if show_action %}
                                                     {% set action_url = action.get_url(item, assembled_data.entity_config) %}
                                                     {% set btn_type = action.button_type.value|replace('btn-', '') %}
-                                                    
-                                                    {% if action.confirmation_required %}
-                                                        <a href="#" 
+
+                                                    {% if action.javascript_handler %}
+                                                        <!-- Custom JavaScript handler (e.g., POST form submission) -->
+                                                        <a href="#"
+                                                        onclick="{{ action.javascript_handler }}('{{ action_url }}', '{{ action.confirmation_message or 'Are you sure?' }}'); return false;"
+                                                        class="btn-action-sm btn-{{ btn_type }}"
+                                                        title="{{ action.label }}">
+                                                            <i class="{{ action.icon }} action-icon-sm"></i>
+                                                        </a>
+                                                    {% elif action.confirmation_required %}
+                                                        <a href="#"
                                                         onclick="confirmAction('{{ action_url }}', '{{ action.confirmation_message }}'); return false;"
                                                         class="btn-action-sm btn-{{ btn_type }}"
                                                         title="{{ action.label }}">
                                                             <i class="{{ action.icon }} action-icon-sm"></i>
                                                         </a>
                                                     {% else %}
-                                                        <a href="{{ action_url }}" 
+                                                        <a href="{{ action_url }}"
                                                         class="btn-action-sm btn-{{ btn_type }}"
                                                         title="{{ action.label }}">
                                                             <i class="{{ action.icon }} action-icon-sm"></i>
@@ -804,6 +850,7 @@ Fixed: Summary cards, Filter layout, Table data, Debug code issues
                                                 {% endif %}
                                             {% endif %}
                                         {% endfor %}
+                                        {% endif %}
                                     {% endif %}
                                 </div>
                             </td>
@@ -1446,6 +1493,20 @@ document.addEventListener('DOMContentLoaded', function() {
     color: #9ca3af;
 }
 </style>
+
+<!-- Entity-specific custom CSS files -->
+{% if assembled_data and assembled_data.entity_config and assembled_data.entity_config.custom_css_files %}
+    {% for css_file in assembled_data.entity_config.custom_css_files %}
+    <link rel="stylesheet" href="{{ url_for('static', filename=css_file) }}">
+    {% endfor %}
+{% endif %}
+
+<!-- Entity-specific custom JavaScript files -->
+{% if assembled_data and assembled_data.entity_config and assembled_data.entity_config.custom_javascript_files %}
+    {% for js_file in assembled_data.entity_config.custom_javascript_files %}
+    <script src="{{ url_for('static', filename=js_file) }}"></script>
+    {% endfor %}
+{% endif %}
 
 </div> <!-- ✅ Close main container -->
 

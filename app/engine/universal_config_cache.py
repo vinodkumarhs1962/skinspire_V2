@@ -175,7 +175,7 @@ class UniversalConfigurationCache:
                 self._set_entity_config_cache(entity_type, fresh_config)
                 
                 response_time = time.time() - start_time
-                logger.info(f"📥 CONFIG CACHE MISS: {entity_type} entity config loaded and cached "
+                logger.debug(f"📥 CONFIG CACHE MISS: {entity_type} entity config loaded and cached "
                            f"({response_time*1000:.1f}ms)")
             
             return fresh_config
@@ -214,7 +214,7 @@ class UniversalConfigurationCache:
                 self._set_filter_config_cache(entity_type, fresh_config)
                 
                 response_time = time.time() - start_time
-                logger.info(f"📥 CONFIG CACHE MISS: {entity_type} filter config loaded "
+                logger.debug(f"📥 CONFIG CACHE MISS: {entity_type} filter config loaded "
                            f"({response_time*1000:.1f}ms)")
             
             return fresh_config
@@ -253,7 +253,7 @@ class UniversalConfigurationCache:
                 self._set_search_config_cache(entity_type, fresh_config)
                 
                 response_time = time.time() - start_time
-                logger.info(f"📥 CONFIG CACHE MISS: {entity_type} search config loaded "
+                logger.debug(f"📥 CONFIG CACHE MISS: {entity_type} search config loaded "
                            f"({response_time*1000:.1f}ms)")
             
             return fresh_config
@@ -463,7 +463,7 @@ def get_config_cache_statistics() -> Dict[str, Any]:
 def preload_common_configurations():
     """Preload frequently used configurations"""
     common_entities = [
-        'suppliers', 'supplier_payments', 'patient_payments', 'medicines', 'patients',
+        'suppliers', 'supplier_payments', 'patient_payments', 'medicines', 'patients', 'packages',
         'users', 'configurations', 'settings', 'package_payment_plans'
     ]
     

@@ -8,11 +8,11 @@
 | **Attribute** | **Details** |
 |---------------|-------------|
 | **Project** | SkinSpire Clinic HMS - Universal Engine |
-| **Version** | v6.0 (Includes Entity Dropdown Feature) |
+| **Version** | v6.0 (Includes Entity Dropdown & Cascading Dropdown Features) |
 | **Status** | **PRODUCTION READY** |
-| **Last Updated** | September 2025 |
+| **Last Updated** | November 2025 |
 | **Architecture** | Configuration-Driven, Backend-Heavy, Entity-Agnostic |
-| **Core Features** | CRUD, Documents, Search/Filter, **Entity Dropdown Search**, Caching |
+| **Core Features** | CRUD, Documents, Search/Filter, **Entity Dropdown Search**, **Cascading Dropdowns**, Caching |
 
 ---
 
@@ -35,6 +35,7 @@
 10. [Implementation for Existing Entities](#10-implementation-for-existing-entities) ⭐ NEW
 11. [Adding Entity Dropdown to New Entities](#11-adding-entity-dropdown-to-new-entities) ⭐ NEW
 12. [API Endpoint Configuration](#12-api-endpoint-configuration) ⭐ NEW
+    - 12.5 [Advanced Pattern: Cascading Dropdowns](#125-advanced-pattern-cascading-dropdowns) ⭐ NEW
 
 ### **Part IV: Implementation**
 13. [Complete Configuration Examples](#13-complete-configuration-examples)
@@ -584,6 +585,1046 @@ This ensures:
 - Users see readable names in active filters
 - Search field displays names after selection
 - Database queries still work correctly
+
+---
+
+## **12.5 Advanced Pattern: Cascading Dropdowns** ⭐ NEW
+
+### **Overview**
+
+Cascading dropdowns are a powerful UI pattern where one dropdown's configuration dynamically changes based on another field's value. This pattern is essential for polymorphic relationships where a single field can reference different entity types.
+
+**Real-World Use Case**: Package BOM (Bill of Materials) Item
+- Field `item_type` selects: "service" or "medicine"
+- Field `item_name` dropdown searches different entities based on `item_type`:
+  - When `item_type = "service"` → Search services entity
+  - When `item_type = "medicine"` → Search medicines entity
+
+### **Key Features**
+- 🔄 **Dynamic Configuration**: Dropdown config changes based on master field
+- 🎯 **Type-Safe**: Each entity type has its own search configuration
+- 🧹 **Clean Switching**: Old results cleared when switching types
+- 🚀 **Instance Management**: Proper cleanup prevents memory leaks
+- ⚙️ **Entity-Agnostic**: No hardcoded entity logic in templates
+
+---
+
+### **12.5.1 Architecture**
+
+#### **Data Flow**
+
+```
+1. User selects value in master field (e.g., item_type = "medicine")
+   ↓
+2. JavaScript event handler triggered
+   ↓
+3. Look up entity configuration from ENTITY_CONFIG_MAP
+   ↓
+4. Destroy old EntityDropdown instance (cleanup event listeners)
+   ↓
+5. Update data-entity-config with new configuration
+   ↓
+6. Create new EntityDropdown instance
+   ↓
+7. User searches in dropdown with new entity target
+   ↓
+8. API endpoint /api/universal/{target_entity}/search called
+   ↓
+9. Results displayed with entity-specific formatting
+```
+
+#### **Component Interaction**
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Master Field (item_type)                           │
+│  - Standard <select> element                        │
+│  - No entity-specific code                          │
+└────────────────┬────────────────────────────────────┘
+                 │ change event
+                 ↓
+┌─────────────────────────────────────────────────────┐
+│  JavaScript Handler                                 │
+│  - Entity-agnostic                                  │
+│  - Configuration-driven                             │
+│  - Manages instance lifecycle                       │
+└────────────────┬────────────────────────────────────┘
+                 │ updates config
+                 ↓
+┌─────────────────────────────────────────────────────┐
+│  EntityDropdown Component                           │
+│  - Generic search component                         │
+│  - Reads config from data-entity-config            │
+│  - Calls API based on target_entity                │
+└────────────────┬────────────────────────────────────┘
+                 │ API request
+                 ↓
+┌─────────────────────────────────────────────────────┐
+│  Universal API Endpoint                             │
+│  - /api/universal/{entity_type}/search             │
+│  - Entity-agnostic routing                          │
+│  - Returns formatted results                        │
+└─────────────────────────────────────────────────────┘
+```
+
+---
+
+### **12.5.2 Configuration Requirements**
+
+#### **Step 1: Add form_scripts Support to Core Definitions**
+
+Ensure `app/config/core_definitions.py` supports form scripts (added in v6.0):
+
+```python
+@dataclass
+class EntityConfiguration:
+    # ... existing fields ...
+
+    # ⭐ Form script loading
+    form_scripts: List[str] = field(default_factory=list)
+    form_inline_script: Optional[str] = field(default=None)
+```
+
+#### **Step 2: Add search_endpoint to EntitySearchConfiguration**
+
+```python
+@dataclass
+class EntitySearchConfiguration:
+    # ... existing fields ...
+
+    # ⭐ Explicit search endpoint
+    search_endpoint: Optional[str] = None
+```
+
+#### **Step 3: Configure Entity Fields**
+
+In your entity configuration (e.g., `package_bom_item_config.py`):
+
+```python
+PACKAGE_BOM_ITEM_FIELDS = [
+    # Master field that controls cascading
+    FieldDefinition(
+        name="item_type",
+        label="Item Type",
+        field_type=FieldType.SELECT,
+        required=True,
+        show_in_list=True,
+        show_in_form=True,
+        options=[
+            {"value": "service", "label": "Service"},
+            {"value": "medicine", "label": "Medicine"}
+        ],
+        help_text="Select the type of item"
+    ),
+
+    # Cascading dropdown - initial config for one entity
+    FieldDefinition(
+        name="item_name",
+        label="Item Name",
+        field_type=FieldType.ENTITY_SEARCH,
+        required=True,
+        show_in_list=True,
+        show_in_form=True,
+
+        # Initial configuration (will be overridden by JavaScript)
+        entity_search_config=EntitySearchConfiguration(
+            target_entity='services',
+            search_endpoint='/api/universal/services/search',
+            search_fields=['service_name', 'code'],
+            display_template='{service_name}',
+            value_field='service_name',
+            placeholder='Select item type first...',
+            min_chars=2,
+            preload_common=False
+        ),
+        help_text="Select item type first, then search for the item"
+    )
+]
+```
+
+#### **Step 4: Add Form Scripts to Entity Configuration**
+
+```python
+PACKAGE_BOM_ITEM_CONFIG = EntityConfiguration(
+    entity_type="package_bom_items",
+    name="Package BOM Item",
+    plural_name="Package BOM Items",
+    fields=PACKAGE_BOM_ITEM_FIELDS,
+
+    # ⭐ Load cascading dropdown JavaScript
+    form_scripts=['js/package_bom_item_dropdown.js'],
+
+    # ... other configuration ...
+)
+
+# ⭐ CRITICAL: Export configuration
+config = PACKAGE_BOM_ITEM_CONFIG
+```
+
+---
+
+### **12.5.3 JavaScript Implementation**
+
+#### **File Structure**
+
+**Location**: `app/static/js/package_bom_item_dropdown.js`
+
+#### **Configuration Mapping**
+
+Define entity-specific configurations:
+
+```javascript
+/**
+ * Package BOM Item - Dynamic Dropdown Handler
+ * Updates item_name dropdown configuration based on item_type selection
+ */
+(function() {
+    'use strict';
+
+    // Entity configuration mapping for different item types
+    const ENTITY_CONFIG_MAP = {
+        'service': {
+            target_entity: 'services',
+            search_endpoint: '/api/universal/services/search',
+            search_fields: ['service_name', 'code', 'description'],
+            display_template: '{service_name}',
+            value_field: 'service_name',
+            placeholder: 'Search services...',
+            min_chars: 2,
+            preload_common: true,
+            cache_results: true
+        },
+        'medicine': {
+            target_entity: 'medicines',
+            search_endpoint: '/api/universal/medicines/search',
+            search_fields: ['medicine_name', 'generic_name', 'medicine_type'],
+            display_template: '{medicine_name} ({medicine_type})',
+            value_field: 'medicine_name',
+            placeholder: 'Search medicines...',
+            min_chars: 2,
+            preload_common: true,
+            cache_results: true
+        }
+    };
+
+    // ... implementation ...
+})();
+```
+
+#### **Instance Management** ⭐ CRITICAL
+
+The most critical aspect is proper instance destruction:
+
+```javascript
+function initializeBOMItemDropdown() {
+    const itemTypeSelect = document.getElementById('item_type');
+    const itemNameContainer = document.querySelector('[data-name="item_name"]');
+
+    if (!itemTypeSelect || !itemNameContainer) {
+        console.log('BOM item dropdown elements not found');
+        return;
+    }
+
+    const itemNameSearch = itemNameContainer.querySelector('.entity-dropdown-search');
+    const itemNameHidden = itemNameContainer.querySelector('.entity-dropdown-hidden-input');
+
+    // Disable item_name until item_type is selected
+    if (itemNameSearch && !itemTypeSelect.value) {
+        itemNameSearch.disabled = true;
+    }
+
+    // Handle item_type changes
+    itemTypeSelect.addEventListener('change', function() {
+        const selectedType = this.value;
+        console.log('[BOM Dropdown] Item type changed to:', selectedType);
+
+        if (!selectedType) {
+            // No type selected - disable dropdown
+            if (itemNameSearch) {
+                itemNameSearch.disabled = true;
+                itemNameSearch.value = '';
+                itemNameSearch.placeholder = 'Select item type first...';
+            }
+            if (itemNameHidden) {
+                itemNameHidden.value = '';
+            }
+            return;
+        }
+
+        const config = ENTITY_CONFIG_MAP[selectedType];
+        if (!config) {
+            console.warn('[BOM Dropdown] No configuration found for item type:', selectedType);
+            return;
+        }
+
+        console.log('[BOM Dropdown] Applying config for', selectedType, ':', config);
+
+        // Update data-entity-config attribute
+        itemNameContainer.dataset.entityConfig = JSON.stringify(config);
+
+        // Clear the results dropdown if visible
+        const resultsContainer = itemNameContainer.querySelector('.entity-dropdown-results');
+        if (resultsContainer) {
+            resultsContainer.innerHTML = '';
+            resultsContainer.style.display = 'none';
+        }
+
+        // Remove 'open' class from container
+        itemNameContainer.classList.remove('open');
+
+        // Enable and update search input
+        if (itemNameSearch) {
+            itemNameSearch.disabled = false;
+            itemNameSearch.placeholder = config.placeholder;
+            itemNameSearch.value = ''; // Clear previous selection
+        }
+
+        // Clear hidden value
+        if (itemNameHidden) {
+            itemNameHidden.value = '';
+        }
+
+        // ⭐ CRITICAL: Destroy old instance before creating new one
+        if (window.EntityDropdown) {
+            console.log('[BOM Dropdown] Removing old instance...');
+
+            // Destroy the old instance first
+            if (itemNameContainer._dropdownInstance) {
+                console.log('[BOM Dropdown] Destroying old instance...');
+                try {
+                    itemNameContainer._dropdownInstance.destroy();
+                } catch (e) {
+                    console.warn('[BOM Dropdown] Error destroying old instance:', e);
+                }
+                delete itemNameContainer._dropdownInstance;
+            }
+
+            // Remove ALL existing instance markers
+            delete itemNameContainer.dataset.dropdownInstance;
+            delete itemNameContainer.dataset.initialized;
+
+            // Remove event binding marker from search input
+            if (itemNameSearch) {
+                delete itemNameSearch.dataset.eventsbound;
+            }
+
+            console.log('[BOM Dropdown] Creating new EntityDropdown instance...');
+
+            try {
+                // ⭐ Create new dropdown instance and store reference
+                const newInstance = new window.EntityDropdown(itemNameContainer);
+                itemNameContainer._dropdownInstance = newInstance;
+                console.log('[BOM Dropdown] EntityDropdown reinitialized successfully');
+
+                // Focus the search field
+                setTimeout(() => {
+                    if (itemNameSearch && !itemNameSearch.disabled) {
+                        itemNameSearch.focus();
+                    }
+                }, 100);
+            } catch (error) {
+                console.error('Error reinitializing EntityDropdown:', error);
+            }
+        } else {
+            console.warn('EntityDropdown class not available');
+        }
+    });
+
+    // Trigger change if item_type already has a value (edit mode)
+    if (itemTypeSelect.value) {
+        console.log('Edit mode detected, triggering change for:', itemTypeSelect.value);
+        itemTypeSelect.dispatchEvent(new Event('change'));
+    }
+}
+
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeBOMItemDropdown);
+} else {
+    initializeBOMItemDropdown();
+}
+```
+
+---
+
+### **12.5.4 Template Integration**
+
+The Universal Engine template (`universal_create.html`) automatically supports cascading dropdowns:
+
+```html
+<!-- Entity-specific scripts loaded from configuration -->
+{% if entity_config and entity_config.form_scripts %}
+    {% for script_path in entity_config.form_scripts %}
+    <script src="{{ url_for('static', filename=script_path) }}?v=2.4"></script>
+    {% endfor %}
+{% endif %}
+
+<!-- Entity search field rendering -->
+{% elif section_field.field_type == 'entity_search' %}
+    <div class="entity-dropdown-container"
+         data-name="{{ section_field.name }}"
+         data-entity-config='{{ config_dict | tojson }}'>
+        <input type="hidden" class="entity-dropdown-hidden-input"
+               name="{{ section_field.name }}"
+               value="{{ data.get(section_field.name, '') if data else '' }}">
+        <input type="text"
+               class="form-control entity-dropdown-search"
+               placeholder="{{ section_field.entity_search_config.placeholder }}"
+               value="{{ display_value }}"
+               autocomplete="off">
+        <div class="entity-dropdown-results" style="display: none;"></div>
+    </div>
+{% endif %}
+```
+
+**Key Points**:
+- No entity-specific code in template
+- Configuration passed via `data-entity-config` attribute
+- JavaScript modifies this attribute to change behavior
+- EntityDropdown reads updated config on initialization
+
+---
+
+### **12.5.5 EntityDropdown Component Updates**
+
+The `universal_entity_dropdown.js` component must support instance destruction:
+
+```javascript
+class EntityDropdown {
+    constructor(container) {
+        this.container = container;
+        this.searchInput = container.querySelector('.entity-dropdown-search');
+        this.hiddenInput = container.querySelector('.entity-dropdown-hidden-input');
+        this.resultsContainer = container.querySelector('.entity-dropdown-results');
+
+        // ⭐ Store instance reference
+        this.container._dropdownInstance = this;
+
+        // Parse configuration
+        const configAttr = this.container.dataset.entityConfig;
+        this.config = configAttr ? JSON.parse(configAttr) : {};
+
+        console.log('[EntityDropdown] Loaded config:', this.config);
+        console.log('[EntityDropdown] Search endpoint:', this.config.search_endpoint);
+
+        this.init();
+    }
+
+    // ⭐ Destroy method for cleanup
+    destroy() {
+        console.log('[EntityDropdown] Destroying instance...');
+
+        // Remove all event listeners
+        if (this.searchInput) {
+            this.searchInput.removeEventListener('focus', this.handleFocus);
+            this.searchInput.removeEventListener('input', this.handleInput);
+            this.searchInput.removeEventListener('keydown', this.handleKeydown);
+        }
+
+        if (this.resultsContainer) {
+            this.resultsContainer.removeEventListener('click', this.handleResultClick);
+        }
+
+        // Remove document click listener
+        document.removeEventListener('click', this.handleDocumentClick);
+
+        // Clear DOM references
+        this.container = null;
+        this.searchInput = null;
+        this.hiddenInput = null;
+        this.resultsContainer = null;
+
+        console.log('[EntityDropdown] Instance destroyed');
+    }
+
+    // ... rest of implementation ...
+}
+```
+
+---
+
+### **12.5.6 API Endpoint Requirements**
+
+Ensure your API endpoint supports all target entities:
+
+```python
+# app/api/routes/universal_api.py
+
+@universal_api_bp.route('/<entity_type>/search', methods=['GET'])
+@login_required
+def entity_search(entity_type: str):
+    """Universal entity search endpoint"""
+
+    # Get parameters
+    search_term = request.args.get('q', '').strip()
+    limit = min(int(request.args.get('limit', 10)), 50)
+
+    # Get context
+    hospital_id = current_user.hospital_id
+    branch_id = flask_session.get('branch_id')
+
+    # ⭐ CRITICAL: Use entity_type directly (don't convert plural to singular)
+    config = get_entity_config(entity_type)
+
+    if not config:
+        logger.warning(f"No configuration found for entity: {entity_type}")
+        return jsonify({'success': False, 'error': 'Entity not found'}), 404
+
+    # Route to appropriate search function
+    if entity_type == 'services':
+        results = search_services(search_term, hospital_id, branch_id, limit)
+    elif entity_type == 'medicines':
+        results = search_medicines(search_term, hospital_id, branch_id, limit)
+    else:
+        results = generic_entity_search(entity_type, search_term,
+                                       hospital_id, branch_id, limit)
+
+    return jsonify({
+        'success': True,
+        'results': results,
+        'count': len(results)
+    })
+```
+
+#### **Entity-Specific Search Functions**
+
+```python
+def search_medicines(search_term: str, hospital_id: uuid.UUID,
+                    branch_id: uuid.UUID, limit: int) -> List[Dict]:
+    """Search medicines for dropdown"""
+
+    from app.models.master import Medicine
+
+    with get_db_session() as session:
+        query = session.query(Medicine).filter(
+            Medicine.hospital_id == hospital_id,
+            Medicine.status == 'active'
+        )
+
+        # Soft delete filter
+        if hasattr(Medicine, 'deleted_at'):
+            query = query.filter(Medicine.deleted_at.is_(None))
+
+        # Search filter
+        if search_term:
+            pattern = f'%{search_term}%'
+            query = query.filter(
+                (Medicine.medicine_name.ilike(pattern)) |
+                (Medicine.generic_name.ilike(pattern))
+            )
+
+        medicines = query.order_by(Medicine.medicine_name).limit(limit).all()
+
+        results = []
+        for medicine in medicines:
+            results.append({
+                'id': medicine.medicine_name,
+                'value': medicine.medicine_name,
+                'label': medicine.medicine_name,
+                'display': medicine.medicine_name,
+                'medicine_id': str(medicine.medicine_id),
+                'medicine_name': medicine.medicine_name,
+                'generic_name': medicine.generic_name or '',
+                'medicine_type': medicine.medicine_type if hasattr(medicine, 'medicine_type') else ''
+            })
+
+        return results
+```
+
+---
+
+### **12.5.7 Complete Working Example: Package BOM Items**
+
+This is a production-ready example from the SkinSpire HMS system.
+
+#### **Configuration File**: `app/config/modules/package_bom_item_config.py`
+
+```python
+from app.config.core_definitions import (
+    EntityConfiguration, FieldDefinition, FieldType, FilterType,
+    EntitySearchConfiguration, CRUDOperation
+)
+
+# Field Definitions
+PACKAGE_BOM_ITEM_FIELDS = [
+    FieldDefinition(
+        name="item_type",
+        label="Item Type",
+        field_type=FieldType.SELECT,
+        required=True,
+        show_in_list=True,
+        show_in_form=True,
+        filterable=True,
+        options=[
+            {"value": "service", "label": "Service"},
+            {"value": "medicine", "label": "Medicine"}
+        ],
+        width="120px",
+        help_text="Select the type of item"
+    ),
+
+    FieldDefinition(
+        name="item_name",
+        label="Item Name",
+        field_type=FieldType.ENTITY_SEARCH,
+        required=True,
+        show_in_list=True,
+        show_in_form=True,
+        filterable=True,
+        entity_search_config=EntitySearchConfiguration(
+            target_entity='services',
+            search_endpoint='/api/universal/services/search',
+            search_fields=['service_name', 'code'],
+            display_template='{service_name}',
+            value_field='service_name',
+            placeholder='Select item type first...',
+            min_chars=2,
+            preload_common=False
+        ),
+        width="250px",
+        help_text="Select item type first, then search for the item"
+    ),
+
+    FieldDefinition(
+        name="quantity",
+        label="Quantity",
+        field_type=FieldType.NUMBER,
+        required=True,
+        show_in_list=True,
+        show_in_form=True,
+        width="100px",
+        help_text="Quantity required per session"
+    ),
+
+    # ... other fields ...
+]
+
+# Entity Configuration
+PACKAGE_BOM_ITEM_CONFIG = EntityConfiguration(
+    entity_type="package_bom_items",
+    name="Package BOM Item",
+    plural_name="Package BOM Items",
+    model_class="app.models.master.PackageBOMItem",
+    table_name="package_bom_items",
+    primary_key="bom_item_id",
+
+    fields=PACKAGE_BOM_ITEM_FIELDS,
+
+    # ⭐ Load cascading dropdown JavaScript
+    form_scripts=['js/package_bom_item_dropdown.js'],
+
+    searchable_fields=['item_name', 'item_type'],
+    allowed_operations=[CRUDOperation.CREATE, CRUDOperation.READ,
+                       CRUDOperation.UPDATE, CRUDOperation.DELETE],
+
+    title_field='item_name',
+
+    # ... other configuration ...
+)
+
+# ⭐ CRITICAL: Export configuration
+config = PACKAGE_BOM_ITEM_CONFIG
+```
+
+#### **Entity Registration**: `app/config/entity_registry.py`
+
+```python
+ENTITY_REGISTRY = {
+    # ... other entities ...
+
+    "package_bom_items": EntityRegistration(
+        category=EntityCategory.MASTER,
+        module="app.config.modules.package_bom_item_config",
+        service_class="app.engine.universal_entity_service.UniversalEntityService",
+        model_class="app.models.master.PackageBOMItem"
+    ),
+
+    "services": EntityRegistration(
+        category=EntityCategory.MASTER,
+        module="app.config.modules.service_config",
+        service_class="app.engine.universal_entity_service.UniversalEntityService",
+        model_class="app.models.master.Service"
+    ),
+
+    "medicines": EntityRegistration(
+        category=EntityCategory.MASTER,
+        module="app.config.modules.medicine_config",
+        service_class="app.services.medicine_service.UniversalMedicineService",
+        model_class="app.models.master.Medicine"
+    ),
+}
+```
+
+#### **CSS Styling**: Add `!important` to critical properties
+
+```css
+/* app/static/css/components/universal_entity_dropdown.css */
+
+.entity-dropdown-results {
+    position: absolute !important;
+    top: calc(100% + 4px) !important;
+    left: 0 !important;
+    right: 0 !important;
+    min-width: 400px !important;
+    max-width: 600px !important;
+    background: white !important;
+    border: 1px solid rgb(209 213 219) !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15) !important;
+    max-height: 400px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    z-index: 1050 !important;
+    scrollbar-width: thin !important;
+}
+
+.entity-dropdown-item {
+    padding: 0.875rem 1rem !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+    border-bottom: 1px solid rgb(243 244 246) !important;
+    position: relative !important;
+    display: flex !important;
+    align-items: flex-start !important;
+    min-height: 60px !important;
+}
+```
+
+---
+
+### **12.5.8 Implementation Checklist**
+
+When implementing cascading dropdowns:
+
+**Configuration**:
+- [ ] Add `form_scripts` field to entity configuration
+- [ ] Configure master field (e.g., item_type) as SELECT
+- [ ] Configure dependent field (e.g., item_name) as ENTITY_SEARCH
+- [ ] Set initial `entity_search_config` for one entity type
+- [ ] Export configuration with `config = YOUR_CONFIG_OBJECT`
+
+**JavaScript Handler**:
+- [ ] Create entity-agnostic JavaScript file
+- [ ] Define ENTITY_CONFIG_MAP with all entity configurations
+- [ ] Implement change event handler on master field
+- [ ] **Destroy old EntityDropdown instance before creating new one** ⭐
+- [ ] Clear previous results and values
+- [ ] Update `data-entity-config` attribute
+- [ ] Create new EntityDropdown instance
+- [ ] Store instance reference on container
+- [ ] Handle edit mode (trigger change if value exists)
+
+**EntityDropdown Component**:
+- [ ] Add `destroy()` method for cleanup
+- [ ] Remove all event listeners in destroy
+- [ ] Clear DOM references
+- [ ] Store instance reference: `container._dropdownInstance = this`
+- [ ] Read config from `data-entity-config` attribute
+
+**API Endpoint**:
+- [ ] Register all target entities in entity registry
+- [ ] Create search functions for each entity
+- [ ] Handle entity routing in universal_api.py
+- [ ] Return consistent response format
+- [ ] Include entity-specific fields in response (e.g., medicine_type)
+
+**CSS**:
+- [ ] Add `!important` to critical dropdown properties
+- [ ] Set appropriate max-height for scrolling (400px)
+- [ ] Style entity-specific badges and secondary info
+- [ ] Add cache busting version to CSS link
+
+**Testing**:
+- [ ] Test in normal browser
+- [ ] Test in incognito mode (cache-free)
+- [ ] Verify old results cleared when switching types
+- [ ] Check console for duplicate API calls (should be none)
+- [ ] Verify instance destruction logs
+- [ ] Test edit mode initialization
+- [ ] Test with multiple entities
+
+---
+
+### **12.5.9 Troubleshooting Cascading Dropdowns**
+
+#### **Issue 1: Old Results Still Showing After Switching Types**
+
+**Symptoms**:
+- Switch from "service" to "medicine"
+- Type "am" in search
+- See both services AND medicines in results
+- Console shows two API calls
+
+**Root Cause**: Old EntityDropdown instance not destroyed
+
+**Console Evidence**:
+```
+[EntityDropdown] Fetching: /api/universal/services/search?q=am
+[EntityDropdown] Fetching: /api/universal/medicines/search?q=am
+```
+
+**Solution**:
+
+1. **Add destroy() method to EntityDropdown**:
+```javascript
+destroy() {
+    // Remove all event listeners
+    if (this.searchInput) {
+        this.searchInput.removeEventListener('input', this.handleInput);
+        // ... other listeners
+    }
+    // Clear references
+    this.container = null;
+}
+```
+
+2. **Call destroy before creating new instance**:
+```javascript
+if (itemNameContainer._dropdownInstance) {
+    itemNameContainer._dropdownInstance.destroy();
+    delete itemNameContainer._dropdownInstance;
+}
+
+// Remove markers
+delete itemNameContainer.dataset.dropdownInstance;
+delete itemNameContainer.dataset.initialized;
+```
+
+3. **Verify in console**:
+```
+[BOM Dropdown] Destroying old instance...
+[BOM Dropdown] Creating new EntityDropdown instance...
+[EntityDropdown] Instance destroyed
+[EntityDropdown] Loaded config: {target_entity: "medicines", ...}
+```
+
+---
+
+#### **Issue 2: 404 Error for Entity Search**
+
+**Symptoms**:
+```
+GET /api/universal/medicines/search HTTP/1.1" 404
+WARNING - No registration found for entity: medicine
+ERROR - No configuration found for entity: medicine
+```
+
+**Root Cause**: API code converting "medicines" (plural) → "medicine" (singular), but registry uses "medicines"
+
+**Wrong Code**:
+```python
+# ❌ WRONG - Don't convert plural to singular
+config_entity_type = entity_type
+if entity_type == 'medicines':
+    config_entity_type = 'medicine'  # Registry doesn't have 'medicine'!
+config = get_entity_config(config_entity_type)
+```
+
+**Solution**:
+```python
+# ✅ CORRECT - Use entity_type directly
+config = get_entity_config(entity_type)  # Use 'medicines' as-is
+```
+
+**Verification**:
+```python
+# In entity_registry.py, ensure entry exists
+"medicines": EntityRegistration(
+    category=EntityCategory.MASTER,
+    module="app.config.modules.medicine_config",
+    service_class="app.services.medicine_service.UniversalMedicineService",
+    model_class="app.models.master.Medicine"
+),
+```
+
+---
+
+#### **Issue 3: Dropdown Window Not Scrollable**
+
+**Symptoms**:
+- Dropdown shows many results
+- No scrollbar visible
+- Can't scroll to see all results
+- Height exceeds 400px limit
+
+**Root Cause**: CSS conflicts from other stylesheets overriding dropdown styles
+
+**Solution**: Add `!important` to all critical CSS properties:
+
+```css
+.entity-dropdown-results {
+    max-height: 400px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    scrollbar-width: thin !important;
+}
+```
+
+**Ensure CSS is loaded in template**:
+```html
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/universal_entity_dropdown.css') }}?v=2.4">
+```
+
+---
+
+#### **Issue 4: Browser Caching Old JavaScript**
+
+**Symptoms**:
+- Code changes not taking effect
+- Old behavior persists
+- Works in incognito mode
+
+**Solution**: Add version parameter to script tags:
+
+```html
+<script src="{{ url_for('static', filename='js/package_bom_item_dropdown.js') }}?v=2.4"></script>
+```
+
+Increment version after each change: `v=2.4` → `v=2.5`
+
+---
+
+#### **Issue 5: Missing Entity-Specific Fields in Results**
+
+**Symptoms**:
+- Medicine dropdown shows names but no type badges
+- Missing secondary information
+
+**Root Cause**: API not returning entity-specific fields
+
+**Solution**: Include all fields in API response:
+
+```python
+def search_medicines(...):
+    # ...
+    results.append({
+        'id': medicine.medicine_name,
+        'value': medicine.medicine_name,
+        'label': medicine.medicine_name,
+        # ⭐ Include entity-specific fields
+        'medicine_type': medicine.medicine_type if hasattr(medicine, 'medicine_type') else '',
+        'generic_name': medicine.generic_name or '',
+    })
+```
+
+**Update formatDisplay() in EntityDropdown**:
+
+```javascript
+formatDisplay(item) {
+    let secondaryInfo = '';
+    if (item.medicine_type) {
+        secondaryInfo = `<div class="entity-dropdown-item-secondary">
+            <span class="badge badge-sm badge-info">${item.medicine_type}</span>
+            ${item.generic_name ? `<span class="text-muted">| ${item.generic_name}</span>` : ''}
+        </div>`;
+    }
+    return `
+        <div class="entity-dropdown-item-content">
+            <div class="entity-dropdown-item-primary">${display}</div>
+            ${secondaryInfo}
+        </div>
+    `;
+}
+```
+
+---
+
+#### **Issue 6: Configuration Not Found**
+
+**Symptoms**:
+```javascript
+[BOM Dropdown] No configuration found for item type: medicine
+```
+
+**Root Cause**: ENTITY_CONFIG_MAP doesn't have entry for the selected value
+
+**Solution**: Ensure all possible values in master field have configurations:
+
+```javascript
+const ENTITY_CONFIG_MAP = {
+    'service': { ... },  // ✅ Matches option value="service"
+    'medicine': { ... }, // ✅ Matches option value="medicine"
+    // Add more as needed
+};
+```
+
+**Master field options must match map keys**:
+```python
+FieldDefinition(
+    name="item_type",
+    options=[
+        {"value": "service", "label": "Service"},   # ✅ Key exists in map
+        {"value": "medicine", "label": "Medicine"}, # ✅ Key exists in map
+    ]
+)
+```
+
+---
+
+### **12.5.10 Best Practices**
+
+**1. Entity-Agnostic Design**
+- Keep JavaScript handler generic
+- Use configuration mapping, not if/else chains
+- No hardcoded entity names in templates
+
+**2. Instance Lifecycle Management**
+- Always destroy old instance before creating new
+- Store instance reference on container
+- Clear all markers and flags
+- Remove event listeners properly
+
+**3. Configuration Consistency**
+- Use same field structure across all entity configs
+- Consistent naming: `{entity}_name` for display
+- Standard response format from all APIs
+
+**4. Performance Optimization**
+- Enable caching for frequently searched entities
+- Set reasonable result limits
+- Use preload wisely (only for small datasets)
+
+**5. User Experience**
+- Clear previous values when switching types
+- Disable dependent field until master selected
+- Show helpful placeholder text
+- Focus search field after type switch
+
+**6. Testing Strategy**
+- Test in incognito mode (no cache)
+- Check console for duplicate API calls
+- Verify instance destruction logs
+- Test all entity type combinations
+
+**7. Documentation**
+- Document entity config map in code
+- Note which entities are supported
+- Explain instance management approach
+
+---
+
+### **12.5.11 Summary**
+
+Cascading dropdowns are a powerful pattern for polymorphic relationships in the Universal Engine:
+
+✅ **Entity-Agnostic**: No hardcoded logic in templates
+✅ **Configuration-Driven**: All behavior defined in config
+✅ **Instance-Safe**: Proper cleanup prevents memory leaks
+✅ **Scalable**: Easy to add new entity types
+✅ **User-Friendly**: Clear switching, helpful feedback
+
+**Key Files Modified**:
+- `core_definitions.py`: Added form_scripts support
+- `{entity}_config.py`: Configure fields and scripts
+- `package_bom_item_dropdown.js`: Entity-agnostic handler
+- `universal_entity_dropdown.js`: Add destroy() method
+- `universal_api.py`: Handle all target entities
+
+**Pattern Applications**:
+- BOM items (service/medicine/product)
+- Transactions (patient/supplier/vendor)
+- Documents (entity-specific attachments)
+- Any polymorphic relationship
 
 ---
 

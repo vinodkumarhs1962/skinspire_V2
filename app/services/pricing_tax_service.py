@@ -109,47 +109,10 @@ def get_applicable_pricing_and_tax(
                       f"Falling back to master table.")
         result = _build_response_from_master(session, entity_type, entity_id)
 
-    # Step 3: Apply campaign hooks if enabled
-    if apply_campaigns and result.get('applicable_price'):
-        base_price = result['applicable_price']
-
-        try:
-            from app.services.campaign_hook_service import apply_campaign_hooks
-
-            campaign_result = apply_campaign_hooks(
-                session=session,
-                hospital_id=hospital_id,
-                entity_type=entity_type,
-                entity_id=entity_id,
-                base_price=base_price,
-                applicable_date=applicable_date,
-                context=campaign_context
-            )
-
-            # If campaign applied a discount, update pricing
-            if campaign_result.hook_applied and campaign_result.has_discount:
-                result['applicable_price'] = campaign_result.adjusted_price
-                result['campaign_applied'] = True
-                result['campaign_info'] = campaign_result.to_dict()
-                result['source'] = 'campaign'  # Override source to indicate campaign pricing
-
-                logger.info(f"Campaign '{campaign_result.hook_name}' applied: "
-                          f"{base_price} → {campaign_result.adjusted_price}")
-            else:
-                result['campaign_applied'] = False
-                result['campaign_info'] = None
-
-        except ImportError:
-            logger.warning("Campaign hook service not available - skipping campaign pricing")
-            result['campaign_applied'] = False
-            result['campaign_info'] = None
-        except Exception as e:
-            logger.error(f"Error applying campaign hooks: {str(e)}", exc_info=True)
-            result['campaign_applied'] = False
-            result['campaign_info'] = None
-    else:
-        result['campaign_applied'] = False
-        result['campaign_info'] = None
+    # DEPRECATED (2025-11-21): Campaign hooks system removed
+    # Use promotion_campaigns table via discount_service.py for all promotions
+    result['campaign_applied'] = False
+    result['campaign_info'] = None
 
     return result
 

@@ -1597,13 +1597,13 @@ class CategorizedFilterProcessor:
             config = get_entity_config(entity_type)
             if config and hasattr(config, 'filter_category_mapping'):
                 mapping = config.filter_category_mapping
-                if field_config.name in mapping:
+                if mapping and field_config.name in mapping:
                     return mapping[field_config.name]
-            
+
             # Fallback to field type detection
             from app.config.filter_categories import get_field_category_from_existing_field
             return get_field_category_from_existing_field(field_config)
-            
+
         except Exception as e:
             logger.error(f"Error getting field category: {str(e)}")
             return FilterCategory.SEARCH  # Safe default

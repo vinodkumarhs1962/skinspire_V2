@@ -1,0 +1,29 @@
+/**
+ * Package BOM Items List - Visual Grouping Styles
+ * Creates divider lines between different package groups
+ */
+
+/* Add a thick border-top when a new package group starts */
+.universal-data-table tbody tr.package-group-start {
+    border-top: 3px solid #0066cc !important;
+}
+
+/* Add some extra spacing for better visual separation */
+.universal-data-table tbody tr.package-group-start td {
+    padding-top: 1rem !important;
+}
+
+/* Alternate styling option - background color change */
+.universal-data-table tbody tr.package-group-start {
+    position: relative;
+}
+
+/* Optional: Add a subtle background to the first row of each package group */
+.universal-data-table tbody tr.package-group-start:hover {
+    background-color: #f0f7ff !important;
+}
+
+/* Make package name column slightly bolder for better grouping visibility */
+.universal-data-table tbody td:nth-child(2) {
+    font-weight: 500;
+}

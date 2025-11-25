@@ -55,6 +55,8 @@ class InvoiceItemComponent {
           if (e.target.matches('.quantity, .unit-price, .discount-percent')) {
             this.calculateLineTotal(e.target.closest('.line-item-row'));
             this.calculateTotals();
+            // Notify bulk discount manager of line item changes
+            document.dispatchEvent(new Event('line-item-changed'));
           }
         });
       }
@@ -515,6 +517,8 @@ class InvoiceItemComponent {
               console.log('🔢 Calculating line total after item selection...');
               self.calculateLineTotal(row);
               self.calculateTotals();
+              // Notify bulk discount manager of line item changes
+              document.dispatchEvent(new Event('line-item-changed'));
             });
             
             itemSearchResults.appendChild(div);

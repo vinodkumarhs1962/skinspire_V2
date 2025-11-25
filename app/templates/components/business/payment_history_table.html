@@ -1,17 +1,17 @@
 <!-- templates/components/business/payment_history_table.html -->
 <div class="container-fluid px-0" style="max-width: 100%;">
 
-{% if data.has_history %}
+{% if data.get('has_history') %}
 <div class="payment-history-container" style="width: 100%;">
 
     <!-- Summary Card - Compact -->
     {% if data.get('invoice_summary') %}
     <div class="alert alert-info mb-3">
         <i class="fas fa-receipt"></i>
-        <strong>Invoice:</strong> {{ data.invoice_summary.invoice_number }}
-        | <strong>Total Paid:</strong> ₹{{ "{:,.2f}".format(data.summary.total_paid) }}
-        | <strong>Payments:</strong> {{ data.summary.payment_count }}
-        | <strong>Balance:</strong> ₹{{ "{:,.2f}".format(data.invoice_summary.balance_due) }}
+        <strong>Invoice:</strong> {{ data.get('invoice_summary', {}).get('invoice_number', '-') }}
+        | <strong>Total Paid:</strong> ₹{{ "{:,.2f}".format(data.get('summary', {}).get('total_paid', 0)|float) if data.get('summary', {}).get('total_paid') is not none else '0.00' }}
+        | <strong>Payments:</strong> {{ data.get('summary', {}).get('payment_count', 0) }}
+        | <strong>Balance:</strong> ₹{{ "{:,.2f}".format(data.get('invoice_summary', {}).get('balance_due', 0)|float) if data.get('invoice_summary', {}).get('balance_due') is not none else '0.00' }}
     </div>
     {% endif %}
 
@@ -30,48 +30,49 @@
                 </tr>
             </thead>
             <tbody>
-                {% for payment in data.payments %}
+                {% for payment in data.get('payments', []) %}
                 <tr>
                     <td style="text-align: left !important;">{{ loop.index }}</td>
                     <td>
-                        {% if payment.payment_date %}
-                            {% set payment_date_str = payment.payment_date|string %}
+                        {% if payment.get('payment_date') %}
+                            {% set payment_date_str = payment.get('payment_date')|string %}
                             {% if 'T' in payment_date_str %}
                                 {% set date_parts = payment_date_str.split('T')[0].split('-') %}
                                 {% set months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] %}
                                 {% if date_parts|length >= 3 %}
                                     {{ date_parts[2] }}-{{ months[date_parts[1]|int - 1] }}-{{ date_parts[0] }}
                                 {% else %}
-                                    {{ payment.payment_date }}
+                                    {{ payment.get('payment_date') }}
                                 {% endif %}
                             {% else %}
-                                {{ payment.payment_date }}
+                                {{ payment.get('payment_date') }}
                             {% endif %}
                         {% else %}
                             -
                         {% endif %}
                     </td>
                     <td>
-                        <strong>{{ payment.reference_no }}</strong>
+                        <strong>{{ payment.get('reference_no', '-') }}</strong>
                     </td>
                     <td>
-                        <span class="badge {% if payment.payment_method == 'cash' %}bg-success{% elif payment.payment_method in ['bank_transfer', 'upi'] %}bg-primary{% elif payment.payment_method == 'cheque' %}bg-warning{% else %}bg-secondary{% endif %}">
-                            {{ payment.payment_method|title|replace('_', ' ') }}
+                        <span class="badge {% if payment.get('payment_method') == 'cash' %}bg-success{% elif payment.get('payment_method') in ['bank_transfer', 'upi'] %}bg-primary{% elif payment.get('payment_method') == 'cheque' %}bg-warning{% else %}bg-secondary{% endif %}">
+                            {{ payment.get('payment_method', 'Unknown')|title|replace('_', ' ') }}
                         </span>
                     </td>
                     <td class="text-end fw-bold">
-                        ₹{{ "{:,.2f}".format(payment.allocated_amount) }}
-                        {% if payment.is_partial %}
+                        {% set allocated_amt = payment.get('allocated_amount') %}
+                        ₹{{ "{:,.2f}".format(allocated_amt|float) if allocated_amt is not none else '0.00' }}
+                        {% if payment.get('is_partial') %}
                         <small class="d-block text-warning" style="font-size: 0.7rem;">(Partial)</small>
                         {% endif %}
                     </td>
                     <td style="text-align: center !important;">
-                        <span class="badge {% if payment.workflow_status in ['approved', 'completed'] %}bg-success{% elif payment.workflow_status == 'pending' %}bg-warning{% else %}bg-secondary{% endif %}">
-                            {{ payment.workflow_status|title }}
+                        <span class="badge {% if payment.get('workflow_status') in ['approved', 'completed'] %}bg-success{% elif payment.get('workflow_status') == 'pending' %}bg-warning{% else %}bg-secondary{% endif %}">
+                            {{ payment.get('workflow_status', 'Unknown')|title }}
                         </span>
                     </td>
                     <td style="text-align: center !important;">
-                        <a href="{{ url_for('universal_views.universal_detail_view', entity_type='patient_payments', item_id=payment.payment_id) }}"
+                        <a href="{{ url_for('universal_views.universal_detail_view', entity_type='patient_payments', item_id=payment.get('payment_id')) }}"
                            class="btn btn-sm btn-outline-primary"
                            title="View Payment"
                            target="_blank"
@@ -85,8 +86,8 @@
             <tfoot class="table-light">
                 <tr class="table-primary">
                     <td colspan="4" class="text-end"><strong>Total Allocated to This Invoice:</strong></td>
-                    <td class="text-end"><strong class="text-primary">₹{{ "{:,.2f}".format(data.summary.total_paid) }}</strong></td>
-                    <td colspan="2" class="text-center">{{ data.summary.payment_count }} payment{{ 's' if data.summary.payment_count != 1 else '' }}</td>
+                    <td class="text-end"><strong class="text-primary">₹{{ "{:,.2f}".format(data.get('summary', {}).get('total_paid', 0)|float) if data.get('summary', {}).get('total_paid') is not none else '0.00' }}</strong></td>
+                    <td colspan="2" class="text-center">{{ data.get('summary', {}).get('payment_count', 0) }} payment{{ 's' if data.get('summary', {}).get('payment_count', 0) != 1 else '' }}</td>
                 </tr>
             </tfoot>
         </table>

@@ -175,9 +175,18 @@
                         <!-- Custom Dropdown Actions -->
                         {% if assembled_data.header_actions and assembled_data.header_actions.dropdown_actions %}
                             {% for action in assembled_data.header_actions.dropdown_actions %}
-                                <a href="{{ action.url }}" 
-                                class="dropdown-item{% if action.id == 'delete' %} text-danger{% elif action.id in ['restore', 'undelete'] %} text-success{% endif %}"
-                                {% if action.confirmation_required %}
+                                <a href="{{ action.url }}"
+                                class="dropdown-item{% if action.id in ['delete', 'delete_bom_item', 'reject_bom_item'] %} text-danger{% elif action.id in ['restore', 'undelete', 'restore_bom_item'] %} text-success{% elif action.id in ['approve_bom_item'] %} text-success{% elif action.id in ['submit_for_approval'] %} text-primary{% endif %}"
+                                {% if action.id in ['delete', 'delete_bom_item'] %}
+                                onclick="handleDelete(event); return false;"
+                                data-confirm-message="{{ action.confirmation_message or 'Are you sure you want to delete this item?' }}"
+                                {% elif action.id in ['restore', 'undelete', 'restore_bom_item'] %}
+                                onclick="handleUndelete(event); return false;"
+                                data-confirm-message="{{ action.confirmation_message or 'Are you sure you want to restore this item?' }}"
+                                {% elif action.id in ['approve_bom_item', 'reject_bom_item', 'submit_for_approval'] %}
+                                onclick="handleFormSubmit(event); return false;"
+                                data-confirm-message="{{ action.confirmation_message }}"
+                                {% elif action.confirmation_required %}
                                 onclick="return confirm('{{ action.confirmation_message }}')"
                                 {% endif %}>
                                     <i class="{{ action.icon }} mr-2"></i>
@@ -316,11 +325,13 @@
                             </div>
                             <div class="universal-view-header-field-value">
                                 {% if field.field_type.value == 'currency' %}
-                                    ₹ {{ "{:,.2f}".format(item[field.name]|float) if item[field.name] else '0.00' }}
+                                    {% set field_value = item.get(field.name) %}
+                                    ₹ {{ "{:,.2f}".format(field_value|float) if field_value is not none else '0.00' }}
                                 {% elif field.field_type.value == 'date' %}
-                                    {{ item[field.name]|dateformat if item[field.name] else '—' }}
+                                    {% set field_value = item.get(field.name) %}
+                                    {{ field_value|dateformat if field_value else '—' }}
                                 {% else %}
-                                    {{ item[field.name] or '—' }}
+                                    {{ item.get(field.name) or '—' }}
                                 {% endif %}
                             </div>
                         </div>
@@ -542,16 +553,18 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Same for undelete
-function handleUndelete(button) {
-    const entityName = button.dataset.entityName || 'this item';
-    const undeleteUrl = button.dataset.undeleteUrl;
-    
-    if (confirm(`Are you sure you want to restore ${entityName}?`)) {
+function handleDelete(event) {
+    event.preventDefault();
+    const link = event.currentTarget;
+    const deleteUrl = link.href;
+    const confirmMessage = link.dataset.confirmMessage || 'Are you sure you want to delete this item?';
+
+    if (confirm(confirmMessage)) {
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = undeleteUrl;
-        
-        // Get CSRF token the same way
+        form.action = deleteUrl;
+
+        // Get CSRF token
         const csrfInput = document.querySelector('[name=csrf_token]');
         if (csrfInput) {
             const input = document.createElement('input');
@@ -560,10 +573,98 @@ function handleUndelete(button) {
             input.value = csrfInput.value;
             form.appendChild(input);
         } else {
-            alert('Security token not found. Please refresh the page and try again.');
-            return;
+            // Try to get it from meta tag
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            if (csrfMeta) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'csrf_token';
+                input.value = csrfMeta.content;
+                form.appendChild(input);
+            } else {
+                alert('Security token not found. Please refresh the page and try again.');
+                return;
+            }
         }
-        
+
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function handleUndelete(event) {
+    event.preventDefault();
+    const link = event.currentTarget;
+    const undeleteUrl = link.href;
+    const confirmMessage = link.dataset.confirmMessage || 'Are you sure you want to restore this item?';
+
+    if (confirm(confirmMessage)) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = undeleteUrl;
+
+        // Get CSRF token
+        const csrfInput = document.querySelector('[name=csrf_token]');
+        if (csrfInput) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'csrf_token';
+            input.value = csrfInput.value;
+            form.appendChild(input);
+        } else {
+            // Try to get it from meta tag
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            if (csrfMeta) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'csrf_token';
+                input.value = csrfMeta.content;
+                form.appendChild(input);
+            } else {
+                alert('Security token not found. Please refresh the page and try again.');
+                return;
+            }
+        }
+
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function handleFormSubmit(event) {
+    event.preventDefault();
+    const link = event.currentTarget;
+    const actionUrl = link.href;
+    const confirmMessage = link.dataset.confirmMessage || 'Are you sure you want to perform this action?';
+
+    if (confirm(confirmMessage)) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = actionUrl;
+
+        // Get CSRF token
+        const csrfInput = document.querySelector('[name=csrf_token]');
+        if (csrfInput) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'csrf_token';
+            input.value = csrfInput.value;
+            form.appendChild(input);
+        } else {
+            // Try to get it from meta tag
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            if (csrfMeta) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'csrf_token';
+                input.value = csrfMeta.content;
+                form.appendChild(input);
+            } else {
+                alert('Security token not found. Please refresh the page and try again.');
+                return;
+            }
+        }
+
         document.body.appendChild(form);
         form.submit();
     }

@@ -651,25 +651,32 @@ class EnhancedUniversalDataAssembler:
         """Build action buttons for table rows"""
         try:
             actions = []
-            
+
             for action_config in config.actions:
                 if not getattr(action_config, 'show_in_list', False):
                     continue
-                
-                if self._check_action_conditions(action_config, item):
+
+                # Use _evaluate_action_conditions which supports conditional_display
+                if self._evaluate_action_conditions(action_config, item):
+                    # Get button type
+                    button_type = getattr(action_config, 'button_type', None)
+                    button_type_value = button_type.value.replace('btn-', '') if button_type else 'info'
+
                     action = {
                         'name': getattr(action_config, 'name', action_config.id),
                         'label': action_config.label,
                         'icon': action_config.icon,
                         'css_class': getattr(action_config, 'css_class', 'btn-sm'),
-                        'url': self._build_action_url(action_config, item, config),
+                        'button_type': button_type_value,
+                        'url': action_config.get_url(item, config),  # Use get_url method for proper URL building
                         'confirmation_required': getattr(action_config, 'confirmation_required', False),
-                        'confirmation_message': getattr(action_config, 'confirmation_message', '')
+                        'confirmation_message': getattr(action_config, 'confirmation_message', ''),
+                        'javascript_handler': getattr(action_config, 'javascript_handler', None)
                     }
                     actions.append(action)
-            
+
             return actions
-            
+
         except Exception as e:
             logger.error(f"Error building row actions: {str(e)}")
             return []

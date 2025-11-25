@@ -141,7 +141,7 @@ def initialize_cache_system(app):
         try:
             from app.engine.universal_service_cache import init_service_cache
             init_service_cache(app)
-            app.logger.info("✅ Service cache initialized")
+            # Service cache initialized (debug logging reduced)
         except Exception as e:
             app.logger.error(f"Service cache init failed: {e}")
             app.config['SERVICE_CACHE_ENABLED'] = False
@@ -151,7 +151,7 @@ def initialize_cache_system(app):
         try:
             from app.engine.universal_config_cache import init_config_cache
             init_config_cache(app)
-            app.logger.info("✅ Config cache initialized")
+            # Config cache initialized (debug logging reduced)
             
             # Preload common configurations
             if app.config.get('CONFIG_CACHE_PRELOAD'):
@@ -219,9 +219,6 @@ def create_app() -> Flask:
         # Add hasattr and attribute to Jinja globals
         app.jinja_env.globals['hasattr'] = hasattr
         app.jinja_env.globals['attribute'] = getattr
-        
-        # Exempt API endpoints from CSRF
-        csrf.exempt(r"/api/*")
 
         # Configure login manager
         login_manager.login_view = 'auth_views.login'
@@ -307,10 +304,18 @@ def create_app() -> Flask:
             # Skip for static files
             if request.endpoint and 'static' in request.endpoint:
                 return
-                
+
             # Store current user in g for easy access
             g.user = current_user
-            
+
+            # Store hospital_id and branch_id in g for templates
+            if current_user.is_authenticated:
+                g.hospital_id = current_user.hospital_id
+                g.branch_id = getattr(current_user, 'branch_id', None)
+            else:
+                g.hospital_id = None
+                g.branch_id = None
+
             # Add auth token to requests if available in session
             if 'auth_token' in session and request.endpoint:
                 auth_token = session.get('auth_token')
@@ -433,6 +438,13 @@ def register_view_blueprints(app: Flask) -> None:
         except ImportError as e:
             app.logger.warning(f"Package views blueprint could not be loaded: {str(e)}")
 
+        try:
+            # Wallet views (loyalty wallet management)
+            from app.views.wallet_views import wallet_bp
+            view_blueprints.append(wallet_bp)
+        except ImportError as e:
+            app.logger.warning(f"Wallet views blueprint could not be loaded: {str(e)}")
+
         app.logger.info("Registered view blueprints")
     except ImportError as e:
         app.logger.warning(f"View blueprints could not be loaded: {str(e)}")
@@ -537,6 +549,15 @@ def register_api_blueprints(app: Flask) -> None:
         blueprints.append(patient_info_bp)
     except ImportError as e:
         app.logger.warning(f"Patient info API blueprint could not be loaded: {str(e)}")
+
+    # Register discount API blueprint
+    try:
+        from app.api.routes.discount_api import discount_bp
+        blueprints.append(discount_bp)
+        # Exempt discount API from CSRF protection
+        csrf.exempt(discount_bp)
+    except ImportError as e:
+        app.logger.warning(f"Discount API blueprint could not be loaded: {str(e)}")
 
     # Register each blueprint
     for blueprint in blueprints:

@@ -465,9 +465,12 @@ class InvoiceHeader(Base, TimestampMixin, TenantMixin):
 
     # Default GL Account (Business Rule #9)
     gl_account_id = Column(UUID(as_uuid=True), ForeignKey('chart_of_accounts.account_id'))
-    
+
     # Additional Information
     notes = Column(Text)
+
+    # Campaign Tracking (Added 2025-11-21)
+    campaigns_applied = Column(JSONB)  # Track which promotions were applied to this invoice
     
     # Relationships
     hospital = relationship("Hospital")
@@ -2403,3 +2406,187 @@ class PaymentDocumentAccessLog(Base, TimestampMixin):
     
     def __repr__(self):
         return f"<DocumentAccess {self.user_id} -> {self.document_id} ({self.access_type})>"
+
+
+# ============================================================================
+# LOYALTY WALLET MODELS
+# ============================================================================
+
+class PatientLoyaltyWallet(Base):
+    """
+    Patient loyalty wallet for prepaid points system
+    Tracks wallet balance, tier, and lifetime metrics
+    """
+    __tablename__ = 'patient_loyalty_wallet'
+
+    wallet_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    patient_id = Column(UUID(as_uuid=True), ForeignKey('patients.patient_id'), nullable=False)
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+    branch_id = Column(UUID(as_uuid=True), ForeignKey('branches.branch_id'))
+    card_type_id = Column(UUID(as_uuid=True), ForeignKey('loyalty_card_types.card_type_id'))
+
+    # Balance tracking
+    points_balance = Column(Integer, default=0, nullable=False)
+    points_value = Column(Numeric(12, 2), default=0, nullable=False)  # 1:1 ratio
+
+    # Lifetime tracking
+    total_amount_loaded = Column(Numeric(12, 2), default=0, nullable=False)
+    total_points_loaded = Column(Integer, default=0, nullable=False)
+    total_points_redeemed = Column(Integer, default=0, nullable=False)
+    total_bonus_points = Column(Integer, default=0, nullable=False)
+
+    # Status
+    wallet_status = Column(String(20), default='active', nullable=False)  # 'active', 'suspended', 'closed'
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    # Audit fields
+    created_by = Column(String(15), ForeignKey('users.user_id'))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_by = Column(String(15), ForeignKey('users.user_id'))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    closed_at = Column(DateTime(timezone=True))
+    closed_by = Column(String(15), ForeignKey('users.user_id'))
+
+    # Relationships
+    patient = relationship("Patient")
+    hospital = relationship("Hospital")
+    card_type = relationship("LoyaltyCardType")
+    transactions = relationship("WalletTransaction", back_populates="wallet", cascade="all, delete-orphan")
+    batches = relationship("WalletPointsBatch", back_populates="wallet", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<PatientLoyaltyWallet {self.wallet_id} - Patient {self.patient_id} - Balance: {self.points_balance}>"
+
+
+class WalletTransaction(Base):
+    """
+    Complete audit log of all wallet transactions
+    Types: load, redeem, refund_service, refund_wallet, expire, adjustment
+    """
+    __tablename__ = 'wallet_transaction'
+
+    transaction_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    wallet_id = Column(UUID(as_uuid=True), ForeignKey('patient_loyalty_wallet.wallet_id'), nullable=False)
+    transaction_type = Column(String(20), nullable=False)
+    transaction_date = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    # For 'load' transactions
+    amount_paid = Column(Numeric(12, 2))
+    base_points = Column(Integer)
+    bonus_points = Column(Integer, default=0)
+    total_points_loaded = Column(Integer)
+    expiry_date = Column(Date)
+
+    # For 'redeem' transactions
+    points_redeemed = Column(Integer)
+    redemption_value = Column(Numeric(12, 2))
+    invoice_id = Column(UUID(as_uuid=True), ForeignKey('invoice_header.invoice_id'))
+    invoice_number = Column(String(50))
+
+    # For 'refund_service' transactions
+    points_credited_back = Column(Integer)
+    refund_reason = Column(Text)
+    original_transaction_id = Column(UUID(as_uuid=True), ForeignKey('wallet_transaction.transaction_id'))
+
+    # For 'refund_wallet' transactions (wallet closure)
+    wallet_closure_amount = Column(Numeric(12, 2))
+    points_forfeited = Column(Integer)
+
+    # Balance tracking
+    balance_before = Column(Integer)
+    balance_after = Column(Integer)
+
+    # Payment tracking
+    payment_mode = Column(String(50))
+    payment_reference = Column(String(100))
+
+    # Accounting link
+    journal_entry_id = Column(UUID(as_uuid=True))
+
+    # Audit fields
+    created_by = Column(String(15), ForeignKey('users.user_id'), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    notes = Column(Text)
+
+    # Relationships
+    wallet = relationship("PatientLoyaltyWallet", back_populates="transactions")
+    invoice = relationship("InvoiceHeader", foreign_keys=[invoice_id])
+
+    def __repr__(self):
+        return f"<WalletTransaction {self.transaction_id} - {self.transaction_type} - {self.balance_after} points>"
+
+
+class WalletPointsBatch(Base):
+    """
+    Tracks points by load batch for FIFO redemption and expiry management
+    Each load creates a new batch with 12-month expiry
+    """
+    __tablename__ = 'wallet_points_batch'
+
+    batch_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    wallet_id = Column(UUID(as_uuid=True), ForeignKey('patient_loyalty_wallet.wallet_id'), nullable=False)
+    load_transaction_id = Column(UUID(as_uuid=True), ForeignKey('wallet_transaction.transaction_id'), nullable=False)
+
+    # Points tracking
+    points_loaded = Column(Integer, nullable=False)
+    points_remaining = Column(Integer, nullable=False)
+    points_redeemed = Column(Integer, default=0, nullable=False)
+    points_expired = Column(Integer, default=0, nullable=False)
+
+    # Expiry management
+    load_date = Column(Date, nullable=False)
+    expiry_date = Column(Date, nullable=False)
+    is_expired = Column(Boolean, default=False, nullable=False)
+    expired_at = Column(DateTime(timezone=True))
+
+    # FIFO tracking
+    batch_sequence = Column(Integer, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    # Relationships
+    wallet = relationship("PatientLoyaltyWallet", back_populates="batches")
+    load_transaction = relationship("WalletTransaction", foreign_keys=[load_transaction_id])
+
+    def __repr__(self):
+        return f"<WalletPointsBatch {self.batch_id} - Remaining: {self.points_remaining}/{self.points_loaded}>"
+
+
+class LoyaltyCardTierHistory(Base):
+    """
+    Tracks patient tier changes (new, upgrades, renewals)
+    Maintains history of all tier activations and changes
+    """
+    __tablename__ = 'loyalty_card_tier_history'
+
+    history_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    wallet_id = Column(UUID(as_uuid=True), ForeignKey('patient_loyalty_wallet.wallet_id'), nullable=False)
+    patient_id = Column(UUID(as_uuid=True), ForeignKey('patients.patient_id'), nullable=False)
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+
+    card_type_id = Column(UUID(as_uuid=True), ForeignKey('loyalty_card_types.card_type_id'), nullable=False)
+    previous_card_type_id = Column(UUID(as_uuid=True), ForeignKey('loyalty_card_types.card_type_id'))
+
+    change_type = Column(String(20), nullable=False)  # 'new', 'upgrade', 'downgrade', 'renewal'
+    amount_paid = Column(Numeric(12, 2), nullable=False)
+    points_credited = Column(Integer, nullable=False)
+    bonus_points = Column(Integer, nullable=False)
+
+    valid_from = Column(Date, nullable=False)
+    valid_until = Column(Date, nullable=False)
+
+    payment_id = Column(UUID(as_uuid=True))
+    transaction_id = Column(UUID(as_uuid=True), ForeignKey('wallet_transaction.transaction_id'))
+
+    created_date = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_by = Column(String(15), ForeignKey('users.user_id'))
+
+    # Relationships
+    wallet = relationship("PatientLoyaltyWallet")
+    patient = relationship("Patient")
+    card_type = relationship("LoyaltyCardType", foreign_keys=[card_type_id])
+    previous_card_type = relationship("LoyaltyCardType", foreign_keys=[previous_card_type_id])
+    transaction = relationship("WalletTransaction")
+
+    def __repr__(self):
+        return f"<LoyaltyCardTierHistory {self.history_id} - {self.change_type} to {self.card_type_id}>"

@@ -1,10 +1,10 @@
 # app/models/master.py
 
-from sqlalchemy import Column, String, ForeignKey, Boolean, Text, Numeric, Date, Integer
+from sqlalchemy import Column, String, ForeignKey, Boolean, Text, Numeric, Date, Integer, DateTime, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
-from .base import Base, TimestampMixin, TenantMixin, SoftDeleteMixin, generate_uuid
+from .base import Base, TimestampMixin, TenantMixin, SoftDeleteMixin, ApprovalMixin, generate_uuid
 
 class Hospital(Base, TimestampMixin, SoftDeleteMixin):
     """Hospital (Tenant) level configuration"""
@@ -33,6 +33,14 @@ class Hospital(Base, TimestampMixin, SoftDeleteMixin):
     return_filing_period = Column(String(10))  # Monthly/Quarterly
     bank_account_details = Column(JSONB)  # Banking information for payments
     logo = Column(JSONB, nullable=True) # Logo to be stored at hospital level
+
+    # Bulk discount policy
+    bulk_discount_enabled = Column(Boolean, default=False)  # Whether hospital offers bulk service discounts
+    bulk_discount_min_service_count = Column(Integer, default=5)  # Minimum services to trigger bulk discount
+    bulk_discount_effective_from = Column(Date)  # Date when bulk discount policy became effective
+
+    # Loyalty discount policy (multi-discount system - 21-Nov-2025)
+    loyalty_discount_mode = Column(String(20), default='absolute')  # 'absolute' = max(loyalty, other), 'additional' = loyalty% + other%
 
     # Relationships
     branches = relationship("Branch", back_populates="hospital", cascade="all, delete-orphan")
@@ -314,30 +322,129 @@ class PackageFamily(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
 class Package(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     """Treatment or service packages"""
     __tablename__ = 'packages'
-    
+
     package_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
     hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
     package_family_id = Column(UUID(as_uuid=True), ForeignKey('package_families.package_family_id'))
     package_name = Column(String(100), nullable=False)
-    
+    package_code = Column(String(50))  # Unique code for search/autocomplete
+
     # Pricing and GST
     price = Column(Numeric(10, 2), nullable=False)  # Base price excluding GST
+    selling_price = Column(Numeric(10, 2))  # Actual selling price (can differ from base)
     currency_code = Column(String(3), default='INR')
+    hsn_code = Column(String(10))  # HSN/SAC code for GST compliance
     gst_rate = Column(Numeric(5, 2))  # Overall GST rate (%)
     cgst_rate = Column(Numeric(5, 2))  # Central GST rate (%)
     sgst_rate = Column(Numeric(5, 2))  # State GST rate (%)
     igst_rate = Column(Numeric(5, 2))  # Integrated GST rate (%)
     is_gst_exempt = Column(Boolean, default=False)
-    
+
     # Business rules
     service_owner = Column(String(100))  # Responsible staff/department
-    max_discount = Column(Numeric(5, 2))  # Maximum allowed discount percentage
+
+    # Discount fields (multi-discount system - 21-Nov-2025)
+    # Note: NO bulk_discount for packages (business rule)
+    standard_discount_percent = Column(Numeric(5, 2), default=0)  # Fallback discount
+    loyalty_discount_percent = Column(Numeric(5, 2), default=0)  # Loyalty card discount
+    max_discount = Column(Numeric(5, 2))  # Maximum allowed discount cap
+
     status = Column(String(20), default='active')  # active/discontinued
     
     # Relationships
     hospital = relationship("Hospital")
     family = relationship("PackageFamily", back_populates="packages")
     services = relationship("PackageServiceMapping", back_populates="package")
+    bom_items = relationship("PackageBOMItem", back_populates="package")
+    session_plan = relationship("PackageSessionPlan", back_populates="package")
+    payment_plans = relationship("PackagePaymentPlan", back_populates="package")
+
+class PackageBOMItem(Base, TimestampMixin, TenantMixin, SoftDeleteMixin, ApprovalMixin):
+    """
+    Package Bill of Materials - Polymorphic item reference
+    Supports services, medicines, consumables, products in a single table
+
+    Workflow: draft → pending_approval → approved/rejected
+    """
+    __tablename__ = 'package_bom_items'
+
+    bom_item_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+    package_id = Column(UUID(as_uuid=True), ForeignKey('packages.package_id'), nullable=False)
+
+    # Polymorphic Item Reference - THE KEY DESIGN
+    item_type = Column(String(20), nullable=False)  # 'service', 'medicine', 'product', 'consumable'
+    item_id = Column(UUID(as_uuid=True), nullable=False)  # Points to services, medicines, etc.
+    item_name = Column(String(200))  # Denormalized for quick display
+
+    # Quantity & Specifications
+    quantity = Column(Numeric(10, 2), nullable=False, default=1)
+    unit_of_measure = Column(String(50))
+
+    # Delivery Method
+    supply_method = Column(String(20), default='per_package')
+    # Values: 'per_package' (upfront), 'per_session', 'session_1', 'session_2', etc.
+
+    # Pricing (captured at BOM creation time)
+    current_price = Column(Numeric(10, 2))
+    line_total = Column(Numeric(10, 2))
+
+    # Workflow Status - NEW
+    status = Column(String(20), default='draft', nullable=False)
+    # Values: 'draft', 'pending_approval', 'approved', 'rejected'
+    rejection_reason = Column(Text)  # Reason for rejection
+
+    # Display & Ordering
+    display_sequence = Column(Integer)
+    is_optional = Column(Boolean, default=False)
+    conditional_logic = Column(JSONB)  # Conditions for when this item is needed
+    notes = Column(Text)
+
+    # Relationships
+    hospital = relationship("Hospital")
+    package = relationship("Package", back_populates="bom_items")
+
+    def __repr__(self):
+        return f"<PackageBOMItem(package={self.package_id}, item={self.item_type}:{self.item_name}, qty={self.quantity})>"
+
+class PackageSessionPlan(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
+    """
+    Package Session Delivery Plan
+    Defines how package is delivered across sessions with resource requirements
+    """
+    __tablename__ = 'package_session_plan'
+
+    session_plan_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+    package_id = Column(UUID(as_uuid=True), ForeignKey('packages.package_id'), nullable=False)
+
+    # Session Identification
+    session_number = Column(Integer, nullable=False)
+    session_name = Column(String(100))
+    session_description = Column(Text)
+
+    # Duration
+    estimated_duration_minutes = Column(Integer)
+
+    # Resource Requirements (JSON Array)
+    # Format: [{"resource_type": "doctor", "role": "dermatologist", "duration_minutes": 30, "quantity": 1}]
+    resource_requirements = Column(JSONB)
+
+    # Scheduling
+    recommended_gap_days = Column(Integer)  # Gap from previous session
+    is_mandatory = Column(Boolean, default=True)
+    scheduling_notes = Column(Text)
+    prerequisites = Column(Text)  # What must be done before this session
+
+    # Display
+    display_sequence = Column(Integer)
+
+    # Relationships
+    hospital = relationship("Hospital")
+    package = relationship("Package", back_populates="session_plan")
+
+    def __repr__(self):
+        return f"<PackageSessionPlan(package={self.package_id}, session={self.session_number}:{self.session_name})>"
 
 class Service(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     """Individual services offered"""
@@ -362,7 +469,13 @@ class Service(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     # Business rules
     priority = Column(String(20))  # Priority level
     service_owner = Column(String(100))  # Responsible staff/department
-    max_discount = Column(Numeric(5, 2))  # Maximum allowed discount percentage
+
+    # Discount fields (multi-discount system - 21-Nov-2025)
+    standard_discount_percent = Column(Numeric(5, 2), default=0)  # Fallback discount
+    bulk_discount_percent = Column(Numeric(5, 2), default=0)  # Quantity-based discount
+    loyalty_discount_percent = Column(Numeric(5, 2), default=0)  # Loyalty card discount
+    max_discount = Column(Numeric(5, 2))  # Maximum allowed discount cap
+
     default_gl_account = Column(UUID(as_uuid=True), ForeignKey('chart_of_accounts.account_id'))
     service_type = Column(String(50), nullable=True)  # e.g., 'Skin Treatment', 'Laser Procedure', 'Consultation', 'Cosmetic Procedure'
     duration_minutes = Column(Integer, nullable=True)  # Expected duration of the service
@@ -541,14 +654,19 @@ class Medicine(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     mrp = Column(Numeric(10, 2))  # Maximum Retail Price (new from previous migration)
     selling_price = Column(Numeric(10, 2))  # Actual selling price (new from previous migration)
     last_purchase_price = Column(Numeric(10, 2))  # Last purchase price (new from previous migration)
-    
+
     # Currency field - just store it, no complex logic
     currency_code = Column(String(3), default='INR')  # Simple field, no constraints
-    
+
     # MRP tracking fields
     mrp_effective_date = Column(Date)  # When MRP was last updated
     previous_mrp = Column(Numeric(10, 2))  # Previous MRP for tracking
 
+    # Discount Information (multi-discount system - 21-Nov-2025)
+    standard_discount_percent = Column(Numeric(5, 2), default=0)  # Fallback discount
+    bulk_discount_percent = Column(Numeric(5, 2), default=0)  # Quantity-based discount
+    loyalty_discount_percent = Column(Numeric(5, 2), default=0)  # Loyalty card discount
+    max_discount = Column(Numeric(5, 2))  # Maximum allowed discount cap
 
     # Inventory Management
     safety_stock = Column(Integer)  # Minimum stock level
@@ -659,3 +777,177 @@ class ChartOfAccounts(Base, TimestampMixin, TenantMixin):
     services = relationship("Service", back_populates="gl_account")
     medicines = relationship("Medicine", back_populates="gl_account")
     gl_entries = relationship("GLEntry", back_populates="account")
+
+
+# ===================================================================
+# DISCOUNT SYSTEM MODELS
+# ===================================================================
+
+class LoyaltyCardType(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
+    """Defines different types of loyalty cards with associated discounts"""
+    __tablename__ = 'loyalty_card_types'
+
+    card_type_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+
+    # Card type details
+    card_type_code = Column(String(20), nullable=False)  # e.g., 'SILVER', 'GOLD', 'PLATINUM'
+    card_type_name = Column(String(50), nullable=False)  # Display name
+    description = Column(Text)
+
+    # Discount configuration
+    discount_percent = Column(Numeric(5, 2), default=0)  # Default discount for this card type
+
+    # Card benefits (flexible JSON for additional perks)
+    benefits = Column(JSONB)  # {priority_booking: true, free_consultation: true, etc.}
+
+    # Eligibility criteria
+    min_lifetime_spend = Column(Numeric(12, 2))  # Minimum spend to qualify
+    min_visits = Column(Integer)  # Minimum visit count to qualify
+
+    # Visual styling
+    card_color = Column(String(7))  # Hex color code for UI display
+    icon_url = Column(String(255))
+    display_sequence = Column(Integer)
+
+    # Status
+    is_active = Column(Boolean, default=True)
+
+    # Relationships
+    hospital = relationship("Hospital")
+    patient_cards = relationship("PatientLoyaltyCard", back_populates="card_type")
+
+
+class PatientLoyaltyCard(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
+    """Links patients to their loyalty card types"""
+    __tablename__ = 'patient_loyalty_cards'
+
+    patient_card_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+    patient_id = Column(UUID(as_uuid=True), ForeignKey('patients.patient_id'), nullable=False)
+    card_type_id = Column(UUID(as_uuid=True), ForeignKey('loyalty_card_types.card_type_id'), nullable=False)
+
+    # Card details
+    card_number = Column(String(50), unique=True)  # Physical/digital card number
+    issue_date = Column(Date, nullable=False)
+    expiry_date = Column(Date)
+
+    # Status
+    is_active = Column(Boolean, default=True)
+
+    # Relationships
+    hospital = relationship("Hospital")
+    patient = relationship("Patient")
+    card_type = relationship("LoyaltyCardType", back_populates="patient_cards")
+
+
+class DiscountApplicationLog(Base):
+    """Audit trail of all discount applications in invoices"""
+    __tablename__ = 'discount_application_log'
+
+    log_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+
+    # Invoice reference
+    invoice_id = Column(UUID(as_uuid=True), ForeignKey('invoice_header.invoice_id'))
+    line_item_id = Column(UUID(as_uuid=True), ForeignKey('invoice_line_item.line_item_id'))
+
+    # Discount details
+    discount_type = Column(String(20), nullable=False)  # bulk, loyalty, campaign, manual, none
+    card_type_id = Column(UUID(as_uuid=True), ForeignKey('loyalty_card_types.card_type_id'))  # If type = 'loyalty'
+    campaign_hook_id = Column(UUID(as_uuid=True), ForeignKey('campaign_hook_config.hook_id'))  # If type = 'campaign'
+
+    # Discount amounts
+    original_price = Column(Numeric(12, 2), nullable=False)
+    discount_percent = Column(Numeric(5, 2), nullable=False)
+    discount_amount = Column(Numeric(12, 2), nullable=False)
+    final_price = Column(Numeric(12, 2), nullable=False)
+
+    # Context
+    applied_at = Column(Date, nullable=False)
+    applied_by = Column(UUID(as_uuid=True))
+    patient_id = Column(UUID(as_uuid=True), ForeignKey('patients.patient_id'))
+    service_id = Column(UUID(as_uuid=True), ForeignKey('services.service_id'))
+
+    # Metadata
+    calculation_metadata = Column(JSONB)  # Store competing discounts and why this one was chosen
+    service_count_in_invoice = Column(Integer)  # Total service count that triggered bulk discount
+
+    # Relationships
+    hospital = relationship("Hospital")
+    patient = relationship("Patient")
+    service = relationship("Service")
+    card_type = relationship("LoyaltyCardType")
+class PromotionCampaign(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
+    """Promotion/Campaign discount configuration"""
+    __tablename__ = 'promotion_campaigns'
+
+    campaign_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+
+    # Campaign Details
+    campaign_name = Column(String(100), nullable=False)
+    campaign_code = Column(String(50), unique=True)  # For manual application
+    description = Column(Text)
+
+    # Campaign Period
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    is_active = Column(Boolean, default=True)
+
+    # Promotion Type (Complex Promotions - 21-Nov-2025)
+    promotion_type = Column(String(20), default='simple_discount')  # 'simple_discount', 'buy_x_get_y', 'tiered_discount', 'bundle'
+    promotion_rules = Column(JSONB)  # Complex promotion rules in JSON format
+
+    # Discount Configuration (for simple_discount type)
+    discount_type = Column(String(20), nullable=False)  # 'percentage' or 'fixed_amount'
+    discount_value = Column(Numeric(10, 2), nullable=False)
+
+    # Applicability
+    applies_to = Column(String(20), nullable=False)  # 'all', 'services', 'medicines', 'packages'
+    specific_items = Column(JSONB)  # Array of item_ids if not 'all'
+
+    # Constraints
+    min_purchase_amount = Column(Numeric(10, 2))
+    max_discount_amount = Column(Numeric(10, 2))
+    max_uses_per_patient = Column(Integer)
+    max_total_uses = Column(Integer)
+    current_uses = Column(Integer, default=0)
+
+    # Terms & Conditions
+    terms_and_conditions = Column(Text)
+
+    # Auto-application
+    auto_apply = Column(Boolean, default=False)
+
+    # Relationships
+    hospital = relationship("Hospital")
+    usage_logs = relationship("PromotionUsageLog", back_populates="campaign")
+
+
+class PromotionUsageLog(Base):
+    """Tracks promotion campaign usage"""
+    __tablename__ = 'promotion_usage_log'
+
+    usage_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey('promotion_campaigns.campaign_id'), nullable=False)
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+    patient_id = Column(UUID(as_uuid=True), ForeignKey('patients.patient_id'))
+    invoice_id = Column(UUID(as_uuid=True))  # Reference to invoice
+
+    # Usage Details
+    usage_date = Column(DateTime(timezone=True), server_default=func.now())
+    discount_amount = Column(Numeric(10, 2), nullable=False)
+    invoice_amount = Column(Numeric(10, 2))
+
+    # Applied By
+    applied_by = Column(String(15))
+    applied_manually = Column(Boolean, default=False)
+
+    # Audit
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    campaign = relationship("PromotionCampaign", back_populates="usage_logs")
+    hospital = relationship("Hospital")
+    patient = relationship("Patient")
