@@ -536,6 +536,36 @@ MEDICINE_FIELDS = [
         section="business_rules",
         view_order=2
     ),
+
+    # Bulk Discount Eligibility (Added 2025-11-27)
+    FieldDefinition(
+        name="bulk_discount_eligible",
+        label="Bulk Discount Eligible",
+        field_type=FieldType.BOOLEAN,
+        show_in_list=True,
+        show_in_detail=True,
+        show_in_form=True,
+        filterable=True,
+        default_value=False,
+        help_text="Enable to allow bulk discount for this medicine",
+        tab_group="pricing_gst",
+        section="pricing_info",
+        view_order=8
+    ),
+    FieldDefinition(
+        name="bulk_discount_percent",
+        label="Bulk Discount %",
+        field_type=FieldType.PERCENTAGE,
+        show_in_list=True,
+        show_in_detail=True,
+        show_in_form=True,
+        default_value=0,
+        help_text="Discount percentage when bulk discount applies",
+        tab_group="pricing_gst",
+        section="pricing_info",
+        view_order=9
+    ),
+
     FieldDefinition(
         name="status",
         label="Status",

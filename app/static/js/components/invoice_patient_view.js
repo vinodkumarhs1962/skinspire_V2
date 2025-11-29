@@ -113,8 +113,21 @@ function collectInvoiceData() {
     const discountBreakdown = {};
     lineItems.forEach(item => {
         if (item.discountType && item.discountType !== 'none' && item.discountAmount > 0) {
-            // Handle stacked discount (bulk_plus_loyalty)
-            if (item.discountType === 'bulk_plus_loyalty' && item.discountMetadata) {
+            // Handle stacked discount with breakdown array (new format)
+            if (item.discountType === 'stacked' && item.discountMetadata?.breakdown) {
+                const metadata = item.discountMetadata;
+                const breakdown = metadata.breakdown;
+
+                // Calculate each component from breakdown
+                breakdown.forEach(component => {
+                    if (component.source && component.percent) {
+                        const componentAmount = (item.unitPrice * item.quantity * component.percent) / 100;
+                        discountBreakdown[component.source] = (discountBreakdown[component.source] || 0) + componentAmount;
+                    }
+                });
+            }
+            // Handle legacy bulk_plus_loyalty format
+            else if (item.discountType === 'bulk_plus_loyalty' && item.discountMetadata) {
                 const metadata = item.discountMetadata;
 
                 if (metadata.bulk_percent && metadata.loyalty_percent) {

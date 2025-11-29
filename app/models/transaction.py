@@ -652,6 +652,8 @@ class PaymentDetail(Base, TimestampMixin, TenantMixin):
     credit_card_amount = Column(Numeric(12, 2), default=0)
     debit_card_amount = Column(Numeric(12, 2), default=0)
     upi_amount = Column(Numeric(12, 2), default=0)
+    wallet_points_amount = Column(Numeric(12, 2), default=0)  # Loyalty points redeemed (1 point = ₹1)
+    wallet_transaction_id = Column(UUID(as_uuid=True), ForeignKey('wallet_transaction.transaction_id'))  # Reference to wallet transaction
 
     # Currency Information
     currency_code = Column(String(3), default='INR')
@@ -736,6 +738,7 @@ class PaymentDetail(Base, TimestampMixin, TenantMixin):
     # Tracking
     payment_source = Column(String(20))  # 'single_invoice', 'multi_invoice', 'package_installment', 'advance'
     advance_adjustment_amount = Column(Numeric(12, 2))  # Amount from advance adjustment
+    payment_method_total = Column(Numeric(12, 2))  # Grand total: cash + card + upi + wallet + advance
     invoice_count = Column(Integer, default=1)  # Number of invoices paid
 
     # Change Tracking

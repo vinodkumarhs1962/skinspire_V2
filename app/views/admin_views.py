@@ -715,6 +715,90 @@ def hospital_settings():
                 current_app.logger.error(f"Logo removal error: {str(e)}", exc_info=True)
                 flash(f'An error occurred: {str(e)}', 'error')
         
+        # Handle discount stacking configuration update
+        elif request.form.get('form_type') == 'discount_stacking':
+            try:
+                # Parse max_total_discount
+                max_discount_value = request.form.get('max_total_discount', '').strip()
+                max_total_discount = float(max_discount_value) if max_discount_value else None
+
+                # Build the stacking config
+                discount_stacking_config = {
+                    'campaign': {
+                        'mode': request.form.get('campaign_mode', 'exclusive'),
+                        'buy_x_get_y_exclusive': request.form.get('buy_x_get_y_exclusive') == 'on'
+                    },
+                    'loyalty': {
+                        'mode': request.form.get('loyalty_mode', 'incremental')
+                    },
+                    'bulk': {
+                        'mode': request.form.get('bulk_mode', 'incremental'),
+                        'exclude_with_campaign': request.form.get('exclude_with_campaign') == 'on'
+                    },
+                    'vip': {
+                        'mode': request.form.get('vip_mode', 'exclusive')
+                    },
+                    'max_total_discount': max_total_discount
+                }
+
+                # Parse staff discretionary discount config
+                staff_disc_max = request.form.get('staff_disc_max_percent', '5').strip()
+                staff_disc_options_str = request.form.get('staff_disc_options', '1, 2, 3, 4, 5').strip()
+                staff_disc_requires_note = request.form.get('staff_disc_requires_note') == 'on'
+
+                # Parse options string to list of integers
+                try:
+                    staff_disc_options = [int(x.strip()) for x in staff_disc_options_str.split(',') if x.strip()]
+                except ValueError:
+                    staff_disc_options = [1, 2, 3, 4, 5]
+
+                staff_discretionary_config = {
+                    'enabled': True,
+                    'code': 'STAFFDISC',
+                    'name': 'Staff Discretionary Discount',
+                    'max_percent': int(staff_disc_max) if staff_disc_max else 5,
+                    'default_percent': staff_disc_options[0] if staff_disc_options else 1,
+                    'options': staff_disc_options,
+                    'requires_note': staff_disc_requires_note,
+                    'stacking_mode': 'incremental'
+                }
+
+                with get_db_session() as session:
+                    hospital = session.query(Hospital).filter_by(hospital_id=hospital_id).first()
+                    if hospital:
+                        hospital.discount_stacking_config = discount_stacking_config
+
+                        # Also update staff discretionary in hospital_settings
+                        from app.models.master import HospitalSettings
+                        billing_settings = session.query(HospitalSettings).filter_by(
+                            hospital_id=hospital_id, category='billing'
+                        ).first()
+
+                        if billing_settings:
+                            settings = billing_settings.settings or {}
+                            settings['staff_discretionary_discount'] = staff_discretionary_config
+                            billing_settings.settings = settings
+                            from sqlalchemy.orm.attributes import flag_modified
+                            flag_modified(billing_settings, 'settings')
+                        else:
+                            # Create new billing settings
+                            new_settings = HospitalSettings(
+                                hospital_id=hospital_id,
+                                category='billing',
+                                settings={'staff_discretionary_discount': staff_discretionary_config},
+                                is_active=True
+                            )
+                            session.add(new_settings)
+
+                        # Single commit for all changes
+                        session.commit()
+                        flash('Discount stacking configuration saved successfully', 'success')
+                    else:
+                        flash('Hospital not found', 'error')
+            except Exception as e:
+                current_app.logger.error(f"Error saving discount stacking config: {str(e)}", exc_info=True)
+                flash(f'Failed to save discount configuration: {str(e)}', 'error')
+
         # Handle verification settings update
         elif any(key in request.form for key in ['require_phone_verification', 'require_email_verification']):
             # Get verification settings from form
@@ -729,14 +813,14 @@ def hospital_settings():
                 "otp_expiry_minutes": int(request.form.get('otp_expiry_minutes', 10)),
                 "max_otp_attempts": int(request.form.get('max_otp_attempts', 3))
             }
-            
+
             # Update settings
             result = HospitalSettingsService.update_settings(
                 hospital_id=hospital_id,
                 category="verification",
                 settings=verification_settings
             )
-            
+
             if result.get('success'):
                 flash('Settings updated successfully', 'success')
             else:
@@ -744,20 +828,35 @@ def hospital_settings():
     
     # Get current settings
     verification_settings = HospitalSettingsService.get_settings(hospital_id, "verification")
-    
+
+    # Get discount stacking config using centralized DiscountService
+    from app.services.discount_service import DiscountService
+    discount_stacking_config = None
+    staff_discretionary_config = {'max_percent': 5, 'options': [1, 2, 3, 4, 5], 'requires_note': False}  # defaults
+    with get_db_session() as session:
+        discount_stacking_config = DiscountService.get_stacking_config(session, hospital_id)
+
+        # Get staff discretionary config from hospital_settings
+        from app.models.master import HospitalSettings
+        billing_settings = session.query(HospitalSettings).filter_by(
+            hospital_id=hospital_id, category='billing'
+        ).first()
+        if billing_settings and billing_settings.settings:
+            staff_discretionary_config = billing_settings.settings.get('staff_discretionary_discount', staff_discretionary_config)
+
     # Get current hospital details including logo, using get_detached_copy
     hospital = None
     with get_db_session() as session:
         # Get the hospital with all needed relationships loaded
         hospital_query = session.query(Hospital).filter_by(hospital_id=hospital_id)
-        
+
         # Load the hospital
         db_hospital = hospital_query.first()
-        
+
         # Create a detached copy of the hospital to use outside the session
         if db_hospital:
             hospital = get_detached_copy(db_hospital)
-            
+
             # Debug the hospital logo field
             if hospital and hasattr(hospital, 'logo') and hospital.logo:
                 current_app.logger.info(f"Hospital logo data: {hospital.logo}")
@@ -768,19 +867,21 @@ def hospital_settings():
                         current_app.logger.info("Converted hospital logo from string to dict")
                     except json.JSONDecodeError:
                         current_app.logger.error("Failed to parse hospital logo JSON")
-    
+
     # Get menu items for navigation
     menu_items = generate_menu_for_role(current_user.entity_type)
-    
+
     # For the template to work correctly, attach the detached hospital to current_user
     # This is a temporary attachment just for the request
     current_user.hospital = hospital
-    
+
     return render_template(
         'admin/hospital_settings.html',
         verification_settings=verification_settings,
         hospital=hospital,
-        menu_items=menu_items
+        menu_items=menu_items,
+        discount_stacking_config=discount_stacking_config,
+        staff_discretionary_config=staff_discretionary_config
     )
 
 # Add these routes to your existing admin_views.py file

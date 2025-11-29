@@ -7,14 +7,15 @@ from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 from datetime import date, datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, func
 import logging
 
 logger = logging.getLogger(__name__)
 
 from app.models.master import (
     Service, Hospital, Medicine, Package, LoyaltyCardType,
-    DiscountApplicationLog, PromotionCampaign, PromotionUsageLog
+    DiscountApplicationLog, PromotionCampaign, PromotionUsageLog, Patient,
+    PromotionCampaignGroup, PromotionGroupItem
 )
 from app.models.transaction import PatientLoyaltyWallet
 # NOTE: CampaignHookConfig removed - now using promotion_campaigns table for all promotions
@@ -99,7 +100,17 @@ class DiscountService:
 
         # Get service bulk discount percentage
         service = session.query(Service).filter_by(service_id=service_id).first()
-        if not service or not service.bulk_discount_percent or service.bulk_discount_percent == 0:
+        if not service:
+            return None
+
+        # Check if service is eligible for bulk discount (Added 2025-11-27)
+        if not getattr(service, 'bulk_discount_eligible', True):
+            # If bulk_discount_eligible is explicitly False, skip
+            # Default to True for backward compatibility if field doesn't exist
+            if hasattr(service, 'bulk_discount_eligible') and not service.bulk_discount_eligible:
+                return None
+
+        if not service.bulk_discount_percent or service.bulk_discount_percent == 0:
             return None
 
         # Calculate discount
@@ -161,7 +172,14 @@ class DiscountService:
 
         # Get medicine bulk discount percentage
         medicine = session.query(Medicine).filter_by(medicine_id=medicine_id).first()
-        if not medicine or not medicine.bulk_discount_percent or medicine.bulk_discount_percent == 0:
+        if not medicine:
+            return None
+
+        # Check if medicine is eligible for bulk discount (Added 2025-11-27)
+        if hasattr(medicine, 'bulk_discount_eligible') and not medicine.bulk_discount_eligible:
+            return None
+
+        if not medicine.bulk_discount_percent or medicine.bulk_discount_percent == 0:
             return None
 
         # Calculate discount
@@ -186,6 +204,95 @@ class DiscountService:
                 'medicine_count': total_medicine_count,
                 'min_threshold': hospital.bulk_discount_min_service_count,
                 'medicine_name': medicine.medicine_name
+            }
+        )
+
+    @staticmethod
+    def calculate_bulk_discount_simulation(
+        session: Session,
+        hospital_id: str,
+        item_type: str,  # 'Service' or 'Medicine'
+        item_id: str,
+        unit_price: Decimal,
+        quantity: int = 1
+    ) -> Optional[DiscountCalculationResult]:
+        """
+        Calculate bulk discount for SIMULATION mode.
+
+        Unlike calculate_bulk_discount(), this does NOT check actual quantities.
+        It assumes the item is eligible if it has bulk_discount_percent > 0.
+
+        Used by promotion dashboard to show potential savings.
+
+        Args:
+            session: Database session
+            hospital_id: Hospital ID
+            item_type: 'Service' or 'Medicine'
+            item_id: Item ID
+            unit_price: Unit price of the item
+            quantity: Quantity of this item
+
+        Returns:
+            DiscountCalculationResult if item has bulk_discount_percent configured
+            None if item doesn't have bulk discount configured
+        """
+        # Check if bulk discount is enabled at hospital level
+        hospital = session.query(Hospital).filter_by(hospital_id=hospital_id).first()
+        if not hospital or not hospital.bulk_discount_enabled:
+            return None
+
+        # Get the item based on type (case-insensitive)
+        item = None
+        item_name = None
+        item_type_normalized = item_type.title() if item_type else ''
+
+        if item_type_normalized == 'Service':
+            item = session.query(Service).filter_by(service_id=item_id).first()
+            item_name = item.service_name if item else None
+        elif item_type_normalized == 'Medicine':
+            item = session.query(Medicine).filter_by(medicine_id=item_id).first()
+            item_name = item.medicine_name if item else None
+        else:
+            return None  # Packages don't support bulk discount
+
+        if not item:
+            return None
+
+        # Check if item has bulk discount configured
+        if not hasattr(item, 'bulk_discount_percent') or not item.bulk_discount_percent:
+            return None
+
+        if item.bulk_discount_percent == 0:
+            return None
+
+        # Check bulk_discount_eligible flag if exists
+        if hasattr(item, 'bulk_discount_eligible') and not item.bulk_discount_eligible:
+            return None
+
+        # Calculate discount (assuming eligible)
+        original_price = unit_price * quantity
+        discount_percent = item.bulk_discount_percent
+
+        # Apply max_discount cap if set
+        if hasattr(item, 'max_discount') and item.max_discount is not None:
+            if discount_percent > item.max_discount:
+                discount_percent = item.max_discount
+
+        discount_amount = (original_price * discount_percent) / 100
+        final_price = original_price - discount_amount
+
+        return DiscountCalculationResult(
+            discount_type='bulk',
+            discount_percent=discount_percent,
+            discount_amount=discount_amount,
+            final_price=final_price,
+            original_price=original_price,
+            metadata={
+                'item_type': item_type,
+                'item_name': item_name,
+                'min_threshold': hospital.bulk_discount_min_service_count,
+                'simulation': True,  # Flag to indicate this is simulated
+                'reason': f'Requires min {hospital.bulk_discount_min_service_count} items'
             }
         )
 
@@ -286,8 +393,8 @@ class DiscountService:
 
         Business Rules:
         - Requires patient to have active loyalty card
-        - Reads item.loyalty_discount_percent from Service/Medicine/Package model
-        - Applies max_discount cap if set
+        - Uses card_type.discount_percent (card-level, published discount)
+        - Same discount applies to ALL services/medicines for the card type
         - Priority: 2 (medium-high)
         - Can combine with bulk discount based on hospital.loyalty_discount_mode
 
@@ -301,8 +408,8 @@ class DiscountService:
             quantity: Quantity of this item
 
         Returns:
-            DiscountCalculationResult if patient has loyalty card and item has loyalty_discount_percent
-            None if patient doesn't have loyalty card or no loyalty discount configured
+            DiscountCalculationResult if patient has loyalty card with discount configured
+            None if patient doesn't have loyalty card or card has no discount
         """
         # Check if patient has active loyalty wallet
         patient_wallet = session.query(PatientLoyaltyWallet).join(
@@ -321,10 +428,14 @@ class DiscountService:
         if not patient_wallet or not patient_wallet.card_type:
             return None
 
-        # Get the item based on type
-        item = None
-        item_name = None
+        card_type = patient_wallet.card_type
 
+        # Use card type's discount_percent (published, same for all items)
+        if not card_type.discount_percent or card_type.discount_percent == 0:
+            return None
+
+        # Get item name for metadata (optional, for logging/display)
+        item_name = None
         if item_type == 'Service':
             item = session.query(Service).filter_by(service_id=item_id).first()
             item_name = item.service_name if item else None
@@ -334,38 +445,18 @@ class DiscountService:
         elif item_type == 'Package':
             item = session.query(Package).filter_by(package_id=item_id).first()
             item_name = item.package_name if item else None
-        else:
-            logger.warning(f"Unknown item_type: {item_type}")
-            return None
 
-        if not item:
-            logger.warning(f"{item_type} not found: {item_id}")
-            return None
-
-        # Check if item has loyalty_discount_percent configured
-        if not hasattr(item, 'loyalty_discount_percent') or not item.loyalty_discount_percent:
-            return None
-
-        if item.loyalty_discount_percent == 0:
-            return None
-
-        # Calculate discount
+        # Calculate discount using card type's discount_percent
         original_price = unit_price * quantity
-        discount_percent = item.loyalty_discount_percent
-
-        # Apply max_discount cap if set
-        if hasattr(item, 'max_discount') and item.max_discount is not None:
-            if discount_percent > item.max_discount:
-                discount_percent = item.max_discount
-                logger.info(f"{item_type} {item_name} loyalty discount capped at max_discount: {item.max_discount}%")
+        discount_percent = Decimal(str(card_type.discount_percent))
 
         discount_amount = (original_price * discount_percent) / 100
         final_price = original_price - discount_amount
 
-        card_type = patient_wallet.card_type
+        logger.info(f"Loyalty discount: {card_type.card_type_name} card gives {discount_percent}% off")
 
         return DiscountCalculationResult(
-            discount_type='loyalty_percent',
+            discount_type='loyalty',
             discount_percent=discount_percent,
             discount_amount=discount_amount,
             final_price=final_price,
@@ -378,6 +469,98 @@ class DiscountService:
                 'card_type_name': card_type.card_type_name,
                 'wallet_id': str(patient_wallet.wallet_id),
                 'priority': 2  # Medium-high priority
+            }
+        )
+
+    @staticmethod
+    def calculate_vip_discount(
+        session: Session,
+        hospital_id: str,
+        patient_id: str,
+        item_type: str,  # 'Service', 'Medicine', 'Package'
+        item_id: str,
+        unit_price: Decimal,
+        quantity: int = 1
+    ) -> Optional[DiscountCalculationResult]:
+        """
+        Calculate VIP discount for patients marked as VIP or Special Group.
+
+        IMPORTANT: VIP discounts should be created as CAMPAIGNS with target_special_group=True.
+        This method is kept for backward compatibility but VIP campaigns are the preferred approach.
+
+        Business Rules:
+        - Patient must be marked as VIP (is_vip=True) or Special Group (is_special_group=True)
+        - VIP discount percent comes from VIP-targeted campaigns (preferred) or legacy item-level settings
+        - Priority: Configured in stacking_config (can be exclusive, incremental, or absolute)
+
+        Args:
+            session: Database session
+            hospital_id: Hospital ID
+            patient_id: Patient ID
+            item_type: Type of item ('Service', 'Medicine', 'Package')
+            item_id: Item ID
+            unit_price: Unit price of the item
+            quantity: Quantity of this item
+
+        Returns:
+            DiscountCalculationResult if VIP discount applies, None otherwise
+        """
+        if not patient_id:
+            return None
+
+        # Check if patient is VIP or Special Group
+        patient = session.query(Patient).filter_by(patient_id=patient_id).first()
+        if not patient:
+            return None
+
+        # Check VIP status (is_vip or is_special_group flag)
+        is_vip = getattr(patient, 'is_vip', False) or getattr(patient, 'is_special_group', False)
+        if not is_vip:
+            return None
+
+        # VIP discount percent should come from VIP-targeted campaigns
+        # This legacy method only checks item-level or patient-level VIP percent
+        vip_discount_percent = None
+
+        # 1. Check patient-level VIP discount (legacy)
+        if hasattr(patient, 'vip_discount_percent') and patient.vip_discount_percent:
+            vip_discount_percent = Decimal(str(patient.vip_discount_percent))
+
+        # 2. Check item-level VIP discount (legacy)
+        if vip_discount_percent is None or vip_discount_percent == 0:
+            item = None
+            if item_type == 'Service':
+                item = session.query(Service).filter_by(service_id=item_id).first()
+            elif item_type == 'Medicine':
+                item = session.query(Medicine).filter_by(medicine_id=item_id).first()
+            elif item_type == 'Package':
+                item = session.query(Package).filter_by(package_id=item_id).first()
+
+            if item and hasattr(item, 'vip_discount_percent') and item.vip_discount_percent:
+                vip_discount_percent = Decimal(str(item.vip_discount_percent))
+
+        # If no VIP discount configured, return None
+        # Note: VIP campaigns are handled separately in get_best_discount_multi
+        if not vip_discount_percent or vip_discount_percent <= 0:
+            return None
+
+        # Calculate discount
+        original_price = unit_price * quantity
+        discount_amount = (original_price * vip_discount_percent) / 100
+        final_price = original_price - discount_amount
+
+        return DiscountCalculationResult(
+            discount_type='vip',
+            discount_percent=vip_discount_percent,
+            discount_amount=discount_amount,
+            final_price=final_price,
+            original_price=original_price,
+            metadata={
+                'item_type': item_type,
+                'patient_id': str(patient_id),
+                'is_vip': getattr(patient, 'is_vip', False),
+                'is_special_group': getattr(patient, 'is_special_group', False),
+                'priority': 'Configured in stacking_config'
             }
         )
 
@@ -489,11 +672,15 @@ class DiscountService:
             invoice_date = date.today()
 
         # Get active promotions applicable to this item type
+        # NOTE: Personalized promotions (is_personalized=True) are excluded from auto-apply
+        # They require manual code entry by staff at billing counter
         promotions = session.query(PromotionCampaign).filter(
             and_(
                 PromotionCampaign.hospital_id == hospital_id,
                 PromotionCampaign.is_active == True,
                 PromotionCampaign.is_deleted == False,
+                PromotionCampaign.is_personalized == False,  # Skip personalized promos - require manual entry
+                PromotionCampaign.status == 'approved',  # Only approved promotions
                 PromotionCampaign.start_date <= invoice_date,
                 PromotionCampaign.end_date >= invoice_date,
                 or_(
@@ -506,14 +693,44 @@ class DiscountService:
         if not promotions:
             return None
 
+        # Check if patient is in special group (Added 2025-11-27)
+        patient_is_special_group = False
+        if patient_id:
+            patient = session.query(Patient).filter_by(patient_id=patient_id).first()
+            if patient and hasattr(patient, 'is_special_group'):
+                patient_is_special_group = patient.is_special_group
+
         # Check each promotion for eligibility
         for promotion in promotions:
+            # Check special group targeting (Added 2025-11-27)
+            if hasattr(promotion, 'target_special_group') and promotion.target_special_group:
+                # This promotion only applies to special group patients
+                if not patient_is_special_group:
+                    continue  # Skip - patient is not in special group
             # NEW: Dispatch based on promotion_type
             if promotion.promotion_type == 'buy_x_get_y':
                 # Handle Buy X Get Y promotions
                 if invoice_items is None:
                     logger.debug(f"Skipping buy_x_get_y promotion {promotion.campaign_name} - no invoice context provided")
                     continue  # Need invoice context for buy_x_get_y
+
+                # Check if campaign targets specific groups (Added 2025-11-28)
+                if promotion.target_groups:
+                    target_group_ids = promotion.target_groups.get('group_ids', [])
+                    if target_group_ids:
+                        # Check if item belongs to any of the target groups
+                        item_in_group = session.query(PromotionGroupItem).join(
+                            PromotionCampaignGroup,
+                            PromotionGroupItem.group_id == PromotionCampaignGroup.group_id
+                        ).filter(
+                            PromotionCampaignGroup.is_active == True,
+                            PromotionGroupItem.group_id.in_(target_group_ids),
+                            PromotionGroupItem.item_type == item_type.lower(),
+                            PromotionGroupItem.item_id == item_id
+                        ).first()
+
+                        if not item_in_group:
+                            continue  # Item not in any target group
 
                 result = DiscountService.handle_buy_x_get_y(
                     session=session,
@@ -530,7 +747,25 @@ class DiscountService:
             elif promotion.promotion_type == 'simple_discount' or promotion.promotion_type is None:
                 # Handle simple discount promotions (original logic)
 
-                # Check if specific items list (if set)
+                # Check if campaign targets specific groups (Added 2025-11-28)
+                if promotion.target_groups:
+                    target_group_ids = promotion.target_groups.get('group_ids', [])
+                    if target_group_ids:
+                        # Check if item belongs to any of the target groups
+                        item_in_group = session.query(PromotionGroupItem).join(
+                            PromotionCampaignGroup,
+                            PromotionGroupItem.group_id == PromotionCampaignGroup.group_id
+                        ).filter(
+                            PromotionCampaignGroup.is_active == True,
+                            PromotionGroupItem.group_id.in_(target_group_ids),
+                            PromotionGroupItem.item_type == item_type.lower(),
+                            PromotionGroupItem.item_id == item_id
+                        ).first()
+
+                        if not item_in_group:
+                            continue  # Item not in any target group
+
+                # Check if specific items list (if set) - for fine-grained override
                 if promotion.specific_items:
                     specific_item_ids = promotion.specific_items.get('item_ids', [])
                     if specific_item_ids and item_id not in specific_item_ids:
@@ -588,7 +823,8 @@ class DiscountService:
                         'discount_type': promotion.discount_type,
                         'discount_value': float(promotion.discount_value),
                         'priority': 1,  # Highest priority
-                        'auto_applied': promotion.auto_apply
+                        'auto_applied': promotion.auto_apply,
+                        'end_date': promotion.end_date.strftime('%d-%b-%Y') if promotion.end_date else ''
                     }
                 )
 
@@ -810,17 +1046,39 @@ class DiscountService:
         quantity: int,
         total_item_count: int,  # For bulk discount eligibility
         invoice_date: date = None,
-        invoice_items: List[Dict] = None  # NEW: Full invoice context for buy_x_get_y
+        invoice_items: List[Dict] = None,  # Full invoice context for buy_x_get_y
+        exclude_bulk: bool = False,  # Staff manually unchecked bulk discount
+        exclude_loyalty: bool = False,  # Staff manually unchecked loyalty discount
+        exclude_standard: bool = False,  # Staff manually unchecked standard discount
+        simulation_mode: bool = False,  # If True, assume bulk eligible (for dashboard simulation)
+        manual_promo_code: Dict = None,  # Manually entered promo code from staff
+        staff_discretionary: Dict = None,  # Staff discretionary discount - stacks incrementally (Added 2025-11-29)
+        exclude_campaign: bool = False,  # Staff unchecked ALL campaign discounts (Added 2025-11-29)
+        excluded_campaign_ids: List[str] = None,  # Per-campaign exclusion list
+        exclude_vip: bool = False  # Staff manually unchecked VIP discount (Added 2025-11-29)
     ) -> DiscountCalculationResult:
         """
-        Calculate all applicable discounts using priority-based selection
+        Calculate all applicable discounts using CENTRALIZED stacking configuration.
 
-        Priority Logic:
-        1. Promotion (priority 1) - Always wins if active
-        2. Bulk (priority 2) OR Loyalty % (priority 2) - Depends on loyalty_discount_mode
-           - 'absolute': Pick the higher discount
-           - 'additional': Add bulk% + loyalty% together
-        3. Standard (priority 4) - Fallback when no other discounts apply
+        This is the SINGLE SOURCE OF TRUTH for discount calculation.
+        Used by both Invoice (actual) and Dashboard (simulation) contexts.
+
+        The stacking behavior is controlled by hospital's discount_stacking_config:
+        - Each discount type can be: exclusive, incremental, or absolute
+        - Exclusive: Only that discount applies, all others excluded
+        - Incremental: Adds to total
+        - Absolute: Competes with other absolutes (highest wins)
+
+        Context Differences:
+        - Invoice Mode (simulation_mode=False):
+          * Bulk discount checked against actual total_item_count
+          * Staff overrides (exclude_bulk, exclude_loyalty) apply
+          * Staff Discretionary discount can be applied
+        - Simulation Mode (simulation_mode=True):
+          * Bulk discount assumed eligible if item has bulk_discount_percent > 0
+          * Staff overrides ignored (no checkboxes in simulation)
+          * VIP discount IS included (patient attribute)
+          * Staff Discretionary is EXCLUDED (manual intervention only)
 
         Args:
             session: Database session
@@ -832,279 +1090,301 @@ class DiscountService:
             quantity: Quantity of this item
             total_item_count: Total count of items of this type in invoice (for bulk discount)
             invoice_date: Invoice date (defaults to today)
+            invoice_items: Full invoice context for buy_x_get_y
+            exclude_bulk: If True, skip bulk discount (staff manually unchecked) - ignored in simulation_mode
+            exclude_loyalty: If True, skip loyalty discount (staff manually unchecked) - ignored in simulation_mode
+            simulation_mode: If True, assume bulk eligible and ignore staff overrides
 
         Returns:
-            DiscountCalculationResult with the best discount (or no discount)
+            DiscountCalculationResult with the calculated discount based on stacking config
         """
         original_price = unit_price * quantity
 
-        # Get hospital loyalty_discount_mode
-        hospital = session.query(Hospital).filter_by(hospital_id=hospital_id).first()
-        loyalty_mode = hospital.loyalty_discount_mode if hospital else 'absolute'
+        # Get hospital's stacking configuration
+        stacking_config = DiscountService.get_stacking_config(session, hospital_id)
 
-        # Calculate all applicable discounts
-        discounts = {}
+        # =================================================================
+        # STEP 1: Calculate all individual discounts
+        # =================================================================
+        discount_data = {}
+        all_eligible = []
 
-        # 1. PROMOTION (Priority 1 - Highest)
-        promotion_discount = DiscountService.calculate_promotion_discount(
-            session, hospital_id, patient_id, item_type, item_id, unit_price, quantity, invoice_date,
-            invoice_items=invoice_items  # NEW: Pass invoice context for buy_x_get_y
-        )
-        if promotion_discount:
-            discounts['promotion'] = promotion_discount
+        # 1. PROMOTION/CAMPAIGN DISCOUNT
+        # Skip if exclude_campaign is True (Added 2025-11-29)
+        # Or if specific campaign is in excluded_campaign_ids
+        auto_promotion_discount = None
+        if not exclude_campaign:
+            # Check for automatic promotions
+            auto_promotion_discount = DiscountService.calculate_promotion_discount(
+                session, hospital_id, patient_id, item_type, item_id, unit_price, quantity, invoice_date,
+                invoice_items=invoice_items
+            )
+            # Check if this specific campaign is excluded
+            if auto_promotion_discount and excluded_campaign_ids:
+                campaign_id = auto_promotion_discount.promotion_id
+                if campaign_id and str(campaign_id) in [str(cid) for cid in excluded_campaign_ids]:
+                    logger.info(f"Campaign {campaign_id} excluded by user selection")
+                    auto_promotion_discount = None
 
-            # Before returning promotion, collect all other eligible discounts for transparency
-            all_eligible = [
-                {
-                    'type': 'promotion',
-                    'percent': float(promotion_discount.discount_percent),
-                    'amount': float(promotion_discount.discount_amount),
-                    'applied': True,
-                    'reason': 'Highest priority - applied',
-                    'campaign_name': promotion_discount.metadata.get('campaign_name', 'Promotion Campaign')
+        # Then, calculate manual promo code discount if provided
+        manual_promotion_discount = None
+        if manual_promo_code:
+            logger.info(f"Processing manual promo code: {manual_promo_code.get('campaign_code')}")
+            original_price = unit_price * quantity
+            promo_discount_type = manual_promo_code.get('discount_type', 'percentage')
+            promo_discount_value = Decimal(str(manual_promo_code.get('discount_value', 0)))
+
+            if promo_discount_type == 'percentage':
+                discount_amount = (original_price * promo_discount_value) / 100
+                discount_percent = promo_discount_value
+            else:
+                discount_amount = promo_discount_value
+                discount_percent = (discount_amount / original_price * 100) if original_price > 0 else Decimal('0')
+
+            manual_promotion_discount = DiscountCalculationResult(
+                discount_type='promotion',
+                discount_percent=discount_percent,
+                discount_amount=discount_amount,
+                final_price=original_price - discount_amount,
+                original_price=original_price,
+                promotion_id=manual_promo_code.get('campaign_id'),
+                metadata={
+                    'campaign_id': manual_promo_code.get('campaign_id'),
+                    'campaign_code': manual_promo_code.get('campaign_code'),
+                    'campaign_name': manual_promo_code.get('campaign_code', 'Manual Promo'),
+                    'discount_type': promo_discount_type,
+                    'manual_entry': True
                 }
-            ]
-
-            # Check bulk discount eligibility
-            bulk_discount_check = None
-            if item_type == 'Service':
-                bulk_discount_check = DiscountService.calculate_bulk_discount(
-                    session, hospital_id, item_id, total_item_count, unit_price, quantity
-                )
-            elif item_type == 'Medicine':
-                bulk_discount_check = DiscountService.calculate_medicine_bulk_discount(
-                    session, hospital_id, item_id, total_item_count, unit_price, quantity
-                )
-
-            if bulk_discount_check:
-                all_eligible.append({
-                    'type': 'bulk',
-                    'percent': float(bulk_discount_check.discount_percent),
-                    'amount': float(bulk_discount_check.discount_amount),
-                    'applied': False,
-                    'reason': 'Lower priority - not applied'
-                })
-
-            # Check loyalty discount eligibility
-            loyalty_discount_check = DiscountService.calculate_loyalty_percentage_discount(
-                session, hospital_id, patient_id, item_type, item_id, unit_price, quantity
             )
-            if loyalty_discount_check:
-                all_eligible.append({
-                    'type': 'loyalty',
-                    'percent': float(loyalty_discount_check.discount_percent),
-                    'amount': float(loyalty_discount_check.discount_amount),
-                    'applied': False,
-                    'reason': 'Lower priority - not applied',
-                    'card_type_name': loyalty_discount_check.metadata.get('card_type_name', 'Loyalty Card')
-                })
 
-            # Check standard discount eligibility
-            standard_discount_check = DiscountService.calculate_standard_discount(
-                session, item_type, item_id, unit_price, quantity
-            )
-            if standard_discount_check:
-                all_eligible.append({
-                    'type': 'standard',
-                    'percent': float(standard_discount_check.discount_percent),
-                    'amount': float(standard_discount_check.discount_amount),
-                    'applied': False,
-                    'reason': 'Lower priority - not applied'
-                })
+        # Pick the MAX discount between automatic and manual
+        promotion_discount = None
+        if auto_promotion_discount and manual_promotion_discount:
+            if auto_promotion_discount.discount_percent >= manual_promotion_discount.discount_percent:
+                promotion_discount = auto_promotion_discount
+                logger.info(f"Using automatic promotion ({auto_promotion_discount.discount_percent}%) over manual ({manual_promotion_discount.discount_percent}%)")
+            else:
+                promotion_discount = manual_promotion_discount
+                logger.info(f"Using manual promotion ({manual_promotion_discount.discount_percent}%) over automatic ({auto_promotion_discount.discount_percent}%)")
+        elif auto_promotion_discount:
+            promotion_discount = auto_promotion_discount
+            logger.info(f"Using automatic promotion: {auto_promotion_discount.discount_percent}%")
+        elif manual_promotion_discount:
+            promotion_discount = manual_promotion_discount
+            logger.info(f"Using manual promotion: {manual_promotion_discount.discount_percent}%")
 
-            # Promotion wins - return it with all eligible discounts metadata
-            promotion_discount.metadata['selection_reason'] = 'Promotion has highest priority (1)'
-            promotion_discount.metadata['all_eligible_discounts'] = all_eligible
-            return promotion_discount
+        if promotion_discount:
+            campaign_type = promotion_discount.metadata.get('discount_type', 'percentage')
+            discount_data['campaign'] = {
+                'percent': float(promotion_discount.discount_percent),
+                'amount': float(promotion_discount.discount_amount),
+                'type': campaign_type,
+                'name': promotion_discount.metadata.get('campaign_name', 'Promotion Campaign'),
+                'promotion_id': promotion_discount.promotion_id,
+                'applicable': True
+            }
+            # For buy_x_get_y, use effective_percent if available
+            if campaign_type == 'buy_x_get_y':
+                discount_data['campaign']['effective_percent'] = promotion_discount.metadata.get('effective_percent', float(promotion_discount.discount_percent))
 
-        # 2. BULK DISCOUNT (Priority 2)
+            all_eligible.append({
+                'type': 'campaign',
+                'percent': float(promotion_discount.discount_percent),
+                'amount': float(promotion_discount.discount_amount),
+                'campaign_name': promotion_discount.metadata.get('campaign_name', 'Promotion Campaign'),
+                'campaign_code': promotion_discount.metadata.get('campaign_code', ''),
+                'end_date': promotion_discount.metadata.get('end_date', ''),
+                'promotion_id': promotion_discount.promotion_id
+            })
+
+        # 2. BULK DISCOUNT
+        # In simulation mode: ignore exclude_bulk, assume eligible if item has bulk_discount_percent
+        # In invoice mode: check actual total_item_count and respect exclude_bulk flag
         bulk_discount = None
-        if item_type == 'Service':
-            bulk_discount = DiscountService.calculate_bulk_discount(
-                session, hospital_id, item_id, total_item_count, unit_price, quantity
-            )
-        elif item_type == 'Medicine':
-            bulk_discount = DiscountService.calculate_medicine_bulk_discount(
-                session, hospital_id, item_id, total_item_count, unit_price, quantity
-            )
-        # Note: Packages don't support bulk discount
+        should_calc_bulk = simulation_mode or not exclude_bulk
+
+        if should_calc_bulk:
+            if simulation_mode:
+                # Simulation: Assume eligible, calculate based on item's bulk_discount_percent
+                bulk_discount = DiscountService.calculate_bulk_discount_simulation(
+                    session, hospital_id, item_type, item_id, unit_price, quantity
+                )
+            else:
+                # Invoice: Check actual quantities
+                if item_type == 'Service':
+                    bulk_discount = DiscountService.calculate_bulk_discount(
+                        session, hospital_id, item_id, total_item_count, unit_price, quantity
+                    )
+                elif item_type == 'Medicine':
+                    bulk_discount = DiscountService.calculate_medicine_bulk_discount(
+                        session, hospital_id, item_id, total_item_count, unit_price, quantity
+                    )
+        elif exclude_bulk:
+            logger.info(f"Bulk discount excluded by staff override for {item_type} {item_id}")
 
         if bulk_discount:
-            discounts['bulk'] = bulk_discount
+            discount_data['bulk'] = {
+                'percent': float(bulk_discount.discount_percent),
+                'amount': float(bulk_discount.discount_amount)
+            }
+            all_eligible.append({
+                'type': 'bulk',
+                'percent': float(bulk_discount.discount_percent),
+                'amount': float(bulk_discount.discount_amount)
+            })
 
-        # 3. LOYALTY % DISCOUNT (Priority 2)
-        loyalty_discount = DiscountService.calculate_loyalty_percentage_discount(
-            session, hospital_id, patient_id, item_type, item_id, unit_price, quantity
-        )
+        # 3. LOYALTY DISCOUNT
+        # In simulation mode: ignore exclude_loyalty flag
+        # In invoice mode: respect exclude_loyalty flag
+        loyalty_discount = None
+        should_calc_loyalty = simulation_mode or not exclude_loyalty
+
+        if should_calc_loyalty:
+            loyalty_discount = DiscountService.calculate_loyalty_percentage_discount(
+                session, hospital_id, patient_id, item_type, item_id, unit_price, quantity
+            )
+        elif exclude_loyalty:
+            logger.info(f"Loyalty discount excluded by staff override for {item_type} {item_id}")
+
         if loyalty_discount:
-            discounts['loyalty_percent'] = loyalty_discount
+            discount_data['loyalty'] = {
+                'percent': float(loyalty_discount.discount_percent),
+                'amount': float(loyalty_discount.discount_amount),
+                'card_type': loyalty_discount.metadata.get('card_type_name', 'Loyalty Card'),
+                'card_type_id': str(loyalty_discount.card_type_id) if loyalty_discount.card_type_id else None
+            }
+            all_eligible.append({
+                'type': 'loyalty',
+                'percent': float(loyalty_discount.discount_percent),
+                'amount': float(loyalty_discount.discount_amount),
+                'card_type_name': loyalty_discount.metadata.get('card_type_name', 'Loyalty Card')
+            })
 
-        # Handle bulk + loyalty based on loyalty_discount_mode
-        if 'bulk' in discounts and 'loyalty_percent' in discounts:
-            if loyalty_mode == 'additional':
-                # Add both percentages together
-                combined_percent = bulk_discount.discount_percent + loyalty_discount.discount_percent
+        # 4. VIP DISCOUNT
+        # Skip VIP discount if staff manually unchecked it (Added 2025-11-29)
+        vip_discount = None
+        if not exclude_vip:
+            vip_discount = DiscountService.calculate_vip_discount(
+                session, hospital_id, patient_id, item_type, item_id, unit_price, quantity
+            )
+        else:
+            logger.info(f"VIP discount excluded by staff override for {item_type} {item_id}")
 
-                # Apply max_discount cap
-                item = None
-                if item_type == 'Service':
-                    item = session.query(Service).filter_by(service_id=item_id).first()
-                elif item_type == 'Medicine':
-                    item = session.query(Medicine).filter_by(medicine_id=item_id).first()
-                elif item_type == 'Package':
-                    item = session.query(Package).filter_by(package_id=item_id).first()
+        if vip_discount:
+            discount_data['vip'] = {
+                'percent': float(vip_discount.discount_percent),
+                'amount': float(vip_discount.discount_amount)
+            }
+            all_eligible.append({
+                'type': 'vip',
+                'percent': float(vip_discount.discount_percent),
+                'amount': float(vip_discount.discount_amount)
+            })
 
-                if item and hasattr(item, 'max_discount') and item.max_discount is not None:
-                    if combined_percent > item.max_discount:
-                        combined_percent = item.max_discount
-                        logger.info(f"Combined discount capped at max_discount: {item.max_discount}%")
-
-                combined_amount = (original_price * combined_percent) / 100
-                combined_price = original_price - combined_amount
-
-                return DiscountCalculationResult(
-                    discount_type='bulk_plus_loyalty',
-                    discount_percent=combined_percent,
-                    discount_amount=combined_amount,
-                    final_price=combined_price,
-                    original_price=original_price,
-                    card_type_id=loyalty_discount.card_type_id,
-                    metadata={
-                        'selection_reason': 'Combined bulk + loyalty (additional mode)',
-                        'loyalty_mode': 'additional',
-                        'bulk_percent': float(bulk_discount.discount_percent),
-                        'loyalty_percent': float(loyalty_discount.discount_percent),
-                        'bulk_amount': float(bulk_discount.discount_amount),
-                        'loyalty_amount': float(loyalty_discount.discount_amount),
-                        'priority': 2,
-                        'all_eligible_discounts': [
-                            {
-                                'type': 'bulk',
-                                'percent': float(bulk_discount.discount_percent),
-                                'amount': float(bulk_discount.discount_amount),
-                                'applied': True,
-                                'reason': f'Quantity {total_item_count} meets threshold'
-                            },
-                            {
-                                'type': 'loyalty',
-                                'percent': float(loyalty_discount.discount_percent),
-                                'amount': float(loyalty_discount.discount_amount),
-                                'applied': True,
-                                'card_type_name': loyalty_discount.metadata.get('card_type_name', 'Loyalty Card')
-                            }
-                        ]
-                    }
-                )
-            else:  # 'absolute' mode
-                # Pick the higher discount
-                best = bulk_discount if bulk_discount.discount_percent >= loyalty_discount.discount_percent else loyalty_discount
-                best.metadata['selection_reason'] = f'Higher discount (absolute mode): {best.discount_type}'
-                best.metadata['other_eligible_discounts'] = [
-                    {
-                        'type': 'bulk' if best.discount_type != 'bulk' else 'loyalty_percent',
-                        'percent': float(bulk_discount.discount_percent if best.discount_type != 'bulk' else loyalty_discount.discount_percent),
-                        'amount': float(bulk_discount.discount_amount if best.discount_type != 'bulk' else loyalty_discount.discount_amount)
-                    }
-                ]
-                return best
-
-        # Only one of bulk or loyalty applies
-        if 'bulk' in discounts:
-            bulk_discount.metadata['selection_reason'] = 'Bulk discount (no loyalty available)'
-
-            # Add all eligible discounts info
-            all_eligible = [
-                {
-                    'type': 'bulk',
-                    'percent': float(bulk_discount.discount_percent),
-                    'amount': float(bulk_discount.discount_amount),
-                    'applied': True,
-                    'reason': f'Quantity {total_item_count} meets threshold'
-                }
-            ]
-
-            # Check if loyalty exists but not applied
-            if 'loyalty_percent' in discounts:
-                all_eligible.append({
-                    'type': 'loyalty',
-                    'percent': float(loyalty_discount.discount_percent),
-                    'amount': float(loyalty_discount.discount_amount),
-                    'applied': False,
-                    'reason': 'Available but bulk discount is higher',
-                    'card_type_name': loyalty_discount.metadata.get('card_type_name', 'Loyalty Card')
-                })
-
-            # Check for standard discount
+        # 5. STANDARD DISCOUNT (Fallback)
+        # Skip standard discount if staff manually unchecked it
+        standard_discount = None
+        if not exclude_standard:
             standard_discount = DiscountService.calculate_standard_discount(
                 session, item_type, item_id, unit_price, quantity
             )
-            if standard_discount:
-                all_eligible.append({
-                    'type': 'standard',
-                    'percent': float(standard_discount.discount_percent),
-                    'amount': float(standard_discount.discount_amount),
-                    'applied': False,
-                    'reason': 'Lower priority - not applied'
-                })
-
-            bulk_discount.metadata['all_eligible_discounts'] = all_eligible
-            return bulk_discount
-
-        if 'loyalty_percent' in discounts:
-            loyalty_discount.metadata['selection_reason'] = 'Loyalty discount (no bulk available)'
-
-            # Add all eligible discounts info
-            all_eligible = [
-                {
-                    'type': 'loyalty',
-                    'percent': float(loyalty_discount.discount_percent),
-                    'amount': float(loyalty_discount.discount_amount),
-                    'applied': True,
-                    'card_type_name': loyalty_discount.metadata.get('card_type_name', 'Loyalty Card')
-                }
-            ]
-
-            # Check for standard discount
-            standard_discount = DiscountService.calculate_standard_discount(
-                session, item_type, item_id, unit_price, quantity
-            )
-            if standard_discount:
-                all_eligible.append({
-                    'type': 'standard',
-                    'percent': float(standard_discount.discount_percent),
-                    'amount': float(standard_discount.discount_amount),
-                    'applied': False,
-                    'reason': 'Lower priority - not applied'
-                })
-
-            loyalty_discount.metadata['all_eligible_discounts'] = all_eligible
-            return loyalty_discount
-
-        # 4. STANDARD DISCOUNT (Priority 4 - Fallback)
-        standard_discount = DiscountService.calculate_standard_discount(
-            session, item_type, item_id, unit_price, quantity
-        )
+        elif exclude_standard:
+            logger.info(f"Standard discount excluded by staff override for {item_type} {item_id}")
         if standard_discount:
-            standard_discount.metadata['selection_reason'] = 'Standard discount (fallback)'
-            standard_discount.metadata['all_eligible_discounts'] = [
-                {
-                    'type': 'standard',
-                    'percent': float(standard_discount.discount_percent),
-                    'amount': float(standard_discount.discount_amount),
-                    'applied': True,
-                    'reason': 'Only available discount'
-                }
-            ]
-            return standard_discount
+            discount_data['standard'] = {
+                'percent': float(standard_discount.discount_percent),
+                'amount': float(standard_discount.discount_amount)
+            }
+            all_eligible.append({
+                'type': 'standard',
+                'percent': float(standard_discount.discount_percent),
+                'amount': float(standard_discount.discount_amount)
+            })
 
-        # No discounts apply
+        # =================================================================
+        # STEP 2: Use centralized stacking calculator
+        # =================================================================
+        stacked_result = DiscountService.calculate_stacked_discount(
+            discount_data, stacking_config, item_price=float(original_price)
+        )
+
+        # =================================================================
+        # STEP 3: Convert result to DiscountCalculationResult
+        # =================================================================
+        total_percent = Decimal(str(stacked_result.get('total_percent', 0)))
+        discount_amount = (original_price * total_percent) / 100
+        final_price = original_price - discount_amount
+
+        # Determine primary discount type for compatibility
+        applied_discounts = stacked_result.get('applied_discounts', [])
+        if not applied_discounts:
+            discount_type = 'none'
+        elif len(applied_discounts) == 1:
+            source = applied_discounts[0].get('source', 'none')
+            # Map 'campaign' to 'promotion' for backward compatibility
+            discount_type = 'promotion' if source == 'campaign' else source
+        else:
+            # Multiple discounts applied - use 'stacked' type
+            discount_type = 'stacked'
+
+        # Get promotion_id and card_type_id if applicable
+        promotion_id = None
+        card_type_id = None
+
+        if 'campaign' in discount_data:
+            promotion_id = discount_data['campaign'].get('promotion_id')
+        if 'loyalty' in discount_data:
+            card_type_id = discount_data['loyalty'].get('card_type_id')
+
+        # Mark which discounts were applied vs excluded
+        for eligible in all_eligible:
+            eligible_source = eligible['type']
+            if eligible_source == 'campaign':
+                eligible_source = 'campaign'  # Normalize
+
+            is_applied = any(
+                a.get('source') == eligible_source or
+                (eligible['type'] == 'campaign' and a.get('source') == 'campaign')
+                for a in applied_discounts
+            )
+            eligible['applied'] = is_applied
+
+            if not is_applied:
+                # Find exclusion reason
+                excluded_list = stacked_result.get('excluded_discounts', [])
+                for excl in excluded_list:
+                    if excl.get('source') == eligible_source:
+                        eligible['reason'] = excl.get('reason', 'Excluded by stacking config')
+                        break
+                else:
+                    eligible['reason'] = 'Not applied'
+
+        # Determine if stacking was applied (multiple discounts combined)
+        stacking_applied = len(applied_discounts) > 1
+
+        # NOTE: Staff discretionary is now an INVOICE-LEVEL discount (2025-11-29)
+        # It is NOT applied at line-item level anymore
+        # The staff_discretionary parameter is ignored here - handled at invoice total level in API
+
         return DiscountCalculationResult(
-            discount_type='none',
-            discount_percent=Decimal('0'),
-            discount_amount=Decimal('0'),
-            final_price=original_price,
+            discount_type=discount_type,
+            discount_percent=total_percent,
+            discount_amount=discount_amount,
+            final_price=final_price,
             original_price=original_price,
-            metadata={'reason': 'No applicable discounts found'}
+            card_type_id=card_type_id,
+            promotion_id=promotion_id,
+            metadata={
+                'selection_reason': f'Calculated using hospital stacking config',
+                'stacking_config': stacking_config,
+                'stacking_applied': stacking_applied,  # True when bulk + loyalty combined
+                'breakdown': stacked_result.get('breakdown', []),
+                'applied_discounts': applied_discounts,
+                'excluded_discounts': stacked_result.get('excluded_discounts', []),
+                'all_eligible_discounts': all_eligible,
+                'capped': stacked_result.get('capped', False),
+                'cap_applied': stacked_result.get('cap_applied')
+            }
         )
 
     @staticmethod
@@ -1285,7 +1565,16 @@ class DiscountService:
         patient_id: str,
         line_items: List[Dict],
         invoice_date: date = None,
-        respect_max_discount: bool = True
+        respect_max_discount: bool = True,
+        respect_staff_override: bool = True,
+        exclude_bulk: bool = False,
+        exclude_loyalty: bool = False,
+        exclude_standard: bool = False,
+        exclude_campaign: bool = False,  # Added 2025-11-29
+        excluded_campaign_ids: List[str] = None,  # Per-campaign exclusion
+        manual_promo_code: Dict = None,
+        staff_discretionary: Dict = None,  # Added 2025-11-29
+        exclude_vip: bool = False  # Added 2025-11-29: Staff manually unchecked VIP discount
     ) -> List[Dict]:
         """
         Apply multi-discount logic to all items (Services, Medicines, Packages) in an invoice
@@ -1296,6 +1585,11 @@ class DiscountService:
         - Loyalty % (all types, requires loyalty card)
         - Promotion (all types, highest priority)
 
+        Staff Override:
+        - If item has 'discount_override' = True, skip automatic discount calculation
+        - Staff can uncheck discount checkboxes to override the proposed discount
+        - The manually set discount_percent will be preserved
+
         Args:
             session: Database session
             hospital_id: Hospital ID
@@ -1303,6 +1597,9 @@ class DiscountService:
             line_items: List of line item dictionaries (Services, Medicines, Packages)
             invoice_date: Invoice date (defaults to today)
             respect_max_discount: Whether to enforce max_discount
+            respect_staff_override: Whether to respect staff's manual discount overrides
+            exclude_bulk: If True, skip bulk discount calculation (staff manually unchecked)
+            exclude_loyalty: If True, skip loyalty discount calculation (staff manually unchecked)
 
         Returns:
             Updated line_items with discount_percent and discount_metadata populated
@@ -1318,12 +1615,20 @@ class DiscountService:
 
         logger.info(f"Multi-discount: Service count={total_service_count} ({len(service_items)} items), "
                     f"Medicine count={total_medicine_count} ({len(medicine_items)} items), "
-                    f"Package count={len(package_items)} items")
+                    f"Package count={len(package_items)} items, exclude_bulk={exclude_bulk}, exclude_loyalty={exclude_loyalty}")
 
         # Process each SERVICE item
         for item in service_items:
             service_id = item.get('item_id') or item.get('service_id')
             if not service_id:
+                continue
+
+            # Check for staff override - if staff manually set/cleared the discount, respect it
+            if respect_staff_override and item.get('discount_override'):
+                logger.info(f"Staff override detected for service {item.get('item_name')} - preserving manual discount of {item.get('discount_percent', 0)}%")
+                # Preserve the staff's manually set discount
+                item['discount_type'] = item.get('discount_type', 'manual')
+                item['discount_metadata'] = item.get('discount_metadata', {'source': 'staff_override'})
                 continue
 
             unit_price = Decimal(str(item.get('unit_price', 0)))
@@ -1340,12 +1645,22 @@ class DiscountService:
                 quantity=quantity,
                 total_item_count=total_service_count,
                 invoice_date=invoice_date,
-                invoice_items=line_items  # NEW: Pass full invoice context for buy_x_get_y
+                invoice_items=line_items,  # Pass full invoice context for buy_x_get_y
+                exclude_bulk=exclude_bulk,  # Staff manually unchecked bulk discount
+                exclude_loyalty=exclude_loyalty,  # Staff manually unchecked loyalty discount
+                exclude_standard=exclude_standard,  # Staff manually unchecked standard discount
+                manual_promo_code=manual_promo_code,  # Manually entered promo code
+                staff_discretionary=staff_discretionary,  # Staff discretionary discount (Added 2025-11-29)
+                exclude_campaign=exclude_campaign,  # Exclude ALL campaigns
+                excluded_campaign_ids=excluded_campaign_ids,  # Per-campaign exclusion
+                exclude_vip=exclude_vip  # Staff manually unchecked VIP discount (Added 2025-11-29)
             )
 
-            # Apply max_discount cap (EXCEPT for promotions - they have priority)
+            # Apply max_discount cap (EXCEPT for promotions and stacked discounts)
             # Promotions (especially Buy X Get Y) should not be capped by max_discount
-            if respect_max_discount and best_discount.discount_percent > 0 and best_discount.discount_type != 'promotion':
+            # Stacked discounts (bulk + loyalty) should not be capped - stacking is a hospital-level decision
+            is_stacked = best_discount.metadata.get('stacking_applied', False)
+            if respect_max_discount and best_discount.discount_percent > 0 and best_discount.discount_type != 'promotion' and not is_stacked:
                 service = session.query(Service).filter_by(service_id=service_id).first()
                 if service and service.max_discount:
                     if best_discount.discount_percent > service.max_discount:
@@ -1372,6 +1687,13 @@ class DiscountService:
             if not medicine_id:
                 continue
 
+            # Check for staff override
+            if respect_staff_override and item.get('discount_override'):
+                logger.info(f"Staff override detected for medicine {item.get('item_name')} - preserving manual discount of {item.get('discount_percent', 0)}%")
+                item['discount_type'] = item.get('discount_type', 'manual')
+                item['discount_metadata'] = item.get('discount_metadata', {'source': 'staff_override'})
+                continue
+
             unit_price = Decimal(str(item.get('unit_price', 0)))
             quantity = int(item.get('quantity', 1))
 
@@ -1386,11 +1708,20 @@ class DiscountService:
                 quantity=quantity,
                 total_item_count=total_medicine_count,
                 invoice_date=invoice_date,
-                invoice_items=line_items  # NEW: Pass full invoice context for buy_x_get_y
+                invoice_items=line_items,  # Pass full invoice context for buy_x_get_y
+                exclude_bulk=exclude_bulk,  # Staff manually unchecked bulk discount
+                exclude_loyalty=exclude_loyalty,  # Staff manually unchecked loyalty discount
+                exclude_standard=exclude_standard,  # Staff manually unchecked standard discount
+                manual_promo_code=manual_promo_code,  # Manually entered promo code
+                staff_discretionary=staff_discretionary,  # Staff discretionary discount (Added 2025-11-29)
+                exclude_campaign=exclude_campaign,  # Exclude ALL campaigns
+                excluded_campaign_ids=excluded_campaign_ids,  # Per-campaign exclusion
+                exclude_vip=exclude_vip  # Staff manually unchecked VIP discount (Added 2025-11-29)
             )
 
-            # Apply max_discount cap (EXCEPT for promotions - they have priority)
-            if respect_max_discount and best_discount.discount_percent > 0 and best_discount.discount_type != 'promotion':
+            # Apply max_discount cap (EXCEPT for promotions and stacked discounts)
+            is_stacked = best_discount.metadata.get('stacking_applied', False)
+            if respect_max_discount and best_discount.discount_percent > 0 and best_discount.discount_type != 'promotion' and not is_stacked:
                 medicine = session.query(Medicine).filter_by(medicine_id=medicine_id).first()
                 if medicine and medicine.max_discount:
                     if best_discount.discount_percent > medicine.max_discount:
@@ -1416,6 +1747,13 @@ class DiscountService:
             if not package_id:
                 continue
 
+            # Check for staff override
+            if respect_staff_override and item.get('discount_override'):
+                logger.info(f"Staff override detected for package {item.get('item_name')} - preserving manual discount of {item.get('discount_percent', 0)}%")
+                item['discount_type'] = item.get('discount_type', 'manual')
+                item['discount_metadata'] = item.get('discount_metadata', {'source': 'staff_override'})
+                continue
+
             unit_price = Decimal(str(item.get('unit_price', 0)))
             quantity = int(item.get('quantity', 1))
 
@@ -1430,11 +1768,18 @@ class DiscountService:
                 quantity=quantity,
                 total_item_count=0,  # Not used for packages (no bulk discount)
                 invoice_date=invoice_date,
-                invoice_items=line_items  # NEW: Pass full invoice context for buy_x_get_y
+                invoice_items=line_items,  # Pass full invoice context for buy_x_get_y
+                exclude_bulk=True,  # Packages don't support bulk discount
+                exclude_loyalty=exclude_loyalty,  # Staff manually unchecked loyalty discount
+                staff_discretionary=staff_discretionary,  # Staff discretionary discount (Added 2025-11-29)
+                exclude_campaign=exclude_campaign,  # Exclude ALL campaigns
+                excluded_campaign_ids=excluded_campaign_ids,  # Per-campaign exclusion
+                exclude_vip=exclude_vip  # Staff manually unchecked VIP discount (Added 2025-11-29)
             )
 
-            # Apply max_discount cap (EXCEPT for promotions - they have priority)
-            if respect_max_discount and best_discount.discount_percent > 0 and best_discount.discount_type != 'promotion':
+            # Apply max_discount cap (EXCEPT for promotions and stacked discounts)
+            is_stacked = best_discount.metadata.get('stacking_applied', False)
+            if respect_max_discount and best_discount.discount_percent > 0 and best_discount.discount_type != 'promotion' and not is_stacked:
                 package = session.query(Package).filter_by(package_id=package_id).first()
                 if package and package.max_discount:
                     if best_discount.discount_percent > package.max_discount:
@@ -1733,4 +2078,671 @@ class DiscountService:
                 }
                 for dtype, data in by_type.items()
             }
+        }
+
+    # ==================== MANUAL PROMO CODE VALIDATION (Added 2025-11-25) ====================
+
+    @staticmethod
+    def validate_promo_code(
+        session: Session,
+        hospital_id: str,
+        promo_code: str,
+        patient_id: str = None,
+        invoice_date: date = None
+    ) -> Dict:
+        """
+        Validate a manually entered promotion code.
+
+        This is used when staff enters a promo code at billing counter.
+        Works for both personalized and public promotions.
+
+        Args:
+            session: Database session
+            hospital_id: Hospital UUID
+            promo_code: The promotion code entered by staff
+            patient_id: Patient UUID (for checking per-patient usage limits)
+            invoice_date: Invoice date for validity check (defaults to today)
+
+        Returns:
+            Dict with:
+                - valid: True/False
+                - promotion: Promotion details if valid
+                - error: Error message if invalid
+        """
+        if invoice_date is None:
+            invoice_date = date.today()
+
+        if not promo_code or not promo_code.strip():
+            return {
+                'valid': False,
+                'error': 'Promotion code is required',
+                'promotion': None
+            }
+
+        promo_code = promo_code.strip().upper()
+
+        # Find promotion by code
+        promotion = session.query(PromotionCampaign).filter(
+            and_(
+                PromotionCampaign.hospital_id == hospital_id,
+                func.upper(PromotionCampaign.campaign_code) == promo_code,
+                PromotionCampaign.is_deleted == False
+            )
+        ).first()
+
+        if not promotion:
+            logger.warning(f"Promo code not found: {promo_code}")
+            return {
+                'valid': False,
+                'error': f'Invalid promotion code: {promo_code}',
+                'promotion': None
+            }
+
+        # Check if promotion is active
+        if not promotion.is_active:
+            logger.info(f"Promo code inactive: {promo_code}")
+            return {
+                'valid': False,
+                'error': 'This promotion is no longer active',
+                'promotion': None
+            }
+
+        # Check validity period
+        if invoice_date < promotion.start_date:
+            logger.info(f"Promo code not yet started: {promo_code}, starts {promotion.start_date}")
+            return {
+                'valid': False,
+                'error': f'This promotion starts on {promotion.start_date.strftime("%d-%b-%Y")}',
+                'promotion': None
+            }
+
+        if invoice_date > promotion.end_date:
+            logger.info(f"Promo code expired: {promo_code}, ended {promotion.end_date}")
+            return {
+                'valid': False,
+                'error': f'This promotion expired on {promotion.end_date.strftime("%d-%b-%Y")}',
+                'promotion': None
+            }
+
+        # Check max total uses
+        if promotion.max_total_uses and promotion.current_uses >= promotion.max_total_uses:
+            logger.info(f"Promo code usage limit reached: {promo_code}")
+            return {
+                'valid': False,
+                'error': 'This promotion has reached its maximum usage limit',
+                'promotion': None
+            }
+
+        # Check max uses per patient
+        if patient_id and promotion.max_uses_per_patient:
+            patient_usage_count = session.query(PromotionUsageLog).filter(
+                and_(
+                    PromotionUsageLog.campaign_id == promotion.campaign_id,
+                    PromotionUsageLog.patient_id == patient_id
+                )
+            ).count()
+
+            if patient_usage_count >= promotion.max_uses_per_patient:
+                logger.info(f"Patient usage limit reached for promo: {promo_code}, patient: {patient_id}")
+                return {
+                    'valid': False,
+                    'error': 'You have already used this promotion the maximum number of times',
+                    'promotion': None
+                }
+
+        # Promotion is valid - return details
+        logger.info(f"Promo code validated successfully: {promo_code}, campaign: {promotion.campaign_name}")
+
+        return {
+            'valid': True,
+            'error': None,
+            'promotion': {
+                'campaign_id': str(promotion.campaign_id),
+                'campaign_code': promotion.campaign_code,
+                'campaign_name': promotion.campaign_name,
+                'description': promotion.description,
+                'promotion_type': promotion.promotion_type,
+                'discount_type': promotion.discount_type,
+                'discount_value': float(promotion.discount_value),
+                'applies_to': promotion.applies_to,
+                'specific_items': promotion.specific_items,
+                'start_date': promotion.start_date.strftime('%d-%b-%Y'),
+                'end_date': promotion.end_date.strftime('%d-%b-%Y'),
+                'is_personalized': promotion.is_personalized,
+                'min_purchase_amount': float(promotion.min_purchase_amount) if promotion.min_purchase_amount else None,
+                'max_discount_amount': float(promotion.max_discount_amount) if promotion.max_discount_amount else None,
+                'terms_and_conditions': promotion.terms_and_conditions,
+                'remaining_uses': (promotion.max_total_uses - promotion.current_uses) if promotion.max_total_uses else None
+            }
+        }
+
+    @staticmethod
+    def get_promotion_by_code(
+        session: Session,
+        hospital_id: str,
+        promo_code: str
+    ) -> Optional[PromotionCampaign]:
+        """
+        Get promotion campaign by code (for applying manually entered code).
+
+        Args:
+            session: Database session
+            hospital_id: Hospital UUID
+            promo_code: The promotion code
+
+        Returns:
+            PromotionCampaign object or None
+        """
+        if not promo_code:
+            return None
+
+        return session.query(PromotionCampaign).filter(
+            and_(
+                PromotionCampaign.hospital_id == hospital_id,
+                func.upper(PromotionCampaign.campaign_code) == promo_code.strip().upper(),
+                PromotionCampaign.is_active == True,
+                PromotionCampaign.is_deleted == False
+            )
+        ).first()
+
+    # =========================================================================
+    # CENTRALIZED DISCOUNT STACKING CONFIGURATION & CALCULATION
+    # =========================================================================
+    # These methods provide a single source of truth for discount calculation
+    # logic, used by invoicing, dashboard, simulation, and all other modules.
+    # =========================================================================
+
+    @staticmethod
+    def get_stacking_config(session: Session, hospital_id: str) -> Dict:
+        """
+        Get discount stacking configuration for a hospital.
+        Returns default config if not set.
+
+        Args:
+            session: Database session
+            hospital_id: Hospital UUID
+
+        Returns:
+            Stacking configuration dictionary
+        """
+        default_config = {
+            'campaign': {
+                'mode': 'exclusive',           # 'exclusive' or 'incremental'
+                'buy_x_get_y_exclusive': True  # X items always at list price
+            },
+            'loyalty': {
+                'mode': 'incremental'          # 'incremental' or 'absolute'
+            },
+            'bulk': {
+                'mode': 'incremental',         # 'incremental' or 'absolute'
+                'exclude_with_campaign': True  # No bulk if campaign applies
+            },
+            'vip': {
+                'mode': 'absolute'             # 'incremental' or 'absolute'
+            },
+            'max_total_discount': None         # Optional cap (e.g., 50)
+        }
+
+        hospital = session.query(Hospital).filter_by(hospital_id=hospital_id).first()
+        if not hospital:
+            return default_config
+
+        config = hospital.discount_stacking_config
+        if not config:
+            return default_config
+
+        # Merge with defaults to ensure all keys exist
+        merged = default_config.copy()
+        for key in ['campaign', 'loyalty', 'bulk', 'vip']:
+            if key in config:
+                merged[key] = {**default_config.get(key, {}), **config[key]}
+        if 'max_total_discount' in config:
+            merged['max_total_discount'] = config['max_total_discount']
+
+        return merged
+
+    @staticmethod
+    def calculate_stacked_discount(
+        discounts: Dict[str, Dict],
+        stacking_config: Dict,
+        item_price: Decimal = None
+    ) -> Dict:
+        """
+        Calculate the final discount based on stacking configuration.
+
+        This is the SINGLE SOURCE OF TRUTH for discount stacking logic.
+        All modules (invoicing, dashboard, simulation) should use this.
+
+        Args:
+            discounts: Dictionary of available discounts, each with:
+                {
+                    'campaign': {'percent': X, 'amount': Y, 'type': 'percentage'|'fixed'|'buy_x_get_y', ...},
+                    'bulk': {'percent': X, ...},
+                    'loyalty': {'percent': X, ...},
+                    'vip': {'percent': X, ...},
+                    'standard': {'percent': X, ...}
+                }
+            stacking_config: Hospital's stacking configuration
+            item_price: Item price (needed to convert fixed amount to %)
+
+        Returns:
+            {
+                'total_percent': X,
+                'breakdown': [...],
+                'applied_discounts': [...],
+                'excluded_discounts': [...],
+                'capped': True/False,
+                'cap_applied': X
+            }
+        """
+        breakdown = []
+        applied = []
+        excluded = []
+        total_percent = Decimal('0')
+
+        campaign = discounts.get('campaign', {})
+        bulk = discounts.get('bulk', {})
+        loyalty = discounts.get('loyalty', {})
+        vip = discounts.get('vip', {})
+        standard = discounts.get('standard', {})
+
+        campaign_config = stacking_config.get('campaign', {})
+        loyalty_config = stacking_config.get('loyalty', {})
+        bulk_config = stacking_config.get('bulk', {})
+        vip_config = stacking_config.get('vip', {})
+
+        # =====================================================================
+        # STEP 0: Calculate actual percentages for each discount type
+        # =====================================================================
+        discount_values = {}
+
+        # Campaign discount
+        campaign_percent = Decimal('0')
+        if campaign.get('applicable') or campaign.get('percent', 0) > 0:
+            campaign_type = campaign.get('type', 'percentage')
+            if campaign_type == 'buy_x_get_y':
+                campaign_percent = Decimal(str(campaign.get('effective_percent', 0)))
+            elif campaign_type == 'fixed' and item_price and item_price > 0:
+                amount = Decimal(str(campaign.get('amount', 0)))
+                campaign_percent = (amount / item_price) * 100
+            else:
+                campaign_percent = Decimal(str(campaign.get('percent', 0)))
+        discount_values['campaign'] = {
+            'percent': campaign_percent,
+            'config': campaign_config,
+            'name': campaign.get('name', 'Campaign'),
+            'type': campaign.get('type', 'percentage')
+        }
+
+        # Bulk discount
+        bulk_percent = Decimal(str(bulk.get('percent', 0)))
+        discount_values['bulk'] = {
+            'percent': bulk_percent,
+            'config': bulk_config,
+            'name': 'Bulk Discount'
+        }
+
+        # Loyalty discount
+        loyalty_percent = Decimal(str(loyalty.get('percent', 0)))
+        if not loyalty.get('is_valid_today', True):
+            loyalty_percent = Decimal('0')
+        discount_values['loyalty'] = {
+            'percent': loyalty_percent,
+            'config': loyalty_config,
+            'name': loyalty.get('card_type', 'Loyalty Card')
+        }
+
+        # VIP discount
+        vip_percent = Decimal(str(vip.get('percent', 0)))
+        discount_values['vip'] = {
+            'percent': vip_percent,
+            'config': vip_config,
+            'name': 'VIP Discount'
+        }
+
+        # =====================================================================
+        # DEBUG: Log discount values and modes (Added 2025-11-29)
+        # =====================================================================
+        logger.info(f"=== calculate_stacked_discount DEBUG ===")
+        for source, data in discount_values.items():
+            logger.info(f"  {source}: percent={data['percent']}, mode={data['config'].get('mode', 'N/A')}, name={data.get('name', 'N/A')}")
+
+        # =====================================================================
+        # STEP 1: Check for EXCLUSIVE mode (any type can be exclusive)
+        # If multiple exclusives, highest one wins
+        # =====================================================================
+        exclusive_candidates = []
+        for source, data in discount_values.items():
+            if data['percent'] > 0 and data['config'].get('mode') == 'exclusive':
+                exclusive_candidates.append({
+                    'source': source,
+                    'percent': data['percent'],
+                    'name': data['name']
+                })
+
+        logger.info(f"  Exclusive candidates: {exclusive_candidates}")
+
+        if exclusive_candidates:
+            # Pick highest exclusive discount
+            best_exclusive = max(exclusive_candidates, key=lambda x: x['percent'])
+            logger.info(f"  Best exclusive: {best_exclusive['source']} at {best_exclusive['percent']}%")
+            total_percent = best_exclusive['percent']
+            breakdown.append({
+                'source': best_exclusive['source'],
+                'percent': float(best_exclusive['percent']),
+                'mode': 'exclusive'
+            })
+            applied.append({
+                'source': best_exclusive['source'],
+                'percent': float(best_exclusive['percent']),
+                'name': best_exclusive['name']
+            })
+
+            # Mark all others as excluded
+            for source, data in discount_values.items():
+                if source != best_exclusive['source'] and data['percent'] > 0:
+                    excluded.append({
+                        'source': source,
+                        'reason': f"{best_exclusive['source'].title()} is exclusive"
+                    })
+
+            # Skip to max cap check (handled at the end)
+            pass
+
+        else:
+            # =====================================================================
+            # No EXCLUSIVE discount - process INCREMENTAL and ABSOLUTE modes
+            # =====================================================================
+
+            # Check if campaign is applied (for bulk exclusion check)
+            campaign_applied = discount_values['campaign']['percent'] > 0
+
+            # -----------------------------------------------------------------
+            # STEP 2: Handle INCREMENTAL discounts (they all add up)
+            # -----------------------------------------------------------------
+            for source in ['campaign', 'bulk', 'loyalty', 'vip']:
+                data = discount_values[source]
+                if data['percent'] <= 0:
+                    continue
+
+                mode = data['config'].get('mode', 'incremental')
+
+                # Check bulk exclusion with campaign
+                if source == 'bulk' and campaign_applied and data['config'].get('exclude_with_campaign', False):
+                    excluded.append({'source': 'bulk', 'reason': 'Excluded when campaign applies'})
+                    continue
+
+                if mode == 'incremental':
+                    total_percent += data['percent']
+                    breakdown.append({
+                        'source': source,
+                        'percent': float(data['percent']),
+                        'mode': 'incremental'
+                    })
+                    applied.append({
+                        'source': source,
+                        'percent': float(data['percent']),
+                        'name': data['name']
+                    })
+
+            # -----------------------------------------------------------------
+            # STEP 3: Handle ABSOLUTE discounts (best one wins)
+            # -----------------------------------------------------------------
+            absolute_candidates = []
+
+            for source in ['campaign', 'bulk', 'loyalty', 'vip']:
+                data = discount_values[source]
+                if data['percent'] <= 0:
+                    continue
+
+                mode = data['config'].get('mode', 'incremental')
+
+                # Check bulk exclusion with campaign
+                if source == 'bulk' and campaign_applied and data['config'].get('exclude_with_campaign', False):
+                    continue  # Already excluded above
+
+                if mode == 'absolute':
+                    absolute_candidates.append({
+                        'source': source,
+                        'percent': data['percent'],
+                        'name': data['name']
+                    })
+
+            # Pick the best absolute discount and ADD to incrementals
+            # ABSOLUTE mode: Best absolute discount STACKS with incrementals (Updated 2025-11-29)
+            # - Multiple absolutes compete among themselves (best one wins)
+            # - The winning absolute then ADDS to the incremental total
+            logger.info(f"  Absolute candidates: {absolute_candidates}")
+            logger.info(f"  Incremental total after STEP 2: {total_percent}%")
+
+            if absolute_candidates:
+                best_absolute = max(absolute_candidates, key=lambda x: x['percent'])
+                logger.info(f"  Best absolute: {best_absolute['source']} at {best_absolute['percent']}%")
+
+                # ABSOLUTE mode: Add best absolute to incrementals (they stack)
+                total_percent += best_absolute['percent']
+                logger.info(f"  --> Absolute STACKS with incrementals: {total_percent}%")
+
+                breakdown.append({
+                    'source': best_absolute['source'],
+                    'percent': float(best_absolute['percent']),
+                    'mode': 'absolute (stacked)'
+                })
+                applied.append({
+                    'source': best_absolute['source'],
+                    'percent': float(best_absolute['percent']),
+                    'name': best_absolute['name']
+                })
+
+                # Mark non-winning absolute candidates as excluded
+                for candidate in absolute_candidates:
+                    if candidate['source'] != best_absolute['source']:
+                        excluded.append({
+                            'source': candidate['source'],
+                            'reason': f"Lower than {best_absolute['source']} ({float(candidate['percent'])}% < {float(best_absolute['percent'])}%)"
+                        })
+
+        # =====================================================================
+        # STEP 6: Apply Standard Discount (Fallback)
+        # =====================================================================
+        standard_percent = Decimal(str(standard.get('percent', 0)))
+        if total_percent == 0 and standard_percent > 0:
+            total_percent = standard_percent
+            breakdown.append({
+                'source': 'standard',
+                'percent': float(standard_percent),
+                'mode': 'fallback'
+            })
+            applied.append({
+                'source': 'standard',
+                'percent': float(standard_percent),
+                'name': 'Standard Discount'
+            })
+
+        # =====================================================================
+        # STEP 7: Apply Max Discount Cap
+        # =====================================================================
+        capped = False
+        cap_applied = None
+        max_cap = stacking_config.get('max_total_discount')
+
+        if max_cap is not None and total_percent > Decimal(str(max_cap)):
+            cap_applied = float(total_percent)
+            total_percent = Decimal(str(max_cap))
+            capped = True
+            breakdown.append({
+                'source': 'cap',
+                'percent': float(max_cap),
+                'mode': f'capped from {cap_applied}%'
+            })
+
+        logger.info(f"  === FINAL RESULT ===")
+        logger.info(f"  Total percent: {total_percent}%")
+        logger.info(f"  Applied: {applied}")
+        logger.info(f"  Excluded: {excluded}")
+        logger.info(f"  Capped: {capped}")
+
+        return {
+            'total_percent': float(total_percent),
+            'breakdown': breakdown,
+            'applied_discounts': applied,
+            'excluded_discounts': excluded,
+            'capped': capped,
+            'cap_applied': cap_applied
+        }
+
+    @staticmethod
+    def get_max_discount_preview(
+        session: Session,
+        hospital_id: str,
+        patient_id: str = None,
+        item_type: str = None,
+        item_id: str = None,
+        item_price: Decimal = None,
+        campaigns: List[Dict] = None
+    ) -> Dict:
+        """
+        Get maximum possible discount preview for dashboard/simulation.
+
+        This method uses the SAME stacking logic as actual invoice calculation,
+        ensuring consistency across all modules.
+
+        Args:
+            session: Database session
+            hospital_id: Hospital UUID
+            patient_id: Patient UUID (for loyalty/VIP)
+            item_type: 'Service', 'Medicine', 'Package' (optional)
+            item_id: Item UUID (optional)
+            item_price: Item price for amount-to-% conversion
+            campaigns: List of applicable campaign dicts (optional, pre-fetched)
+
+        Returns:
+            {
+                'max_discount_percent': X,
+                'breakdown': [...],
+                'stacking_config': {...},
+                'discounts_available': {...}
+            }
+        """
+        from app.models.master import Patient
+
+        # Get stacking configuration
+        stacking_config = DiscountService.get_stacking_config(session, hospital_id)
+
+        # Collect all available discounts
+        discounts = {
+            'campaign': {'percent': 0, 'applicable': False},
+            'bulk': {'percent': 0, 'applicable': False},
+            'loyalty': {'percent': 0, 'applicable': False, 'is_valid_today': False},
+            'vip': {'percent': 0, 'applicable': False},
+            'standard': {'percent': 0, 'applicable': False}
+        }
+
+        # Get best campaign discount
+        if campaigns:
+            best_campaign = None
+            best_value = 0
+            for c in campaigns:
+                if c.get('auto_apply') and not c.get('is_personalized'):
+                    value = c.get('discount_value', 0)
+                    if c.get('discount_type') == 'percentage' and value > best_value:
+                        best_value = value
+                        best_campaign = c
+
+            if best_campaign:
+                discounts['campaign'] = {
+                    'percent': best_value,
+                    'applicable': True,
+                    'type': best_campaign.get('discount_type', 'percentage'),
+                    'name': best_campaign.get('campaign_name', 'Campaign'),
+                    'promotion_type': best_campaign.get('promotion_type', 'simple_discount')
+                }
+
+        # Get bulk discount (if item selected)
+        if item_type and item_id:
+            if item_type.lower() in ['service', 'services']:
+                service = session.query(Service).filter_by(service_id=item_id).first()
+                if service and getattr(service, 'bulk_discount_eligible', False):
+                    bulk_percent = float(service.bulk_discount_percent or 0)
+                    if bulk_percent > 0:
+                        discounts['bulk'] = {
+                            'percent': bulk_percent,
+                            'applicable': True,
+                            'name': 'Bulk Discount'
+                        }
+            elif item_type.lower() in ['medicine', 'medicines']:
+                medicine = session.query(Medicine).filter_by(medicine_id=item_id).first()
+                if medicine and getattr(medicine, 'bulk_discount_eligible', False):
+                    bulk_percent = float(medicine.bulk_discount_percent or 0)
+                    if bulk_percent > 0:
+                        discounts['bulk'] = {
+                            'percent': bulk_percent,
+                            'applicable': True,
+                            'name': 'Bulk Discount'
+                        }
+
+        # Get loyalty discount (if patient selected)
+        if patient_id:
+            loyalty_wallet = session.query(PatientLoyaltyWallet).filter(
+                PatientLoyaltyWallet.patient_id == patient_id,
+                PatientLoyaltyWallet.is_active == True
+            ).first()
+
+            if loyalty_wallet:
+                card_type = session.query(LoyaltyCardType).filter_by(
+                    card_type_id=loyalty_wallet.card_type_id,
+                    is_active=True
+                ).first()
+
+                if card_type:
+                    today = date.today()
+                    valid_from = getattr(loyalty_wallet, 'valid_from', None)
+                    valid_to = getattr(loyalty_wallet, 'valid_to', None)
+                    is_valid = True
+                    if valid_from and today < valid_from:
+                        is_valid = False
+                    if valid_to and today > valid_to:
+                        is_valid = False
+
+                    discounts['loyalty'] = {
+                        'percent': float(card_type.discount_percent or 0),
+                        'applicable': True,
+                        'is_valid_today': is_valid,
+                        'card_type': card_type.card_type_name
+                    }
+
+            # Get VIP status
+            patient = session.query(Patient).filter_by(patient_id=patient_id).first()
+            if patient and getattr(patient, 'is_special_group', False):
+                # TODO: Get VIP discount from hospital settings
+                # For now, VIP is just a flag for campaign targeting
+                discounts['vip'] = {
+                    'percent': 0,  # VIP discount percentage should be configurable
+                    'applicable': False
+                }
+
+        # Get standard discount (if item selected)
+        if item_type and item_id:
+            if item_type.lower() in ['service', 'services']:
+                service = session.query(Service).filter_by(service_id=item_id).first()
+                if service and service.standard_discount_percent:
+                    discounts['standard'] = {
+                        'percent': float(service.standard_discount_percent),
+                        'applicable': True,
+                        'name': 'Standard Discount'
+                    }
+
+        # Calculate stacked discount
+        result = DiscountService.calculate_stacked_discount(
+            discounts, stacking_config, item_price
+        )
+
+        return {
+            'max_discount_percent': result['total_percent'],
+            'breakdown': result['breakdown'],
+            'applied_discounts': result['applied_discounts'],
+            'excluded_discounts': result['excluded_discounts'],
+            'stacking_config': stacking_config,
+            'discounts_available': discounts,
+            'capped': result['capped']
         }

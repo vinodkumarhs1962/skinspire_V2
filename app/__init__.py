@@ -224,7 +224,15 @@ def create_app() -> Flask:
         login_manager.login_view = 'auth_views.login'
         login_manager.login_message = 'Please log in to access this page.'
         login_manager.login_message_category = 'info'
-        
+
+        # Handle unauthorized access for AJAX requests
+        @login_manager.unauthorized_handler
+        def unauthorized():
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or \
+               request.headers.get('Accept') == 'application/json':
+                return jsonify({'success': False, 'message': 'Authentication required. Please log in.'}), 401
+            return redirect(url_for('auth_views.login'))
+
         # Set up user loader for Flask-Login using database_service
         @login_manager.user_loader
         def load_user(user_id):
@@ -444,6 +452,15 @@ def register_view_blueprints(app: Flask) -> None:
             view_blueprints.append(wallet_bp)
         except ImportError as e:
             app.logger.warning(f"Wallet views blueprint could not be loaded: {str(e)}")
+
+        try:
+            # Promotion views (promotions dashboard and management)
+            from app.views.promotion_views import promotion_views_bp
+            view_blueprints.append(promotion_views_bp)
+            # Exempt promotion API endpoints from CSRF (for JSON API calls)
+            csrf.exempt(promotion_views_bp)
+        except ImportError as e:
+            app.logger.warning(f"Promotion views blueprint could not be loaded: {str(e)}")
 
         app.logger.info("Registered view blueprints")
     except ImportError as e:

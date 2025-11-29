@@ -67,43 +67,58 @@ class InvoiceItemComponent {
       if (this.noItemsRow) {
         this.noItemsRow.style.display = 'none';
       }
-      
+
       // Create new row from template
       const content = this.template.content.cloneNode(true);
       const row = content.querySelector('.line-item-row');
-      
+
       // Replace {index} placeholders
       const currentIndex = this.itemCount;
       row.innerHTML = row.innerHTML.replace(/{index}/g, currentIndex);
-      
+
       // Add to container
       this.container.appendChild(row);
-      
+
       // Initialize row
       this.initRow(row);
-      
+
       // Update line numbers and calculate totals
       this.updateLineNumbers();
       this.calculateTotals();
-      
+
       // Increment counter
       this.itemCount++;
+
+      // Notify bulk discount manager of line item addition (Added 2025-11-29)
+      document.dispatchEvent(new Event('line-item-added'));
+
+      // Return the row for programmatic access (e.g., preserving line items on error)
+      return row;
+    }
+
+    // Alias for addNewItem (used by restoration code)
+    addLineItem() {
+      return this.addNewItem();
     }
     
     removeItem(row) {
       if (!row) return;
-      
+
       // Remove row from DOM
       row.remove();
-      
+
       // Show "no items" row if empty
       if (this.container.querySelectorAll('.line-item-row').length === 0 && this.noItemsRow) {
         this.noItemsRow.style.display = '';
       }
-      
+
       // Update line numbers and recalculate totals
       this.updateLineNumbers();
       this.calculateTotals();
+
+      // Notify bulk discount manager of line item removal
+      // This triggers recalculation of bulk discount eligibility
+      document.dispatchEvent(new Event('line-item-removed'));
     }
     
     saveItem(row) {

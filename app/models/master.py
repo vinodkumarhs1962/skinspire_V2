@@ -1,6 +1,6 @@
 # app/models/master.py
 
-from sqlalchemy import Column, String, ForeignKey, Boolean, Text, Numeric, Date, Integer, DateTime, func
+from sqlalchemy import Column, String, ForeignKey, Boolean, Text, Numeric, Date, Integer, DateTime, func, UniqueConstraint, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -41,6 +41,27 @@ class Hospital(Base, TimestampMixin, SoftDeleteMixin):
 
     # Loyalty discount policy (multi-discount system - 21-Nov-2025)
     loyalty_discount_mode = Column(String(20), default='absolute')  # 'absolute' = max(loyalty, other), 'additional' = loyalty% + other%
+
+    # Discount Stacking Configuration (Comprehensive - 28-Nov-2025)
+    # Configures how different discount types interact with each other
+    # Default config allows full stacking with campaign having highest priority
+    discount_stacking_config = Column(JSONB, default={
+        'campaign': {
+            'mode': 'exclusive',           # 'exclusive' = only campaign, 'incremental' = stacks with others
+            'buy_x_get_y_exclusive': True  # X items always at list price
+        },
+        'loyalty': {
+            'mode': 'incremental'          # 'incremental' = always adds, 'absolute' = competes
+        },
+        'bulk': {
+            'mode': 'incremental',         # 'incremental' = adds, 'absolute' = competes
+            'exclude_with_campaign': True  # No bulk if campaign applies
+        },
+        'vip': {
+            'mode': 'absolute'             # 'incremental' = adds, 'absolute' = competes
+        },
+        'max_total_discount': None         # Optional cap on total discount % (e.g., 50)
+    })
 
     # Relationships
     branches = relationship("Branch", back_populates="hospital", cascade="all, delete-orphan")
@@ -199,6 +220,10 @@ class Patient(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     documents = Column(JSONB)                      # ID proofs, previous records
     preferences = Column(JSONB)                    # language, communication preferences
     is_active = Column(Boolean, default=True)
+
+    # Special Group Flag (Added 2025-11-27)
+    # VIP/Special customers eligible for exclusive campaigns, Email/WhatsApp targeting, and special app features
+    is_special_group = Column(Boolean, default=False)
 
     # Relationships
     hospital = relationship("Hospital", back_populates="patients")
@@ -476,6 +501,10 @@ class Service(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     loyalty_discount_percent = Column(Numeric(5, 2), default=0)  # Loyalty card discount
     max_discount = Column(Numeric(5, 2))  # Maximum allowed discount cap
 
+    # Bulk Discount Eligibility (Added 2025-11-27)
+    # Checkbox to enable/disable bulk discount for this service
+    bulk_discount_eligible = Column(Boolean, default=False)
+
     default_gl_account = Column(UUID(as_uuid=True), ForeignKey('chart_of_accounts.account_id'))
     service_type = Column(String(50), nullable=True)  # e.g., 'Skin Treatment', 'Laser Procedure', 'Consultation', 'Cosmetic Procedure'
     duration_minutes = Column(Integer, nullable=True)  # Expected duration of the service
@@ -667,6 +696,10 @@ class Medicine(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     bulk_discount_percent = Column(Numeric(5, 2), default=0)  # Quantity-based discount
     loyalty_discount_percent = Column(Numeric(5, 2), default=0)  # Loyalty card discount
     max_discount = Column(Numeric(5, 2))  # Maximum allowed discount cap
+
+    # Bulk Discount Eligibility (Added 2025-11-27)
+    # Checkbox to enable/disable bulk discount for this medicine
+    bulk_discount_eligible = Column(Boolean, default=False)
 
     # Inventory Management
     safety_stock = Column(Integer)  # Minimum stock level
@@ -878,7 +911,7 @@ class DiscountApplicationLog(Base):
     patient = relationship("Patient")
     service = relationship("Service")
     card_type = relationship("LoyaltyCardType")
-class PromotionCampaign(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
+class PromotionCampaign(Base, TimestampMixin, TenantMixin, SoftDeleteMixin, ApprovalMixin):
     """Promotion/Campaign discount configuration"""
     __tablename__ = 'promotion_campaigns'
 
@@ -894,6 +927,11 @@ class PromotionCampaign(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     is_active = Column(Boolean, default=True)
+
+    # Approval Workflow (Added 2025-11-28)
+    # Status: draft (new), pending_approval (submitted), approved, rejected
+    status = Column(String(20), default='draft')
+    approval_notes = Column(Text)  # Rejection reason or approval comments
 
     # Promotion Type (Complex Promotions - 21-Nov-2025)
     promotion_type = Column(String(20), default='simple_discount')  # 'simple_discount', 'buy_x_get_y', 'tiered_discount', 'bundle'
@@ -919,6 +957,21 @@ class PromotionCampaign(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
 
     # Auto-application
     auto_apply = Column(Boolean, default=False)
+
+    # Personalized Campaign Flag (Added 2025-11-25)
+    # TRUE = Sent via Email/WhatsApp to specific patients, requires manual code entry
+    # FALSE = Public promotion, auto-applied to all eligible patients
+    is_personalized = Column(Boolean, default=False)
+
+    # Special Group Targeting (Added 2025-11-27)
+    # TRUE = Campaign only applies to patients where is_special_group = TRUE
+    # FALSE = Campaign applies to all patients (default)
+    target_special_group = Column(Boolean, default=False)
+
+    # Campaign Group Targeting (Added 2025-11-28)
+    # JSONB format: {"group_ids": ["uuid1", "uuid2"]}
+    # NULL = use applies_to/specific_items logic (backward compatible)
+    target_groups = Column(JSONB)
 
     # Relationships
     hospital = relationship("Hospital")
@@ -951,3 +1004,47 @@ class PromotionUsageLog(Base):
     campaign = relationship("PromotionCampaign", back_populates="usage_logs")
     hospital = relationship("Hospital")
     patient = relationship("Patient")
+
+
+class PromotionCampaignGroup(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
+    """Campaign groups for organizing services, medicines, and packages into targetable collections"""
+    __tablename__ = 'promotion_campaign_groups'
+
+    group_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+
+    # Group Details
+    group_code = Column(String(50), nullable=False)
+    group_name = Column(String(100), nullable=False)
+    description = Column(Text)
+    is_active = Column(Boolean, default=True)
+
+    # Unique constraint on (hospital_id, group_code)
+    __table_args__ = (
+        UniqueConstraint('hospital_id', 'group_code', name='uq_campaign_group_code'),
+    )
+
+    # Relationships
+    hospital = relationship("Hospital")
+    items = relationship("PromotionGroupItem", back_populates="group", cascade="all, delete-orphan")
+
+
+class PromotionGroupItem(Base):
+    """Junction table linking campaign groups to services, medicines, and packages"""
+    __tablename__ = 'promotion_group_items'
+
+    group_item_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    group_id = Column(UUID(as_uuid=True), ForeignKey('promotion_campaign_groups.group_id', ondelete='CASCADE'), nullable=False)
+    item_type = Column(String(20), nullable=False)  # 'service', 'medicine', 'package'
+    item_id = Column(UUID(as_uuid=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_by = Column(UUID(as_uuid=True), ForeignKey('users.user_id'))
+
+    # Unique constraint: same item cannot be in same group twice
+    __table_args__ = (
+        UniqueConstraint('group_id', 'item_type', 'item_id', name='uq_group_item'),
+        CheckConstraint("item_type IN ('service', 'medicine', 'package')", name='chk_item_type'),
+    )
+
+    # Relationships
+    group = relationship("PromotionCampaignGroup", back_populates="items")

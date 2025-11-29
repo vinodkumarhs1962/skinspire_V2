@@ -1,0 +1,183 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}Create Campaign Group - Skinspire{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/buttons.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/cards.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <!-- Page Header -->
+    <div class="mb-6">
+        <!-- Row 1: Title and Date -->
+        <div class="flex flex-wrap justify-between items-center">
+            <div>
+                <nav class="text-sm text-gray-500 mb-2">
+                    <a href="{{ url_for('promotion_views.dashboard') }}" class="hover:text-blue-600">
+                        <i class="fas fa-tags mr-1"></i>Promotions
+                    </a>
+                    <span class="mx-2">/</span>
+                    <a href="{{ url_for('promotion_views.group_list') }}" class="hover:text-blue-600">Campaign Groups</a>
+                    <span class="mx-2">/</span>
+                    <span class="text-gray-900 dark:text-white">New Group</span>
+                </nav>
+                <h1 class="text-2xl font-bold text-gray-800 dark:text-white">
+                    <i class="fas fa-plus-circle mr-2 text-purple-600"></i>Create Campaign Group
+                </h1>
+            </div>
+            <div class="text-right px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                <div class="text-base font-semibold text-gray-900 dark:text-white">{{ today_display }}</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">{{ today_day }}</div>
+            </div>
+        </div>
+        <!-- Row 2: Action Buttons -->
+        <div class="flex flex-wrap gap-2 mt-4">
+            <a href="{{ url_for('promotion_views.group_list') }}" class="btn-back">
+                <i class="fas fa-arrow-left mr-2"></i>Back
+            </a>
+        </div>
+    </div>
+
+    <!-- Form Card -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                <i class="fas fa-info-circle mr-2"></i>Group Information
+            </h2>
+        </div>
+
+        <form id="createGroupForm" method="POST" class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Group Code -->
+                <div>
+                    <label for="group_code" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Group Code <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" id="group_code" name="group_code" required
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white uppercase"
+                           placeholder="e.g., PREMIUM-SKIN" maxlength="50"
+                           oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9-_]/g, '')">
+                    <p class="mt-1 text-xs text-gray-500">Uppercase letters, numbers, hyphens only</p>
+                </div>
+
+                <!-- Group Name -->
+                <div>
+                    <label for="group_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Group Name <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" id="group_name" name="group_name" required
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                           placeholder="e.g., Premium Skin Care" maxlength="100">
+                </div>
+
+                <!-- Description -->
+                <div class="md:col-span-2">
+                    <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Description
+                    </label>
+                    <textarea id="description" name="description" rows="3"
+                              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                              placeholder="Brief description of this group..."></textarea>
+                </div>
+
+                <!-- Is Active -->
+                <div class="md:col-span-2">
+                    <label class="inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="is_active" name="is_active" checked
+                               class="sr-only peer">
+                        <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 dark:peer-focus:ring-purple-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-purple-600"></div>
+                        <span class="ms-3 text-sm font-medium text-gray-700 dark:text-gray-300">Active</span>
+                    </label>
+                    <p class="mt-1 text-xs text-gray-500">Active groups can be used in campaigns</p>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                <a href="{{ url_for('promotion_views.group_list') }}" class="btn-secondary">
+                    <i class="fas fa-times mr-2"></i>Cancel
+                </a>
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-save mr-2"></i>Create Group
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Quick Tips -->
+    <div class="mt-6 bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4">
+        <h3 class="text-sm font-semibold text-purple-800 dark:text-purple-300 mb-2">
+            <i class="fas fa-lightbulb mr-2"></i>Tips for Campaign Groups
+        </h3>
+        <ul class="text-sm text-purple-700 dark:text-purple-400 space-y-1">
+            <li><i class="fas fa-check mr-2"></i>Group related services, medicines, and packages together</li>
+            <li><i class="fas fa-check mr-2"></i>Use descriptive names like "Summer Skin Care" or "Premium Treatments"</li>
+            <li><i class="fas fa-check mr-2"></i>Items can belong to multiple groups simultaneously</li>
+            <li><i class="fas fa-check mr-2"></i>Add items after creating the group</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.getElementById('createGroupForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const formData = {
+            group_code: document.getElementById('group_code').value.trim(),
+            group_name: document.getElementById('group_name').value.trim(),
+            description: document.getElementById('description').value.trim(),
+            is_active: document.getElementById('is_active').checked
+        };
+
+        // Validation
+        if (!formData.group_code) {
+            alert('Please enter a group code');
+            return;
+        }
+        if (!formData.group_name) {
+            alert('Please enter a group name');
+            return;
+        }
+
+        // Submit
+        fetch('{{ url_for("promotion_views.group_create") }}', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/json'
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify(formData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Redirect to detail page
+                window.location.href = data.redirect || '{{ url_for("promotion_views.group_list") }}';
+            } else {
+                alert(data.message || 'Failed to create group');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while creating the group');
+        });
+    });
+
+    // Auto-generate code from name
+    document.getElementById('group_name').addEventListener('blur', function() {
+        const codeField = document.getElementById('group_code');
+        if (!codeField.value && this.value) {
+            codeField.value = this.value
+                .toUpperCase()
+                .replace(/[^A-Z0-9\s-]/g, '')
+                .replace(/\s+/g, '-')
+                .substring(0, 50);
+        }
+    });
+</script>
+{% endblock %}

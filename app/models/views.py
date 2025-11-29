@@ -651,9 +651,17 @@ class PatientPaymentReceiptView(Base):
     credit_card_amount = Column(Numeric(12, 2))
     debit_card_amount = Column(Numeric(12, 2))
     upi_amount = Column(Numeric(12, 2))
+    wallet_points_amount = Column(Numeric(12, 2))  # Loyalty points redeemed
+    wallet_transaction_id = Column(PostgresUUID(as_uuid=True))  # Reference to wallet_transaction
+    advance_adjustment_amount = Column(Numeric(12, 2))  # Advance adjustment amount
+    advance_adjustment_id = Column(PostgresUUID(as_uuid=True))  # Reference to advance_adjustment
+    payment_method_total = Column(Numeric(12, 2))  # Total of all payment methods
+    # Alias columns for detail sections
+    wallet_points_detail_amount = Column(Numeric(12, 2))  # Same as wallet_points_amount
+    advance_amount_applied = Column(Numeric(12, 2))  # Same as advance_adjustment_amount
 
     # === PAYMENT METHOD GROUPING ===
-    payment_method_primary = Column(String(30))  # Cash, Credit Card, Debit Card, UPI, Multiple, Advance Adjustment
+    payment_method_primary = Column(String(30))  # Cash, Credit Card, Debit Card, UPI, Wallet Points, Advance, Multiple
 
     # === PAYMENT METHOD DETAILS ===
     card_number_last4 = Column(String(4))

@@ -843,7 +843,7 @@
                             <div id="standard-eligible-discounts" style="display: block; margin-top: 12px; padding: 12px; background: #f9fafb; border-radius: 4px; border: 1px solid #e5e7eb;">
                                 <div style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">ALL ELIGIBLE DISCOUNTS:</div>
                                 <div id="standard-eligible-list" style="font-size: 13px; color: #374151;">
-                                    Loading...
+                                    <span style="color: #9ca3af; font-style: italic;">Add items to see discounts</span>
                                 </div>
                             </div>
                         </div>
@@ -873,7 +873,7 @@
                             <div id="bulk-eligible-discounts" style="display: block; margin-top: 12px; padding: 12px; background: #f9fafb; border-radius: 4px; border: 1px solid #e5e7eb;">
                                 <div style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">ALL ELIGIBLE DISCOUNTS:</div>
                                 <div id="bulk-eligible-list" style="font-size: 13px; color: #374151;">
-                                    Loading...
+                                    <span style="color: #9ca3af; font-style: italic;">Add 5+ items for bulk discount</span>
                                 </div>
                             </div>
                         </div>
@@ -904,50 +904,164 @@
                             <div id="loyalty-eligible-discounts" style="display: block; margin-top: 12px; padding: 12px; background: #f9fafb; border-radius: 4px; border: 1px solid #e5e7eb;">
                                 <div style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">ALL ELIGIBLE DISCOUNTS:</div>
                                 <div id="loyalty-eligible-list" style="font-size: 13px; color: #374151;">
-                                    Loading...
+                                    <span style="color: #9ca3af; font-style: italic;">Select patient with loyalty card</span>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Promotion Discount (Auto-applied) -->
-                        <div class="discount-control-card promotion-card" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); padding: 16px; border-radius: 8px; border: 2px solid #86efac;">
-                            <label style="display: flex; align-items: center;">
-                                <input
-                                    type="checkbox"
-                                    id="has-promotion-discount"
-                                    style="width: 18px; height: 18px; margin-right: 10px;"
-                                    disabled
-                                    checked>
-                                <div style="flex: 1;">
-                                    <span class="badge-discount-promotion" style="font-size: 11px; font-weight: 600;">PROMOTION 🎁</span>
-                                    <div style="font-size: 13px; color: #166534; margin-top: 4px; font-weight: 500;">Auto-applied when eligible</div>
+                        <!-- Campaign Discounts Card (Redesigned 2025-11-29) -->
+                        <div class="discount-control-card campaign-card" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); padding: 16px; border-radius: 8px; border: 2px solid #86efac;">
+                            <!-- Header -->
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <div style="display: flex; align-items: center;">
+                                    <span class="badge-discount-promotion" style="font-size: 11px; font-weight: 600;">CAMPAIGN</span>
+                                    <span style="font-size: 12px; color: #166534; margin-left: 8px;">Auto-applied based on eligibility</span>
                                 </div>
-                                <button type="button" id="promotion-eligible-toggle"
-                                    style="background: #dcfce7; border: 1px solid #86efac; border-radius: 4px; padding: 4px 8px; font-size: 11px; color: #166534; cursor: pointer; margin-left: 8px;"
-                                    title="Show all eligible discounts">
-                                    ℹ️ Details
-                                </button>
-                            </label>
-                            <div id="promotion-discount-info" style="margin-top: 12px; font-size: 13px; color: #166534; display: none;">
-                                <strong style="font-weight: 500;">Campaign:</strong> <span id="promotion-name">None</span><br>
-                                <strong style="font-weight: 500;">Amount:</strong> <span id="promotion-amount">Rs. 0.00</span>
+                                <label style="display: flex; align-items: center; cursor: pointer;">
+                                    <input type="checkbox" id="campaign-apply-checkbox" checked onchange="toggleCampaignDiscount()"
+                                           style="width: 18px; height: 18px; cursor: pointer; accent-color: #22c55e;">
+                                    <span style="margin-left: 8px; font-size: 13px; font-weight: 500; color: #166534;">Apply</span>
+                                </label>
                             </div>
-                            <!-- Eligible Discounts Section -->
-                            <div id="promotion-eligible-discounts" style="display: block; margin-top: 12px; padding: 12px; background: #f0fdf4; border-radius: 4px; border: 1px solid #86efac;">
-                                <div style="font-size: 12px; font-weight: 600; color: #166534; margin-bottom: 8px;">ALL ELIGIBLE DISCOUNTS:</div>
-                                <div id="promotion-eligible-list" style="font-size: 13px; color: #374151;">
-                                    Loading...
+
+                            <!-- Eligible Campaigns List -->
+                            <div id="campaign-eligible-list" style="padding: 12px; background: white; border-radius: 6px; border: 1px solid #86efac; min-height: 60px;">
+                                <div id="campaign-list-content" style="font-size: 13px; color: #374151;">
+                                    <span style="color: #9ca3af; font-style: italic;">Add items to see eligible campaigns</span>
                                 </div>
                             </div>
+
+                            <!-- Applied Campaign Info (shown when campaign is applied) -->
+                            <div id="campaign-applied-info" style="display: none; margin-top: 12px; padding: 12px; background: rgba(34, 197, 94, 0.1); border-radius: 6px; border: 1px solid #22c55e;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <div style="font-size: 14px; font-weight: 600; color: #166534;">
+                                            <span id="applied-campaign-name">-</span>
+                                        </div>
+                                        <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">
+                                            <span id="applied-campaign-desc"></span>
+                                        </div>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div style="font-size: 11px; color: #6b7280;">Discount</div>
+                                        <div style="font-size: 18px; font-weight: 700; color: #16a34a;">
+                                            <span id="applied-campaign-discount">0%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Hidden fields for campaign tracking -->
+                            <input type="hidden" id="applied-promo-code" name="applied_promo_code" value="">
+                            <input type="hidden" id="applied-campaign-id" name="applied_campaign_id" value="">
+                            <input type="hidden" id="exclude-campaign" value="false">
                         </div>
 
+                        </div>
+
+                        <!-- VIP Auto-Apply Section (Added 2025-11-29) -->
+                        <div id="vip-discount-section" class="discount-control-card vip-card" style="display: none; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 16px; border-radius: 8px; border: 2px solid #f59e0b; margin-top: 12px;">
+                            <!-- Header -->
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <div style="display: flex; align-items: center;">
+                                    <span class="badge" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;">VIP DISCOUNT</span>
+                                    <span style="font-size: 12px; color: #92400e; margin-left: 8px;">Special customer discount</span>
+                                </div>
+                                <label style="display: flex; align-items: center; cursor: pointer;">
+                                    <input type="checkbox" id="vip-auto-apply-checkbox" onchange="toggleVipAutoApply()"
+                                           style="width: 18px; height: 18px; cursor: pointer; accent-color: #f59e0b;">
+                                    <span style="margin-left: 8px; font-size: 13px; font-weight: 500; color: #92400e;">Auto-Apply</span>
+                                </label>
+                            </div>
+
+                            <!-- VIP Status Info -->
+                            <div id="vip-status-info" style="padding: 12px; background: white; border-radius: 6px; border: 1px solid #f59e0b;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <div style="font-size: 14px; font-weight: 600; color: #92400e;">
+                                            <span id="vip-campaign-name">VIP Customer Special</span>
+                                        </div>
+                                        <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+                                            Code: <span id="vip-campaign-code" style="font-weight: 600;">VIP2025</span>
+                                        </div>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div style="font-size: 11px; color: #6b7280;">Discount</div>
+                                        <div style="font-size: 18px; font-weight: 700; color: #d97706;">
+                                            <span id="vip-discount-display">20%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="vip-apply-hint" style="margin-top: 8px; font-size: 12px; color: #6b7280; font-style: italic;">
+                                    Check 'Auto-Apply' to automatically apply VIP discount, or enter code manually above.
+                                </div>
+                            </div>
+                            <!-- Invoice-level VIP discount info (shows calculated amount) -->
+                            <div id="vip-discount-info" style="display: none; margin-top: 12px; padding: 12px; background: rgba(245, 158, 11, 0.1); border-radius: 6px; border: 1px solid #f59e0b;">
+                                <!-- Populated by JavaScript -->
+                            </div>
+                            <!-- Hidden fields for VIP -->
+                            <input type="hidden" id="vip-campaign-id" value="">
+                            <input type="hidden" id="vip-discount-value" value="">
+                            <input type="hidden" id="vip-discount-type" value="">
+                            <input type="hidden" id="vip-enabled" value="false">
+                        </div>
+
+                        <!-- Staff Discretionary Discount Section (Added 2025-11-29) -->
+                        <div id="staff-discretionary-section" class="discount-control-card staff-special-card" style="background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%); padding: 16px; border-radius: 8px; border: 2px solid #a78bfa; margin-top: 12px;">
+                            <!-- Header -->
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <div style="display: flex; align-items: center;">
+                                    <span class="badge" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;">STAFF SPECIAL</span>
+                                    <span style="font-size: 12px; color: #6d28d9; margin-left: 8px;">Discretionary (Incremental)</span>
+                                </div>
+                                <label style="display: flex; align-items: center; cursor: pointer;">
+                                    <input type="checkbox" id="staff-discretionary-checkbox" onchange="toggleStaffDiscretionary()"
+                                           style="width: 18px; height: 18px; cursor: pointer; accent-color: #8b5cf6;">
+                                    <span style="margin-left: 8px; font-size: 13px; font-weight: 500; color: #6d28d9;">Enable</span>
+                                </label>
+                            </div>
+
+                            <!-- Discretionary Controls -->
+                            <div id="staff-discretionary-controls" style="display: none; padding: 12px; background: white; border-radius: 6px; border: 1px solid #a78bfa;">
+                                <div style="display: flex; gap: 16px; align-items: center;">
+                                    <div style="flex: 1;">
+                                        <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px;">Discount %</label>
+                                        <select id="staff-discretionary-percent" onchange="updateStaffDiscretionary()"
+                                                style="width: 100%; padding: 8px 12px; border: 2px solid #a78bfa; border-radius: 6px; font-size: 14px; background: white;">
+                                            <option value="1">1%</option>
+                                            <option value="2">2%</option>
+                                            <option value="3">3%</option>
+                                            <option value="4">4%</option>
+                                            <option value="5">5%</option>
+                                        </select>
+                                    </div>
+                                    <div style="flex: 2;">
+                                        <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px;">Note (Optional)</label>
+                                        <input type="text" id="staff-discretionary-note" placeholder="Reason for special discount..."
+                                               style="width: 100%; padding: 8px 12px; border: 2px solid #a78bfa; border-radius: 6px; font-size: 14px;">
+                                    </div>
+                                </div>
+                                <div style="margin-top: 8px; font-size: 12px; color: #6d28d9; font-style: italic;">
+                                    This discount applies on invoice subtotal (after line-item discounts).
+                                </div>
+                            </div>
+                            <!-- Invoice-level discount info (shows calculated amount) -->
+                            <div id="staff-discretionary-info" style="display: none; margin-top: 12px; padding: 12px; background: rgba(124, 58, 237, 0.1); border-radius: 6px; border: 1px solid #7c3aed;">
+                                <!-- Populated by JavaScript -->
+                            </div>
+                            <!-- Hidden fields for discretionary -->
+                            <input type="hidden" id="staff-discretionary-enabled" value="false">
+                            <input type="hidden" id="staff-discretionary-value" value="0">
                         </div>
 
                         <!-- Priority Information -->
                         <div class="priority-info" style="margin-top: 16px; padding: 12px; background: #fef3c7; border-radius: 6px; font-size: 13px; color: #92400e;">
-                            <strong style="font-weight: 500;">💡 Discount Priority:</strong> Promotion (1) > Bulk/Loyalty (2) > Standard (4)
+                            <strong style="font-weight: 500;">Discount Types:</strong>
                             <br>
-                            <small style="font-size: 12px;">Note: Only the highest priority discount applies to each item</small>
+                            <span style="font-size: 12px;">Line-Item: Campaign > Bulk/Loyalty > Standard (highest wins)</span>
+                            <br>
+                            <span style="font-size: 12px;">Invoice-Level: VIP + Staff Special (applied on subtotal)</span>
                         </div>
 
                         <!-- Live Pricing Summary INSIDE Collapsible -->
@@ -1058,16 +1172,16 @@
                         <thead class="universal-table-header">
                             <tr>
                                 <th class="text-center w-12">#</th>
-                                <th class="w-24">Type</th>
-                                <th class="w-1/4">Item</th>
-                                <th class="text-left w-24">Batch</th>
-                                <th class="text-left w-24">Expiry</th>
-                                <th class="text-right w-16">Qty</th>
+                                <th class="w-20">Type</th>
+                                <th class="w-1/5">Item</th>
+                                <th class="text-left w-20">Batch</th>
+                                <th class="text-left w-20">Expiry</th>
+                                <th class="text-right w-14">Qty</th>
                                 <th class="text-right w-20">Price</th>
-                                <th class="text-right w-16">Disc%</th>
-                                <th class="text-center w-16">GST%</th>
-                                <th class="text-right w-32">Amount</th>
-                                <th class="text-center w-16">Action</th>
+                                <th class="text-right w-40">Disc%</th>
+                                <th class="text-center w-14">GST%</th>
+                                <th class="text-right w-28">Amount</th>
+                                <th class="text-center w-12">Action</th>
                             </tr>
                         </thead>
                         <tbody id="line-items-container" class="universal-table-body">
@@ -1084,6 +1198,30 @@
                                 <td class="text-right font-semibold px-4 py-2">
                                     <span class="currency-symbol">₹</span>
                                     <span id="subtotal-display">0.00</span>
+                                </td>
+                                <td></td>
+                            </tr>
+                            <!-- VIP Discount Row (Invoice-Level) - Added 2025-11-29 -->
+                            <tr id="vip-discount-row" style="display: none; background: linear-gradient(90deg, #fef3c7 0%, #ffffff 100%);">
+                                <td colspan="9" class="text-right font-semibold px-4 py-2" style="color: #d97706;">
+                                    <span style="background: #f59e0b; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-right: 8px;">VIP</span>
+                                    VIP Discount (<span id="vip-discount-percent-display">0</span>%):
+                                </td>
+                                <td class="text-right font-semibold px-4 py-2" style="color: #d97706;">
+                                    <span>- ₹</span>
+                                    <span id="vip-discount-amount-display">0.00</span>
+                                </td>
+                                <td></td>
+                            </tr>
+                            <!-- Staff Special Discount Row (Invoice-Level) - Added 2025-11-29 -->
+                            <tr id="staff-special-discount-row" style="display: none; background: linear-gradient(90deg, #ede9fe 0%, #ffffff 100%);">
+                                <td colspan="9" class="text-right font-semibold px-4 py-2" style="color: #7c3aed;">
+                                    <span style="background: #8b5cf6; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-right: 8px;">STAFF</span>
+                                    Staff Special (<span id="staff-special-percent-display">0</span>%):
+                                </td>
+                                <td class="text-right font-semibold px-4 py-2" style="color: #7c3aed;">
+                                    <span>- ₹</span>
+                                    <span id="staff-special-amount-display">0.00</span>
                                 </td>
                                 <td></td>
                             </tr>
@@ -1497,15 +1635,31 @@ document.addEventListener('DOMContentLoaded', function() {
     window.invoiceItemComponent = invoiceItemComponent;
 
     // =================================================================
-    // INITIALIZE BULK DISCOUNT MANAGER
+    // INITIALIZE BULK DISCOUNT MANAGER (Singleton pattern with lock to prevent duplicates)
     // =================================================================
-    const bulkDiscountManager = new BulkDiscountManager();
     const hospitalId = '{{ current_user.hospital_id }}';
     const patientId = document.querySelector('[name="patient_id"]')?.value || null;
 
-    bulkDiscountManager.initialize(hospitalId, patientId);
-    window.bulkDiscountManager = bulkDiscountManager;
-    console.log("✅ BulkDiscountManager initialized successfully");
+    if (!window.bulkDiscountManager && !window._bulkDiscountManagerCreating) {
+        window._bulkDiscountManagerCreating = true;
+        const bulkDiscountManager = new BulkDiscountManager();
+        bulkDiscountManager.initialize(hospitalId, patientId);
+        window.bulkDiscountManager = bulkDiscountManager;
+        console.log('✅ BulkDiscountManager initialized (singleton from HTML)');
+    } else if (window.bulkDiscountManager) {
+        console.log('⚠️ BulkDiscountManager already exists, skipping creation');
+    } else {
+        console.log('⏳ BulkDiscountManager creation in progress, skipping');
+    }
+
+    // Initialize VIP and Staff Discretionary sections (ALWAYS run regardless of who created manager)
+    if (window.initStaffDiscretionary) {
+        window.initStaffDiscretionary(hospitalId);
+    }
+    if (patientId && window.checkVipEligibility) {
+        window.checkVipEligibility(patientId);
+    }
+    console.log("✅ VIP and Staff Discretionary sections initialized");
 
     // =================================================================
     // DISCOUNT CONTROLS COLLAPSE/EXPAND TOGGLE
@@ -1551,6 +1705,35 @@ document.addEventListener('DOMContentLoaded', function() {
             bulkDiscountManager.toggleEligibleDiscountsDisplay('standard');
         });
     }
+
+    // =================================================================
+    // RESTORE PATIENT SELECTION (after validation errors)
+    // =================================================================
+    {% if preserved_patient_name or form.patient_name.data %}
+    (function() {
+        const patientSearchInput = document.getElementById('patient_search');
+        const patientNameField = document.getElementById('patient_name');
+        const patientIdField = document.getElementById('patient_id');
+
+        // Use explicit preserved values first, fall back to form data
+        const preservedPatientName = {{ (preserved_patient_name or form.patient_name.data or '')|tojson }};
+        const preservedPatientId = {{ (preserved_patient_id or form.patient_id.data or '')|tojson }};
+
+        if (patientSearchInput && preservedPatientName) {
+            patientSearchInput.value = preservedPatientName;
+            console.log("✅ Restored patient selection:", preservedPatientName);
+        }
+
+        if (patientIdField && preservedPatientId) {
+            patientIdField.value = preservedPatientId;
+            console.log("✅ Restored patient ID:", preservedPatientId);
+        }
+
+        if (patientNameField && preservedPatientName) {
+            patientNameField.value = preservedPatientName;
+        }
+    })();
+    {% endif %}
 
     // =================================================================
     // RESTORE PRESERVED LINE ITEMS (after validation errors)
@@ -1710,33 +1893,55 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     // =================================================================
-    // 4. TOTALS UPDATE FUNCTION (Enhanced)
+    // 4. TOTALS UPDATE FUNCTION (Enhanced with Invoice-Level Discounts)
+    // Invoice-level discounts (VIP, Staff Special) are applied AFTER line-item totals
     // =================================================================
     function updateTotalsDisplay() {
-        // Get totals from existing invoice.js functions
-        const subtotal = parseFloat(document.getElementById('subtotal')?.textContent || '0');
-        const totalDiscount = parseFloat(document.getElementById('total-discount')?.textContent || '0');
-        const totalCGST = parseFloat(document.getElementById('total-cgst')?.textContent || '0');
-        const totalSGST = parseFloat(document.getElementById('total-sgst')?.textContent || '0');
-        const totalIGST = parseFloat(document.getElementById('total-igst')?.textContent || '0');
-        const grandTotal = parseFloat(document.getElementById('grand-total')?.textContent || '0');
+        // Get invoice-level discounts (VIP and Staff Special)
+        const vipAmountEl = document.getElementById('vip-discount-amount-display');
+        const staffAmountEl = document.getElementById('staff-special-amount-display');
+        const vipDiscountAmount = vipAmountEl ? parseFloat(vipAmountEl.textContent || '0') : 0;
+        const staffSpecialAmount = staffAmountEl ? parseFloat(staffAmountEl.textContent || '0') : 0;
+        const invoiceLevelDiscount = vipDiscountAmount + staffSpecialAmount;
+
+        // If no invoice-level discounts, nothing to adjust
+        if (invoiceLevelDiscount <= 0) {
+            return;
+        }
+
+        // Read current values from display elements (set by invoice_item.js)
+        const discountDisplay = document.getElementById('total-discount-display');
+        const grandTotalDisplay = document.getElementById('grand-total-display');
+
+        if (!discountDisplay || !grandTotalDisplay) {
+            return;
+        }
+
+        // Get current line-item discount and grand total
+        const lineItemDiscount = parseFloat(discountDisplay.textContent || '0');
+        const baseGrandTotal = parseFloat(grandTotalDisplay.textContent || '0');
+
+        // Calculate new totals with invoice-level discounts
+        const totalDiscount = lineItemDiscount + invoiceLevelDiscount;
+        const adjustedGrandTotal = baseGrandTotal - invoiceLevelDiscount;
 
         // Update display elements
-        document.getElementById('subtotal-display').textContent = subtotal.toFixed(2);
-        document.getElementById('total-discount-display').textContent = totalDiscount.toFixed(2);
-        document.getElementById('cgst-display').textContent = totalCGST.toFixed(2);
-        document.getElementById('sgst-display').textContent = totalSGST.toFixed(2);
-        document.getElementById('igst-display').textContent = totalIGST.toFixed(2);
-        document.getElementById('grand-total-display').textContent = grandTotal.toFixed(2);
+        discountDisplay.textContent = totalDiscount.toFixed(2);
+        grandTotalDisplay.textContent = adjustedGrandTotal.toFixed(2);
 
-        // Show amount in words if grand total > 0
-        if (grandTotal > 0) {
-            document.getElementById('amount-in-words')?.classList.remove('hidden');
-            document.getElementById('amount-in-words-text').textContent = numberToWords(grandTotal) + ' Rupees Only';
+        // Update amount in words
+        const amountInWords = document.getElementById('amount-in-words');
+        const amountInWordsText = document.getElementById('amount-in-words-text');
+        if (adjustedGrandTotal > 0) {
+            if (amountInWords) amountInWords.classList.remove('hidden');
+            if (amountInWordsText) amountInWordsText.textContent = numberToWords(Math.round(adjustedGrandTotal)) + ' Rupees Only';
         } else {
-            document.getElementById('amount-in-words')?.classList.add('hidden');
+            if (amountInWords) amountInWords.classList.add('hidden');
         }
     }
+
+    // Make updateTotalsDisplay globally accessible for invoice_bulk_discount.js
+    window.updateTotalsDisplay = updateTotalsDisplay;
 
     // =================================================================
     // 5. NUMBER TO WORDS CONVERSION (for amount display)
@@ -1831,7 +2036,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Recalculate all line items with new interstate flag
                     recalculateAllLineItems();
 
-                    console.log(`✅ State set to: ${stateToUse}, Interstate: ${data.is_interstate}`);
+                    // Reload patient loyalty card info for discount calculations
+                    if (window.bulkDiscountManager) {
+                        await window.bulkDiscountManager.loadPatientLoyalty(patientId);
+                        // Recalculate discounts with new patient loyalty info
+                        window.bulkDiscountManager.updatePricing();
+                    }
+
+                    // Check VIP eligibility for this patient (Added 2025-11-29)
+                    if (window.checkVipEligibility) {
+                        await window.checkVipEligibility(patientId);
+                    }
+
+                    console.log(`State set to: ${stateToUse}, Interstate: ${data.is_interstate}`);
                 } else {
                     console.error('❌ Failed to get patient state:', data.message);
                 }
@@ -1907,6 +2124,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 loyaltyCheckbox.checked = true;
             }
 
+            // Clear promo code as well
+            clearPromoCode();
+
             // Recalculate with default settings
             window.bulkDiscountManager.updatePricing();
 
@@ -1916,20 +2136,480 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // =================================================================
+    // CAMPAIGN DISCOUNT FUNCTIONS (Redesigned 2025-11-29)
+    // Per-campaign checkbox support added 2025-11-29
+    // =================================================================
+
+    // Store eligible campaigns globally
+    window.eligibleCampaigns = [];
+    window.appliedCampaign = null;
+    window.excludedCampaignIds = [];  // Array of campaign IDs to exclude
+
+    // Toggle all campaigns (master checkbox)
+    function toggleCampaignDiscount() {
+        const checkbox = document.getElementById('campaign-apply-checkbox');
+
+        if (checkbox.checked) {
+            // Enable all campaigns
+            window.excludedCampaignIds = [];
+        } else {
+            // Disable all campaigns
+            window.excludedCampaignIds = window.eligibleCampaigns.map(c => c.campaign_id);
+        }
+
+        // Update individual checkboxes
+        window.eligibleCampaigns.forEach(c => {
+            const individualCheckbox = document.getElementById(`campaign-checkbox-${c.campaign_id}`);
+            if (individualCheckbox) {
+                individualCheckbox.checked = checkbox.checked;
+            }
+        });
+
+        // Trigger discount recalculation
+        if (window.bulkDiscountManager) {
+            window.bulkDiscountManager.setExcludedCampaignIds(window.excludedCampaignIds);
+            window.bulkDiscountManager.updatePricing();
+        }
+
+        console.log('All campaigns:', checkbox.checked ? 'enabled' : 'disabled');
+    }
+
+    // Toggle individual campaign
+    function toggleIndividualCampaign(campaignId) {
+        const checkbox = document.getElementById(`campaign-checkbox-${campaignId}`);
+
+        if (checkbox.checked) {
+            // Remove from excluded list
+            window.excludedCampaignIds = window.excludedCampaignIds.filter(id => id !== campaignId);
+        } else {
+            // Add to excluded list
+            if (!window.excludedCampaignIds.includes(campaignId)) {
+                window.excludedCampaignIds.push(campaignId);
+            }
+        }
+
+        // Update master checkbox state
+        const masterCheckbox = document.getElementById('campaign-apply-checkbox');
+        if (masterCheckbox) {
+            const allEnabled = window.excludedCampaignIds.length === 0;
+            const allDisabled = window.excludedCampaignIds.length === window.eligibleCampaigns.length;
+            masterCheckbox.checked = !allDisabled;
+            masterCheckbox.indeterminate = !allEnabled && !allDisabled;
+        }
+
+        // Trigger discount recalculation
+        if (window.bulkDiscountManager) {
+            window.bulkDiscountManager.setExcludedCampaignIds(window.excludedCampaignIds);
+            window.bulkDiscountManager.updatePricing();
+        }
+
+        console.log('Campaign', campaignId, checkbox.checked ? 'enabled' : 'disabled');
+    }
+
+    // Update eligible campaigns display (called from discount response)
+    function updateEligibleCampaigns(campaigns) {
+        window.eligibleCampaigns = campaigns || [];
+        const listContent = document.getElementById('campaign-list-content');
+        const appliedInfo = document.getElementById('campaign-applied-info');
+
+        if (!campaigns || campaigns.length === 0) {
+            listContent.innerHTML = '<span style="color: #9ca3af; font-style: italic;">No campaigns available for current items</span>';
+            appliedInfo.style.display = 'none';
+            window.appliedCampaign = null;
+            return;
+        }
+
+        // Build campaigns list HTML with per-campaign checkboxes
+        let html = '';
+        campaigns.forEach((c, idx) => {
+            const discountDisplay = c.discount_type === 'percentage' ? `${c.discount_value}%` : `Rs.${c.discount_value}`;
+            const isExcluded = window.excludedCampaignIds.includes(c.campaign_id);
+            const isChecked = !isExcluded;
+            const statusBadge = c.applied && isChecked
+                ? '<span style="background: #22c55e; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">APPLIED</span>'
+                : isChecked
+                    ? '<span style="background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 4px; font-size: 10px;">ELIGIBLE</span>'
+                    : '<span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 4px; font-size: 10px;">BYPASSED</span>';
+
+            // Format valid till date
+            const validTillText = c.end_date ? `Valid till: ${c.end_date}` : '';
+
+            html += `
+                <div style="display: flex; align-items: flex-start; padding: 10px 0; ${idx > 0 ? 'border-top: 1px solid #e5e7eb;' : ''}">
+                    <div style="margin-right: 10px; padding-top: 2px;">
+                        <input type="checkbox" id="campaign-checkbox-${c.campaign_id}"
+                               ${isChecked ? 'checked' : ''}
+                               onchange="toggleIndividualCampaign('${c.campaign_id}')"
+                               style="width: 16px; height: 16px; cursor: pointer; accent-color: #22c55e;">
+                    </div>
+                    <div style="flex: 1;">
+                        <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
+                            <span style="font-weight: 600; color: ${isChecked ? '#166534' : '#9ca3af'};">${c.campaign_name}</span>
+                            ${statusBadge}
+                        </div>
+                        <div style="font-size: 12px; color: #374151; margin-top: 4px;">
+                            <span style="background: ${isChecked ? '#f0fdf4' : '#f3f4f6'}; padding: 2px 6px; border-radius: 3px; font-weight: 500;">${c.campaign_code || ''}</span>
+                        </div>
+                        ${validTillText ? `<div style="font-size: 11px; color: #6b7280; margin-top: 4px;"><i class="bi bi-calendar-event"></i> ${validTillText}</div>` : ''}
+                    </div>
+                    <div style="text-align: right; min-width: 60px;">
+                        <div style="font-size: 18px; font-weight: 700; color: ${isChecked ? '#16a34a' : '#9ca3af'};">${discountDisplay}</div>
+                        <div style="font-size: 10px; color: #6b7280;">OFF</div>
+                    </div>
+                </div>
+            `;
+
+            // Track applied campaign
+            if (c.applied) {
+                window.appliedCampaign = c;
+            }
+        });
+
+        listContent.innerHTML = html;
+
+        // Update applied campaign info
+        if (window.appliedCampaign && !window.excludeCampaign) {
+            document.getElementById('applied-campaign-name').textContent = window.appliedCampaign.campaign_name;
+            document.getElementById('applied-campaign-desc').textContent = window.appliedCampaign.campaign_code || '';
+            const discDisplay = window.appliedCampaign.discount_type === 'percentage'
+                ? `${window.appliedCampaign.discount_value}%`
+                : `Rs.${window.appliedCampaign.discount_value}`;
+            document.getElementById('applied-campaign-discount').textContent = discDisplay;
+            appliedInfo.style.display = 'block';
+
+            // Store in hidden fields
+            document.getElementById('applied-promo-code').value = window.appliedCampaign.campaign_code || '';
+            document.getElementById('applied-campaign-id').value = window.appliedCampaign.campaign_id || '';
+        } else {
+            appliedInfo.style.display = 'none';
+        }
+    }
+
+    // Make functions globally accessible
+    window.toggleCampaignDiscount = toggleCampaignDiscount;
+    window.toggleIndividualCampaign = toggleIndividualCampaign;
+    window.updateEligibleCampaigns = updateEligibleCampaigns;
+
+    // Legacy function stubs for backward compatibility
+    function applyPromoCode() {
+        console.log('applyPromoCode is deprecated - campaigns are now auto-applied');
+    }
+    function clearPromoCode() {
+        console.log('clearPromoCode is deprecated - use campaign checkbox instead');
+    }
+    function showPromoResult(success, message) {
+        console.log('showPromoResult:', success, message);
+    }
+    function showPromotionDetails(promotion) {
+        console.log('showPromotionDetails:', promotion);
+
+        // Format discount display
+        let discountText = '';
+        if (promotion.discount_type === 'percentage') {
+            discountText = `${promotion.discount_value}%`;
+        } else {
+            discountText = `₹${promotion.discount_value.toFixed(2)}`;
+        }
+        document.getElementById('promotion-discount-display').textContent = discountText;
+
+        promoInfoDiv.style.display = 'block';
+    }
+
+    // Allow Enter key to apply promo code
+    document.addEventListener('DOMContentLoaded', function() {
+        const promoInput = document.getElementById('promo-code-input');
+        if (promoInput) {
+            promoInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    applyPromoCode();
+                }
+            });
+        }
+    });
+
+    // Make functions globally accessible
+    window.applyPromoCode = applyPromoCode;
+    window.clearPromoCode = clearPromoCode;
+
+    // =================================================================
+    // VIP DISCOUNT FUNCTIONS (Added 2025-11-29)
+    // =================================================================
+
+    // Store VIP discount config globally
+    window.vipDiscountConfig = null;
+    window.patientIsVip = false;
+
+    // Check if patient is VIP and show/hide VIP section
+    async function checkVipEligibility(patientId) {
+        if (!patientId) {
+            hideVipSection();
+            return;
+        }
+
+        try {
+            const response = await fetch(`/invoice/web_api/vip-eligibility/${patientId}`);
+            const data = await response.json();
+
+            if (data.is_vip && data.vip_campaign) {
+                window.patientIsVip = true;
+                window.vipDiscountConfig = data.vip_campaign;
+                showVipSection(data.vip_campaign);
+
+                // If auto_apply_default is true, check the checkbox
+                if (data.auto_apply_default) {
+                    document.getElementById('vip-auto-apply-checkbox').checked = true;
+                    toggleVipAutoApply();
+                }
+            } else {
+                window.patientIsVip = false;
+                window.vipDiscountConfig = null;
+                hideVipSection();
+            }
+        } catch (error) {
+            console.error('Error checking VIP eligibility:', error);
+            hideVipSection();
+        }
+    }
+
+    // Show VIP discount section
+    function showVipSection(campaign) {
+        const section = document.getElementById('vip-discount-section');
+        section.style.display = 'block';
+
+        // Populate VIP details
+        document.getElementById('vip-campaign-name').textContent = campaign.campaign_name;
+        document.getElementById('vip-campaign-code').textContent = campaign.campaign_code;
+        document.getElementById('vip-campaign-id').value = campaign.campaign_id;
+        document.getElementById('vip-discount-value').value = campaign.discount_value;
+        document.getElementById('vip-discount-type').value = campaign.discount_type;
+
+        // Format discount display
+        if (campaign.discount_type === 'percentage') {
+            document.getElementById('vip-discount-display').textContent = `${campaign.discount_value}%`;
+        } else {
+            document.getElementById('vip-discount-display').textContent = `Rs.${campaign.discount_value}`;
+        }
+    }
+
+    // Hide VIP discount section
+    function hideVipSection() {
+        const section = document.getElementById('vip-discount-section');
+        section.style.display = 'none';
+        document.getElementById('vip-auto-apply-checkbox').checked = false;
+    }
+
+    // Toggle VIP auto-apply (Updated 2025-11-29: Now invoice-level discount)
+    function toggleVipAutoApply() {
+        console.log('='.repeat(60));
+        console.log('🔔 toggleVipAutoApply [v2] called');
+
+        const checkbox = document.getElementById('vip-auto-apply-checkbox');
+        const hintDiv = document.getElementById('vip-apply-hint');
+        const vipEnabledField = document.getElementById('vip-enabled');
+        const vipDiscountRow = document.getElementById('vip-discount-row');
+
+        console.log('   checkbox.checked:', checkbox ? checkbox.checked : 'not found');
+        console.log('   vipConfig:', window.vipDiscountConfig);
+        console.log('   bulkDiscountManager:', window.bulkDiscountManager ? 'exists' : 'NOT FOUND');
+
+        if (checkbox.checked && window.vipDiscountConfig) {
+            // Enable VIP as invoice-level discount
+            vipEnabledField.value = 'true';
+
+            // Immediately show VIP row with expected percent (amount will be calculated by API)
+            if (vipDiscountRow) {
+                vipDiscountRow.style.display = 'table-row';
+                document.getElementById('vip-discount-percent-display').textContent = window.vipDiscountConfig.discount_value || 0;
+                document.getElementById('vip-discount-amount-display').textContent = 'Calculating...';
+                console.log('📍 VIP row shown immediately, percent:', window.vipDiscountConfig.discount_value);
+            }
+
+            // Update BulkDiscountManager with VIP discount
+            if (window.bulkDiscountManager) {
+                window.bulkDiscountManager.setVipDiscount(
+                    true,
+                    parseFloat(window.vipDiscountConfig.discount_value),
+                    window.vipDiscountConfig.discount_type,
+                    window.vipDiscountConfig.campaign_id
+                );
+                // Force recalculation using dedicated method that bypasses all guards
+                window.bulkDiscountManager.forceRecalculateInvoiceDiscounts();
+            }
+
+            hintDiv.textContent = 'VIP discount will be applied on invoice total.';
+            hintDiv.style.color = '#16a34a';
+        } else {
+            // Disable VIP discount
+            vipEnabledField.value = 'false';
+
+            // Hide VIP row immediately
+            if (vipDiscountRow) {
+                vipDiscountRow.style.display = 'none';
+                console.log('📍 VIP row hidden');
+            }
+
+            if (window.bulkDiscountManager) {
+                window.bulkDiscountManager.setVipDiscount(false, 0, 'percentage', null);
+                // Force recalculation using dedicated method
+                window.bulkDiscountManager.forceRecalculateInvoiceDiscounts();
+            }
+
+            hintDiv.textContent = "Check 'Auto-Apply' to apply VIP discount on invoice total.";
+            hintDiv.style.color = '#6b7280';
+
+            // Hide VIP info
+            const vipInfoDiv = document.getElementById('vip-discount-info');
+            if (vipInfoDiv) vipInfoDiv.style.display = 'none';
+        }
+    }
+
+    // Make VIP functions globally accessible
+    window.checkVipEligibility = checkVipEligibility;
+    window.toggleVipAutoApply = toggleVipAutoApply;
+
+    // =================================================================
+    // STAFF DISCRETIONARY DISCOUNT FUNCTIONS (Added 2025-11-29)
+    // =================================================================
+
+    // Store discretionary config globally
+    window.staffDiscretionaryConfig = null;
+
+    // Initialize staff discretionary section from hospital settings
+    async function initStaffDiscretionary(hospitalId) {
+        try {
+            const response = await fetch(`/invoice/web_api/staff-discretionary-config/${hospitalId}`);
+            const data = await response.json();
+
+            if (data.enabled) {
+                window.staffDiscretionaryConfig = data;
+                document.getElementById('staff-discretionary-section').style.display = 'block';
+
+                // Populate dropdown options
+                const select = document.getElementById('staff-discretionary-percent');
+                select.innerHTML = '';
+                (data.options || [1, 2, 3, 4, 5]).forEach(opt => {
+                    const option = document.createElement('option');
+                    option.value = opt;
+                    option.textContent = `${opt}%`;
+                    select.appendChild(option);
+                });
+
+                // Set default
+                select.value = data.default_percent || 1;
+            } else {
+                document.getElementById('staff-discretionary-section').style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Error loading staff discretionary config:', error);
+            // Default config if API fails
+            window.staffDiscretionaryConfig = { enabled: true, max_percent: 5, default_percent: 1, options: [1,2,3,4,5] };
+        }
+    }
+
+    // Toggle staff discretionary discount
+    function toggleStaffDiscretionary() {
+        console.log('='.repeat(60));
+        console.log('🔔 toggleStaffDiscretionary [v2] called');
+
+        const checkbox = document.getElementById('staff-discretionary-checkbox');
+        const controls = document.getElementById('staff-discretionary-controls');
+        const enabledField = document.getElementById('staff-discretionary-enabled');
+        const valueField = document.getElementById('staff-discretionary-value');
+        const staffSpecialRow = document.getElementById('staff-special-discount-row');
+        const staffInfoEl = document.getElementById('staff-discretionary-info');
+
+        console.log('   checkbox.checked:', checkbox ? checkbox.checked : 'not found');
+        console.log('   bulkDiscountManager:', window.bulkDiscountManager ? 'exists' : 'NOT FOUND');
+
+        if (checkbox.checked) {
+            controls.style.display = 'block';
+            enabledField.value = 'true';
+            const selectedPercent = document.getElementById('staff-discretionary-percent').value;
+            valueField.value = selectedPercent;
+
+            // Immediately show Staff Special row with expected percent
+            if (staffSpecialRow) {
+                staffSpecialRow.style.display = 'table-row';
+                document.getElementById('staff-special-percent-display').textContent = selectedPercent || 0;
+                document.getElementById('staff-special-amount-display').textContent = 'Calculating...';
+                console.log('📍 Staff Special row shown immediately, percent:', selectedPercent);
+            }
+
+            // Trigger discount recalculation
+            if (window.bulkDiscountManager) {
+                window.bulkDiscountManager.setStaffDiscretionary(
+                    true,
+                    parseFloat(selectedPercent),
+                    document.getElementById('staff-discretionary-note').value
+                );
+                // Force recalculation using dedicated method that bypasses all guards
+                window.bulkDiscountManager.forceRecalculateInvoiceDiscounts();
+            }
+        } else {
+            controls.style.display = 'none';
+            enabledField.value = 'false';
+            valueField.value = '0';
+
+            // Hide Staff Special row and info immediately
+            if (staffSpecialRow) {
+                staffSpecialRow.style.display = 'none';
+                console.log('📍 Staff Special row hidden');
+            }
+            if (staffInfoEl) {
+                staffInfoEl.style.display = 'none';
+            }
+
+            // Trigger discount recalculation with staff disabled
+            if (window.bulkDiscountManager) {
+                window.bulkDiscountManager.setStaffDiscretionary(false, 0, '');
+                // Force recalculation using dedicated method
+                window.bulkDiscountManager.forceRecalculateInvoiceDiscounts();
+            }
+        }
+    }
+
+    // Update staff discretionary when percentage changes
+    function updateStaffDiscretionary() {
+        const valueField = document.getElementById('staff-discretionary-value');
+        const selectedPercent = document.getElementById('staff-discretionary-percent').value;
+        valueField.value = selectedPercent;
+
+        // Update Staff Special row percent display immediately
+        const staffPercentDisplay = document.getElementById('staff-special-percent-display');
+        if (staffPercentDisplay) {
+            staffPercentDisplay.textContent = selectedPercent || 0;
+            document.getElementById('staff-special-amount-display').textContent = 'Calculating...';
+            console.log('📍 Staff Special percent updated:', selectedPercent);
+        }
+
+        // Trigger discount recalculation
+        if (window.bulkDiscountManager) {
+            window.bulkDiscountManager.setStaffDiscretionary(
+                true,
+                parseFloat(selectedPercent),
+                document.getElementById('staff-discretionary-note').value
+            );
+            // Force recalculation using dedicated method
+            window.bulkDiscountManager.forceRecalculateInvoiceDiscounts();
+        }
+    }
+
+    // Make staff discretionary functions globally accessible
+    window.toggleStaffDiscretionary = toggleStaffDiscretionary;
+    window.updateStaffDiscretionary = updateStaffDiscretionary;
+    window.initStaffDiscretionary = initStaffDiscretionary;
+
     // Patient view function is defined in invoice_patient_view.js
     // DO NOT define openPatientView() here - it will override the proper implementation!
 
     // =================================================================
     // 9. INTEGRATE WITH EXISTING INVOICE.JS FUNCTIONS
     // =================================================================
-    // Hook into existing calculateTotals function
-    if (window.invoiceComponentFunctions && window.invoiceComponentFunctions.calculateTotals) {
-        const originalCalculateTotals = window.invoiceComponentFunctions.calculateTotals;
-        window.invoiceComponentFunctions.calculateTotals = function() {
-            originalCalculateTotals.apply(this, arguments);
-            updateTotalsDisplay();
-        };
-    }
+    // NOTE: updateTotalsDisplay() is called from updatePricingSummary() in invoice_bulk_discount.js
+    // after the discount API returns invoice-level discounts (VIP, Staff Special).
+    // We don't hook into calculateTotals here to avoid interfering with core calculations.
 
     console.log("✅ All enhancements loaded successfully");
 });

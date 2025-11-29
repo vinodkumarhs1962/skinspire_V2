@@ -593,8 +593,8 @@ def _update_prescription_inventory(
         if not batch:
             raise ValueError(f"Inventory Error: Batch number required for {medicine_name}")
 
-        # Get ALL inventory records for this batch with positive stock (FIFO order)
-        # Order by expiry first (FIFO), then created_at (oldest first)
+        # Get the LATEST inventory record for this batch (current_stock is a running balance snapshot)
+        # The most recent record contains the actual available stock
         inventory_records = session.query(Inventory).filter(
             Inventory.hospital_id == hospital_id,
             Inventory.medicine_id == medicine_id,
@@ -612,11 +612,18 @@ def _update_prescription_inventory(
                 f"Please verify batch number."
             )
 
-        # Calculate total available stock across all records
-        total_available_stock = sum(record.current_stock for record in inventory_records)
+        # Get LATEST record's current_stock (this is the actual available stock)
+        # Note: current_stock is a running balance snapshot, NOT a quantity per record
+        latest_record = session.query(Inventory).filter(
+            Inventory.hospital_id == hospital_id,
+            Inventory.medicine_id == medicine_id,
+            Inventory.batch == batch
+        ).order_by(Inventory.created_at.desc()).first()
+
+        total_available_stock = latest_record.current_stock if latest_record else 0
 
         # Validate sufficient total stock available
-        if total_available_stock < quantity:
+        if total_available_stock is None or total_available_stock < quantity:
             raise ValueError(
                 f"Inventory Error: Insufficient stock for {medicine_name} (Batch: {batch}). "
                 f"Available: {total_available_stock}, Requested: {quantity}"
@@ -776,29 +783,41 @@ def _create_single_invoice_with_category(
             batch_quantities[key]['total_quantity'] += quantity
             logger.info(f"Aggregated total for {item.get('item_name')} Batch {batch}: {batch_quantities[key]['total_quantity']}")
 
-    # Now validate aggregated quantities against available stock
-    for key, batch_info in batch_quantities.items():
-        medicine_id = batch_info['medicine_id']
-        batch = batch_info['batch']
-        total_quantity = batch_info['total_quantity']
-        item_name = batch_info['item_name']
+    # Validate aggregated quantities against available stock
+    # NOTE: For GST_MEDICINES and GST_EXEMPT_MEDICINES, inventory validation is already
+    # done by _update_prescription_inventory() which runs BEFORE this function and properly
+    # sums current_stock across all batch records (consolidated qty). Skip redundant check.
+    skip_validation = category in [
+        InvoiceSplitCategory.GST_MEDICINES,
+        InvoiceSplitCategory.GST_EXEMPT_MEDICINES
+    ]
 
-        # Get the latest inventory entry for this medicine and batch
-        latest_inventory = session.query(Inventory).filter(
-            Inventory.hospital_id == hospital_id,
-            Inventory.medicine_id == medicine_id,
-            Inventory.batch == batch
-        ).order_by(Inventory.created_at.desc()).first()
+    if not skip_validation:
+        for key, batch_info in batch_quantities.items():
+            medicine_id = batch_info['medicine_id']
+            batch = batch_info['batch']
+            total_quantity = batch_info['total_quantity']
+            item_name = batch_info['item_name']
 
-        if not latest_inventory:
-            raise ValueError(f"Inventory not found for {item_name} (Batch: {batch})")
+            # Get the LATEST current_stock for this batch (current_stock is a running balance snapshot)
+            # Use subquery to get the most recent record's current_stock
+            latest_inventory = session.query(Inventory.current_stock).filter(
+                Inventory.hospital_id == hospital_id,
+                Inventory.medicine_id == medicine_id,
+                Inventory.batch == batch
+            ).order_by(Inventory.created_at.desc()).first()
 
-        # Check if there's enough stock for TOTAL quantity across all line items
-        if latest_inventory.current_stock < total_quantity:
-            raise ValueError(
-                f"Insufficient stock for {item_name} (Batch: {batch}). "
-                f"Available: {latest_inventory.current_stock}, Requested: {total_quantity}"
-            )
+            total_available = latest_inventory[0] if latest_inventory else 0
+
+            if total_available <= 0:
+                raise ValueError(f"Inventory not found for {item_name} (Batch: {batch})")
+
+            # Check if there's enough stock for TOTAL quantity across all line items
+            if total_available < total_quantity:
+                raise ValueError(
+                    f"Insufficient stock for {item_name} (Batch: {batch}). "
+                    f"Available: {total_available}, Requested: {total_quantity}"
+                )
 
     # Generate invoice number using category prefix with thread-safe locking
     invoice_number = generate_invoice_number_with_category(
@@ -1092,31 +1111,35 @@ def _create_single_invoice(
     """
 
     # Validate inventory availability first
+    # Use SUM to get consolidated batch total (multiple inventory records may exist for same batch)
     for item in line_items:
         if item.get('item_type') in ['Medicine', 'Prescription']:
             medicine_id = item.get('item_id')
             batch = item.get('batch')
             quantity = Decimal(str(item.get('quantity', 1)))
-            
+
             if not medicine_id or not batch:
                 continue
-                
-            # Get the latest inventory entry for this medicine and batch
-            latest_inventory = session.query(Inventory).filter(
+
+            # Get medicine name for error messages
+            medicine = session.query(Medicine).filter_by(medicine_id=medicine_id).first()
+            medicine_name = medicine.medicine_name if medicine else "Unknown Medicine"
+
+            # Get the LATEST current_stock for this batch (current_stock is a running balance snapshot)
+            latest_inventory = session.query(Inventory.current_stock).filter(
                 Inventory.hospital_id == hospital_id,
                 Inventory.medicine_id == medicine_id,
                 Inventory.batch == batch
             ).order_by(Inventory.created_at.desc()).first()
-            
-            if not latest_inventory:
-                raise ValueError(f"Inventory not found for medicine {medicine_id}, batch {batch}")
-                
-            # Check if there's enough stock
-            if latest_inventory.current_stock < quantity:
-                # Get medicine name for better error message
-                medicine = session.query(Medicine).filter_by(medicine_id=medicine_id).first()
-                medicine_name = medicine.medicine_name if medicine else "Unknown Medicine"
-                raise ValueError(f"Insufficient stock for {medicine_name} (Batch: {batch}). Available: {latest_inventory.current_stock}, Requested: {quantity}")
+
+            total_available = latest_inventory[0] if latest_inventory else 0
+
+            if total_available <= 0:
+                raise ValueError(f"Inventory not found for {medicine_name} (Batch: {batch})")
+
+            # Check if there's enough stock using latest balance
+            if total_available < quantity:
+                raise ValueError(f"Insufficient stock for {medicine_name} (Batch: {batch}). Available: {total_available}, Requested: {quantity}")
 
     # Generate invoice number
     invoice_number = generate_invoice_number(hospital_id, is_gst_invoice, invoice_type, session)
@@ -1824,20 +1847,23 @@ def _update_inventory_for_invoice(
                     logger.warning(f"No batch specified for medicine {medicine_id} in invoice {invoice_id}")
                     continue
                 
-                # Get the latest inventory entry for this medicine and batch
+                # Get the latest inventory entry for this medicine and batch (for pricing info)
                 latest_inventory = session.query(Inventory).filter(
                     Inventory.hospital_id == hospital_id,
                     Inventory.medicine_id == medicine_id,
                     Inventory.batch == batch
                 ).order_by(Inventory.created_at.desc()).first()
-                
+
                 if not latest_inventory:
                     logger.warning(f"No inventory found for medicine {medicine_id}, batch {batch}")
                     continue
-                
+
+                # Get available stock from the LATEST record (current_stock is a running balance snapshot)
+                total_available = latest_inventory.current_stock
+
                 # Double-check if there's enough stock before updating
-                if latest_inventory.current_stock < quantity:
-                    raise ValueError(f"Insufficient stock for {medicine_name} (Batch: {batch}). Available: {latest_inventory.current_stock}, Requested: {quantity}")
+                if total_available is None or total_available < quantity:
+                    raise ValueError(f"Insufficient stock for {medicine_name} (Batch: {batch}). Available: {total_available or 0}, Requested: {quantity}")
                 
                 # Calculate current stock after this transaction
                 current_stock = latest_inventory.current_stock - quantity
@@ -1891,7 +1917,8 @@ def _update_inventory_for_invoice(
 
     except Exception as e:
         logger.error(f"Error updating inventory for invoice: {str(e)}")
-        session.rollback()
+        # Don't rollback here - let the calling function handle transaction management
+        # Rolling back here invalidates the nested transaction and breaks subsequent operations
         raise
 
 def _reverse_inventory_for_invoice(
@@ -2728,6 +2755,9 @@ def record_multi_invoice_payment(
     save_as_draft=False,
     approval_threshold=Decimal('100000'),
     allow_overpayment=False,  # ✅ NEW: Require explicit confirmation for overpayments
+    wallet_points_amount=Decimal('0'),  # ✅ Wallet points applied to payment
+    wallet_transaction_id=None,  # ✅ Wallet transaction ID if wallet was used
+    advance_adjustment_amount=Decimal('0'),  # ✅ Advance amount applied to payment
     session=None
 ):
     """
@@ -2762,7 +2792,8 @@ def record_multi_invoice_payment(
             session, hospital_id, invoice_allocations, payment_date,
             cash_amount, credit_card_amount, debit_card_amount, upi_amount,
             card_number_last4, card_type, upi_id, reference_number,
-            recorded_by, save_as_draft, approval_threshold, allow_overpayment
+            recorded_by, save_as_draft, approval_threshold, allow_overpayment,
+            wallet_points_amount, wallet_transaction_id, advance_adjustment_amount
         )
 
     # Create new session and commit
@@ -2772,7 +2803,8 @@ def record_multi_invoice_payment(
                 new_session, hospital_id, invoice_allocations, payment_date,
                 cash_amount, credit_card_amount, debit_card_amount, upi_amount,
                 card_number_last4, card_type, upi_id, reference_number,
-                recorded_by, save_as_draft, approval_threshold, allow_overpayment
+                recorded_by, save_as_draft, approval_threshold, allow_overpayment,
+                wallet_points_amount, wallet_transaction_id, advance_adjustment_amount
             )
 
             # Commit the transaction
@@ -2812,7 +2844,10 @@ def _record_multi_invoice_payment(
     recorded_by,
     save_as_draft,
     approval_threshold,
-    allow_overpayment
+    allow_overpayment,
+    wallet_points_amount=Decimal('0'),
+    wallet_transaction_id=None,
+    advance_adjustment_amount=Decimal('0')
 ):
     """Internal function to record multi-invoice payment"""
     try:
@@ -2923,16 +2958,23 @@ def _record_multi_invoice_payment(
         # CREATE PAYMENT_DETAILS RECORD (invoice_id = NULL for multi-invoice)
         # ========================================================================
 
+        # Calculate grand total including wallet and advance
+        payment_method_total = total_payment + wallet_points_amount + advance_adjustment_amount
+
         payment = PaymentDetail(
             payment_id=uuid.uuid4(),
             hospital_id=hospital_id,
             invoice_id=None,  # ✅ NULL for multi-invoice payments
             payment_date=payment_date,
-            total_amount=total_payment,
+            total_amount=total_payment,  # Cash/card/UPI only
             cash_amount=cash_amount,
             credit_card_amount=credit_card_amount,
             debit_card_amount=debit_card_amount,
             upi_amount=upi_amount,
+            wallet_points_amount=wallet_points_amount,  # ✅ Wallet points redeemed
+            wallet_transaction_id=wallet_transaction_id,  # ✅ Wallet transaction reference
+            advance_adjustment_amount=advance_adjustment_amount,  # ✅ Advance amount applied
+            payment_method_total=payment_method_total,  # ✅ Grand total including all methods
             card_number_last4=card_number_last4,
             card_type=card_type,
             upi_id=upi_id,
@@ -2984,7 +3026,11 @@ def _record_multi_invoice_payment(
 
                 if gl_result and gl_result.get('success'):
                     gl_transaction_id = gl_result.get('transaction_id')
-                    logger.info(f"✅ GL transaction created: {gl_transaction_id}")
+                    # ✅ Mark payment as GL posted
+                    payment.gl_posted = True
+                    payment.posting_date = datetime.now(timezone.utc)
+                    payment.gl_entry_id = gl_transaction_id
+                    logger.info(f"✅ GL transaction created: {gl_transaction_id}, payment marked as gl_posted=True")
                 else:
                     logger.warning(f"⚠️ GL posting failed but payment created: {gl_result.get('error', 'Unknown error')}")
                     gl_transaction_id = None
@@ -4581,7 +4627,12 @@ def _apply_advance_payment(
                     current_user_id=current_user_id
                 )
 
-                logger.info(f"Created GL entries for advance adjustment {adjustment.adjustment_id}")
+                # ✅ Mark payment as GL posted
+                if gl_transaction_id:
+                    payment.gl_posted = True
+                    payment.gl_entry_id = gl_transaction_id
+
+                logger.info(f"Created GL entries for advance adjustment {adjustment.adjustment_id}, gl_posted=True")
 
             except Exception as e:
                 logger.error(f"Error creating GL entries for advance adjustment: {str(e)}")

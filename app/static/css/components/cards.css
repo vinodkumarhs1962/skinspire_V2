@@ -1870,6 +1870,16 @@
     color: rgb(107 114 128) !important;
 }
 
+.universal-stat-card .stat-card-icon.warning {
+    background-color: rgb(254 243 199) !important; /* amber-100 */
+    color: rgb(245 158 11) !important; /* amber-500 */
+}
+
+.universal-stat-card .stat-card-icon.danger {
+    background-color: rgb(254 226 226) !important; /* red-100 */
+    color: rgb(239 68 68) !important; /* red-500 */
+}
+
 /* ==========================================
    STAT CARD CONTENT STYLING
    ========================================== */
@@ -1888,6 +1898,11 @@
     margin-bottom: 0.5rem !important;
     color: rgb(17 24 39) !important;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+}
+
+/* Small variant for detail views */
+.universal-stat-card .stat-card-value.sm {
+    font-size: 1.25rem !important;
 }
 
 .dark .universal-stat-card .stat-card-value {

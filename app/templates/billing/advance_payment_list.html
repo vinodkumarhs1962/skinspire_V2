@@ -2,16 +2,22 @@
 
 {% block title %}Advance Payments{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/buttons.css') }}">
+{% endblock %}
+
 {% block content %}
 <div class="container mx-auto px-4 py-4">
     <div class="flex justify-between items-center mb-6">
         <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Advance Payments</h1>
-        <a href="{{ url_for('billing_views.create_advance_payment_view') }}" class="bg-blue-500 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded inline-flex items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            New Advance Payment
-        </a>
+        <div class="flex gap-2">
+            <a href="{{ url_for('promotion_views.dashboard') }}" class="btn-secondary">
+                <i class="fas fa-tags mr-2"></i>Promotions
+            </a>
+            <a href="{{ url_for('billing_views.create_advance_payment_view') }}" class="btn-primary">
+                <i class="fas fa-plus mr-2"></i>New Advance Payment
+            </a>
+        </div>
     </div>
 
     <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">

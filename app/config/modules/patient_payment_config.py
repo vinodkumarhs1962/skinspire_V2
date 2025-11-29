@@ -171,18 +171,7 @@ PATIENT_PAYMENT_FIELDS = [
         view_order=9
     ),
 
-    FieldDefinition(
-        name="advance_adjustment_amount",
-        label="Advance Adjustment",
-        field_type=FieldType.CURRENCY,
-        show_in_list=False,
-        show_in_detail=True,
-        show_in_form=False,
-        readonly=True,
-        tab_group="payment_details",
-        section="payment_summary",
-        view_order=10
-    ),
+    # NOTE: advance_adjustment_amount moved to payment_methods section
 
     FieldDefinition(
         name="last_modified_by",
@@ -498,12 +487,12 @@ PATIENT_PAYMENT_FIELDS = [
 
     FieldDefinition(
         name="total_amount",
-        label="Total Amount",
+        label="💵 Cash/Card/UPI",
         field_type=FieldType.CURRENCY,
         db_column="total_amount",
         filter_operator=FilterOperator.BETWEEN,
-        show_in_list=True,
-        show_in_detail=True,
+        show_in_list=False,  # ✅ Hide from list - use payment_method_total instead
+        show_in_detail=False,  # ✅ Hide from detail - shown in payment_methods section breakdown
         show_in_form=True,
         searchable=False,
         sortable=True,
@@ -511,9 +500,9 @@ PATIENT_PAYMENT_FIELDS = [
         required=True,
         tab_group="payment_details",
         section="payment_summary",
-        view_order=5,
+        view_order=10,  # Show after payment_method_total
         format_pattern="mixed_payment_breakdown",
-        css_classes="text-xl font-bold text-primary",
+        css_classes="text-muted",
         width="150px"
     ),
 
@@ -630,6 +619,64 @@ PATIENT_PAYMENT_FIELDS = [
         view_order=4
     ),
 
+    FieldDefinition(
+        name="wallet_points_amount",
+        label="🎁 Wallet Points",  # Icon in label
+        field_type=FieldType.CURRENCY,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=False,
+        required=False,
+        tab_group="payment_details",
+        section="payment_methods",
+        view_order=5
+    ),
+
+    FieldDefinition(
+        name="advance_adjustment_amount",
+        label="⏩ Advance Adjustment",  # Icon in label
+        field_type=FieldType.CURRENCY,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=False,
+        required=False,
+        tab_group="payment_details",
+        section="payment_methods",
+        view_order=6
+    ),
+
+    FieldDefinition(
+        name="payment_method_total",
+        label="💰 Total Payment",
+        field_type=FieldType.CURRENCY,
+        show_in_list=True,  # ✅ Show in list - includes cash/card/upi + wallet + advance
+        show_in_detail=True,
+        show_in_form=False,
+        required=False,
+        sortable=True,
+        tab_group="payment_details",
+        section="payment_summary",  # ✅ Show in payment summary (primary total)
+        view_order=1,  # Show first
+        css_classes="text-2xl font-bold text-success",
+        width="150px"
+    ),
+
+    # Total in payment_methods section - uses a virtual field to read from payment_method_total
+    FieldDefinition(
+        name="payment_total_display",
+        label="💰 Total",
+        field_type=FieldType.CURRENCY,
+        virtual=True,  # Virtual field - value comes from payment_method_total
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=False,
+        required=False,
+        tab_group="payment_details",
+        section="payment_methods",
+        view_order=99,  # Show at the end of breakdown
+        css_classes="font-bold text-primary border-t pt-2"
+    ),
+
     # ==========================================================================
     # PAYMENT METHOD DETAILS
     # ==========================================================================
@@ -686,6 +733,67 @@ PATIENT_PAYMENT_FIELDS = [
         tab_group="payment_details",
         section="payment_summary",
         view_order=6
+    ),
+
+    # ==========================================================================
+    # WALLET POINTS DETAILS (shown when wallet_points_amount > 0)
+    # ==========================================================================
+
+    FieldDefinition(
+        name="wallet_transaction_id",
+        label="🔗 Wallet Transaction ID",
+        field_type=FieldType.TEXT,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=False,
+        required=False,
+        tab_group="payment_details",
+        section="wallet_points_details",
+        view_order=1
+    ),
+
+    FieldDefinition(
+        name="wallet_points_detail_amount",
+        label="🎁 Points Redeemed (₹1 = 1 point)",
+        field_type=FieldType.CURRENCY,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=False,
+        required=False,
+        tab_group="payment_details",
+        section="wallet_points_details",
+        view_order=2
+    ),
+
+    # ==========================================================================
+    # ADVANCE ADJUSTMENT DETAILS (shown when advance_adjustment_amount > 0)
+    # ==========================================================================
+
+    FieldDefinition(
+        name="advance_adjustment_id",
+        label="🔗 Advance Adjustment ID",
+        field_type=FieldType.TEXT,
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=False,
+        required=False,
+        tab_group="payment_details",
+        section="advance_details",
+        view_order=1
+    ),
+
+    FieldDefinition(
+        name="advance_amount_applied",
+        label="⏩ Advance Applied",
+        field_type=FieldType.CURRENCY,
+        db_column="advance_adjustment_amount",
+        show_in_list=False,
+        show_in_detail=True,
+        show_in_form=False,
+        required=False,
+        tab_group="payment_details",
+        section="advance_details",
+        view_order=2
     ),
 
     # ✅ Separate field for displaying invoice numbers in multi-invoice payments
@@ -1411,6 +1519,28 @@ PATIENT_PAYMENT_TABS = {
                 default_collapsed=False,
                 conditional_display="upi_amount > 0"
             ),
+            # Wallet points details - only show when used
+            "wallet_points_details": SectionDefinition(
+                key="wallet_points_details",
+                title="🎁 Wallet Points Redemption",
+                icon="fas fa-gift",
+                columns=2,
+                order=7,
+                collapsible=True,
+                default_collapsed=False,
+                conditional_display="wallet_points_amount > 0"
+            ),
+            # Advance adjustment details - only show when used
+            "advance_details": SectionDefinition(
+                key="advance_details",
+                title="⏩ Advance Adjustment Details",
+                icon="fas fa-forward",
+                columns=2,
+                order=8,
+                collapsible=True,
+                default_collapsed=False,
+                conditional_display="advance_adjustment_amount > 0"
+            ),
             "currency_info": SectionDefinition(
                 key="currency_info",
                 title="Currency Information",
@@ -1633,7 +1763,7 @@ PATIENT_PAYMENT_VIEW_LAYOUT = ViewLayoutConfiguration(
         "secondary_fields": [
             {"field": "patient_mrn", "label": "MRN", "icon": "fas fa-id-card"},
             {"field": "payment_date", "label": "Payment Date", "icon": "fas fa-calendar", "type": "date"},
-            {"field": "total_amount", "label": "Amount Paid", "icon": "fas fa-rupee-sign", "type": "currency", "css_classes": "text-xl font-bold text-success"},
+            {"field": "payment_method_total", "label": "Amount Paid", "icon": "fas fa-rupee-sign", "type": "currency", "css_classes": "text-xl font-bold text-success"},
             {"field": "payment_method_primary", "label": "Payment Method", "icon": "fas fa-credit-card"}
         ]
     }
@@ -2026,7 +2156,7 @@ PATIENT_PAYMENT_SUMMARY_CARDS = [
 
     {
         "id": "total_amount",
-        "field": "total_amount",
+        "field": "payment_method_total",  # ✅ Use payment_method_total (includes wallet + advance)
         "label": "Total Amount",
         "icon": "fas fa-rupee-sign",
         "icon_css": "stat-card-icon success",
@@ -2351,7 +2481,7 @@ PATIENT_PAYMENT_CONFIG = EntityConfiguration(
 
     # Date and Amount Configuration
     primary_date_field="payment_date",
-    primary_amount_field="total_amount",
+    primary_amount_field="payment_method_total",  # ✅ Use payment_method_total (includes wallet + advance)
 
     # Soft Delete Configuration
     enable_soft_delete=True,

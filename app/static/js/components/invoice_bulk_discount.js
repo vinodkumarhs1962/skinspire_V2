@@ -16,14 +16,93 @@ class BulkDiscountManager {
         this.currentPatientLoyalty = null;
         this.isEnabled = false;
         this.isInitialized = false;
-        this.userToggledCheckbox = false; // Track if user manually toggled
+        this.userToggledCheckbox = false; // Track if user manually toggled bulk checkbox
+        this.userToggledLoyaltyCheckbox = false; // Track if user manually toggled loyalty checkbox
+        this.userToggledStandardCheckbox = false; // Track if user manually toggled standard checkbox
         this.isProcessing = false; // Prevent re-entry
         this.canEditDiscount = window.CAN_EDIT_DISCOUNT !== undefined ? window.CAN_EDIT_DISCOUNT : true; // Permission to manually edit discount fields
+        this.manualPromoCode = null; // Manually entered promo code (Added 2025-11-25)
+
+        // Request tracking to handle race conditions (Added 2025-11-29)
+        this.instanceId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        this.latestRequestTimestamp = 0;
+        this.invoiceLevelDiscountInProgress = false; // Block updatePricing during VIP/Staff toggle
+        console.log('🔧 BulkDiscountManager instance created:', this.instanceId);
+
+        // Staff discretionary discount (Added 2025-11-29)
+        this.staffDiscretionaryEnabled = false;
+        this.staffDiscretionaryPercent = 0;
+        this.staffDiscretionaryNote = '';
+
+        // VIP discount (Added 2025-11-29)
+        this.vipEnabled = false;
+        this.vipPercent = 0;
+        this.vipDiscountType = 'percentage';
+        this.vipCampaignId = null;
+
+        // Exclude campaign flag (Added 2025-11-29)
+        this.excludeCampaign = false;
+        this.excludedCampaignIds = [];  // Array of specific campaign IDs to exclude
 
         // Bind methods
         this.initialize = this.initialize.bind(this);
         this.updatePricing = this.updatePricing.bind(this);
         this.toggleBulkDiscount = this.toggleBulkDiscount.bind(this);
+        this.setManualPromoCode = this.setManualPromoCode.bind(this);
+        this.setStaffDiscretionary = this.setStaffDiscretionary.bind(this);
+        this.setVipDiscount = this.setVipDiscount.bind(this);
+        this.setExcludeCampaign = this.setExcludeCampaign.bind(this);
+        this.setExcludedCampaignIds = this.setExcludedCampaignIds.bind(this);
+    }
+
+    /**
+     * Set manually entered promo code (Added 2025-11-25)
+     * This promo will be included in discount calculations
+     */
+    setManualPromoCode(promoData) {
+        this.manualPromoCode = promoData;
+        console.log('Manual promo code set:', promoData ? promoData.campaign_code : 'cleared');
+    }
+
+    /**
+     * Set staff discretionary discount (Added 2025-11-29)
+     * This discount stacks incrementally on top of all other discounts
+     */
+    setStaffDiscretionary(enabled, percent, note = '') {
+        this.staffDiscretionaryEnabled = enabled;
+        this.staffDiscretionaryPercent = enabled ? parseFloat(percent) || 0 : 0;
+        this.staffDiscretionaryNote = note;
+        console.log('Staff discretionary set:', enabled ? `${percent}%` : 'disabled', note ? `(${note})` : '');
+    }
+
+    /**
+     * Set VIP discount (Added 2025-11-29)
+     * Invoice-level discount for VIP customers
+     */
+    setVipDiscount(enabled, percent, discountType = 'percentage', campaignId = null) {
+        this.vipEnabled = enabled;
+        this.vipPercent = enabled ? parseFloat(percent) || 0 : 0;
+        this.vipDiscountType = discountType;
+        this.vipCampaignId = campaignId;
+        console.log(`🎫 VIP discount set [${this.instanceId}]:`, enabled ? `${percent}% (${discountType})` : 'disabled');
+    }
+
+    /**
+     * Set exclude campaign flag (Added 2025-11-29)
+     * When true, ALL campaign discounts are bypassed
+     */
+    setExcludeCampaign(exclude) {
+        this.excludeCampaign = exclude;
+        console.log('Exclude campaign set:', exclude);
+    }
+
+    /**
+     * Set excluded campaign IDs (Added 2025-11-29)
+     * Array of specific campaign IDs to exclude
+     */
+    setExcludedCampaignIds(campaignIds) {
+        this.excludedCampaignIds = campaignIds || [];
+        console.log('Excluded campaign IDs:', this.excludedCampaignIds);
     }
 
     /**
@@ -94,6 +173,21 @@ class BulkDiscountManager {
 
                 // Show loyalty card badge
                 this.displayLoyaltyCardBadge(data.card);
+
+                // Enable and check loyalty checkbox
+                const loyaltyCheckbox = document.getElementById('apply-loyalty-discount');
+                if (loyaltyCheckbox) {
+                    loyaltyCheckbox.disabled = false;
+                    loyaltyCheckbox.checked = true;
+                    console.log('Loyalty checkbox enabled and checked');
+                }
+            } else {
+                // Disable loyalty checkbox if no card
+                const loyaltyCheckbox = document.getElementById('apply-loyalty-discount');
+                if (loyaltyCheckbox) {
+                    loyaltyCheckbox.disabled = true;
+                    loyaltyCheckbox.checked = false;
+                }
             }
         } catch (error) {
             console.error('Error loading patient loyalty:', error);
@@ -109,6 +203,24 @@ class BulkDiscountManager {
         const checkbox = document.getElementById('bulk-discount-enabled');
         if (checkbox) {
             checkbox.addEventListener('change', this.toggleBulkDiscount);
+        }
+
+        // Standard discount checkbox toggle
+        const standardCheckbox = document.getElementById('apply-standard-discount');
+        if (standardCheckbox) {
+            standardCheckbox.addEventListener('change', (e) => {
+                this.userToggledStandardCheckbox = true;
+                this.handleDiscountCheckboxChange('standard', e.target.checked);
+            });
+        }
+
+        // Loyalty discount checkbox toggle
+        const loyaltyCheckbox = document.getElementById('apply-loyalty-discount');
+        if (loyaltyCheckbox) {
+            loyaltyCheckbox.addEventListener('change', (e) => {
+                this.userToggledLoyaltyCheckbox = true;
+                this.handleDiscountCheckboxChange('loyalty', e.target.checked);
+            });
         }
 
         // Eligible discounts toggle buttons
@@ -167,17 +279,96 @@ class BulkDiscountManager {
     }
 
     /**
+     * Force recalculation for invoice-level discounts (VIP, Staff Special)
+     * This bypasses all guard conditions and directly calls the API
+     * Added 2025-11-29
+     */
+    async forceRecalculateInvoiceDiscounts() {
+        console.log('='.repeat(60));
+        console.log('🔄 forceRecalculateInvoiceDiscounts called [v3]');
+        console.log('   VIP enabled:', this.vipEnabled, 'percent:', this.vipPercent);
+        console.log('   Staff enabled:', this.staffDiscretionaryEnabled, 'percent:', this.staffDiscretionaryPercent);
+        console.log('   isInitialized:', this.isInitialized);
+        console.log('   hospitalConfig:', this.hospitalConfig ? 'loaded' : 'not loaded');
+        console.log('   instanceId:', this.instanceId);
+
+        // Set flag to block updatePricing() during this operation
+        this.invoiceLevelDiscountInProgress = true;
+
+        // Reset all blocking flags
+        this.isProcessing = false;
+        this.isUpdatingDiscounts = false;
+
+        try {
+            // Collect current line items
+            const lineItems = this.collectLineItems();
+            console.log('   Line items collected:', lineItems.length);
+
+            // If no line items, still show the discount rows with 0 amount
+            if (lineItems.length === 0) {
+                console.log('   No line items, showing discount rows with 0 amount');
+                // Update the display to show 0 amounts
+                const vipDiscountRow = document.getElementById('vip-discount-row');
+                const staffSpecialRow = document.getElementById('staff-special-discount-row');
+
+                if (this.vipEnabled && vipDiscountRow) {
+                    vipDiscountRow.style.display = 'table-row';
+                    document.getElementById('vip-discount-percent-display').textContent = this.vipPercent || 0;
+                    document.getElementById('vip-discount-amount-display').textContent = '0.00';
+                }
+                if (this.staffDiscretionaryEnabled && staffSpecialRow) {
+                    staffSpecialRow.style.display = 'table-row';
+                    document.getElementById('staff-special-percent-display').textContent = this.staffDiscretionaryPercent || 0;
+                    document.getElementById('staff-special-amount-display').textContent = '0.00';
+                }
+                return;
+            }
+
+            // Build exclusion flags based on current checkbox states
+            const bulkCheckbox = document.getElementById('bulk-discount-enabled');
+            const loyaltyCheckbox = document.getElementById('apply-loyalty-discount');
+            const standardCheckbox = document.getElementById('apply-standard-discount');
+
+            const excludeBulk = bulkCheckbox ? !bulkCheckbox.checked : false;
+            const excludeLoyalty = this.userToggledLoyaltyCheckbox && loyaltyCheckbox && !loyaltyCheckbox.checked;
+            const excludeStandard = this.userToggledStandardCheckbox && standardCheckbox && !standardCheckbox.checked;
+
+            // Call API directly
+            await this.applyDiscounts(lineItems, { excludeBulk, excludeLoyalty, excludeStandard });
+        } finally {
+            // Reset the flag after a delay to allow the discount update to complete
+            setTimeout(() => {
+                this.invoiceLevelDiscountInProgress = false;
+                console.log('🔓 Invoice-level discount operation complete');
+            }, 500);
+        }
+    }
+
+    /**
      * Update pricing in real-time
      * MAIN FUNCTION - Called whenever line items change
      */
     async updatePricing() {
         if (!this.isInitialized || !this.hospitalConfig) {
+            console.log('updatePricing: Not initialized or no hospital config');
+            return;
+        }
+
+        // Block during VIP/Staff toggle to prevent race conditions
+        if (this.invoiceLevelDiscountInProgress) {
+            console.log('⏸️ Invoice-level discount in progress, skipping updatePricing');
             return;
         }
 
         // Prevent re-entry
         if (this.isProcessing) {
             console.log('Already processing, skipping updatePricing');
+            return;
+        }
+
+        // Prevent re-trigger during discount update
+        if (this.isUpdatingDiscounts) {
+            console.log('Currently updating discounts, skipping updatePricing');
             return;
         }
 
@@ -207,29 +398,40 @@ class BulkDiscountManager {
             const isEligible = serviceCount >= this.hospitalConfig.bulk_discount_min_service_count;
             const checkbox = document.getElementById('bulk-discount-enabled');
 
-            if (!checkbox) return;
-
-            // Auto-check/uncheck checkbox based on eligibility (only if user hasn't manually toggled)
-            if (isEligible) {
-                // Only auto-check if user hasn't manually unchecked
-                if (!this.userToggledCheckbox) {
-                    checkbox.checked = true;
-                }
-                checkbox.disabled = false;
-                this.updateEligibilityBadge('eligible', serviceCount);
-            } else {
-                // Only auto-uncheck if user hasn't manually checked
-                if (!this.userToggledCheckbox) {
+            // Auto-check/uncheck checkbox based on eligibility (if checkbox exists)
+            if (checkbox) {
+                if (isEligible) {
+                    // Only auto-check if user hasn't manually unchecked
+                    if (!this.userToggledCheckbox) {
+                        checkbox.checked = true;
+                    }
+                    checkbox.disabled = false;
+                    this.updateEligibilityBadge('eligible', serviceCount);
+                } else {
+                    // Not eligible - always uncheck and reset user toggle
+                    // (can't have bulk discount if below threshold)
                     checkbox.checked = false;
+                    checkbox.disabled = false;
+                    this.userToggledCheckbox = false;  // Reset so next eligibility auto-checks
+                    const servicesNeeded = this.hospitalConfig.bulk_discount_min_service_count - serviceCount;
+                    this.updateEligibilityBadge('not-eligible', serviceCount, servicesNeeded);
                 }
-                checkbox.disabled = false;
-                const servicesNeeded = this.hospitalConfig.bulk_discount_min_service_count - serviceCount;
-                this.updateEligibilityBadge('not-eligible', serviceCount, servicesNeeded);
             }
 
-            // Always apply discounts via API (backend will determine which discounts apply)
-            // Even if bulk checkbox is unchecked, loyalty/other discounts may still apply
-            await this.applyDiscounts(lineItems);
+            // Apply discounts via API (backend will determine which discounts apply)
+            // Pass checkbox states so backend knows which discounts to skip
+            // excludeBulk = true when: user manually unchecked AND still eligible, OR not eligible at all
+            const excludeBulk = !isEligible || (this.userToggledCheckbox && checkbox && !checkbox.checked);
+
+            // Check loyalty checkbox state
+            const loyaltyCheckbox = document.getElementById('apply-loyalty-discount');
+            const excludeLoyalty = this.userToggledLoyaltyCheckbox && loyaltyCheckbox && !loyaltyCheckbox.checked;
+
+            // Check standard checkbox state
+            const standardCheckbox = document.getElementById('apply-standard-discount');
+            const excludeStandard = this.userToggledStandardCheckbox && standardCheckbox && !standardCheckbox.checked;
+
+            await this.applyDiscounts(lineItems, { excludeBulk, excludeLoyalty, excludeStandard });
 
         } catch (error) {
             console.error('Error updating pricing:', error);
@@ -240,6 +442,8 @@ class BulkDiscountManager {
 
     /**
      * Collect current line items from the invoice form
+     * Updated 2025-11-29: Now collects ALL item types (Service, Medicine, Package, etc.)
+     * for proper VIP/Staff invoice-level discount calculation
      */
     collectLineItems() {
         const lineItems = [];
@@ -251,33 +455,54 @@ class BulkDiscountManager {
             const itemType = row.querySelector('.item-type')?.value;
             if (!itemType) return;
 
-            const serviceId = row.querySelector('.item-id')?.value;
+            const itemId = row.querySelector('.item-id')?.value;
             const quantity = parseInt(row.querySelector('.quantity')?.value || 1);
             const unitPrice = parseFloat(row.querySelector('.unit-price')?.value || 0);
 
-            console.log(`Row ${index}: type=${itemType}, id=${serviceId}, qty=${quantity}, price=${unitPrice}`);
+            console.log(`Row ${index}: type=${itemType}, id=${itemId}, qty=${quantity}, price=${unitPrice}`);
 
-            if (itemType === 'Service' && serviceId) {
-                lineItems.push({
+            // Collect ALL item types (Service, Medicine, Package, etc.)
+            // Include items even with unitPrice = 0 for invoice-level discount calculation
+            if (itemId) {
+                const item = {
                     index: index,
                     item_type: itemType,
-                    service_id: serviceId,
-                    item_id: serviceId,
+                    item_id: itemId,
                     quantity: quantity,
                     unit_price: unitPrice
-                });
+                };
+
+                // Add type-specific ID field for backward compatibility
+                if (itemType === 'Service' || itemType === 'Package') {
+                    item.service_id = itemId;
+                } else if (itemType === 'Medicine' || itemType === 'OTC' || itemType === 'Prescription' || itemType === 'Product' || itemType === 'Consumable') {
+                    item.medicine_id = itemId;
+                }
+
+                lineItems.push(item);
+                console.log(`  ✓ Added item: ${itemType} - ${itemId} @ Rs.${unitPrice}`);
+            } else {
+                console.log(`  ✗ Skipped row ${index}: no itemId`);
             }
         });
 
-        console.log(`Collected ${lineItems.length} service line items`);
+        console.log(`Collected ${lineItems.length} line items (all types)`);
         return lineItems;
     }
 
     /**
      * Apply discounts to line items via backend calculation
+     * @param {Array} lineItems - Line items to calculate discounts for
+     * @param {Object} options - Options for discount calculation
+     * @param {boolean} options.excludeBulk - If true, skip bulk discount (user manually unchecked)
      */
-    async applyDiscounts(lineItems) {
+    async applyDiscounts(lineItems, options = {}) {
         if (lineItems.length === 0) return;
+
+        // Use timestamp to track this request and handle race conditions
+        const thisRequestTimestamp = Date.now();
+        this.latestRequestTimestamp = thisRequestTimestamp;
+        console.log(`📤 API Request @${thisRequestTimestamp} starting [${this.instanceId}] (VIP=${this.vipEnabled}, Staff=${this.staffDiscretionaryEnabled})`);
 
         try {
             // Get hospital and patient IDs
@@ -295,10 +520,37 @@ class BulkDiscountManager {
                 return;
             }
 
+            // Include manually entered promo code if available
+            const manualPromo = this.manualPromoCode;
+
             const requestData = {
                 hospital_id: hospitalId,
                 patient_id: patientId,
-                line_items: lineItems
+                line_items: lineItems,
+                exclude_bulk: options.excludeBulk || false,
+                exclude_loyalty: options.excludeLoyalty || false,
+                exclude_standard: options.excludeStandard || false,
+                exclude_campaign: this.excludeCampaign || false,  // Added 2025-11-29
+                excluded_campaign_ids: this.excludedCampaignIds || [],  // Per-campaign exclusion
+                manual_promo_code: manualPromo ? {
+                    campaign_id: manualPromo.campaign_id,
+                    campaign_code: manualPromo.campaign_code,
+                    discount_type: manualPromo.discount_type,
+                    discount_value: manualPromo.discount_value
+                } : null,
+                // Staff discretionary discount (Added 2025-11-29)
+                staff_discretionary: this.staffDiscretionaryEnabled ? {
+                    enabled: true,
+                    percent: this.staffDiscretionaryPercent,
+                    note: this.staffDiscretionaryNote
+                } : null,
+                // VIP discount (Added 2025-11-29)
+                vip_discount: this.vipEnabled ? {
+                    enabled: true,
+                    percent: this.vipPercent,
+                    discount_type: this.vipDiscountType,
+                    campaign_id: this.vipCampaignId
+                } : null
             };
 
             console.log('Sending discount calculation request:', requestData);
@@ -314,6 +566,14 @@ class BulkDiscountManager {
 
             const data = await response.json();
 
+            // Check if this response is stale (a newer request has been made)
+            if (thisRequestTimestamp < this.latestRequestTimestamp) {
+                console.log(`📥 API Response @${thisRequestTimestamp} IGNORED (stale - latest is @${this.latestRequestTimestamp})`);
+                return;
+            }
+
+            console.log(`📥 API Response @${thisRequestTimestamp} processing [${this.instanceId}]`);
+
             if (data.success) {
                 // Update line items with calculated discounts
                 this.updateLineItemDiscounts(data.line_items);
@@ -323,6 +583,11 @@ class BulkDiscountManager {
 
                 // Update discount breakdown
                 this.updateDiscountBreakdown(data.line_items);
+
+                // Update eligible campaigns display (Added 2025-11-29)
+                if (window.updateEligibleCampaigns && data.eligible_campaigns) {
+                    window.updateEligibleCampaigns(data.eligible_campaigns);
+                }
 
             } else {
                 throw new Error(data.error || 'Failed to calculate discounts');
@@ -339,40 +604,57 @@ class BulkDiscountManager {
      */
     updateLineItemDiscounts(discountedItems) {
         const rows = document.querySelectorAll('.line-item-row');
+        const rowsArray = Array.from(rows);
 
         console.log(`Updating ${discountedItems.length} line items with discounts`);
+
+        // Set flag to prevent re-triggering updatePricing
+        this.isUpdatingDiscounts = true;
 
         discountedItems.forEach((item) => {
             if (item.item_type !== 'Service') return;
 
-            // Find the matching row by service_id
-            const serviceId = item.service_id || item.item_id;
-            if (!serviceId) {
-                console.warn('Item missing service_id:', item);
-                return;
+            // Use the index from the API response to match the correct row
+            // This handles multiple rows with the same service_id
+            const itemIndex = item.index;
+            let matchedRow = null;
+
+            if (itemIndex !== undefined && itemIndex < rowsArray.length) {
+                // Match by index (most reliable for multiple same items)
+                matchedRow = rowsArray[itemIndex];
+            } else {
+                // Fallback: Find row with matching item-id value
+                const serviceId = item.service_id || item.item_id;
+                if (!serviceId) {
+                    console.warn('Item missing service_id:', item);
+                    return;
+                }
+                rowsArray.forEach(row => {
+                    const itemIdInput = row.querySelector('.item-id');
+                    if (itemIdInput && itemIdInput.value === serviceId) {
+                        matchedRow = row;
+                    }
+                });
             }
 
-            // Find row with matching item-id value
-            let matchedRow = null;
-            rows.forEach(row => {
-                const itemIdInput = row.querySelector('.item-id');
-                if (itemIdInput && itemIdInput.value === serviceId) {
-                    matchedRow = row;
-                }
-            });
-
             if (!matchedRow) {
-                console.warn(`No matching row found for service ${serviceId}`);
+                console.warn(`No matching row found for item index ${itemIndex}`);
                 return;
             }
 
             const discountInput = matchedRow.querySelector('.discount-percent');
             if (discountInput) {
-                console.log(`Setting discount for ${item.item_name || serviceId}: ${item.discount_percent}%`);
+                console.log(`Setting discount for row ${itemIndex} (${item.item_name}): ${item.discount_percent}%`);
                 discountInput.value = item.discount_percent.toFixed(2);
 
+                // Clear override flag when auto-discount is applied
+                try {
+                    this.clearDiscountOverride(matchedRow);
+                } catch (err) {
+                    console.warn('Error clearing discount override:', err);
+                }
+
                 // Enforce readonly state based on user permission
-                // Front desk users cannot manually edit discount fields
                 if (!this.canEditDiscount) {
                     discountInput.setAttribute('readonly', true);
                     discountInput.style.backgroundColor = '#f3f4f6';
@@ -403,8 +685,7 @@ class BulkDiscountManager {
                 // Add discount badge (pass metadata for stacked discounts)
                 this.addDiscountBadge(matchedRow, item.discount_type, item.discount_percent, item.discount_metadata);
 
-                // Trigger input event to recalculate line total and invoice totals
-                // This will trigger the invoice_item.js event handler which handles all calculations
+                // Trigger input event to recalculate line total (but not updatePricing)
                 discountInput.dispatchEvent(new Event('input', { bubbles: true }));
             } else {
                 console.warn('Discount input not found in row');
@@ -415,6 +696,14 @@ class BulkDiscountManager {
 
         // Update eligible discounts display after all line items are updated
         this.updateEligibleDiscountsDisplay();
+
+        // Recalculate invoice totals once after all discounts are applied
+        this.recalculateInvoiceTotals();
+
+        // Reset flag after a short delay to allow event handlers to complete
+        setTimeout(() => {
+            this.isUpdatingDiscounts = false;
+        }, 100);
     }
 
     /**
@@ -430,13 +719,30 @@ class BulkDiscountManager {
             if (itemType !== 'Service') return;
 
             const discountInput = row.querySelector('.discount-percent');
+            const discountTypeInput = row.querySelector('.discount-type');
+            const discountType = discountTypeInput?.value || '';
+
             if (discountInput) {
-                // Only clear if it was auto-applied (has badge)
-                const badge = row.querySelector('.discount-badge');
-                if (badge && badge.classList.contains('bulk-discount')) {
-                    console.log('Clearing discount from row');
+                // Check if this row has bulk-related discount
+                // Includes: bulk, bulk_plus_loyalty, stacked (when bulk is part of it)
+                const hasBulkDiscount = discountType.includes('bulk') ||
+                    discountType === 'stacked' ||
+                    row.querySelector('.discount-badge.bulk-discount');
+
+                if (hasBulkDiscount && parseFloat(discountInput.value) > 0) {
+                    console.log(`Clearing discount from row (type: ${discountType})`);
                     discountInput.value = '0';
-                    badge.remove();
+
+                    // Remove all badges
+                    const badges = row.querySelectorAll('.discount-badge');
+                    badges.forEach(badge => badge.remove());
+
+                    // Clear discount type
+                    if (discountTypeInput) discountTypeInput.value = 'none';
+
+                    // Mark this row as having staff override
+                    this.setDiscountOverride(row, true);
+
                     // Trigger input event to recalculate
                     discountInput.dispatchEvent(new Event('input', { bubbles: true }));
                 }
@@ -457,6 +763,80 @@ class BulkDiscountManager {
         if (breakdown) breakdown.style.display = 'none';
 
         this.recalculateInvoiceTotals();
+    }
+
+    /**
+     * Set discount override flag on a row
+     * This tells the backend to preserve staff's manual discount instead of recalculating
+     */
+    setDiscountOverride(row, isOverride) {
+        // Find or create the override hidden input
+        const rowIndex = row.dataset.index || Array.from(row.parentNode.children).indexOf(row);
+        let overrideInput = row.querySelector('.discount-override');
+
+        if (!overrideInput) {
+            overrideInput = document.createElement('input');
+            overrideInput.type = 'hidden';
+            overrideInput.className = 'discount-override';
+            overrideInput.name = `line_items-${rowIndex}-discount_override`;
+            row.appendChild(overrideInput);
+        }
+
+        overrideInput.value = isOverride ? 'true' : 'false';
+        console.log(`Row ${rowIndex}: discount_override = ${isOverride}`);
+    }
+
+    /**
+     * Clear discount override when auto-discount is applied
+     */
+    clearDiscountOverride(row) {
+        this.setDiscountOverride(row, false);
+    }
+
+    /**
+     * Handle discount checkbox change (Standard, Loyalty, etc.)
+     * When staff unchecks a discount type, mark affected rows as overridden
+     */
+    handleDiscountCheckboxChange(discountType, isChecked) {
+        console.log(`Discount checkbox changed: ${discountType} = ${isChecked}`);
+
+        if (!isChecked) {
+            // Staff unchecked - clear discount for ALL rows (backend will handle exclusion)
+            const rows = document.querySelectorAll('.line-item-row');
+            rows.forEach(row => {
+                const discountTypeInput = row.querySelector('.discount-type');
+                const currentDiscountType = discountTypeInput ? discountTypeInput.value : '';
+
+                // Check if this row has the discount type being toggled
+                const matchesType = currentDiscountType === discountType ||
+                    (discountType === 'standard' && currentDiscountType === 'standard') ||
+                    (discountType === 'loyalty' && (currentDiscountType === 'loyalty' || currentDiscountType === 'loyalty_percent'));
+
+                if (matchesType) {
+                    // Set override and clear discount
+                    this.setDiscountOverride(row, true);
+                    const discountInput = row.querySelector('.discount-percent');
+                    if (discountInput) {
+                        discountInput.value = '0';
+                        discountInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    // Clear discount type and badges
+                    if (discountTypeInput) discountTypeInput.value = 'none';
+                    const badges = row.querySelectorAll('.discount-badge');
+                    badges.forEach(badge => badge.remove());
+                    console.log(`Row with ${discountType} discount - override set, discount cleared`);
+                }
+            });
+            // Recalculate totals (this calls backend with exclusion flags)
+            this.updatePricing();
+        } else {
+            // Staff checked - clear overrides and recalculate from backend
+            const rows = document.querySelectorAll('.line-item-row');
+            rows.forEach(row => {
+                this.clearDiscountOverride(row);
+            });
+            this.updatePricing();
+        }
     }
 
     /**
@@ -583,16 +963,101 @@ class BulkDiscountManager {
 
         const loyaltyAmount = summary.loyalty_discount_amount || 0;
 
-        if (loyaltyCheckbox && loyaltyAmount > 0) {
-            loyaltyCheckbox.checked = true;
-            if (loyaltyInfoEl) loyaltyInfoEl.style.display = 'block';
-            if (loyaltyAmountEl) loyaltyAmountEl.textContent = `Rs. ${loyaltyAmount.toFixed(2)}`;
-            if (loyaltyCardTypeEl && this.currentPatientLoyalty) {
-                loyaltyCardTypeEl.textContent = this.currentPatientLoyalty.card_type_name || 'Active';
+        // Only auto-update checkbox if user hasn't manually toggled it
+        if (loyaltyCheckbox && !this.userToggledLoyaltyCheckbox) {
+            if (loyaltyAmount > 0) {
+                loyaltyCheckbox.checked = true;
+                if (loyaltyInfoEl) loyaltyInfoEl.style.display = 'block';
+                if (loyaltyAmountEl) loyaltyAmountEl.textContent = `Rs. ${loyaltyAmount.toFixed(2)}`;
+                if (loyaltyCardTypeEl && this.currentPatientLoyalty) {
+                    loyaltyCardTypeEl.textContent = this.currentPatientLoyalty.card_type_name || 'Active';
+                }
+            } else {
+                loyaltyCheckbox.checked = false;
+                if (loyaltyInfoEl) loyaltyInfoEl.style.display = 'none';
             }
-        } else if (loyaltyCheckbox) {
-            loyaltyCheckbox.checked = false;
-            if (loyaltyInfoEl) loyaltyInfoEl.style.display = 'none';
+        } else if (loyaltyCheckbox && this.userToggledLoyaltyCheckbox) {
+            // User manually toggled - just update the info display, not the checkbox
+            if (loyaltyInfoEl) {
+                loyaltyInfoEl.style.display = loyaltyAmount > 0 ? 'block' : 'none';
+            }
+            if (loyaltyAmountEl && loyaltyAmount > 0) {
+                loyaltyAmountEl.textContent = `Rs. ${loyaltyAmount.toFixed(2)}`;
+            }
+        }
+
+        // Update invoice-level discounts display (Added 2025-11-29)
+        const invoiceDiscounts = summary.invoice_level_discounts || {};
+        console.log('📊 Invoice-level discounts from API:', invoiceDiscounts);
+
+        // Use manager's internal flags to determine visibility (more reliable than DOM state)
+        // This avoids race conditions where API response arrives after checkbox is toggled
+        const vipIsEnabled = this.vipEnabled;
+        const staffIsEnabled = this.staffDiscretionaryEnabled;
+        console.log('📊 Manager flags:', { vipIsEnabled, staffIsEnabled });
+
+        // VIP Discount - Update both the info card and the totals row
+        const vipDiscountInfoEl = document.getElementById('vip-discount-info');
+        const vipDiscountRow = document.getElementById('vip-discount-row');
+        const vipAmount = invoiceDiscounts.vip_discount_amount || 0;
+        const vipPercent = invoiceDiscounts.vip_discount_percent || 0;
+        console.log('📊 VIP discount:', { vipAmount, vipPercent, rowFound: !!vipDiscountRow, enabled: vipIsEnabled });
+
+        if (vipDiscountInfoEl) {
+            if (vipAmount > 0 || vipIsEnabled) {
+                vipDiscountInfoEl.style.display = 'block';
+                vipDiscountInfoEl.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 12px; color: #92400e;">Applied on subtotal (${vipPercent || this.vipPercent}%)</span>
+                        <span style="font-weight: 600; color: #d97706;">- Rs. ${vipAmount.toFixed(2)}</span>
+                    </div>
+                `;
+            } else {
+                vipDiscountInfoEl.style.display = 'none';
+            }
+        }
+
+        // Update VIP row in totals table - keep visible if enabled
+        if (vipDiscountRow) {
+            if (vipIsEnabled) {
+                vipDiscountRow.style.display = 'table-row';
+                document.getElementById('vip-discount-percent-display').textContent = vipPercent || this.vipPercent || 0;
+                document.getElementById('vip-discount-amount-display').textContent = vipAmount > 0 ? vipAmount.toFixed(2) : '0.00';
+            } else {
+                vipDiscountRow.style.display = 'none';
+            }
+        }
+
+        // Staff Discretionary Discount - Update both the info card and the totals row
+        const staffDiscretionaryInfoEl = document.getElementById('staff-discretionary-info');
+        const staffSpecialRow = document.getElementById('staff-special-discount-row');
+        const staffAmount = invoiceDiscounts.staff_discretionary_amount || 0;
+        const staffPercent = invoiceDiscounts.staff_discretionary_percent || 0;
+        console.log('📊 Staff discount:', { staffAmount, staffPercent, rowFound: !!staffSpecialRow, enabled: staffIsEnabled });
+
+        if (staffDiscretionaryInfoEl) {
+            if (staffAmount > 0 || staffIsEnabled) {
+                staffDiscretionaryInfoEl.style.display = 'block';
+                staffDiscretionaryInfoEl.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 12px; color: #6d28d9;">Applied on subtotal (${staffPercent || this.staffDiscretionaryPercent}%)</span>
+                        <span style="font-weight: 600; color: #7c3aed;">- Rs. ${staffAmount.toFixed(2)}</span>
+                    </div>
+                `;
+            } else {
+                staffDiscretionaryInfoEl.style.display = 'none';
+            }
+        }
+
+        // Update Staff Special row in totals table - keep visible if enabled
+        if (staffSpecialRow) {
+            if (staffIsEnabled) {
+                staffSpecialRow.style.display = 'table-row';
+                document.getElementById('staff-special-percent-display').textContent = staffPercent || this.staffDiscretionaryPercent || 0;
+                document.getElementById('staff-special-amount-display').textContent = staffAmount > 0 ? staffAmount.toFixed(2) : '0.00';
+            } else {
+                staffSpecialRow.style.display = 'none';
+            }
         }
 
         // Update savings badge
@@ -611,6 +1076,14 @@ class BulkDiscountManager {
             this.showPotentialSavings(summary.potential_savings);
         } else {
             this.hidePotentialSavings();
+        }
+
+        // Update totals display to reflect invoice-level discounts (Added 2025-11-29)
+        // Use requestAnimationFrame to ensure DOM updates are complete
+        if (typeof updateTotalsDisplay === 'function') {
+            requestAnimationFrame(() => {
+                updateTotalsDisplay();
+            });
         }
 
         // NOTE: updateEligibleDiscountsDisplay() is called from updateLineItemDiscounts()
@@ -741,17 +1214,91 @@ class BulkDiscountManager {
 
         switch(type) {
             case 'bulk':
-                badgeText = 'Bulk';
+                badgeText = `Bulk ${percent.toFixed(0)}%`;
                 badgeColor = '#3b82f6'; // Blue
                 break;
             case 'loyalty':
+            case 'loyalty_percent':
                 badgeText = `${this.currentPatientLoyalty?.card_type_code || 'Loyalty'} ${percent.toFixed(0)}%`;
                 badgeColor = '#f59e0b'; // Amber
                 break;
             case 'campaign':
             case 'promotion':
-                badgeText = `Promotion ${percent.toFixed(0)}%`;
+                badgeText = `Promo ${percent.toFixed(0)}%`;
                 badgeColor = '#10b981'; // Green
+                break;
+            case 'stacked':
+                // Handle stacked discounts - show individual badges for each component
+                if (metadata && metadata.breakdown && metadata.breakdown.length > 0) {
+                    // Create individual badges for each discount component
+                    metadata.breakdown.forEach((item, index) => {
+                        const componentBadge = document.createElement('span');
+                        componentBadge.className = `discount-badge ${item.source}-discount`;
+
+                        let componentColor = '#6b7280'; // Default gray
+                        let componentLabel = item.source;
+
+                        switch(item.source) {
+                            case 'bulk':
+                                componentColor = '#3b82f6'; // Blue
+                                componentLabel = 'Bulk';
+                                break;
+                            case 'loyalty':
+                                componentColor = '#f59e0b'; // Amber
+                                componentLabel = this.currentPatientLoyalty?.card_type_code || 'Loyalty';
+                                break;
+                            case 'campaign':
+                                componentColor = '#10b981'; // Green
+                                componentLabel = 'Promo';
+                                break;
+                            case 'vip':
+                                componentColor = '#ec4899'; // Pink
+                                componentLabel = 'VIP';
+                                break;
+                        }
+
+                        componentBadge.textContent = `${componentLabel} ${item.percent.toFixed(0)}%`;
+                        componentBadge.style.cssText = `
+                            display: inline-block;
+                            background: ${componentColor};
+                            color: white;
+                            padding: 2px 8px;
+                            border-radius: 4px;
+                            font-size: 11px;
+                            margin-left: ${index === 0 ? '8px' : '4px'};
+                            font-weight: 500;
+                            cursor: help;
+                        `;
+                        componentBadge.title = `${componentLabel} discount: ${item.percent.toFixed(1)}%`;
+                        discountInput.parentElement.appendChild(componentBadge);
+                    });
+
+                    // Add total indicator
+                    const totalBadge = document.createElement('span');
+                    totalBadge.className = 'discount-badge total-discount';
+                    totalBadge.textContent = `= ${percent.toFixed(0)}%`;
+                    totalBadge.style.cssText = `
+                        display: inline-block;
+                        background: #8b5cf6;
+                        color: white;
+                        padding: 2px 8px;
+                        border-radius: 4px;
+                        font-size: 11px;
+                        margin-left: 4px;
+                        font-weight: 600;
+                        cursor: help;
+                    `;
+                    totalBadge.title = 'Total stacked discount';
+                    discountInput.parentElement.appendChild(totalBadge);
+                    return; // Already added badges, exit switch
+                } else {
+                    badgeText = `${percent.toFixed(0)}%`;
+                    badgeColor = '#6b7280'; // Gray
+                }
+                break;
+            case 'standard':
+                badgeText = `Std ${percent.toFixed(0)}%`;
+                badgeColor = '#6b7280'; // Gray
                 break;
             default:
                 badgeText = `${percent.toFixed(0)}%`;
@@ -801,10 +1348,24 @@ class BulkDiscountManager {
 
         console.log(`User toggled checkbox to: ${checkbox.checked}`);
 
-        // Always call API to recalculate - backend decides which discounts apply
-        // Even if bulk is unchecked, loyalty/other discounts should still work
-        const lineItems = this.collectLineItems();
-        this.applyDiscounts(lineItems);
+        // If user unchecked bulk discount, mark rows with bulk discount as overridden
+        if (!checkbox.checked) {
+            // Use the clearDiscounts method which handles all bulk-related discount types
+            this.clearDiscounts();
+        } else {
+            // User re-checked - clear overrides for bulk discount rows and recalculate
+            const rows = document.querySelectorAll('.line-item-row');
+            rows.forEach(row => {
+                const overrideInput = row.querySelector('.discount-override');
+                if (overrideInput && overrideInput.value === 'true') {
+                    this.clearDiscountOverride(row);
+                }
+            });
+
+            // Always call API to recalculate - backend decides which discounts apply
+            const lineItems = this.collectLineItems();
+            this.applyDiscounts(lineItems);
+        }
     }
 
     /**
@@ -1010,16 +1571,27 @@ document.addEventListener('DOMContentLoaded', function() {
     const patientId = document.querySelector('[name="patient_id"]')?.value;
 
     if (hospitalId) {
-        // Create and initialize manager
-        window.bulkDiscountManager = new BulkDiscountManager();
-        window.bulkDiscountManager.initialize(hospitalId, patientId);
+        // Create and initialize manager (Singleton pattern with lock to prevent race conditions)
+        if (!window.bulkDiscountManager && !window._bulkDiscountManagerCreating) {
+            window._bulkDiscountManagerCreating = true;
+            window.bulkDiscountManager = new BulkDiscountManager();
+            window.bulkDiscountManager.initialize(hospitalId, patientId);
+            console.log('✅ BulkDiscountManager initialized from JS file (singleton)');
+        } else if (window.bulkDiscountManager) {
+            console.log('⚠️ BulkDiscountManager already exists, skipping JS initialization');
+        } else {
+            console.log('⏳ BulkDiscountManager creation in progress, skipping JS initialization');
+        }
 
-        // Attach to form submit for validation
-        invoiceForm.addEventListener('submit', function(e) {
-            if (window.bulkDiscountManager && !window.bulkDiscountManager.validateBeforeSubmit()) {
-                e.preventDefault();
-                return false;
-            }
-        });
+        // Attach to form submit for validation (only once)
+        if (!window._bulkDiscountFormSubmitAttached) {
+            window._bulkDiscountFormSubmitAttached = true;
+            invoiceForm.addEventListener('submit', function(e) {
+                if (window.bulkDiscountManager && !window.bulkDiscountManager.validateBeforeSubmit()) {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+        }
     }
 });

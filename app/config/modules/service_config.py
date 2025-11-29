@@ -91,6 +91,32 @@ SERVICE_FIELDS = [
         filterable=True,
         default=True,
         width="80px"
+    ),
+
+    # Discount Fields
+    FieldDefinition(
+        name="bulk_discount_eligible",
+        label="Bulk Discount Eligible",
+        field_type=FieldType.BOOLEAN,
+        show_in_list=True,
+        show_in_detail=True,
+        show_in_form=True,
+        filterable=True,
+        default=False,
+        width="120px",
+        help_text="Enable to allow bulk discount for this service"
+    ),
+
+    FieldDefinition(
+        name="bulk_discount_percent",
+        label="Bulk Discount %",
+        field_type=FieldType.DECIMAL,
+        show_in_list=True,
+        show_in_detail=True,
+        show_in_form=True,
+        default=0,
+        width="100px",
+        help_text="Discount percentage when bulk discount applies"
     )
 ]
 

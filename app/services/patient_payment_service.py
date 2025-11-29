@@ -378,13 +378,15 @@ class PatientPaymentService(UniversalEntityService):
                 total_amount = 0
 
                 for payment in payment_history:
+                    # Use payment_method_total which includes wallet + advance
+                    payment_total = float(payment.payment_method_total or payment.total_amount or 0)
                     payment_dict = {
                         'payment_id': str(payment.payment_id),
                         'payment_date': payment.payment_date,
                         'reference_no': getattr(payment, 'reference_number', None) or f"PMT-{str(payment.payment_id)[:8]}",
                         'invoice_number': payment.invoice_number,
-                        'total_amount': float(payment.total_amount or 0),
-                        'allocated_amount': float(payment.net_amount or 0),  # Use net_amount as allocated
+                        'total_amount': payment_total,  # ✅ Use payment_method_total (includes wallet + advance)
+                        'allocated_amount': payment_total,  # ✅ Use payment_method_total
                         'payment_method': payment.payment_method_primary,
                         'workflow_status': payment.workflow_status,
                         'is_partial': False,  # Not applicable for payment history view
@@ -395,7 +397,7 @@ class PatientPaymentService(UniversalEntityService):
 
                     # Sum only approved, non-reversed payments
                     if payment.workflow_status == 'approved' and not (payment.workflow_status == 'reversed'):
-                        total_amount += float(payment.net_amount or 0)
+                        total_amount += payment_total
 
                 return {
                     'payments': payments,
@@ -515,9 +517,24 @@ class PatientPaymentService(UniversalEntityService):
                         invoice_allocations[invoice_id]['ar_entries'].append(ar_entry)
                         invoice_allocations[invoice_id]['total_allocated'] += (ar_entry.credit_amount or Decimal(0))
 
+                # ========================================================================
+                # Get wallet and advance amounts from payment record FIRST
+                # so we can distribute them across allocations
+                # ========================================================================
+                payment = session.query(PatientPaymentReceiptView).filter(
+                    PatientPaymentReceiptView.payment_id == payment_uuid
+                ).first()
+
+                wallet_amount = Decimal('0')
+                advance_amount = Decimal('0')
+
+                if payment:
+                    wallet_amount = Decimal(str(payment.wallet_points_amount or 0))
+                    advance_amount = Decimal(str(payment.advance_adjustment_amount or 0))
+
                 # Build allocations list with invoice details
                 allocations = []
-                total_allocated = Decimal(0)
+                total_ar_allocated = Decimal(0)  # Only AR-tracked amounts
 
                 for invoice_id_str, alloc_data in invoice_allocations.items():
                     # Get invoice details
@@ -526,7 +543,7 @@ class PatientPaymentService(UniversalEntityService):
                     ).first()
 
                     if invoice:
-                        allocated_amount = alloc_data['total_allocated']
+                        ar_allocated_amount = alloc_data['total_allocated']
                         first_ar_entry = alloc_data['ar_entries'][0]
 
                         allocation_dict = {
@@ -534,14 +551,40 @@ class PatientPaymentService(UniversalEntityService):
                             'invoice_number': invoice.invoice_number,
                             'invoice_date': invoice.invoice_date,
                             'invoice_total': float(invoice.grand_total or 0),
-                            'allocated_amount': float(allocated_amount),
+                            'ar_allocated_amount': float(ar_allocated_amount),  # Original AR amount
+                            'allocated_amount': float(ar_allocated_amount),  # Will be updated below
                             'allocation_date': first_ar_entry.transaction_date,
                             'ar_entry_count': len(alloc_data['ar_entries']),  # Number of line items
                             'reference_number': first_ar_entry.reference_number,
                             'is_cancelled': invoice.is_cancelled
                         }
                         allocations.append(allocation_dict)
-                        total_allocated += allocated_amount
+                        total_ar_allocated += ar_allocated_amount
+
+                # ========================================================================
+                # Distribute wallet and advance amounts proportionally across invoices
+                # ========================================================================
+                if total_ar_allocated > 0 and (wallet_amount > 0 or advance_amount > 0):
+                    for alloc in allocations:
+                        # Calculate proportion based on AR allocation
+                        proportion = Decimal(str(alloc['ar_allocated_amount'])) / total_ar_allocated
+                        wallet_portion = wallet_amount * proportion
+                        advance_portion = advance_amount * proportion
+
+                        # Update allocated_amount to include wallet and advance
+                        alloc['allocated_amount'] = float(
+                            Decimal(str(alloc['ar_allocated_amount'])) + wallet_portion + advance_portion
+                        )
+                        alloc['wallet_portion'] = float(wallet_portion)
+                        alloc['advance_portion'] = float(advance_portion)
+
+                # If no AR allocations but we have wallet/advance (wallet-only payment)
+                elif len(allocations) == 0 and (wallet_amount > 0 or advance_amount > 0):
+                    # For wallet-only payments, we may not have AR entries
+                    # This is handled separately in the return
+                    pass
+
+                total_allocated = total_ar_allocated  # For backward compatibility
 
                 # Build package installment data
                 package_installments = []
@@ -561,17 +604,24 @@ class PatientPaymentService(UniversalEntityService):
                             'is_partial': installment and abs(float(installment.amount) - float(pkg_entry.credit_amount)) > 0.01 if installment else False
                         })
 
-                # Calculate grand total (invoices + packages)
-                grand_total_allocated = total_allocated + package_installment_total
+                # Calculate grand total (invoices + packages + wallet + advance)
+                # NOTE: wallet_amount and advance_amount were retrieved earlier
+                grand_total_allocated = total_allocated + package_installment_total + wallet_amount + advance_amount
 
                 return {
                     'allocations': allocations,
                     'has_allocations': len(allocations) > 0 or len(package_installments) > 0,
-                    'total_allocated': float(total_allocated),
+                    'total_allocated': float(total_allocated),  # AR-tracked invoice payments (cash/card/upi)
                     'allocation_count': len(allocations),
                     'package_installments': package_installments,
                     'package_installment_total': float(package_installment_total),
                     'has_package_installments': len(package_installments) > 0,
+                    # ✅ Wallet and advance amounts
+                    'wallet_amount': float(wallet_amount),
+                    'advance_amount': float(advance_amount),
+                    'has_wallet_payment': wallet_amount > 0,
+                    'has_advance_payment': advance_amount > 0,
+                    # ✅ Grand total includes ALL payment methods
                     'grand_total_allocated': float(grand_total_allocated),
                     'entity_type': 'patient_invoices',  # For links to invoice detail view
                     'currency_symbol': '₹',
@@ -609,7 +659,12 @@ class PatientPaymentService(UniversalEntityService):
         """
         try:
             # Calculate payment method breakdown percentage
-            total = float(item.get('total_amount', 0))
+            # Use payment_method_total which includes wallet + advance
+            total = float(item.get('payment_method_total', 0)) or float(item.get('total_amount', 0))
+
+            # Set payment_total_display virtual field for the breakdown section
+            item['payment_total_display'] = total
+
             if total > 0:
                 item['cash_percentage'] = round((float(item.get('cash_amount', 0)) / total) * 100, 1)
                 item['card_percentage'] = round(
@@ -617,6 +672,8 @@ class PatientPaymentService(UniversalEntityService):
                     1
                 )
                 item['upi_percentage'] = round((float(item.get('upi_amount', 0)) / total) * 100, 1)
+                item['wallet_percentage'] = round((float(item.get('wallet_points_amount', 0)) / total) * 100, 1)
+                item['advance_percentage'] = round((float(item.get('advance_adjustment_amount', 0)) / total) * 100, 1)
 
             # Add status badges
             status = item.get('workflow_status', 'unknown')

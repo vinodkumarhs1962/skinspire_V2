@@ -234,10 +234,11 @@ class WalletGLService:
                 session, wallet_transaction_id, current_user_id
             )
 
-        with get_db_session() as new_session:
-            return WalletGLService._create_wallet_redemption_gl_entries_internal(
-                new_session, wallet_transaction_id, current_user_id
-            )
+        # Use db.session directly to avoid nested session issues in Flask context
+        from app import db
+        return WalletGLService._create_wallet_redemption_gl_entries_internal(
+            db.session, wallet_transaction_id, current_user_id
+        )
 
     @staticmethod
     def _create_wallet_redemption_gl_entries_internal(
@@ -356,9 +357,10 @@ class WalletGLService:
         current_user_id: Optional[str] = None
     ):
         """
-        Update AR Subledger when wallet points are used for payment
+        Update AR Subledger and Invoice when wallet points are used for payment
 
-        Creates a PAYMENT entry in AR subledger to reduce outstanding balance
+        1. Updates invoice paid_amount and balance_due
+        2. Creates a PAYMENT entry in AR subledger to reduce outstanding balance
         """
         try:
             # Get invoice
@@ -368,37 +370,50 @@ class WalletGLService:
                 logger.warning(f"Invoice {invoice_id} not found for AR update")
                 return
 
-            # Get wallet
-            wallet_txn = session.query(WalletTransaction).filter_by(invoice_id=invoice_id).first()
-            if wallet_txn:
-                wallet = session.query(PatientLoyaltyWallet).filter_by(
-                    wallet_id=wallet_txn.wallet_id
-                ).first()
+            # ========================================================================
+            # CRITICAL: Update invoice paid_amount and balance_due
+            # ========================================================================
+            old_paid = invoice.paid_amount or Decimal('0')
+            old_balance = invoice.balance_due or invoice.total_amount
 
-                if wallet:
-                    # Create AR Subledger entry for wallet payment
-                    ar_entry = ARSubledger(
-                        hospital_id=invoice.hospital_id,
-                        patient_id=wallet.patient_id,
-                        invoice_id=invoice_id,
-                        transaction_type='PAYMENT',
-                        transaction_date=payment_date,
-                        debit_amount=Decimal('0'),
-                        credit_amount=payment_amount,
-                        balance=Decimal('0'),  # Will be calculated by trigger/service
-                        payment_mode='WALLET',
-                        reference_number=f"WALLET-{str(wallet_txn.transaction_id)[:8]}",
-                        notes=f"Wallet point redemption - {wallet_txn.points_redeemed} points",
-                        created_by=current_user_id
-                    )
+            invoice.paid_amount = old_paid + payment_amount
+            invoice.balance_due = invoice.total_amount - invoice.paid_amount
 
-                    session.add(ar_entry)
-                    logger.info(f"Created AR subledger entry for wallet payment on invoice {invoice_id}")
+            logger.info(f"📌 Updated invoice {invoice.invoice_number}: paid_amount {old_paid} → {invoice.paid_amount}, balance_due {old_balance} → {invoice.balance_due}")
+
+            # ========================================================================
+            # Create AR Subledger entry for wallet payment
+            # ========================================================================
+            # Import here to avoid circular imports
+            from app.services.subledger_service import create_ar_subledger_entry
+
+            try:
+                create_ar_subledger_entry(
+                    session=session,
+                    hospital_id=invoice.hospital_id,
+                    branch_id=invoice.branch_id,
+                    patient_id=invoice.patient_id,
+                    entry_type='payment',
+                    reference_id=invoice_id,  # Use invoice_id as reference for wallet payment
+                    reference_type='wallet_payment',
+                    reference_number=f"WALLET-{invoice.invoice_number}",  # More descriptive reference
+                    debit_amount=Decimal('0'),
+                    credit_amount=payment_amount,
+                    current_user_id=current_user_id
+                    # Note: 'notes' parameter removed - not supported by create_ar_subledger_entry
+                )
+                logger.info(f"✅ Created AR subledger entry for wallet payment ₹{payment_amount} on invoice {invoice.invoice_number}")
+            except Exception as ar_error:
+                logger.error(f"❌ Could not create AR subledger entry: {str(ar_error)}")
+                import traceback
+                logger.error(traceback.format_exc())
+                # Continue - invoice update is more critical but log the full error
 
         except Exception as e:
             logger.error(f"Error updating AR for wallet payment: {str(e)}")
-            # Don't raise - this is supplementary tracking
-            pass
+            import traceback
+            logger.error(traceback.format_exc())
+            raise  # ✅ Raise to ensure transaction rollback if invoice update fails
 
     @staticmethod
     def create_wallet_refund_gl_entries(

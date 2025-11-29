@@ -1,0 +1,372 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}{{ page_title }} - Skinspire{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/buttons.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <!-- Page Header -->
+    <div class="mb-6">
+        <!-- Row 1: Title and Date -->
+        <div class="flex flex-wrap justify-between items-center">
+            <div>
+                <nav class="text-sm text-gray-500 mb-2">
+                    <a href="{{ url_for('promotion_views.dashboard') }}" class="hover:text-blue-600">
+                        <i class="fas fa-tags mr-1"></i>Promotions
+                    </a>
+                    <span class="mx-2">/</span>
+                    <a href="{{ url_for('promotion_views.campaign_list') }}" class="hover:text-blue-600">Campaigns</a>
+                    <span class="mx-2">/</span>
+                    <a href="{{ url_for('promotion_views.campaign_detail', campaign_id=campaign.campaign_id) }}" class="hover:text-blue-600">
+                        {{ campaign.campaign_code }}
+                    </a>
+                    <span class="mx-2">/</span>
+                    <span class="text-gray-900 dark:text-white">Edit</span>
+                </nav>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                    <i class="fas fa-edit mr-2 text-yellow-600"></i>Edit Campaign: {{ campaign.campaign_code }}
+                </h1>
+            </div>
+            <div class="text-right px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                <div class="text-base font-semibold text-gray-900 dark:text-white">{{ today_display }}</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">{{ today_day }}</div>
+            </div>
+        </div>
+        <!-- Row 2: Action Buttons -->
+        <div class="flex flex-wrap gap-2 mt-4">
+            <a href="{{ url_for('promotion_views.campaign_detail', campaign_id=campaign.campaign_id) }}" class="btn-back">
+                <i class="fas fa-arrow-left mr-2"></i>Back to View
+            </a>
+            <a href="{{ url_for('promotion_views.campaign_list') }}" class="btn-secondary">
+                <i class="fas fa-list mr-2"></i>All Campaigns
+            </a>
+            <a href="{{ url_for('promotion_views.dashboard') }}" class="btn-secondary">
+                <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Form -->
+    <form method="POST" action="{{ url_for('promotion_views.campaign_edit', campaign_id=campaign.campaign_id) }}" class="space-y-6">
+        <!-- Basic Information -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                    <i class="fas fa-info-circle mr-2 text-blue-600"></i>Basic Information
+                </h3>
+            </div>
+            <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Campaign Code <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" name="campaign_code" value="{{ campaign.campaign_code }}"
+                           required maxlength="50" placeholder="e.g., DIWALI2025"
+                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white uppercase">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Campaign Name <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" name="campaign_name" value="{{ campaign.campaign_name }}"
+                           required maxlength="100"
+                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+                    <textarea name="description" rows="2"
+                              class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">{{ campaign.description or '' }}</textarea>
+                </div>
+                <div>
+                    <label class="flex items-center">
+                        <input type="checkbox" name="is_active" {{ 'checked' if campaign.is_active else '' }}
+                               class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Active</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Discount Configuration -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                    <i class="fas fa-percent mr-2 text-green-600"></i>Discount Configuration
+                </h3>
+            </div>
+            <div class="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Promotion Type <span class="text-red-500">*</span>
+                    </label>
+                    <select name="promotion_type" required
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <option value="simple_discount" {{ 'selected' if campaign.promotion_type == 'simple_discount' else '' }}>Simple Discount</option>
+                        <option value="buy_x_get_y" {{ 'selected' if campaign.promotion_type == 'buy_x_get_y' else '' }}>Buy X Get Y Free</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Discount Type <span class="text-red-500">*</span>
+                    </label>
+                    <select name="discount_type" required
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <option value="percentage" {{ 'selected' if campaign.discount_type == 'percentage' else '' }}>Percentage</option>
+                        <option value="fixed_amount" {{ 'selected' if campaign.discount_type == 'fixed_amount' else '' }}>Fixed Amount</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Discount Value <span class="text-red-500">*</span>
+                    </label>
+                    <input type="number" name="discount_value" value="{{ campaign.discount_value }}"
+                           required step="0.01" min="0"
+                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                </div>
+            </div>
+        </div>
+
+        <!-- Validity Period -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                    <i class="fas fa-calendar-alt mr-2 text-yellow-600"></i>Validity Period
+                </h3>
+            </div>
+            <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Start Date <span class="text-red-500">*</span>
+                    </label>
+                    <input type="date" name="start_date" value="{{ campaign.start_date }}" required
+                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        End Date <span class="text-red-500">*</span>
+                    </label>
+                    <input type="date" name="end_date" value="{{ campaign.end_date }}" required
+                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                </div>
+            </div>
+        </div>
+
+        <!-- Targeting -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                    <i class="fas fa-crosshairs mr-2 text-purple-600"></i>Targeting
+                </h3>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Item Type Filter -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Applies To <span class="text-red-500">*</span>
+                        </label>
+                        <select name="applies_to" id="applies_to" required
+                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            <option value="all" {{ 'selected' if campaign.applies_to == 'all' else '' }}>All Items</option>
+                            <option value="services" {{ 'selected' if campaign.applies_to == 'services' else '' }}>Services Only</option>
+                            <option value="medicines" {{ 'selected' if campaign.applies_to == 'medicines' else '' }}>Medicines Only</option>
+                            <option value="packages" {{ 'selected' if campaign.applies_to == 'packages' else '' }}>Packages Only</option>
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500">Filter by item type (applies to all items of this type)</p>
+                    </div>
+
+                    <!-- Campaign Groups Multi-Select -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            <i class="fas fa-layer-group mr-1 text-purple-600"></i>Campaign Groups
+                        </label>
+                        {% set current_group_ids = (campaign.target_groups.group_ids if campaign.target_groups else []) or [] %}
+                        <select name="target_group_ids" id="target_group_ids" multiple size="4"
+                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            {% for group in campaign_groups %}
+                            <option value="{{ group.group_id }}"
+                                    {% if group.group_id|string in current_group_ids %}selected{% endif %}>
+                                {{ group.group_name }} ({{ group.group_code }}) - {{ group.item_count }} items
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500">
+                            Hold Ctrl/Cmd to select multiple groups. Leave empty for no group restriction.
+                            {% if campaign_groups %}
+                            <a href="{{ url_for('promotion_views.group_list') }}" class="text-purple-600 hover:underline ml-1">
+                                <i class="fas fa-external-link-alt"></i> Manage Groups
+                            </a>
+                            {% else %}
+                            <a href="{{ url_for('promotion_views.group_create') }}" class="text-purple-600 hover:underline ml-1">
+                                <i class="fas fa-plus"></i> Create Group
+                            </a>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Usage Constraints -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                    <i class="fas fa-shield-alt mr-2 text-orange-600"></i>Usage Constraints
+                </h3>
+            </div>
+            <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Min Purchase Amount</label>
+                    <input type="number" name="min_purchase_amount" value="{{ campaign.min_purchase_amount or '' }}"
+                           step="0.01" min="0"
+                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Max Discount Amount</label>
+                    <input type="number" name="max_discount_amount" value="{{ campaign.max_discount_amount or '' }}"
+                           step="0.01" min="0"
+                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Max Uses per Patient</label>
+                    <input type="number" name="max_uses_per_patient" value="{{ campaign.max_uses_per_patient or '' }}"
+                           min="1"
+                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Max Total Uses</label>
+                    <input type="number" name="max_total_uses" value="{{ campaign.max_total_uses or '' }}"
+                           min="1"
+                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                </div>
+            </div>
+            <!-- Current Usage Info -->
+            <div class="px-6 pb-6">
+                <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                    <p class="text-sm text-blue-800 dark:text-blue-200">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        <strong>Current Usage:</strong> {{ campaign.current_uses or 0 }} times
+                        {% if campaign.max_total_uses %}
+                            ({{ ((campaign.current_uses or 0) / campaign.max_total_uses * 100)|round(1) }}% of limit)
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Patient Targeting & Application Mode -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                    <i class="fas fa-users mr-2 text-indigo-600"></i>Patient Targeting & Application
+                </h3>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Patient Target Group -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            <i class="fas fa-user-tag mr-1 text-yellow-500"></i>Patient Target
+                        </label>
+                        <select name="target_special_group"
+                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            <option value="" {{ 'selected' if not campaign.target_special_group else '' }}>All Patients</option>
+                            <option value="on" {{ 'selected' if campaign.target_special_group else '' }}>VIP/Special Group Only</option>
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500">Select which patient group can avail this promotion</p>
+                    </div>
+
+                    <!-- Application Mode -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            <i class="fas fa-magic mr-1 text-purple-500"></i>Application Mode
+                        </label>
+                        <select name="is_personalized" id="is_personalized"
+                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            <option value="" {{ 'selected' if not campaign.is_personalized else '' }}>Auto-Apply (Public)</option>
+                            <option value="on" {{ 'selected' if campaign.is_personalized else '' }}>Manual Code Entry (Private)</option>
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500">
+                            Auto-Apply: Applied automatically when conditions match<br>
+                            Manual: Requires campaign code entry at billing
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terms & Conditions -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                    <i class="fas fa-file-contract mr-2 text-gray-600"></i>Terms & Conditions
+                </h3>
+            </div>
+            <div class="p-6">
+                <textarea name="terms_and_conditions" rows="4"
+                          class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">{{ campaign.terms_and_conditions or '' }}</textarea>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex justify-between">
+            <button type="button" onclick="deleteCampaign()"
+                    class="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+                <i class="fas fa-trash mr-2"></i>Delete Campaign
+            </button>
+            <div class="flex gap-4">
+                <a href="{{ url_for('promotion_views.campaign_detail', campaign_id=campaign.campaign_id) }}"
+                   class="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors dark:bg-gray-700 dark:text-gray-200">
+                    Cancel
+                </a>
+                <button type="submit"
+                        class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                    <i class="fas fa-save mr-2"></i>Save Changes
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-uppercase campaign code
+    const codeInput = document.querySelector('input[name="campaign_code"]');
+    if (codeInput) {
+        codeInput.addEventListener('input', function() {
+            this.value = this.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+        });
+    }
+
+});
+
+function deleteCampaign() {
+    if (!confirm('Are you sure you want to delete this campaign? This action cannot be undone.')) return;
+
+    fetch('{{ url_for("promotion_views.campaign_delete", campaign_id=campaign.campaign_id) }}', {
+        method: 'POST',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.href = '{{ url_for("promotion_views.campaign_list") }}';
+        } else {
+            alert(data.message || 'Failed to delete campaign');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred');
+    });
+}
+</script>
+{% endblock %}

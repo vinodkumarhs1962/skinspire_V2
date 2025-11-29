@@ -636,147 +636,451 @@ def poll_payment_status(merchant_transaction_id, max_attempts=30):
 
 ## 7. Implementation Plan
 
-### 7.1 Phase 1: Foundation (Week 1)
+### 7.0 Current State Analysis
 
-| Task | Description | Files |
+The SkinSpire HMS already has a comprehensive payment module with the following capabilities:
+
+**Existing Payment Infrastructure:**
+- **PaymentDetail Model** (`app/models/transaction.py:635-770`): Supports Cash, Credit Card, Debit Card, UPI, Wallet Points, Advance Adjustment
+- **Workflow System**: Draft → Pending Approval → Approved → GL Posted → Reconciled
+- **Card Tracking**: `card_number_last4`, `card_type` fields already exist
+- **UPI Tracking**: `upi_id`, `upi_amount` fields already exist
+- **Payment Form**: `app/templates/billing/payment_form_enhanced.html` with 2-column method grid
+- **Billing Service**: `app/services/billing_service.py` handles payment recording and GL posting
+
+**Integration Strategy:**
+The Paytm EDC integration will ADD to the existing payment flow, not replace it. When staff selects "Paytm EDC", the system will:
+1. Send payment request to EDC machine via Paytm API
+2. Poll for transaction status
+3. On success, auto-populate card/UPI details in existing `PaymentDetail` record
+4. Store additional Paytm-specific data in new `paytm_transactions` table
+
+---
+
+### 7.1 Phase 1: Foundation (2-3 Days)
+
+| Task | Description | Files | Priority |
+|------|-------------|-------|----------|
+| **1.1** Create Paytm Configuration | Environment-based credentials (MID, Key, TID, Channel) | `app/config/paytm_config.py` | High |
+| **1.2** Create Checksum Utility | HMAC-SHA256 signature generation for API security | `app/services/paytm_utils.py` | High |
+| **1.3** Database Migration | Create `paytm_transactions` table | `migrations/create_paytm_transactions.sql` | High |
+| **1.4** Create Paytm Model | SQLAlchemy model for PaytmTransaction | `app/models/paytm_transaction.py` | High |
+| **1.5** Add Environment Variables | Add Paytm credentials to `.env` template | `.env.example` | Medium |
+
+**Files to Create:**
+```
+app/
+├── config/
+│   └── paytm_config.py          # NEW: Paytm credentials & settings
+├── models/
+│   └── paytm_transaction.py     # NEW: PaytmTransaction model
+├── services/
+│   └── paytm_utils.py           # NEW: Checksum & helper utilities
+migrations/
+└── create_paytm_transactions.sql # NEW: Database schema
+```
+
+---
+
+### 7.2 Phase 2: Core Service Integration (3-4 Days)
+
+| Task | Description | Files | Priority |
+|------|-------------|-------|----------|
+| **2.1** Create Paytm EDC Service | Main service with `initiate_payment()`, `check_status()`, `poll_until_complete()`, `void_transaction()` | `app/services/paytm_edc_service.py` | High |
+| **2.2** Integrate with Billing Service | Link Paytm transactions to PaymentDetail records | Modify `app/services/billing_service.py` | High |
+| **2.3** Create API Routes | Flask routes for Paytm operations | `app/views/paytm_views.py` | High |
+| **2.4** Error Handling | Map Paytm error codes to user-friendly messages | `app/services/paytm_edc_service.py` | Medium |
+| **2.5** Background Polling | Async status polling with WebSocket or SSE updates | `app/services/paytm_edc_service.py` | Medium |
+
+**API Endpoints to Create:**
+```
+POST /api/paytm/initiate          # Initiate payment on EDC
+GET  /api/paytm/status/<txn_id>   # Check transaction status
+POST /api/paytm/void/<txn_id>     # Void same-day transaction
+GET  /api/paytm/transactions      # List Paytm transactions (admin)
+```
+
+**Service Class Methods:**
+```python
+class PaytmEDCService:
+    def initiate_payment(invoice_id, amount, patient_name, invoice_number, terminal_id=None)
+    def check_payment_status(merchant_transaction_id)
+    def poll_until_complete(merchant_transaction_id, max_attempts=30, interval=10)
+    def void_transaction(original_transaction_id, reason)
+    def get_transaction_by_invoice(invoice_id)
+```
+
+---
+
+### 7.3 Phase 3: UI Integration (2-3 Days)
+
+| Task | Description | Files | Priority |
+|------|-------------|-------|----------|
+| **3.1** Add Paytm EDC Button | Add "Pay via Paytm EDC" in payment method grid | Modify `app/templates/billing/payment_form_enhanced.html` | High |
+| **3.2** Payment Status Modal | Real-time status display with spinner/progress | Add JavaScript in template | High |
+| **3.3** Success/Failure Display | Show RRN, Auth Code, Card type on success | Modify payment confirmation UI | Medium |
+| **3.4** Void Transaction UI | Add void option for same-day Paytm transactions | Modify `app/templates/billing/payment_history.html` | Medium |
+| **3.5** Receipt Enhancement | Include Paytm transaction details in receipt | Modify receipt template | Low |
+
+**UI Flow:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Payment Methods:                                                │
+│ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌───────────────────┐      │
+│ │  Cash   │ │  Card   │ │   UPI   │ │  💳 Paytm EDC    │ NEW  │
+│ └─────────┘ └─────────┘ └─────────┘ └───────────────────┘      │
+│                                                                 │
+│ [When Paytm EDC selected, show:]                               │
+│ ┌─────────────────────────────────────────────────────────────┐│
+│ │ Amount: ₹2,500.00                                           ││
+│ │ Invoice: INV-2024-0001                                      ││
+│ │                                                             ││
+│ │         [ 🚀 Send to EDC Machine ]                          ││
+│ └─────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│ [After clicking, show status modal:]                           │
+│ ┌─────────────────────────────────────────────────────────────┐│
+│ │ ⏳ Payment in Progress...                                   ││
+│ │                                                             ││
+│ │ Please complete payment on EDC machine                      ││
+│ │ Status: Waiting for customer...                             ││
+│ │                                                             ││
+│ │         [ Cancel Payment ]                                  ││
+│ └─────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 7.4 Phase 4: Testing & Go-Live (2-3 Days)
+
+| Task | Description | Owner |
 |------|-------------|-------|
-| Create service module | Paytm API integration service | `paytm_edc_service.py` |
-| Add configuration | Environment-based credentials | `config.py` |
-| Database schema | Payment transaction tables | Migration script |
-| Checksum utility | HMAC-SHA256 signature generation | `paytm_utils.py` |
+| **4.1** Staging Environment Setup | Configure staging credentials from Paytm Dashboard | Developer |
+| **4.2** Unit Tests | Test checksum generation, API calls, error handling | Developer |
+| **4.3** Integration Tests | End-to-end payment flow with staging EDC | Developer + Staff |
+| **4.4** Test Scenarios | Happy path, error paths, edge cases (see Section 11) | Developer |
+| **4.5** Production Setup | Switch to production credentials, verify TID | Developer |
+| **4.6** Staff Training | Quick reference guide, hands-on demo | Developer + Admin |
+| **4.7** Go-Live | Deploy to production, monitor first transactions | Developer |
 
-### 7.2 Phase 2: Core Integration (Week 2)
+**Test Scenarios Checklist:**
+- [ ] Card payment success (Credit/Debit)
+- [ ] UPI payment success
+- [ ] Card declined
+- [ ] Transaction timeout (customer doesn't complete)
+- [ ] Duplicate transaction ID
+- [ ] EDC machine offline
+- [ ] Network failure during polling
+- [ ] Void same-day transaction
+- [ ] Large amount payment (test limits)
 
-| Task | Description | Files |
-|------|-------------|-------|
-| Sale API integration | Initiate payment requests | `paytm_edc_service.py` |
-| Status polling | Background status checks | `paytm_edc_service.py` |
-| Payment recording | Store transaction details | `billing_service.py` |
-| Error handling | Comprehensive error management | All modules |
+---
 
-### 7.3 Phase 3: UI Integration (Week 3)
+### 7.5 Estimated Timeline
 
-| Task | Description | Files |
-|------|-------------|-------|
-| Payment method UI | Add Paytm EDC option | `billing_create.html` |
-| Status display | Real-time payment status | JavaScript/AJAX |
-| Receipt printing | Include Paytm transaction details | Receipt template |
-| Void/Cancel UI | Same-day transaction reversal | `billing_edit.html` |
+| Phase | Duration | Dependencies | Status |
+|-------|----------|--------------|--------|
+| Phase 1: Foundation | 2-3 days | Merchant Key, Channel ID from Paytm | ⏳ Waiting for credentials |
+| Phase 2: Core Service | 3-4 days | Phase 1 complete | Pending |
+| Phase 3: UI Integration | 2-3 days | Phase 2 complete | Pending |
+| Phase 4: Testing | 2-3 days | Phase 3 complete, EDC device ready | Pending |
+| **Total** | **9-13 days** | | |
 
-### 7.4 Phase 4: Testing & Go-Live (Week 4)
+---
 
-| Task | Description |
-|------|-------------|
-| Staging testing | Test all scenarios with test credentials |
-| Integration testing | End-to-end billing flow |
-| Production setup | Switch to production credentials |
-| Staff training | Train billing staff on new flow |
-| Go-live | Deploy to production |
+### 7.6 Credentials Status
+
+| Credential | Status | Notes |
+|------------|--------|-------|
+| **MID** (Merchant ID) | ✅ Available | Obtained from Paytm Business |
+| **TID** (Terminal ID) | ✅ Available | EDC device allocated |
+| **Merchant Key** | ⏳ Pending | Request from Paytm Dashboard → API Keys |
+| **Channel ID** | ⏳ Pending | Request from Paytm integration team |
+
+**To obtain missing credentials:**
+1. Login to Paytm Merchant Dashboard: https://dashboard.paytm.com
+2. Navigate to **Developer Settings** → **API Keys**
+3. Copy **Merchant Key** (for checksum generation)
+4. Contact integrations@paytm.com for **Channel ID** allocation
 
 ---
 
 ## 8. Database Schema
 
+### 8.0 Integration with Existing Schema
+
+The SkinSpire HMS already has a `payment_details` table with the following relevant fields that will be populated from Paytm EDC responses:
+
+**Existing PaymentDetail Fields (app/models/transaction.py:635-770):**
+```
+- credit_card_amount      → Populated when Paytm payment_mode = CREDIT_CARD
+- debit_card_amount       → Populated when Paytm payment_mode = DEBIT_CARD
+- upi_amount              → Populated when Paytm payment_mode = UPI
+- card_number_last4       → From Paytm masked_card_no (last 4 digits)
+- card_type               → From Paytm card_type (VISA, MASTERCARD, etc.)
+- upi_id                  → From Paytm response (if UPI payment)
+- payment_reference       → Store Paytm RRN
+```
+
+**Integration Flow:**
+```
+Paytm EDC Success Response
+         │
+         ▼
+┌─────────────────────────────────────────────────────────┐
+│ 1. Create PaytmTransaction record (new table)           │
+│    - Store full Paytm response details                  │
+│    - RRN, Auth Code, Bank Transaction ID                │
+│                                                         │
+│ 2. Create/Update PaymentDetail record (existing table)  │
+│    - Map payment_mode to card/UPI amounts               │
+│    - Store card_number_last4, card_type                 │
+│    - Link via paytm_transaction_id FK                   │
+│                                                         │
+│ 3. Update Invoice (existing workflow)                   │
+│    - Mark as paid                                       │
+│    - Trigger GL posting                                 │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
 ### 8.1 New Table: paytm_transactions
 
 ```sql
+-- ============================================================
+-- Paytm EDC Transaction Table
+-- Stores all Paytm EDC transaction details for audit and reconciliation
+-- Links to existing payment_details table
+-- ============================================================
+
 CREATE TABLE paytm_transactions (
     -- Primary Key
     paytm_transaction_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    
-    -- Foreign Keys
+
+    -- Foreign Keys (linking to existing tables)
     hospital_id UUID NOT NULL REFERENCES hospitals(hospital_id),
     branch_id UUID REFERENCES branches(branch_id),
-    billing_invoice_id UUID REFERENCES billing_invoices(invoice_id),
+    invoice_id UUID REFERENCES invoice_headers(invoice_id),
     patient_id UUID REFERENCES patients(patient_id),
-    
+    payment_detail_id UUID REFERENCES payment_details(payment_detail_id),  -- Links to existing payment record
+
     -- Paytm Identifiers
-    merchant_transaction_id VARCHAR(32) NOT NULL UNIQUE,
-    paytm_mid VARCHAR(20) NOT NULL,
-    paytm_tid VARCHAR(8),
-    
+    merchant_transaction_id VARCHAR(32) NOT NULL UNIQUE,  -- Our generated ID (SS20241124143000INV001)
+    paytm_mid VARCHAR(20) NOT NULL,                       -- Merchant ID
+    paytm_tid VARCHAR(8),                                 -- Terminal ID
+
     -- Transaction Details
-    transaction_amount DECIMAL(12, 2) NOT NULL,
-    transaction_amount_paise BIGINT NOT NULL,
-    transaction_datetime TIMESTAMP NOT NULL,
-    
-    -- Paytm Response Data
-    rrn VARCHAR(20),                    -- Retrieval Reference Number
-    auth_code VARCHAR(10),              -- Authorization Code
-    bank_transaction_id VARCHAR(50),    -- Bank's transaction ID
-    paytm_transaction_id_ref VARCHAR(50), -- Paytm's transaction ID
-    
-    -- Payment Details
-    payment_mode VARCHAR(20),           -- CREDIT_CARD, DEBIT_CARD, UPI, etc.
-    card_type VARCHAR(20),              -- VISA, MASTERCARD, RUPAY, etc.
-    masked_card_no VARCHAR(20),         -- XXXX-XXXX-XXXX-1234
-    bank_name VARCHAR(50),
-    gateway_name VARCHAR(50),
-    
+    transaction_amount DECIMAL(12, 2) NOT NULL,           -- Amount in rupees
+    transaction_amount_paise BIGINT NOT NULL,             -- Amount in paise (sent to Paytm)
+    transaction_datetime TIMESTAMP NOT NULL,              -- When transaction was initiated
+
+    -- Paytm Response Data (populated on status check)
+    rrn VARCHAR(20),                                      -- Retrieval Reference Number (bank reference)
+    auth_code VARCHAR(10),                                -- Authorization Code from card issuer
+    bank_transaction_id VARCHAR(50),                      -- Bank's transaction ID
+    paytm_txn_id VARCHAR(50),                             -- Paytm's internal transaction ID
+
+    -- Payment Details from Paytm Response
+    payment_mode VARCHAR(20),                             -- CREDIT_CARD, DEBIT_CARD, UPI, NB
+    card_type VARCHAR(20),                                -- VISA, MASTERCARD, RUPAY, AMEX
+    masked_card_no VARCHAR(20),                           -- XXXX-XXXX-XXXX-1234
+    card_last4 VARCHAR(4),                                -- Extracted last 4 digits
+    bank_name VARCHAR(50),                                -- Issuing bank name
+    gateway_name VARCHAR(50),                             -- Payment gateway used
+
     -- Status Tracking
     request_status VARCHAR(20) NOT NULL DEFAULT 'INITIATED',
-    transaction_status VARCHAR(20),      -- TXN_SUCCESS, TXN_FAILURE, PENDING
-    result_code VARCHAR(10),
-    result_message VARCHAR(200),
-    
-    -- Void/Refund
+    -- INITIATED: Request sent to Paytm
+    -- ACCEPTED: Paytm accepted, waiting for EDC
+    -- POLLING: Polling for status
+    -- COMPLETED: Final status received
+    -- TIMEOUT: Polling timeout
+    -- ERROR: API error
+
+    transaction_status VARCHAR(20),                       -- TXN_SUCCESS, TXN_FAILURE, PENDING
+    result_code VARCHAR(10),                              -- Paytm result code
+    result_message VARCHAR(200),                          -- Paytm result message
+
+    -- Void/Refund Tracking
     is_voided BOOLEAN DEFAULT FALSE,
-    void_transaction_id VARCHAR(32),
+    void_merchant_txn_id VARCHAR(32),                     -- Void transaction ID
     void_datetime TIMESTAMP,
     void_reason VARCHAR(200),
-    
-    -- Metadata
-    request_payload JSONB,              -- Full request sent
-    response_payload JSONB,             -- Full response received
-    status_check_count INTEGER DEFAULT 0,
-    last_status_check TIMESTAMP,
-    
-    -- Audit
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    void_result_code VARCHAR(10),
+    void_result_message VARCHAR(200),
+
+    -- API Payloads (for debugging and audit)
+    request_payload JSONB,                                -- Full request sent to Paytm
+    response_payload JSONB,                               -- Full response from Paytm
+    status_responses JSONB,                               -- Array of status check responses
+
+    -- Polling Tracking
+    status_check_count INTEGER DEFAULT 0,                 -- Number of status polls
+    last_status_check TIMESTAMP,                          -- Last poll timestamp
+    polling_started_at TIMESTAMP,                         -- When polling began
+    polling_completed_at TIMESTAMP,                       -- When final status received
+
+    -- Audit Fields (matching existing pattern)
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     created_by UUID REFERENCES users(user_id),
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_by UUID REFERENCES users(user_id),
-    
-    -- Indexes
-    CONSTRAINT fk_hospital FOREIGN KEY (hospital_id) REFERENCES hospitals(hospital_id),
-    CONSTRAINT chk_amount_positive CHECK (transaction_amount > 0)
+
+    -- Constraints
+    CONSTRAINT chk_amount_positive CHECK (transaction_amount > 0),
+    CONSTRAINT chk_request_status CHECK (request_status IN ('INITIATED', 'ACCEPTED', 'POLLING', 'COMPLETED', 'TIMEOUT', 'ERROR'))
 );
 
--- Indexes for common queries
+-- ============================================================
+-- Indexes for Performance
+-- ============================================================
+
+-- Primary lookups
+CREATE INDEX idx_paytm_txn_merchant_id ON paytm_transactions(merchant_transaction_id);
+CREATE INDEX idx_paytm_txn_invoice ON paytm_transactions(invoice_id);
+CREATE INDEX idx_paytm_txn_payment_detail ON paytm_transactions(payment_detail_id);
+
+-- Filtering and reporting
 CREATE INDEX idx_paytm_txn_hospital ON paytm_transactions(hospital_id);
-CREATE INDEX idx_paytm_txn_invoice ON paytm_transactions(billing_invoice_id);
 CREATE INDEX idx_paytm_txn_status ON paytm_transactions(transaction_status);
 CREATE INDEX idx_paytm_txn_date ON paytm_transactions(transaction_datetime);
-CREATE INDEX idx_paytm_txn_merchant_id ON paytm_transactions(merchant_transaction_id);
+CREATE INDEX idx_paytm_txn_request_status ON paytm_transactions(request_status);
+
+-- Reconciliation queries
+CREATE INDEX idx_paytm_txn_rrn ON paytm_transactions(rrn) WHERE rrn IS NOT NULL;
+CREATE INDEX idx_paytm_txn_created ON paytm_transactions(created_at);
+
+-- ============================================================
+-- Comments
+-- ============================================================
+
+COMMENT ON TABLE paytm_transactions IS 'Stores Paytm EDC transaction details for wireless API integration';
+COMMENT ON COLUMN paytm_transactions.merchant_transaction_id IS 'Unique ID generated by HMS, format: SS{timestamp}{invoice_ref}';
+COMMENT ON COLUMN paytm_transactions.rrn IS 'Retrieval Reference Number from bank, used for reconciliation';
+COMMENT ON COLUMN paytm_transactions.auth_code IS 'Authorization code from card issuer';
+COMMENT ON COLUMN paytm_transactions.request_payload IS 'Full JSON request sent to Paytm API';
+COMMENT ON COLUMN paytm_transactions.response_payload IS 'Full JSON response from Paytm API';
 ```
 
-### 8.2 Extend payment_methods Table
+---
+
+### 8.2 Extend payment_details Table
 
 ```sql
--- Add Paytm EDC as payment method
-INSERT INTO payment_methods (
-    payment_method_id,
-    method_name,
-    method_code,
-    is_active,
-    requires_reference,
-    reference_label
-) VALUES (
-    gen_random_uuid(),
-    'Paytm EDC Card',
-    'PAYTM_EDC',
-    true,
-    true,
-    'RRN / Auth Code'
-);
-```
+-- ============================================================
+-- Add Paytm transaction reference to existing payment_details table
+-- This links the HMS payment record to the Paytm transaction
+-- ============================================================
 
-### 8.3 Extend billing_payments Table
-
-```sql
--- Add column for Paytm transaction reference
-ALTER TABLE billing_payments
+ALTER TABLE payment_details
 ADD COLUMN paytm_transaction_id UUID REFERENCES paytm_transactions(paytm_transaction_id);
+
+-- Add index for lookups
+CREATE INDEX idx_payment_details_paytm_txn ON payment_details(paytm_transaction_id)
+WHERE paytm_transaction_id IS NOT NULL;
+
+-- Add payment source indicator for Paytm EDC
+COMMENT ON COLUMN payment_details.paytm_transaction_id IS 'Links to Paytm EDC transaction when payment was collected via EDC machine';
+```
+
+---
+
+### 8.3 Data Flow: Paytm Response to PaymentDetail
+
+When a Paytm EDC transaction succeeds, the system maps data as follows:
+
+| Paytm Response Field | PaymentDetail Field | Notes |
+|---------------------|---------------------|-------|
+| `payment_mode = 'CREDIT_CARD'` | `credit_card_amount` | Set to transaction amount |
+| `payment_mode = 'DEBIT_CARD'` | `debit_card_amount` | Set to transaction amount |
+| `payment_mode = 'UPI'` | `upi_amount` | Set to transaction amount |
+| `masked_card_no` (last 4) | `card_number_last4` | Extract: `XXXX-1234` → `1234` |
+| `card_type` | `card_type` | VISA, MASTERCARD, RUPAY |
+| `rrn` | `payment_reference` | Bank reference number |
+| `paytm_transaction_id` | `paytm_transaction_id` | FK to new table |
+
+**Example Mapping Code:**
+```python
+def map_paytm_to_payment_detail(paytm_response: dict) -> dict:
+    """Map Paytm EDC response to PaymentDetail fields"""
+    payment_mode = paytm_response.get('paymentMode', '')
+    amount = Decimal(paytm_response.get('transactionAmount', 0)) / 100  # paise to rupees
+
+    payment_data = {
+        'total_amount': amount,
+        'payment_reference': paytm_response.get('rrn'),
+        'card_type': paytm_response.get('cardType'),
+    }
+
+    # Map payment mode to amount field
+    if payment_mode == 'CREDIT_CARD':
+        payment_data['credit_card_amount'] = amount
+    elif payment_mode == 'DEBIT_CARD':
+        payment_data['debit_card_amount'] = amount
+    elif payment_mode == 'UPI':
+        payment_data['upi_amount'] = amount
+
+    # Extract card last 4 digits
+    masked_card = paytm_response.get('maskedCardNo', '')
+    if masked_card:
+        payment_data['card_number_last4'] = masked_card[-4:]
+
+    return payment_data
+```
+
+---
+
+### 8.4 View for Paytm Transaction Reporting
+
+```sql
+-- ============================================================
+-- View: v_paytm_transaction_report
+-- Combines Paytm transactions with payment and invoice details
+-- ============================================================
+
+CREATE OR REPLACE VIEW v_paytm_transaction_report AS
+SELECT
+    pt.paytm_transaction_id,
+    pt.merchant_transaction_id,
+    pt.transaction_datetime,
+    pt.transaction_amount,
+    pt.payment_mode,
+    pt.card_type,
+    pt.card_last4,
+    pt.rrn,
+    pt.auth_code,
+    pt.transaction_status,
+    pt.is_voided,
+    pt.void_datetime,
+
+    -- Invoice details
+    ih.invoice_number,
+    ih.invoice_date,
+    ih.net_amount AS invoice_amount,
+
+    -- Patient details
+    p.patient_code,
+    p.first_name || ' ' || COALESCE(p.last_name, '') AS patient_name,
+
+    -- Payment details
+    pd.payment_number,
+    pd.payment_date,
+    pd.workflow_status AS payment_status,
+
+    -- Audit
+    u.username AS created_by_user,
+    pt.created_at
+
+FROM paytm_transactions pt
+LEFT JOIN invoice_headers ih ON pt.invoice_id = ih.invoice_id
+LEFT JOIN patients p ON pt.patient_id = p.patient_id
+LEFT JOIN payment_details pd ON pt.payment_detail_id = pd.payment_detail_id
+LEFT JOIN users u ON pt.created_by = u.user_id
+ORDER BY pt.transaction_datetime DESC;
+
+COMMENT ON VIEW v_paytm_transaction_report IS 'Comprehensive view of Paytm EDC transactions with related invoice and patient details';
 ```
 
 ---
@@ -1333,6 +1637,32 @@ def initiate_paytm_payment(
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | Nov 2025 | SkinSpire Dev Team | Initial version |
+| 1.1 | 25-Nov-2025 | SkinSpire Dev Team | Updated implementation plan with existing codebase analysis, refined database schema with integration details, added credentials status tracking |
+
+---
+
+## Quick Reference: Next Steps
+
+### Immediate Actions Required:
+1. **Obtain Merchant Key**: Login to https://dashboard.paytm.com → Developer Settings → API Keys
+2. **Obtain Channel ID**: Contact integrations@paytm.com with your MID
+
+### Credentials Checklist:
+- [x] MID (Merchant ID) - Available
+- [x] TID (Terminal ID) - Available
+- [ ] Merchant Key - Pending
+- [ ] Channel ID - Pending
+
+### Once Credentials Available:
+1. Add to environment variables:
+   ```
+   PAYTM_MERCHANT_ID=your_mid_here
+   PAYTM_MERCHANT_KEY=your_key_here
+   PAYTM_TERMINAL_ID=your_tid_here
+   PAYTM_CHANNEL_ID=your_channel_here
+   PAYTM_ENVIRONMENT=staging  # Change to 'production' for go-live
+   ```
+2. Begin Phase 1 implementation
 
 ---
 

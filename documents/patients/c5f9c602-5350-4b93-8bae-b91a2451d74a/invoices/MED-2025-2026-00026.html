@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="csrf-token" content="IjQ4YjdiYzlmNmQ4MTcyMjMwZTY4MTMwNjBhZTY3OGE1M2Q2MTc5OGIi.aSXR4w.PmJn8od2uJrKuPuZeBCh5T7m15w">
+        <title>Invoice #MED/2025-2026/00026 - Skinspire Clinic</title>
+        <!-- Replace the inline styles with centralized CSS -->
+        <link rel="stylesheet" href="/static/css/components/invoice.css">
+        <style>
+            /* Additional styles for pagination and layout */
+            @page {
+                size: A4;
+                margin: 15mm;
+                /* Ensure content flows to next page */
+                orphans: 4;
+                widows: 2;
+            }
+            
+            html, body {
+                width: 210mm;
+                /* Remove height constraint to allow multiple pages */
+                min-height: 297mm;
+                margin: 0 auto !important;
+                padding: 0 !important;
+                overflow: visible !important;
+            }
+            
+            .print-container {
+                width: 180mm !important;
+                margin: 0 auto !important;
+                padding: 0 !important;
+                box-sizing: border-box !important;
+                overflow: visible !important;
+                page-break-inside: auto;
+            }
+            
+            table {
+                page-break-inside: auto;
+            }
+            
+            tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }
+            
+            thead {
+                display: table-header-group;
+            }
+            
+            tfoot {
+                display: table-footer-group;
+            }
+            
+            .page-break {
+                page-break-before: always;
+            }
+        </style>
+    </head>
+<body>
+    <div class="no-print" style="padding: 10px; background-color: #f8f9fa; text-align: center; margin: 0;">
+        <button onclick="window.print()" style="padding: 5px 10px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">
+            Print Invoice
+        </button>
+        <button onclick="window.close()" style="padding: 5px 10px; background-color: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">
+            Close
+        </button>
+        <button onclick="sendEmail()" style="padding: 5px 10px; background-color: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">
+            Send Email
+        </button>
+        <button onclick="sendWhatsApp()" style="padding: 5px 10px; background-color: #25D366; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">
+            Send WhatsApp
+        </button>
+    </div>
+    
+    <div class="print-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">
+                
+                    Skinspire Clinic
+                
+            </div>
+            <div class="hospital-info">
+                <div>Skinspire Clinic</div>
+                <div></div>
+                <div>Phone: 1234567890</div>
+                <div>Email: contact@skinspire.com</div>
+                
+                <div>GSTIN: None</div>
+                
+                
+                <div>Pharmacy Reg: PH12345 
+                    
+                </div>
+                
+            </div>
+        </div>
+        
+        <!-- Invoice Title -->
+        <div class="invoice-title">
+            TAX INVOICE
+        </div>
+        
+        <!-- Invoice Metadata -->
+        <div class="invoice-meta">
+            <div class="meta-section">
+                <div class="meta-title">Patient Details:</div>
+                
+                <div>Name: Ram Kumar</div>
+                <div>MRN: MRN2025001</div>
+                
+                <div>Phone: +911010101010</div>
+                
+                
+            </div>
+            
+            <div class="meta-section">
+                <div class="meta-title">Invoice Details:</div>
+                <div>Invoice #: MED/2025-2026/00026</div>
+                <div>Date: 25-Nov-2025</div>
+                <div>Type: Product</div>
+                
+                <div>Supply Type: Intrastate</div>
+                
+            </div>
+        </div>
+        
+        <!-- Currency Note -->
+        <div class="currency-note">
+            Amounts are in INR
+        </div>
+        
+        <!-- Determine if we have any items of each type -->
+        
+        
+        
+        
+        
+
+        
+            
+            
+            
+        
+            
+            
+            
+        
+
+        <!-- Services and Packages Table (only shown if there are service items) -->
+        
+
+        <!-- Medicines and Prescriptions Table (only shown if there are medicine items) -->
+        
+
+        <!-- Consolidated Prescription Items (Doctor's Examination and Treatment) -->
+        
+
+        <!-- Display message if no items -->
+        
+        <div style="text-align: center; padding: 20px; color: #666;">
+            No line items available
+        </div>
+        
+        
+        <!-- Total Section -->
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <tr>
+                <td colspan="2" style="border: 1px solid #ddd; background-color: #f9f9f9; padding: 8px; width: 100%;">
+                    <strong>Amount in Words:</strong> INR Three Hundred only
+                </td>
+            </tr>
+            <tr>
+                <td style="text-align: right; padding: 5px; width: 70%;">Subtotal:</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">300.00</td>
+            </tr>
+            
+            
+            
+            
+            <tr>
+                <td style="text-align: right; padding: 5px; width: 70%;">Taxable Value:</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">267.86</td>
+            </tr>
+            
+            
+            <tr>
+                <td style="text-align: right; padding: 5px; width: 70%;">CGST:</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">16.07</td>
+            </tr>
+            <tr>
+                <td style="text-align: right; padding: 5px; width: 70%;">SGST:</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">16.07</td>
+            </tr>
+            
+            
+            
+            <tr style="font-weight: bold; border-top: 1px solid #333;">
+                <td style="text-align: right; padding: 5px; width: 70%;">GRAND TOTAL:</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">300.00</td>
+            </tr>
+            
+            
+            
+            <!-- Always show Balance Due row, with different classes based on value -->
+            
+            <tr class="balance-due-row" style="font-weight: bold; color: #d32f2f;">
+            
+                <td style="text-align: right; padding: 5px; width: 70%;">Balance Due:</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">300.00</td>
+            </tr>
+        </table>
+          
+        <!-- Payment Information -->
+        <div class="payment-info">
+            <div style="font-weight: bold; margin-bottom: 5px;">Payment Information:</div>
+            
+                <p>No payments recorded yet.</p>
+            
+        </div>
+
+        <!-- GST Summary Table with Backend Calculations -->
+        
+        <div class="gst-details">
+            <div style="font-weight: bold; margin-bottom: 5px;">GST Summary:</div>
+            <table class="tax-summary">
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th>Taxable Value</th>
+                        <th>GST Rate</th>
+                        
+                        <th>CGST Amount</th>
+                        <th>SGST Amount</th>
+                        
+                        <th>Total Tax</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Display tax groups from backend calculations -->
+                    
+                        <tr>
+                            <td>GST 12.0%</td>
+                            <td>267.86</td>
+                            <td>12.0%</td>
+                            
+                            <td>16.07</td>
+                            <td>16.07</td>
+                            
+                            <td>32.14</td>
+                        </tr>
+                    
+                    
+                    <!-- Display totals row using the accumulated totals from backend -->
+                    <tr style="font-weight: bold;">
+                        <td>Total</td>
+                        <td>267.86</td>
+                        <td></td>
+                        
+                        <td>16.07</td>
+                        <td>16.07</td>
+                        
+                        <td>32.14</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        
+        <!-- Terms & Conditions -->
+        <div class="terms">
+            <div style="font-weight: bold; margin-bottom: 5px;">Terms & Conditions:</div>
+            <ol style="margin: 0; padding-left: 15px;">
+                <li>All payments are non-refundable except as per the clinic's cancellation policy.</li>
+                <li>Payments are due immediately upon receipt of invoice unless otherwise specified.</li>
+                <li>This is a computer-generated invoice and does not require physical signature.</li>
+                
+                <li>GST calculation as per current rates applicable.</li>
+                <li>Subject to local jurisdiction.</li>
+                
+            </ol>
+        </div>
+        
+        <!-- Authorized Signature -->
+        <div class="authorized-signature">
+            <div style="margin-bottom: 30px;">
+                For Skinspire Clinic
+            </div>
+            <div>
+                Authorized Signatory
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer no-print">
+            <div style="text-align: center;">
+                Skinspire Clinic
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function sendEmail() {
+            // Visual feedback that email is being sent
+            const button = document.querySelector('button[onclick="sendEmail()"]');
+            if (button) button.textContent = "Sending...";
+            
+            // Create form with CSRF token
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/invoice/e44b90ef-c35a-4af5-aed4-11dd4a0788b6/send-email';
+            
+            // Add CSRF token from meta
+            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = token;
+            form.appendChild(csrfInput);
+            
+            document.body.appendChild(form);
+            form.submit();
+        }
+        
+        function sendWhatsApp() {
+            // Visual feedback that WhatsApp message is being sent
+            const button = document.querySelector('button[onclick="sendWhatsApp()"]');
+            if (button) button.textContent = "Sending...";
+            
+            // Create form with CSRF token
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/invoice/e44b90ef-c35a-4af5-aed4-11dd4a0788b6/send-whatsapp';
+            
+            // Add CSRF token from meta
+            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = token;
+            form.appendChild(csrfInput);
+            
+            document.body.appendChild(form);
+            form.submit();
+        }
+        
+        // Improved measures to ensure proper pagination
+        window.onload = function() {
+            // Add CSS class to help with column width adjustment
+            const tables = document.querySelectorAll('table');
+            tables.forEach(table => {
+                table.classList.add('full-width-table');
+            });
+        };
+    </script>
+</body>
+</html>

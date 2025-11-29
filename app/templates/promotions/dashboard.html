@@ -1,0 +1,2376 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}{{ page_title }} - Skinspire{% endblock %}
+
+{% block content %}
+<!-- Inline CSS for Summary Cards (must be inside content block) -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/buttons.css') }}">
+<style>
+/* Square Summary Cards - Promotion Dashboard Style */
+.promo-stat-card {
+    background: white;
+    border-radius: 0.5rem;
+    padding: 1.25rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    border: 1px solid #e5e7eb;
+    text-align: center;
+    min-height: 140px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+.promo-stat-card:hover {
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+.promo-stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 0.75rem;
+    font-size: 1.25rem;
+}
+.promo-stat-icon.blue { background: #dbeafe; color: #2563eb; }
+.promo-stat-icon.green { background: #dcfce7; color: #16a34a; }
+.promo-stat-icon.purple { background: #f3e8ff; color: #9333ea; }
+.promo-stat-icon.yellow { background: #fef3c7; color: #d97706; }
+.promo-stat-icon.red { background: #fee2e2; color: #dc2626; }
+.promo-stat-icon.orange { background: #ffedd5; color: #ea580c; }
+.promo-stat-icon.cyan { background: #cffafe; color: #0891b2; }
+.promo-stat-icon.indigo { background: #e0e7ff; color: #4f46e5; }
+.promo-stat-label {
+    font-size: 0.75rem;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+.promo-stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #111827;
+    line-height: 1.2;
+}
+.promo-stat-subtext {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    margin-top: 0.25rem;
+}
+.dark .promo-stat-card {
+    background: #1f2937;
+    border-color: #374151;
+}
+.dark .promo-stat-label { color: #9ca3af; }
+.dark .promo-stat-value { color: #f9fafb; }
+.dark .promo-stat-subtext { color: #6b7280; }
+
+/* Timeline scrollbar styling - horizontal and vertical */
+.timeline-scroll-wrapper {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 #f1f5f9;
+    overflow: auto;
+}
+.timeline-scroll-wrapper::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+.timeline-scroll-wrapper::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 5px;
+}
+.timeline-scroll-wrapper::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border-radius: 5px;
+}
+.timeline-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}
+.timeline-scroll-wrapper::-webkit-scrollbar-corner {
+    background: #f1f5f9;
+}
+
+/* Promotion Autocomplete Dropdown Styling */
+.promo-autocomplete-wrapper {
+    position: relative;
+}
+.promo-autocomplete-dropdown {
+    position: absolute;
+    z-index: 50;
+    width: 100%;
+    max-height: 280px;
+    overflow-y: auto;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    margin-top: 4px;
+}
+.dark .promo-autocomplete-dropdown {
+    background: #1f2937;
+    border-color: #374151;
+}
+.promo-autocomplete-item {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    border-bottom: 1px solid #f3f4f6;
+    transition: background-color 0.15s ease;
+}
+.promo-autocomplete-item:last-child {
+    border-bottom: none;
+}
+.promo-autocomplete-item:hover {
+    background: #f3f4f6;
+}
+.dark .promo-autocomplete-item {
+    border-color: #374151;
+}
+.dark .promo-autocomplete-item:hover {
+    background: #374151;
+}
+.promo-autocomplete-item-label {
+    font-weight: 500;
+    color: #111827;
+}
+.dark .promo-autocomplete-item-label {
+    color: #f9fafb;
+}
+.promo-autocomplete-item-subtitle {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 2px;
+}
+.promo-autocomplete-no-results {
+    padding: 1rem;
+    text-align: center;
+    color: #9ca3af;
+}
+.promo-filter-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    background: #dbeafe;
+    color: #1e40af;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+.promo-filter-tag-remove {
+    margin-left: 0.5rem;
+    cursor: pointer;
+    opacity: 0.7;
+}
+.promo-filter-tag-remove:hover {
+    opacity: 1;
+}
+.dark .promo-filter-tag {
+    background: #1e3a5f;
+    color: #93c5fd;
+}
+</style>
+<div class="p-6">
+    <!-- Page Header with Navigation -->
+    <div class="mb-6">
+        <!-- Row 1: Title and Date -->
+        <div class="flex flex-wrap justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                    <i class="fas fa-tags mr-2 text-blue-600"></i>Promotions Dashboard
+                </h1>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Plan, visualize and manage all promotion types
+                </p>
+            </div>
+            <!-- Date and Day Display -->
+            <div class="text-right px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                <div class="text-base font-semibold text-gray-900 dark:text-white" id="current-date-display">Loading...</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400" id="current-day-display"></div>
+            </div>
+        </div>
+        <!-- Row 2: Action Buttons -->
+        <div class="flex flex-wrap gap-2 mt-4">
+            <a href="{{ url_for('auth_views.dashboard') }}" class="btn-back">
+                <i class="fas fa-arrow-left mr-2"></i>Back
+            </a>
+            <a href="{{ url_for('promotion_views.campaign_create') }}" class="btn-primary">
+                <i class="fas fa-plus mr-2"></i>New Campaign
+            </a>
+            <a href="{{ url_for('promotion_views.campaign_list') }}" class="btn-secondary">
+                <i class="fas fa-list mr-2"></i>All Campaigns
+            </a>
+            <a href="{{ url_for('promotion_views.group_list') }}" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium">
+                <i class="fas fa-object-group mr-2"></i>Campaign Groups
+            </a>
+            <a href="{{ url_for('promotion_views.bulk_config') }}" class="btn-warning">
+                <i class="fas fa-layer-group mr-2"></i>Bulk Config
+            </a>
+            <a href="{{ url_for('promotion_views.loyalty_config') }}" class="btn-success">
+                <i class="fas fa-heart mr-2"></i>Loyalty Config
+            </a>
+            <a href="{{ url_for('admin_views.hospital_settings') }}#discount-stacking-config" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium">
+                <i class="fas fa-sliders-h mr-2"></i>Stacking Config
+            </a>
+            <button onclick="refreshDashboard()" class="btn-outline">
+                <i class="fas fa-sync-alt mr-2"></i>Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Summary Cards - 4 cards per row (Clickable) -->
+    <div class="grid grid-cols-4 gap-4 mb-6">
+        <!-- Row 1: Campaign Status -->
+        <div class="promo-stat-card cursor-pointer hover:ring-2 hover:ring-blue-400" onclick="showCardDetails('active_campaigns')" title="Click to view details">
+            <div class="promo-stat-icon blue">
+                <i class="fas fa-bullhorn"></i>
+            </div>
+            <div class="promo-stat-label">Active Campaigns</div>
+            <div class="promo-stat-value">{{ summary.active_campaigns|default(0) }}</div>
+            <div class="promo-stat-subtext">Approved & running</div>
+        </div>
+
+        <div class="promo-stat-card cursor-pointer hover:ring-2 hover:ring-gray-400" onclick="showCardDetails('draft_campaigns')" title="Click to view drafts">
+            <div class="promo-stat-icon gray">
+                <i class="fas fa-edit"></i>
+            </div>
+            <div class="promo-stat-label">Draft Campaigns</div>
+            <div class="promo-stat-value">{{ summary.draft_campaigns|default(0) }}</div>
+            <div class="promo-stat-subtext">Need approval</div>
+        </div>
+
+        <div class="promo-stat-card cursor-pointer hover:ring-2 hover:ring-amber-400" onclick="showCardDetails('pending_approval')" title="Click to view pending">
+            <div class="promo-stat-icon amber">
+                <i class="fas fa-hourglass-half"></i>
+            </div>
+            <div class="promo-stat-label">Pending Approval</div>
+            <div class="promo-stat-value">{{ summary.pending_approval|default(0) }}</div>
+            <div class="promo-stat-subtext">Awaiting review</div>
+        </div>
+
+        <div class="promo-stat-card cursor-pointer hover:ring-2 hover:ring-yellow-400" onclick="showCardDetails('upcoming')" title="Click to view details">
+            <div class="promo-stat-icon yellow">
+                <i class="fas fa-clock"></i>
+            </div>
+            <div class="promo-stat-label">Starting Soon</div>
+            <div class="promo-stat-value">{{ summary.upcoming|default(0) }}</div>
+            <div class="promo-stat-subtext">In 7 days</div>
+        </div>
+
+        <!-- Row 2: Performance & Settings -->
+        <div class="promo-stat-card cursor-pointer hover:ring-2 hover:ring-red-400" onclick="showCardDetails('expiring')" title="Click to view details">
+            <div class="promo-stat-icon red">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div class="promo-stat-label">Expiring Soon</div>
+            <div class="promo-stat-value">{{ summary.expiring_soon|default(0) }}</div>
+            <div class="promo-stat-subtext">In 7 days</div>
+        </div>
+
+        <div class="promo-stat-card cursor-pointer hover:ring-2 hover:ring-green-400" onclick="showCardDetails('discount_mtd')" title="Click to view details">
+            <div class="promo-stat-icon green">
+                <i class="fas fa-chart-line"></i>
+            </div>
+            <div class="promo-stat-label">Discount MTD</div>
+            <div class="promo-stat-value">
+                <i class="fas fa-rupee-sign text-sm"></i>{{ "{:,.0f}".format(summary.total_discount_mtd|default(0)) }}
+            </div>
+            <div class="promo-stat-subtext">This month</div>
+        </div>
+
+        <div class="promo-stat-card cursor-pointer hover:ring-2 hover:ring-orange-400" onclick="showCardDetails('bulk')" title="Click to view details">
+            <div class="promo-stat-icon {{ 'green' if summary.bulk_enabled else 'orange' }}">
+                <i class="fas fa-layer-group"></i>
+            </div>
+            <div class="promo-stat-label">Bulk Discount</div>
+            <div class="promo-stat-value">{{ 'ON' if summary.bulk_enabled else 'OFF' }}</div>
+            <div class="promo-stat-subtext">Volume discount</div>
+        </div>
+
+        <div class="promo-stat-card cursor-pointer hover:ring-2 hover:ring-purple-400" onclick="showCardDetails('top_campaign')" title="Click to view details">
+            <div class="promo-stat-icon purple">
+                <i class="fas fa-trophy"></i>
+            </div>
+            <div class="promo-stat-label">Top Campaign</div>
+            <div class="promo-stat-value text-base truncate" title="{{ summary.most_used.name|default('N/A') }}">
+                {{ summary.most_used.name|default('N/A') }}
+            </div>
+            <div class="promo-stat-subtext">{{ summary.most_used.uses|default(0) }} uses</div>
+        </div>
+    </div>
+
+    <!-- Summary Card Details Modal -->
+    <div id="card-details-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h3 id="modal-title" class="text-lg font-semibold text-gray-900 dark:text-white">Details</h3>
+                <button onclick="closeCardDetailsModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div id="modal-content" class="p-6 overflow-y-auto max-h-[60vh]">
+                <div class="flex justify-center py-8">
+                    <i class="fas fa-spinner fa-spin text-3xl text-blue-500"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Search Filters Section -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow mb-6">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                <i class="fas fa-filter mr-2 text-blue-600"></i>Filter Applicable Discounts
+            </h3>
+            <p class="text-sm text-gray-500 mt-1">Search by patient, service, or medicine to see applicable promotions</p>
+        </div>
+        <div class="p-4">
+            <!-- 3-row layout for filters -->
+            <div class="space-y-4">
+                <!-- Row 1: Patient (full width) -->
+                <div class="promo-autocomplete-wrapper">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <i class="fas fa-user mr-1"></i>Patient
+                    </label>
+                    <div class="relative">
+                        <input type="text"
+                               id="promo_patient_search"
+                               class="universal-form-input promo-autocomplete-input w-full"
+                               placeholder="Search by name or MRN..."
+                               autocomplete="off"
+                               data-entity-type="patients"
+                               data-api-endpoint="/api/universal/patients/search"
+                               data-value-field="patient_id"
+                               data-display-field="label">
+                        <input type="hidden" id="promo_patient_id" name="patient_id">
+                        <div id="promo_patient_dropdown" class="promo-autocomplete-dropdown hidden"></div>
+                        <div id="promo_patient_loading" class="absolute right-3 top-3 hidden">
+                            <i class="fas fa-spinner fa-spin text-gray-400"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 2: Service + Package (2 columns) -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Service Search -->
+                    <div class="promo-autocomplete-wrapper">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            <i class="fas fa-concierge-bell mr-1"></i>Service
+                        </label>
+                        <div class="relative">
+                            <input type="text"
+                                   id="promo_service_search"
+                                   class="universal-form-input promo-autocomplete-input w-full"
+                                   placeholder="Search services..."
+                                   autocomplete="off"
+                                   data-entity-type="services"
+                                   data-api-endpoint="/api/universal/services/search"
+                                   data-value-field="service_id"
+                                   data-display-field="label">
+                            <input type="hidden" id="promo_service_id" name="service_id">
+                            <div id="promo_service_dropdown" class="promo-autocomplete-dropdown hidden"></div>
+                            <div id="promo_service_loading" class="absolute right-3 top-3 hidden">
+                                <i class="fas fa-spinner fa-spin text-gray-400"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Package Search -->
+                    <div class="promo-autocomplete-wrapper">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            <i class="fas fa-box mr-1"></i>Package
+                        </label>
+                        <div class="relative">
+                            <input type="text"
+                                   id="promo_package_search"
+                                   class="universal-form-input promo-autocomplete-input w-full"
+                                   placeholder="Search packages..."
+                                   autocomplete="off"
+                                   data-entity-type="packages"
+                                   data-api-endpoint="/api/universal/packages/search"
+                                   data-value-field="package_id"
+                                   data-display-field="label">
+                            <input type="hidden" id="promo_package_id" name="package_id">
+                            <div id="promo_package_dropdown" class="promo-autocomplete-dropdown hidden"></div>
+                            <div id="promo_package_loading" class="absolute right-3 top-3 hidden">
+                                <i class="fas fa-spinner fa-spin text-gray-400"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 3: Medicine Type + Medicine Search (50% each) -->
+                <div class="promo-autocomplete-wrapper">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <i class="fas fa-pills mr-1"></i>Medicine / Product
+                    </label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <!-- Medicine Type Dropdown (50%) -->
+                        <select id="promo_medicine_type"
+                                class="universal-form-input w-full"
+                                onchange="onMedicineTypeChange(this)">
+                            <option value="">-- Select Type --</option>
+                            <option value="OTC">OTC</option>
+                            <option value="Prescription">Prescription</option>
+                            <option value="Product">Product</option>
+                            <option value="Consumable">Consumable</option>
+                        </select>
+                        <!-- Medicine Search (50%) -->
+                        <div class="relative">
+                            <input type="text"
+                                   id="promo_medicine_search"
+                                   class="universal-form-input promo-autocomplete-input w-full"
+                                   placeholder="Select type first..."
+                                   autocomplete="off"
+                                   disabled
+                                   data-entity-type="medicines"
+                                   data-api-endpoint="/api/universal/medicines/search"
+                                   data-value-field="medicine_id"
+                                   data-display-field="label">
+                            <input type="hidden" id="promo_medicine_id" name="medicine_id">
+                            <div id="promo_medicine_dropdown" class="promo-autocomplete-dropdown hidden"></div>
+                            <div id="promo_medicine_loading" class="absolute right-3 top-3 hidden">
+                                <i class="fas fa-spinner fa-spin text-gray-400"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filter Actions -->
+            <div class="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button type="button" id="clear-filters-btn" class="btn-outline">
+                    <i class="fas fa-times mr-2"></i>Clear All
+                </button>
+                <button type="button" id="apply-filters-btn" class="btn-primary">
+                    <i class="fas fa-search mr-2"></i>Find Applicable Discounts
+                </button>
+            </div>
+
+            <!-- Selected Filters Display -->
+            <div id="selected-filters" class="hidden mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div class="flex flex-wrap gap-2 items-center">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">Active filters:</span>
+                    <div id="filter-tags" class="flex flex-wrap gap-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Timeline Section -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow mb-6">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex flex-wrap justify-between items-center">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                <i class="fas fa-stream mr-2 text-blue-600"></i>Promotion Plan
+                <span id="timeline-filter-badge" class="hidden ml-2 px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">Filtered</span>
+                <span class="ml-3 text-xs font-normal text-gray-400 dark:text-gray-500" title="Click to zoom in, Double-click to zoom out">
+                    <i class="fas fa-mouse-pointer mr-1"></i>Click: zoom in | Double-click: zoom out
+                </span>
+            </h3>
+            <div class="flex gap-2 mt-2 sm:mt-0 flex-wrap items-center">
+                <!-- Main view switcher: Day | Week | Month -->
+                <div class="inline-flex rounded-md shadow-sm" role="group">
+                    <button type="button" class="timeline-view-btn px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-l-md hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600" data-view="day" title="Day view - 365 days">
+                        <i class="fas fa-calendar-day mr-1"></i>Day
+                    </button>
+                    <button type="button" class="timeline-view-btn px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600" data-view="week" title="Week view - 52 weeks">
+                        <i class="fas fa-calendar-week mr-1"></i>Week
+                    </button>
+                    <button type="button" class="timeline-view-btn px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-100 border border-gray-300 rounded-r-md dark:bg-blue-900 dark:text-blue-300 dark:border-gray-600 active" data-view="month" title="Month view - 12 months">
+                        <i class="fas fa-calendar-alt mr-1"></i>Month
+                    </button>
+                </div>
+                <span class="text-gray-300 dark:text-gray-600">|</span>
+                <button id="timeline-today-btn" class="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600" title="Scroll to today">
+                    <i class="fas fa-crosshairs mr-1"></i>Today
+                </button>
+                <a href="{{ url_for('promotion_views.timeline_fullpage') }}" class="px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400" title="Open full screen view">
+                    <i class="fas fa-expand mr-1"></i>Full
+                </a>
+            </div>
+        </div>
+        <div class="p-4">
+            <div id="timeline-container" class="timeline-scroll-wrapper h-96 bg-gray-50 dark:bg-gray-900 rounded-lg" style="max-height: 450px; overflow: auto;">
+                <!-- Timeline loading placeholder - JS will replace this -->
+                <div id="timeline-loading" class="flex items-center justify-center h-full text-gray-500">
+                    <i class="fas fa-spinner fa-spin mr-2"></i>Loading timeline...
+                </div>
+            </div>
+        </div>
+        <!-- Legend & Visibility Controls -->
+        <div class="px-6 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 rounded-b-lg">
+            <div class="flex flex-wrap justify-between items-center gap-4">
+                <!-- Legend - using inline styles to ensure colors always display -->
+                <div class="flex flex-wrap gap-4 text-sm">
+                    <span class="flex items-center">
+                        <span class="inline-block w-4 h-3 rounded mr-2" style="background-color: #93c5fd;"></span>
+                        Simple Discount
+                    </span>
+                    <span class="flex items-center">
+                        <span class="inline-block w-4 h-3 rounded mr-2" style="background-color: #86efac;"></span>
+                        Buy X Get Y
+                    </span>
+                    <span class="flex items-center">
+                        <span class="inline-block w-4 h-3 rounded mr-2" style="background-color: #fdba74;"></span>
+                        Bulk Discount
+                    </span>
+                    <span class="flex items-center">
+                        <span class="inline-block w-4 h-3 rounded mr-2" style="background-color: #d8b4fe;"></span>
+                        Loyalty Card
+                    </span>
+                    <span class="flex items-center">
+                        <span class="inline-block w-3 h-3 rounded-full mr-2" style="border: 2px dashed #f9a8d4;"></span>
+                        Personalized
+                    </span>
+                    <span class="flex items-center">
+                        <span class="inline-block w-3 h-3 rounded mr-2 text-xs text-center leading-3" style="background-color: #fbbf24;">&#9733;</span>
+                        VIP Only
+                    </span>
+                </div>
+
+                <!-- Visibility Checkboxes -->
+                <div class="flex items-center gap-4 text-sm">
+                    <span class="text-gray-500 dark:text-gray-400 font-medium">Show:</span>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggle-campaigns" class="timeline-visibility-toggle w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 dark:border-gray-600" data-section="campaigns" checked>
+                        <span class="ml-1 text-gray-700 dark:text-gray-300">Campaigns</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggle-bulk" class="timeline-visibility-toggle w-4 h-4 text-orange-600 rounded border-gray-300 focus:ring-orange-500 dark:border-gray-600" data-section="bulk" checked>
+                        <span class="ml-1 text-gray-700 dark:text-gray-300">Bulk</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggle-loyalty" class="timeline-visibility-toggle w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500 dark:border-gray-600" data-section="loyalty" checked>
+                        <span class="ml-1 text-gray-700 dark:text-gray-300">Loyalty</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overlap Warnings -->
+    {% if timeline_data.overlaps and timeline_data.overlaps|length > 0 %}
+    <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
+        <div class="flex items-start">
+            <i class="fas fa-exclamation-triangle text-yellow-600 dark:text-yellow-400 mt-1 mr-3"></i>
+            <div>
+                <h4 class="font-semibold text-yellow-800 dark:text-yellow-200">Overlapping Campaigns Detected</h4>
+                <ul class="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
+                    {% for overlap in timeline_data.overlaps[:3] %}
+                    <li class="mb-1">
+                        <strong>{{ overlap.campaign_1.code }}</strong> and <strong>{{ overlap.campaign_2.code }}</strong>
+                        overlap from {{ overlap.overlap_start }} to {{ overlap.overlap_end }}
+                    </li>
+                    {% endfor %}
+                    {% if timeline_data.overlaps|length > 3 %}
+                    <li class="text-yellow-600">... and {{ timeline_data.overlaps|length - 3 }} more</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Promotion Simulator - Redesigned -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow mb-6">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        <i class="fas fa-flask mr-2 text-purple-600"></i>Promotion Simulator
+                    </h3>
+                    <p class="text-sm text-gray-500 mt-1">Preview discount calculations before billing</p>
+                </div>
+                <div class="text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
+                    <i class="fas fa-info-circle mr-1"></i>P1 &gt; P2 &gt; P4 Priority System
+                </div>
+            </div>
+        </div>
+        <div class="p-6">
+            <!-- Hidden inputs for selected item -->
+            <input type="hidden" id="sim-item-id" value="">
+            <input type="hidden" id="sim-item-name" value="">
+            <input type="hidden" id="sim-item-price" value="">
+            <input type="hidden" id="sim-patient-id" value="">
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Left Column: Inputs -->
+                <div class="lg:col-span-2 space-y-4 pl-4">
+                    <!-- Row 1: Patient Selection (Optional) -->
+                    <div class="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                        <label class="block text-sm font-medium text-purple-800 dark:text-purple-300 mb-2">
+                            <i class="fas fa-user mr-1"></i>Patient (optional - for VIP & Loyalty check)
+                        </label>
+                        <div class="promo-autocomplete-wrapper">
+                            <input type="text"
+                                   id="sim-patient-search"
+                                   class="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                   placeholder="Search patient by name or MRN..."
+                                   autocomplete="off">
+                            <div id="sim-patient-dropdown" class="promo-autocomplete-dropdown hidden"></div>
+                        </div>
+                        <!-- Patient Context Info -->
+                        <div id="sim-patient-context" class="hidden mt-2 text-xs">
+                            <!-- Will show VIP status, loyalty card info -->
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Item Selection -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <!-- Item Type -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                <i class="fas fa-tag mr-1"></i>Type
+                            </label>
+                            <select id="sim-item-type" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                <option value="service">Service</option>
+                                <option value="medicine">Medicine</option>
+                                <option value="package">Package</option>
+                            </select>
+                        </div>
+
+                        <!-- Item Search -->
+                        <div class="md:col-span-3 relative">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                <i class="fas fa-search mr-1"></i>Search Item
+                            </label>
+                            <input type="text" id="sim-item-search"
+                                   placeholder="Type to search..."
+                                   autocomplete="off"
+                                   class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            <div id="sim-item-results"
+                                 class="hidden absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 3: Quantity & Date -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                <i class="fas fa-sort-numeric-up mr-1"></i>Quantity
+                            </label>
+                            <input type="number" id="sim-qty" value="1" min="1"
+                                   class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                <i class="fas fa-calendar mr-1"></i>Date
+                            </label>
+                            <input type="date" id="sim-date" value="{{ today }}"
+                                   class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        </div>
+                        <div class="flex items-end">
+                            <label class="flex items-center cursor-pointer">
+                                <input type="checkbox" id="sim-include-draft"
+                                       class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600">
+                                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                                    <i class="fas fa-edit mr-1 text-gray-400"></i>Include Drafts
+                                </span>
+                            </label>
+                        </div>
+                        <div class="md:col-span-1 flex items-end gap-2">
+                            <button id="run-simulation-btn" class="flex-1 btn-primary">
+                                <i class="fas fa-play mr-2"></i>Simulate
+                            </button>
+                            <button id="clear-simulation-btn" class="btn-outline" title="Clear all">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Selected Item Display -->
+                    <div id="sim-selected-item" class="hidden">
+                        <!-- Selected item will be shown here by JS -->
+                    </div>
+                </div>
+
+                <!-- Right Column: Discount Logic -->
+                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                    <h4 class="font-semibold text-gray-900 dark:text-white mb-3 text-sm">
+                        <i class="fas fa-calculator mr-1 text-blue-600"></i>Discount Logic
+                    </h4>
+                    <div class="space-y-3 text-sm">
+                        <!-- Base Discounts -->
+                        <div class="p-2 bg-blue-50 dark:bg-blue-900/20 rounded border-l-4 border-blue-500">
+                            <div class="font-medium text-gray-800 dark:text-gray-200 mb-1">Base Discount</div>
+                            <div class="text-xs text-gray-500 space-y-1">
+                                <div><i class="fas fa-bullhorn mr-1 text-blue-500"></i>Campaign</div>
+                                <div><i class="fas fa-layer-group mr-1 text-orange-500"></i>Bulk</div>
+                                <div><i class="fas fa-tag mr-1 text-gray-500"></i>Standard</div>
+                            </div>
+                            <div class="mt-2 text-xs font-medium text-blue-700 dark:text-blue-300">
+                                <i class="fas fa-trophy mr-1"></i>MAX discount wins
+                            </div>
+                        </div>
+                        <!-- Loyalty Top-up -->
+                        <div class="p-2 bg-purple-50 dark:bg-purple-900/20 rounded border-l-4 border-purple-500">
+                            <div class="font-medium text-gray-800 dark:text-gray-200 mb-1">
+                                <i class="fas fa-heart mr-1 text-purple-500"></i>Loyalty Card
+                            </div>
+                            <div class="text-xs text-gray-500">
+                                Gold, Silver, Bronze members
+                            </div>
+                            <div class="mt-2 text-xs font-medium text-purple-700 dark:text-purple-300">
+                                <i class="fas fa-plus-circle mr-1"></i>TOP-UP (always added)
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Formula -->
+                    <div class="mt-4 pt-3 border-t border-gray-200 dark:border-gray-700">
+                        <div class="text-xs text-gray-600 dark:text-gray-400 font-mono bg-white dark:bg-gray-800 p-2 rounded">
+                            Final = Base (max%) + Loyalty (top-up%)
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Simulation Results -->
+            <div id="simulation-results" class="hidden mt-6">
+                <!-- Will be populated by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Campaigns Table -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                <i class="fas fa-bullhorn mr-2 text-blue-600"></i>Recent Campaigns
+            </h3>
+            <a href="{{ url_for('promotion_views.campaign_list') }}" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400">
+                View all <i class="fas fa-arrow-right ml-1"></i>
+            </a>
+        </div>
+        <div class="p-4">
+            {% if timeline_data.campaigns and timeline_data.campaigns|length > 0 %}
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-50 dark:bg-gray-900">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campaign</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discount</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Period</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Uses</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for campaign in timeline_data.campaigns[:10] %}
+                        {% set status = campaign.status|default('approved') %}
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <!-- Campaign column: code, name, type badge, groups, VIP, personalized -->
+                            <td class="px-4 py-3">
+                                <a href="{{ url_for('promotion_views.campaign_detail', campaign_id=campaign.campaign_id) }}"
+                                   class="text-blue-600 dark:text-blue-400 hover:underline font-medium text-sm">
+                                    {{ campaign.campaign_code }}
+                                </a>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">{{ campaign.campaign_name }}</p>
+                                <div class="flex flex-wrap gap-1 mt-1">
+                                    <!-- Promotion Type Badge -->
+                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium
+                                        {% if campaign.promotion_type == 'buy_x_get_y' %}bg-green-100 text-green-800
+                                        {% else %}bg-blue-100 text-blue-800{% endif %}">
+                                        {% if campaign.promotion_type == 'buy_x_get_y' %}
+                                        <i class="fas fa-gift mr-1"></i>Buy X Get Y
+                                        {% else %}
+                                        <i class="fas fa-percent mr-1"></i>Discount
+                                        {% endif %}
+                                    </span>
+                                    {% if campaign.is_personalized %}
+                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-purple-100 text-purple-800">
+                                        <i class="fas fa-user-secret mr-1"></i>Private
+                                    </span>
+                                    {% endif %}
+                                    {% if campaign.target_special_group %}
+                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-yellow-100 text-yellow-800">
+                                        <i class="fas fa-star mr-1"></i>VIP
+                                    </span>
+                                    {% endif %}
+                                    {% if campaign.target_group_names and campaign.target_group_names|length > 0 %}
+                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-indigo-100 text-indigo-800">
+                                        <i class="fas fa-object-group mr-1"></i>{{ campaign.target_group_names|length }} group{{ 's' if campaign.target_group_names|length > 1 else '' }}
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                                {{ campaign.discount_value }}{% if campaign.discount_type == 'percentage' %}%{% else %} flat{% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                {{ campaign.start_date }} to {{ campaign.end_date }}
+                            </td>
+                            <!-- Status column: approval status + active/inactive -->
+                            <td class="px-4 py-3 text-center">
+                                <div class="flex flex-col items-center gap-1">
+                                    <!-- Approval Status -->
+                                    {% if status == 'draft' %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
+                                        <i class="fas fa-edit mr-1"></i>Draft
+                                    </span>
+                                    {% elif status == 'pending_approval' %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">
+                                        <i class="fas fa-clock mr-1"></i>Pending
+                                    </span>
+                                    {% elif status == 'rejected' %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">
+                                        <i class="fas fa-ban mr-1"></i>Rejected
+                                    </span>
+                                    {% else %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
+                                        <i class="fas fa-check mr-1"></i>Approved
+                                    </span>
+                                    {% endif %}
+                                    <!-- Active/Inactive -->
+                                    {% if campaign.is_active %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-600 border border-green-200">
+                                        Active
+                                    </span>
+                                    {% else %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-50 text-gray-500 border border-gray-200">
+                                        Inactive
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 text-center text-sm text-gray-900 dark:text-white">
+                                {{ campaign.current_uses }}{% if campaign.max_total_uses %}/{{ campaign.max_total_uses }}{% endif %}
+                            </td>
+                            <!-- Actions column with approval buttons -->
+                            <td class="px-4 py-3 text-center">
+                                <div class="flex justify-center space-x-1">
+                                    <a href="{{ url_for('promotion_views.campaign_detail', campaign_id=campaign.campaign_id) }}"
+                                       class="text-blue-600 hover:text-blue-800 p-1" title="View">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{{ url_for('promotion_views.campaign_edit', campaign_id=campaign.campaign_id) }}"
+                                       class="text-yellow-600 hover:text-yellow-800 p-1" title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <!-- Approval Action Buttons -->
+                                    {% if status == 'draft' %}
+                                    <button type="button" onclick="dashboardSubmitForApproval('{{ campaign.campaign_id }}')"
+                                            class="text-blue-600 hover:text-blue-800 p-1" title="Submit for Approval">
+                                        <i class="fas fa-paper-plane"></i>
+                                    </button>
+                                    {% elif status == 'pending_approval' %}
+                                    <button type="button" onclick="dashboardApprove('{{ campaign.campaign_id }}')"
+                                            class="text-green-600 hover:text-green-800 p-1" title="Approve">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    <button type="button" onclick="dashboardReject('{{ campaign.campaign_id }}')"
+                                            class="text-red-600 hover:text-red-800 p-1" title="Reject">
+                                        <i class="fas fa-ban"></i>
+                                    </button>
+                                    {% elif status == 'rejected' %}
+                                    <button type="button" onclick="dashboardResubmit('{{ campaign.campaign_id }}')"
+                                            class="text-blue-600 hover:text-blue-800 p-1" title="Resubmit">
+                                        <i class="fas fa-redo"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-8 text-gray-500">
+                <i class="fas fa-bullhorn text-4xl text-gray-300 mb-3"></i>
+                <p>No campaigns found</p>
+                <a href="{{ url_for('promotion_views.campaign_create') }}" class="text-blue-600 hover:text-blue-800 mt-2 inline-block">
+                    Create your first campaign
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Scripts inside content block since extra_js block doesn't exist in layout -->
+<script src="{{ url_for('static', filename='js/components/promotion_timeline.js') }}"></script>
+<script src="{{ url_for('static', filename='js/components/promotion_simulator.js') }}"></script>
+<script>
+// =================================================================
+// DASHBOARD APPROVAL ACTIONS
+// =================================================================
+function dashboardSubmitForApproval(campaignId) {
+    if (!confirm('Submit this campaign for approval?')) return;
+    fetch(`/promotions/campaigns/${campaignId}/submit-for-approval`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to submit');
+        }
+    })
+    .catch(error => alert('Error: ' + error.message));
+}
+
+function dashboardApprove(campaignId) {
+    if (!confirm('Approve this campaign?')) return;
+    fetch(`/promotions/campaigns/${campaignId}/approve`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to approve');
+        }
+    })
+    .catch(error => alert('Error: ' + error.message));
+}
+
+function dashboardReject(campaignId) {
+    const reason = prompt('Enter rejection reason (optional):');
+    if (reason === null) return;
+    fetch(`/promotions/campaigns/${campaignId}/reject`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to reject');
+        }
+    })
+    .catch(error => alert('Error: ' + error.message));
+}
+
+function dashboardResubmit(campaignId) {
+    if (!confirm('Resubmit this campaign for approval?')) return;
+    fetch(`/promotions/campaigns/${campaignId}/submit-for-approval`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to resubmit');
+        }
+    })
+    .catch(error => alert('Error: ' + error.message));
+}
+
+// =================================================================
+// DATE/DAY DISPLAY FUNCTIONS
+// =================================================================
+function initializeDateDisplay() {
+    const dateEl = document.getElementById('current-date-display');
+    const dayEl = document.getElementById('current-day-display');
+
+    if (!dateEl || !dayEl) return;
+
+    const now = new Date();
+    const options = { year: 'numeric', month: 'short', day: 'numeric' };
+    const dayOptions = { weekday: 'long' };
+
+    dateEl.textContent = now.toLocaleDateString('en-IN', options);
+    dayEl.textContent = now.toLocaleDateString('en-IN', dayOptions);
+}
+
+// =================================================================
+// FILTER BADGE AUTO-DISMISS
+// =================================================================
+let filterBadgeTimeout = null;
+
+function initializeFilterBadgeDismiss() {
+    // Click anywhere to dismiss the filter badge
+    document.addEventListener('click', function(e) {
+        const badge = document.getElementById('timeline-filter-badge');
+        if (!badge || badge.classList.contains('hidden')) return;
+
+        // If click is not on the badge itself or filter area, dismiss it after 3 seconds
+        const filterSection = document.querySelector('#selected-filters');
+        const isClickOnBadge = badge.contains(e.target);
+        const isClickOnFilterArea = filterSection && filterSection.contains(e.target);
+
+        if (!isClickOnBadge && !isClickOnFilterArea) {
+            // Auto-hide badge after 5 seconds when clicking elsewhere
+            clearTimeout(filterBadgeTimeout);
+            filterBadgeTimeout = setTimeout(() => {
+                badge.classList.add('opacity-50');
+            }, 5000);
+        }
+    });
+
+    // Also add click-to-dismiss on the badge itself
+    const badge = document.getElementById('timeline-filter-badge');
+    if (badge) {
+        badge.style.cursor = 'pointer';
+        badge.title = 'Click to dismiss';
+        badge.addEventListener('click', function() {
+            this.classList.add('hidden');
+            clearTimeout(filterBadgeTimeout);
+        });
+    }
+}
+
+// Reset badge visibility when new filter is applied
+function showFilterBadge() {
+    const badge = document.getElementById('timeline-filter-badge');
+    if (badge) {
+        badge.classList.remove('hidden', 'opacity-50');
+        clearTimeout(filterBadgeTimeout);
+
+        // Auto-fade after 8 seconds
+        filterBadgeTimeout = setTimeout(() => {
+            badge.classList.add('opacity-50');
+        }, 8000);
+    }
+}
+
+// Initialize dashboard components
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize date/day display in header
+    initializeDateDisplay();
+
+    // Initialize click-anywhere to dismiss filter badge
+    initializeFilterBadgeDismiss();
+
+    // Initialize timeline
+    const timelineData = {{ timeline_data|tojson|safe }};
+    console.log('Timeline data:', timelineData);
+
+    const timelineContainer = document.getElementById('timeline-container');
+    const loadingEl = document.getElementById('timeline-loading');
+
+    // Check if we have campaigns to display
+    if (timelineData.campaigns && timelineData.campaigns.length > 0) {
+        // Try to render the timeline
+        if (typeof PromotionTimeline !== 'undefined') {
+            try {
+                window.promotionTimeline = new PromotionTimeline('timeline-container', {
+                    months: 3,
+                    data: timelineData,
+                    stateCode: '{{ hospital_state_code or "" }}'
+                });
+                window.promotionTimeline.render();
+            } catch (e) {
+                console.error('Timeline render error:', e);
+                // Show error message
+                timelineContainer.innerHTML = `
+                    <div class="flex items-center justify-center h-full text-gray-500">
+                        <div class="text-center">
+                            <i class="fas fa-exclamation-triangle text-4xl text-yellow-400 mb-3"></i>
+                            <p>Error loading timeline</p>
+                            <p class="text-xs mt-1">${e.message}</p>
+                        </div>
+                    </div>
+                `;
+            }
+        } else {
+            // PromotionTimeline class not loaded - show simple list
+            timelineContainer.innerHTML = `
+                <div class="flex items-center justify-center h-full text-gray-500">
+                    <div class="text-center">
+                        <i class="fas fa-list text-4xl text-gray-300 mb-3"></i>
+                        <p>${timelineData.campaigns.length} campaign(s) found</p>
+                        <p class="text-xs mt-1">Timeline visualization unavailable</p>
+                    </div>
+                </div>
+            `;
+        }
+    } else {
+        // No campaigns - show empty state
+        timelineContainer.innerHTML = `
+            <div class="flex items-center justify-center h-full text-gray-500">
+                <div class="text-center">
+                    <i class="fas fa-calendar-alt text-4xl text-gray-300 mb-3"></i>
+                    <p>No campaigns to display on timeline</p>
+                    <a href="{{ url_for('promotion_views.campaign_create') }}" class="text-blue-600 hover:underline mt-2 inline-block">
+                        Create your first campaign
+                    </a>
+                </div>
+            </div>
+        `;
+    }
+
+    // Initialize simulator with cascading dropdown pattern
+    if (typeof PromotionSimulator !== 'undefined') {
+        window.promotionSimulator = new PromotionSimulator({
+            itemTypeSelect: 'sim-item-type',
+            itemSearchInput: 'sim-item-search',
+            itemSearchResults: 'sim-item-results',
+            selectedItemDisplay: 'sim-selected-item',
+            itemIdInput: 'sim-item-id',
+            itemNameInput: 'sim-item-name',
+            itemPriceInput: 'sim-item-price',
+            quantityInput: 'sim-qty',
+            dateInput: 'sim-date',
+            runButton: 'run-simulation-btn',
+            resultsContainer: 'simulation-results'
+        });
+    }
+
+    // Helper function to deactivate all view buttons
+    function deactivateAllViewButtons() {
+        document.querySelectorAll('.timeline-view-btn').forEach(b => {
+            b.classList.remove('active', 'bg-blue-100', 'text-blue-700', 'dark:bg-blue-900', 'dark:text-blue-300');
+            b.classList.add('bg-white', 'text-gray-700', 'dark:bg-gray-700', 'dark:text-white');
+        });
+    }
+
+    // Helper function to activate a button
+    function activateViewButton(btn) {
+        btn.classList.add('active', 'bg-blue-100', 'text-blue-700', 'dark:bg-blue-900', 'dark:text-blue-300');
+        btn.classList.remove('bg-white', 'text-gray-700', 'dark:bg-gray-700', 'dark:text-white');
+    }
+
+    // Timeline view switcher (Day | Week | Month) - Rolling Year
+    document.querySelectorAll('.timeline-view-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            deactivateAllViewButtons();
+            activateViewButton(this);
+            if (window.promotionTimeline) {
+                const view = this.dataset.view;
+                if (view === 'day') {
+                    window.promotionTimeline.setDayZoom(365); // Rolling year - 365 days
+                } else if (view === 'week') {
+                    window.promotionTimeline.setWeekZoom(52); // Rolling year - 52 weeks
+                } else if (view === 'month') {
+                    window.promotionTimeline.setZoom(12); // Rolling year - 12 months
+                }
+            }
+        });
+    });
+
+    // Today button
+    document.getElementById('timeline-today-btn')?.addEventListener('click', function() {
+        if (window.promotionTimeline) {
+            window.promotionTimeline.scrollToToday();
+        }
+    });
+
+    // Initialize Promotion Autocomplete Filters
+    initPromoAutocompleteFilters();
+
+    // Initialize visibility toggle checkboxes
+    initVisibilityToggles();
+});
+
+// Initialize visibility toggle checkboxes
+function initVisibilityToggles() {
+    document.querySelectorAll('.timeline-visibility-toggle').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            if (window.promotionTimeline) {
+                const settings = {
+                    campaigns: document.getElementById('toggle-campaigns')?.checked ?? true,
+                    bulk: document.getElementById('toggle-bulk')?.checked ?? true,
+                    loyalty: document.getElementById('toggle-loyalty')?.checked ?? true
+                };
+                window.promotionTimeline.setVisibilitySettings(settings);
+            }
+        });
+    });
+}
+
+function refreshDashboard() {
+    location.reload();
+}
+
+// ============================================================================
+// SUMMARY CARD DETAILS MODAL
+// ============================================================================
+
+function showCardDetails(cardType) {
+    const modal = document.getElementById('card-details-modal');
+    const title = document.getElementById('modal-title');
+    const content = document.getElementById('modal-content');
+
+    // Show modal with loading state
+    modal.classList.remove('hidden');
+    content.innerHTML = '<div class="flex justify-center py-8"><i class="fas fa-spinner fa-spin text-3xl text-blue-500"></i></div>';
+
+    // Set title and fetch data based on card type
+    const cardConfig = {
+        'active_campaigns': {
+            title: 'Active Campaigns',
+            endpoint: '/promotions/api/card-details/active-campaigns'
+        },
+        'draft_campaigns': {
+            title: 'Draft Campaigns',
+            endpoint: '/promotions/api/card-details/draft-campaigns'
+        },
+        'pending_approval': {
+            title: 'Pending Approval',
+            endpoint: '/promotions/api/card-details/pending-approval'
+        },
+        'discount_mtd': {
+            title: 'Discount Given This Month',
+            endpoint: '/promotions/api/card-details/discount-mtd'
+        },
+        'top_campaign': {
+            title: 'Top Performing Campaign',
+            endpoint: '/promotions/api/card-details/top-campaign'
+        },
+        'upcoming': {
+            title: 'Upcoming Campaigns',
+            endpoint: '/promotions/api/card-details/upcoming'
+        },
+        'expiring': {
+            title: 'Expiring Soon',
+            endpoint: '/promotions/api/card-details/expiring'
+        },
+        'bulk': {
+            title: 'Bulk Discount Configuration',
+            endpoint: '/promotions/api/card-details/bulk'
+        },
+        'loyalty': {
+            title: 'Loyalty Card Types',
+            endpoint: '/promotions/api/card-details/loyalty'
+        },
+        'customers': {
+            title: 'Customers Using Promotions (MTD)',
+            endpoint: '/promotions/api/card-details/customers'
+        }
+    };
+
+    const config = cardConfig[cardType];
+    if (!config) {
+        content.innerHTML = '<p class="text-red-500">Unknown card type</p>';
+        return;
+    }
+
+    title.textContent = config.title;
+
+    // Fetch details from API
+    fetch(config.endpoint)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                content.innerHTML = renderCardDetails(cardType, data);
+            } else {
+                content.innerHTML = `<p class="text-red-500">Error: ${data.error || 'Failed to load details'}</p>`;
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching card details:', error);
+            content.innerHTML = '<p class="text-red-500">Failed to load details. Please try again.</p>';
+        });
+}
+
+function closeCardDetailsModal() {
+    document.getElementById('card-details-modal').classList.add('hidden');
+}
+
+// Close modal on backdrop click
+document.getElementById('card-details-modal')?.addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeCardDetailsModal();
+    }
+});
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeCardDetailsModal();
+    }
+});
+
+function renderCardDetails(cardType, data) {
+    switch(cardType) {
+        case 'active_campaigns':
+        case 'upcoming':
+        case 'expiring':
+            return renderCampaignList(data.campaigns || []);
+
+        case 'draft_campaigns':
+            return renderDraftCampaignList(data.campaigns || []);
+
+        case 'pending_approval':
+            return renderPendingApprovalList(data.campaigns || []);
+
+        case 'discount_mtd':
+            return renderDiscountBreakdown(data);
+
+        case 'top_campaign':
+            return renderTopCampaign(data);
+
+        case 'bulk':
+            return renderBulkConfig(data);
+
+        case 'loyalty':
+            return renderLoyaltyCards(data.card_types || []);
+
+        case 'customers':
+            return renderCustomerList(data);
+
+        default:
+            return '<p>No details available</p>';
+    }
+}
+
+function renderCampaignList(campaigns) {
+    if (campaigns.length === 0) {
+        return '<p class="text-gray-500 text-center py-4">No campaigns found</p>';
+    }
+
+    return `
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Code</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Discount</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Period</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    ${campaigns.map(c => `
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <td class="px-4 py-2 text-sm font-medium text-blue-600">${c.campaign_code}</td>
+                            <td class="px-4 py-2 text-sm">${c.campaign_name}</td>
+                            <td class="px-4 py-2 text-sm">${c.discount_type === 'percentage' ? c.discount_value + '%' : '₹' + c.discount_value}</td>
+                            <td class="px-4 py-2 text-sm text-gray-500">${c.start_date} - ${c.end_date}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function renderDraftCampaignList(campaigns) {
+    if (campaigns.length === 0) {
+        return '<p class="text-gray-500 text-center py-4">No draft campaigns</p>';
+    }
+
+    return `
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Code</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Discount</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Period</th>
+                        <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    ${campaigns.map(c => `
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <td class="px-4 py-2 text-sm font-medium text-blue-600">
+                                <a href="/promotions/campaigns/${c.campaign_id}" class="hover:underline">${c.campaign_code}</a>
+                            </td>
+                            <td class="px-4 py-2 text-sm">${c.campaign_name}</td>
+                            <td class="px-4 py-2 text-sm">${c.discount_type === 'percentage' ? c.discount_value + '%' : '₹' + c.discount_value}</td>
+                            <td class="px-4 py-2 text-sm text-gray-500">${c.start_date} - ${c.end_date}</td>
+                            <td class="px-4 py-2 text-center">
+                                <button onclick="submitForApprovalFromModal('${c.campaign_id}')"
+                                        class="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
+                                    <i class="fas fa-paper-plane mr-1"></i>Submit
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+        <p class="text-xs text-gray-400 mt-2 text-center">Click code to view details, or submit for approval</p>
+    `;
+}
+
+function renderPendingApprovalList(campaigns) {
+    if (campaigns.length === 0) {
+        return '<p class="text-gray-500 text-center py-4">No campaigns pending approval</p>';
+    }
+
+    return `
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Code</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Discount</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Period</th>
+                        <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    ${campaigns.map(c => `
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <td class="px-4 py-2 text-sm font-medium text-blue-600">
+                                <a href="/promotions/campaigns/${c.campaign_id}" class="hover:underline">${c.campaign_code}</a>
+                            </td>
+                            <td class="px-4 py-2 text-sm">${c.campaign_name}</td>
+                            <td class="px-4 py-2 text-sm">${c.discount_type === 'percentage' ? c.discount_value + '%' : '₹' + c.discount_value}</td>
+                            <td class="px-4 py-2 text-sm text-gray-500">${c.start_date} - ${c.end_date}</td>
+                            <td class="px-4 py-2 text-center space-x-1">
+                                <button onclick="approveFromModal('${c.campaign_id}')"
+                                        class="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200">
+                                    <i class="fas fa-check mr-1"></i>Approve
+                                </button>
+                                <button onclick="rejectFromModal('${c.campaign_id}')"
+                                        class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200">
+                                    <i class="fas fa-ban mr-1"></i>Reject
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+        <p class="text-xs text-gray-400 mt-2 text-center">Click code to view details before approving</p>
+    `;
+}
+
+// Modal action functions
+function submitForApprovalFromModal(campaignId) {
+    if (!confirm('Submit this campaign for approval?')) return;
+    fetch(`/promotions/campaigns/${campaignId}/submit-for-approval`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            closeCardDetailsModal();
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to submit');
+        }
+    });
+}
+
+function approveFromModal(campaignId) {
+    if (!confirm('Approve this campaign?')) return;
+    fetch(`/promotions/campaigns/${campaignId}/approve`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            closeCardDetailsModal();
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to approve');
+        }
+    });
+}
+
+function rejectFromModal(campaignId) {
+    const reason = prompt('Enter rejection reason (optional):');
+    if (reason === null) return; // User cancelled
+    fetch(`/promotions/campaigns/${campaignId}/reject`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            closeCardDetailsModal();
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to reject');
+        }
+    });
+}
+
+function renderDiscountBreakdown(data) {
+    return `
+        <div class="space-y-4">
+            <div class="text-center">
+                <div class="text-3xl font-bold text-green-600">₹${(data.total || 0).toLocaleString()}</div>
+                <div class="text-gray-500">Total Discount Given</div>
+            </div>
+            ${data.breakdown && data.breakdown.length > 0 ? `
+                <div class="mt-4">
+                    <h4 class="font-medium mb-2">Breakdown by Type:</h4>
+                    <div class="space-y-2">
+                        ${data.breakdown.map(b => `
+                            <div class="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                                <span>${b.type}</span>
+                                <span class="font-medium">₹${(b.amount || 0).toLocaleString()} (${b.count} uses)</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : '<p class="text-gray-500 text-center">No discount breakdown available</p>'}
+        </div>
+    `;
+}
+
+function renderTopCampaign(data) {
+    if (!data.campaign) {
+        return '<p class="text-gray-500 text-center py-4">No campaign data available</p>';
+    }
+    const c = data.campaign;
+    return `
+        <div class="space-y-4">
+            <div class="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                <div class="text-2xl font-bold text-purple-600">${c.campaign_code}</div>
+                <div class="text-lg">${c.campaign_name}</div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                    <div class="text-sm text-gray-500">Total Uses</div>
+                    <div class="text-xl font-bold">${c.total_uses || 0}</div>
+                </div>
+                <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                    <div class="text-sm text-gray-500">Total Discount</div>
+                    <div class="text-xl font-bold">₹${(c.total_discount || 0).toLocaleString()}</div>
+                </div>
+                <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                    <div class="text-sm text-gray-500">Discount Value</div>
+                    <div class="text-xl font-bold">${c.discount_type === 'percentage' ? c.discount_value + '%' : '₹' + c.discount_value}</div>
+                </div>
+                <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                    <div class="text-sm text-gray-500">Valid Until</div>
+                    <div class="text-xl font-bold">${c.end_date}</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderBulkConfig(data) {
+    return `
+        <div class="space-y-4">
+            <div class="flex items-center justify-center gap-4 p-4 rounded-lg ${data.enabled ? 'bg-green-50 dark:bg-green-900/20' : 'bg-orange-50 dark:bg-orange-900/20'}">
+                <i class="fas fa-layer-group text-3xl ${data.enabled ? 'text-green-600' : 'text-orange-600'}"></i>
+                <div>
+                    <div class="text-xl font-bold">${data.enabled ? 'ENABLED' : 'DISABLED'}</div>
+                    <div class="text-sm text-gray-500">Bulk Discount Status</div>
+                </div>
+            </div>
+            ${data.enabled ? `
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                        <div class="text-sm text-gray-500">Min Items Required</div>
+                        <div class="text-xl font-bold">${data.min_count || 5}</div>
+                    </div>
+                    <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                        <div class="text-sm text-gray-500">Stacking Mode</div>
+                        <div class="text-xl font-bold">${data.stacking_mode || 'absolute'}</div>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <a href="/promotions/bulk-config" class="btn-primary w-full text-center">
+                        <i class="fas fa-cog mr-2"></i>Configure Bulk Discount
+                    </a>
+                </div>
+            ` : `
+                <div class="text-center">
+                    <a href="/promotions/bulk-config" class="btn-primary">
+                        <i class="fas fa-power-off mr-2"></i>Enable Bulk Discount
+                    </a>
+                </div>
+            `}
+        </div>
+    `;
+}
+
+function renderLoyaltyCards(cardTypes) {
+    if (cardTypes.length === 0) {
+        return '<p class="text-gray-500 text-center py-4">No loyalty card types configured</p>';
+    }
+
+    return `
+        <div class="space-y-3">
+            ${cardTypes.map(ct => `
+                <div class="flex items-center gap-4 p-3 border rounded-lg ${ct.is_active ? 'border-green-200 bg-green-50 dark:bg-green-900/10' : 'border-gray-200 bg-gray-50 dark:bg-gray-700'}">
+                    <div class="w-12 h-8 rounded" style="background-color: ${ct.card_color || '#gray'}"></div>
+                    <div class="flex-1">
+                        <div class="font-medium">${ct.card_type_name}</div>
+                        <div class="text-sm text-gray-500">${ct.description || ''}</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-lg font-bold text-purple-600">${ct.discount_percent}%</div>
+                        <div class="text-xs text-gray-500">${ct.is_active ? 'Active' : 'Inactive'}</div>
+                    </div>
+                </div>
+            `).join('')}
+            <div class="mt-4">
+                <a href="/promotions/loyalty-config" class="btn-success w-full text-center">
+                    <i class="fas fa-heart mr-2"></i>Manage Loyalty Cards
+                </a>
+            </div>
+        </div>
+    `;
+}
+
+function renderCustomerList(data) {
+    return `
+        <div class="space-y-4">
+            <div class="text-center">
+                <div class="text-3xl font-bold text-indigo-600">${data.total_customers || 0}</div>
+                <div class="text-gray-500">Unique Customers This Month</div>
+            </div>
+            ${data.top_customers && data.top_customers.length > 0 ? `
+                <div class="mt-4">
+                    <h4 class="font-medium mb-2">Top Customers:</h4>
+                    <div class="space-y-2">
+                        ${data.top_customers.map((c, i) => `
+                            <div class="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                                <span><span class="font-medium text-indigo-600">#${i+1}</span> ${c.name}</span>
+                                <span class="text-sm">₹${(c.total_discount || 0).toLocaleString()} saved</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+// =================================================================
+// MEDICINE TYPE CASCADING FILTER (Invoice Line Item Pattern)
+// =================================================================
+
+function onMedicineTypeChange(selectElement) {
+    const medicineType = selectElement.value;
+    const medicineSearch = document.getElementById('promo_medicine_search');
+    const medicineIdInput = document.getElementById('promo_medicine_id');
+    const medicineDropdown = document.getElementById('promo_medicine_dropdown');
+
+    console.log('[MedicineType] Type changed to:', medicineType);
+
+    // Clear any existing selection
+    if (medicineSearch) {
+        medicineSearch.value = '';
+    }
+    if (medicineIdInput) {
+        medicineIdInput.value = '';
+    }
+    if (medicineDropdown) {
+        medicineDropdown.classList.add('hidden');
+    }
+
+    // Clear from global filters
+    window.promoFilters.medicine = null;
+    updateFilterTags();
+
+    if (medicineType) {
+        // Enable medicine search with appropriate placeholder
+        if (medicineSearch) {
+            medicineSearch.disabled = false;
+            medicineSearch.placeholder = `Search ${medicineType} items...`;
+
+            // Focus the search input to trigger initial search (like invoice line item)
+            setTimeout(() => {
+                medicineSearch.focus();
+            }, 100);
+        }
+    } else {
+        // Disable medicine search and hide dropdown
+        if (medicineSearch) {
+            medicineSearch.disabled = true;
+            medicineSearch.placeholder = 'Select type first...';
+        }
+    }
+}
+
+// Initialize medicine search (Invoice Line Item Pattern)
+function initMedicineSearch() {
+    const medicineSearch = document.getElementById('promo_medicine_search');
+    const medicineDropdown = document.getElementById('promo_medicine_dropdown');
+    const medicineIdInput = document.getElementById('promo_medicine_id');
+    const medicineTypeSelect = document.getElementById('promo_medicine_type');
+    const medicineLoading = document.getElementById('promo_medicine_loading');
+
+    if (!medicineSearch || !medicineDropdown || !medicineIdInput || !medicineTypeSelect) {
+        console.warn('[MedicineSearch] Required elements not found');
+        return;
+    }
+
+    // Debounce function
+    const debounce = (func, delay) => {
+        let timeout;
+        return function(...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), delay);
+        };
+    };
+
+    // Search function - reads type from dropdown at call time (like invoice)
+    const performMedicineSearch = debounce((query) => {
+        const itemType = medicineTypeSelect.value;
+
+        if (!itemType) {
+            medicineDropdown.classList.add('hidden');
+            return;
+        }
+
+        console.log(`[MedicineSearch] Searching: q="${query}", type="${itemType}"`);
+
+        // Show loading
+        if (medicineLoading) medicineLoading.classList.remove('hidden');
+
+        // API request with type parameter (like invoice line item)
+        fetch(`/api/universal/medicines/search?q=${encodeURIComponent(query)}&limit=20&item_type=${encodeURIComponent(itemType)}`)
+            .then(response => response.json())
+            .then(data => {
+                console.log('[MedicineSearch] Results:', data);
+                medicineDropdown.innerHTML = '';
+
+                if (!data.success || !data.results || data.results.length === 0) {
+                    medicineDropdown.innerHTML = '<div class="promo-autocomplete-no-results"><i class="fas fa-search mr-2"></i>No items found</div>';
+                    medicineDropdown.classList.remove('hidden');
+                    return;
+                }
+
+                data.results.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'promo-autocomplete-item';
+                    div.innerHTML = `
+                        <div class="promo-autocomplete-item-label">${item.name || item.medicine_name} [${item.item_type || itemType}]</div>
+                        <div class="promo-autocomplete-item-subtitle">MRP: ₹${item.mrp || 0}</div>
+                    `;
+
+                    div.addEventListener('click', () => {
+                        // Set selected values
+                        medicineIdInput.value = item.medicine_id || item.id;
+                        medicineSearch.value = item.name || item.medicine_name;
+
+                        // Update global filter
+                        window.promoFilters.medicine = {
+                            value: item.medicine_id || item.id,
+                            label: item.name || item.medicine_name
+                        };
+                        updateFilterTags();
+
+                        // Hide dropdown
+                        medicineDropdown.classList.add('hidden');
+
+                        // Dispatch event for consistency
+                        medicineSearch.dispatchEvent(new CustomEvent('promoFilterSelected', {
+                            detail: {
+                                entityType: 'medicines',
+                                value: item.medicine_id || item.id,
+                                label: item.name || item.medicine_name
+                            }
+                        }));
+                    });
+
+                    medicineDropdown.appendChild(div);
+                });
+
+                medicineDropdown.classList.remove('hidden');
+            })
+            .catch(error => {
+                console.error('[MedicineSearch] Error:', error);
+                medicineDropdown.innerHTML = '<div class="promo-autocomplete-no-results text-red-500">Error searching</div>';
+                medicineDropdown.classList.remove('hidden');
+            })
+            .finally(() => {
+                if (medicineLoading) medicineLoading.classList.add('hidden');
+            });
+    }, 300);
+
+    // Event listeners (like invoice line item)
+    medicineSearch.addEventListener('input', function() {
+        performMedicineSearch(this.value.trim());
+    });
+
+    medicineSearch.addEventListener('focus', function() {
+        if (!this.disabled && medicineTypeSelect.value) {
+            performMedicineSearch(this.value.trim());
+        }
+    });
+
+    medicineSearch.addEventListener('click', function() {
+        if (!this.disabled && medicineTypeSelect.value) {
+            performMedicineSearch(this.value.trim());
+        }
+    });
+
+    // Hide dropdown on outside click
+    document.addEventListener('click', function(e) {
+        if (!medicineSearch.contains(e.target) && !medicineDropdown.contains(e.target)) {
+            medicineDropdown.classList.add('hidden');
+        }
+    });
+
+    console.log('[MedicineSearch] Initialized successfully');
+}
+
+// =================================================================
+// PROMOTION AUTOCOMPLETE FILTER SYSTEM
+// =================================================================
+class PromoAutocompleteFilter {
+    constructor(inputId, dropdownId, hiddenId, loadingId) {
+        this.searchInput = document.getElementById(inputId);
+        this.dropdown = document.getElementById(dropdownId);
+        this.hiddenInput = document.getElementById(hiddenId);
+        this.loadingIcon = document.getElementById(loadingId);
+
+        if (!this.searchInput || !this.dropdown) {
+            console.warn(`PromoAutocomplete: Elements not found for ${inputId}`);
+            return;
+        }
+
+        this.entityType = this.searchInput.dataset.entityType;
+        this.apiEndpoint = this.searchInput.dataset.apiEndpoint;
+        this.valueField = this.searchInput.dataset.valueField;
+        this.displayField = this.searchInput.dataset.displayField;
+
+        this.searchTimeout = null;
+        this.searchCache = new Map();
+        this.selectedValue = null;
+        this.selectedLabel = null;
+        this.medicineType = null;  // For cascading medicine filter
+
+        this.init();
+    }
+
+    // Set medicine type for cascading filter
+    setMedicineType(type) {
+        this.medicineType = type;
+        this.searchCache.clear();  // Clear cache when type changes
+        this.clearSelection();
+    }
+
+    init() {
+        // Handle input with debounce
+        this.searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.trim();
+            clearTimeout(this.searchTimeout);
+
+            // Clear selection when user types
+            if (this.selectedValue) {
+                this.clearSelection();
+            }
+
+            if (query.length >= 0) {
+                this.searchTimeout = setTimeout(() => {
+                    this.performSearch(query, query.length === 0 ? 20 : 10);
+                }, 300);
+            } else {
+                this.hideDropdown();
+            }
+        });
+
+        // Show initial list on focus
+        this.searchInput.addEventListener('focus', () => {
+            if (!this.selectedValue) {
+                this.performSearch('', 20);
+            }
+        });
+
+        // Hide dropdown on outside click
+        document.addEventListener('click', (e) => {
+            if (!this.searchInput.contains(e.target) && !this.dropdown.contains(e.target)) {
+                this.hideDropdown();
+            }
+        });
+
+        // Handle keyboard navigation
+        this.searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.hideDropdown();
+            }
+        });
+
+        console.log(`PromoAutocomplete initialized for ${this.entityType}`);
+    }
+
+    async performSearch(query, limit) {
+        // Include medicine type in cache key for cascading filter
+        const typeKey = this.medicineType || '';
+        const cacheKey = `${this.entityType}_${typeKey}_${query}_${limit}`;
+
+        console.log(`[Search] performSearch called: entity=${this.entityType}, query="${query}", medicineType=${this.medicineType}`);
+
+        // Check cache
+        if (this.searchCache.has(cacheKey)) {
+            console.log('[Search] Using cached results');
+            this.displayResults(this.searchCache.get(cacheKey));
+            return;
+        }
+
+        this.showLoading();
+
+        try {
+            // Build URL with optional medicine type parameter
+            let url = `${this.apiEndpoint}?q=${encodeURIComponent(query)}&limit=${limit}`;
+            if (this.entityType === 'medicines' && this.medicineType) {
+                url += `&item_type=${encodeURIComponent(this.medicineType)}`;
+            }
+
+            console.log('[Search] Fetching URL:', url);
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            console.log('[Search] Response:', data);
+
+            if (data.success && data.results) {
+                this.searchCache.set(cacheKey, data.results);
+                this.displayResults(data.results);
+            } else {
+                this.showNoResults();
+            }
+        } catch (error) {
+            console.error('[Search] Error:', error);
+            this.showNoResults();
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    displayResults(results) {
+        if (!results || results.length === 0) {
+            this.showNoResults();
+            return;
+        }
+
+        let html = '';
+        results.forEach(item => {
+            const value = item[this.valueField] || item.value || item.uuid;
+            let label = item.label || item.name || item[this.entityType.slice(0, -1) + '_name'];
+
+            // For medicines, append item_type in brackets
+            if (this.entityType === 'medicines' && item.item_type) {
+                label = `${label} [${item.item_type}]`;
+            }
+
+            const subtitle = item.subtitle || item.mrn || item.code || '';
+
+            html += `
+                <div class="promo-autocomplete-item"
+                     data-value="${value}"
+                     data-label="${this.escapeHtml(label)}">
+                    <div class="promo-autocomplete-item-label">${this.escapeHtml(label)}</div>
+                    ${subtitle ? `<div class="promo-autocomplete-item-subtitle">${this.escapeHtml(subtitle)}</div>` : ''}
+                </div>
+            `;
+        });
+
+        this.dropdown.innerHTML = html;
+        this.showDropdown();
+
+        // Add click handlers to items
+        this.dropdown.querySelectorAll('.promo-autocomplete-item').forEach(item => {
+            item.addEventListener('click', () => {
+                this.selectItem(item.dataset.value, item.dataset.label);
+            });
+        });
+    }
+
+    selectItem(value, label) {
+        this.selectedValue = value;
+        this.selectedLabel = label;
+        this.searchInput.value = label;
+        if (this.hiddenInput) {
+            this.hiddenInput.value = value;
+        }
+        this.hideDropdown();
+
+        // Dispatch custom event for filter updates
+        this.searchInput.dispatchEvent(new CustomEvent('promoFilterSelected', {
+            detail: { entityType: this.entityType, value, label }
+        }));
+
+        console.log(`Selected ${this.entityType}: ${label} (${value})`);
+    }
+
+    clearSelection() {
+        this.selectedValue = null;
+        this.selectedLabel = null;
+        if (this.hiddenInput) {
+            this.hiddenInput.value = '';
+        }
+
+        // Dispatch custom event
+        this.searchInput.dispatchEvent(new CustomEvent('promoFilterCleared', {
+            detail: { entityType: this.entityType }
+        }));
+    }
+
+    clear() {
+        this.searchInput.value = '';
+        this.clearSelection();
+        this.hideDropdown();
+    }
+
+    showNoResults() {
+        this.dropdown.innerHTML = '<div class="promo-autocomplete-no-results"><i class="fas fa-search mr-2"></i>No results found</div>';
+        this.showDropdown();
+    }
+
+    showDropdown() {
+        this.dropdown.classList.remove('hidden');
+    }
+
+    hideDropdown() {
+        this.dropdown.classList.add('hidden');
+    }
+
+    showLoading() {
+        if (this.loadingIcon) {
+            this.loadingIcon.classList.remove('hidden');
+        }
+    }
+
+    hideLoading() {
+        if (this.loadingIcon) {
+            this.loadingIcon.classList.add('hidden');
+        }
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    getSelectedValue() {
+        return this.selectedValue;
+    }
+
+    getSelectedLabel() {
+        return this.selectedLabel;
+    }
+}
+
+// Global filter state
+window.promoFilters = {
+    patient: null,
+    service: null,
+    medicine: null,
+    package: null
+};
+
+// Initialize all autocomplete filters
+function initPromoAutocompleteFilters() {
+    // Initialize Patient filter
+    window.patientFilter = new PromoAutocompleteFilter(
+        'promo_patient_search',
+        'promo_patient_dropdown',
+        'promo_patient_id',
+        'promo_patient_loading'
+    );
+
+    // Initialize Service filter
+    window.serviceFilter = new PromoAutocompleteFilter(
+        'promo_service_search',
+        'promo_service_dropdown',
+        'promo_service_id',
+        'promo_service_loading'
+    );
+
+    // Initialize Medicine filter using Invoice Line Item Pattern (NOT class-based)
+    initMedicineSearch();
+
+    // Initialize Package filter
+    window.packageFilter = new PromoAutocompleteFilter(
+        'promo_package_search',
+        'promo_package_dropdown',
+        'promo_package_id',
+        'promo_package_loading'
+    );
+
+    // Listen for filter selections
+    document.querySelectorAll('.promo-autocomplete-input').forEach(input => {
+        console.log('[Filter Init] Adding event listeners to input:', input.id);
+
+        input.addEventListener('promoFilterSelected', (e) => {
+            const { entityType, value, label } = e.detail;
+            const filterKey = entityType.slice(0, -1); // 'patients' -> 'patient'
+            window.promoFilters[filterKey] = { value, label };
+            console.log('[Filter] promoFilterSelected event received:', filterKey, value, label);
+            console.log('[Filter] Updated window.promoFilters:', window.promoFilters);
+            updateFilterTags();
+        });
+
+        input.addEventListener('promoFilterCleared', (e) => {
+            const { entityType } = e.detail;
+            const filterKey = entityType.slice(0, -1);
+            window.promoFilters[filterKey] = null;
+            console.log('[Filter] promoFilterCleared event received:', filterKey);
+            updateFilterTags();
+        });
+    });
+
+    // Clear all filters button
+    const clearBtn = document.getElementById('clear-filters-btn');
+    console.log('[Filter Init] Clear button found:', !!clearBtn);
+    clearBtn?.addEventListener('click', clearAllFilters);
+
+    // Apply filters button
+    const applyBtn = document.getElementById('apply-filters-btn');
+    console.log('[Filter Init] Apply button found:', !!applyBtn);
+    applyBtn?.addEventListener('click', () => {
+        console.log('[Filter] Apply button clicked!');
+        applyFilters();
+    });
+}
+
+function updateFilterTags() {
+    const filterTagsContainer = document.getElementById('filter-tags');
+    const selectedFiltersDiv = document.getElementById('selected-filters');
+
+    if (!filterTagsContainer || !selectedFiltersDiv) return;
+
+    let tags = '';
+    let hasFilters = false;
+
+    if (window.promoFilters.patient) {
+        hasFilters = true;
+        tags += `
+            <span class="promo-filter-tag">
+                <i class="fas fa-user mr-1"></i>${window.promoFilters.patient.label}
+                <span class="promo-filter-tag-remove" data-filter="patient"><i class="fas fa-times"></i></span>
+            </span>
+        `;
+    }
+
+    if (window.promoFilters.service) {
+        hasFilters = true;
+        tags += `
+            <span class="promo-filter-tag">
+                <i class="fas fa-concierge-bell mr-1"></i>${window.promoFilters.service.label}
+                <span class="promo-filter-tag-remove" data-filter="service"><i class="fas fa-times"></i></span>
+            </span>
+        `;
+    }
+
+    if (window.promoFilters.medicine) {
+        hasFilters = true;
+        tags += `
+            <span class="promo-filter-tag">
+                <i class="fas fa-pills mr-1"></i>${window.promoFilters.medicine.label}
+                <span class="promo-filter-tag-remove" data-filter="medicine"><i class="fas fa-times"></i></span>
+            </span>
+        `;
+    }
+
+    filterTagsContainer.innerHTML = tags;
+
+    if (hasFilters) {
+        selectedFiltersDiv.classList.remove('hidden');
+        // Add click handlers to remove buttons
+        filterTagsContainer.querySelectorAll('.promo-filter-tag-remove').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const filterType = btn.dataset.filter;
+                removeFilter(filterType);
+            });
+        });
+    } else {
+        selectedFiltersDiv.classList.add('hidden');
+    }
+}
+
+function removeFilter(filterType) {
+    window.promoFilters[filterType] = null;
+
+    // Clear the corresponding input
+    if (filterType === 'patient' && window.patientFilter) {
+        window.patientFilter.clear();
+    } else if (filterType === 'service' && window.serviceFilter) {
+        window.serviceFilter.clear();
+    } else if (filterType === 'medicine') {
+        // Clear medicine using direct element access (Invoice Line Item Pattern)
+        clearMedicineFilter();
+    } else if (filterType === 'package' && window.packageFilter) {
+        window.packageFilter.clear();
+    }
+
+    updateFilterTags();
+}
+
+// Clear medicine filter (Invoice Line Item Pattern)
+function clearMedicineFilter() {
+    const medicineTypeSelect = document.getElementById('promo_medicine_type');
+    const medicineSearch = document.getElementById('promo_medicine_search');
+    const medicineIdInput = document.getElementById('promo_medicine_id');
+    const medicineDropdown = document.getElementById('promo_medicine_dropdown');
+
+    if (medicineTypeSelect) medicineTypeSelect.value = '';
+    if (medicineSearch) {
+        medicineSearch.value = '';
+        medicineSearch.disabled = true;
+        medicineSearch.placeholder = 'Select type first...';
+    }
+    if (medicineIdInput) medicineIdInput.value = '';
+    if (medicineDropdown) medicineDropdown.classList.add('hidden');
+}
+
+function clearAllFilters() {
+    window.promoFilters = { patient: null, service: null, medicine: null, package: null };
+
+    if (window.patientFilter) window.patientFilter.clear();
+    if (window.serviceFilter) window.serviceFilter.clear();
+    clearMedicineFilter();  // Use direct function instead of class method
+    if (window.packageFilter) window.packageFilter.clear();
+
+    updateFilterTags();
+
+    // Reset timeline to show all campaigns
+    if (window.promotionTimeline) {
+        window.promotionTimeline.clearFilter();
+    }
+
+    // Reset filtered badge
+    const badge = document.getElementById('timeline-filter-badge');
+    if (badge) {
+        badge.classList.add('hidden');
+        badge.textContent = 'Filtered';
+        // Reset badge colors to default
+        badge.classList.remove('bg-yellow-100', 'text-yellow-800', 'bg-purple-100', 'text-purple-800');
+        badge.classList.add('bg-blue-100', 'text-blue-800');
+    }
+
+    // Reset visibility checkboxes to checked
+    document.getElementById('toggle-campaigns').checked = true;
+    document.getElementById('toggle-bulk').checked = true;
+    document.getElementById('toggle-loyalty').checked = true;
+}
+
+function applyFilters() {
+    console.log('[Filter] applyFilters() called');
+    console.log('[Filter] window.promoFilters:', window.promoFilters);
+
+    const filters = {
+        patient_id: window.promoFilters.patient?.value || null,
+        service_id: window.promoFilters.service?.value || null,
+        medicine_id: window.promoFilters.medicine?.value || null,
+        package_id: window.promoFilters.package?.value || null
+    };
+
+    console.log('[Filter] Extracted filters:', filters);
+
+    // Check if any filter is applied
+    const hasFilters = filters.patient_id || filters.service_id || filters.medicine_id || filters.package_id;
+
+    if (!hasFilters) {
+        console.log('[Filter] No filters applied, clearing timeline');
+        // No filters - show all campaigns
+        if (window.promotionTimeline) {
+            window.promotionTimeline.clearFilter();
+        }
+        document.getElementById('timeline-filter-badge')?.classList.add('hidden');
+        return;
+    }
+
+    console.log('[Filter] Has filters, fetching applicable campaigns...');
+
+    // Show filtered badge with auto-dismiss
+    showFilterBadge();
+
+    // Fetch filtered campaigns from API
+    fetchFilteredCampaigns(filters);
+}
+
+async function fetchFilteredCampaigns(filters) {
+    console.log('[Filter] fetchFilteredCampaigns() called with:', filters);
+
+    try {
+        const params = new URLSearchParams();
+        if (filters.patient_id) params.append('patient_id', filters.patient_id);
+        if (filters.service_id) params.append('service_id', filters.service_id);
+        if (filters.medicine_id) params.append('medicine_id', filters.medicine_id);
+        if (filters.package_id) params.append('package_id', filters.package_id);
+
+        const url = `/promotions/api/applicable-campaigns?${params.toString()}`;
+        console.log('[Filter] Fetching from URL:', url);
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        console.log('[Filter] API Response:', data);
+
+        if (data.success && window.promotionTimeline) {
+            console.log('[Filter] Updating timeline with filtered data');
+            console.log('[Filter] - campaigns:', data.campaigns?.length || 0);
+            console.log('[Filter] - patient_context:', data.patient_context);
+            console.log('[Filter] - item_context:', data.item_context);
+            console.log('[Filter] - applicable_discounts:', data.applicable_discounts);
+
+            // Update timeline with filtered campaigns, patient context, and item context
+            window.promotionTimeline.setFilteredCampaigns(
+                data.campaigns,
+                data.applicable_discounts,
+                data.patient_context || null,  // { is_special_group, has_loyalty_card, loyalty_card_valid }
+                data.item_context || null      // { item_type, item_id, item_name }
+            );
+
+            // Show notification about patient/item context
+            showFilterContextInfo(data);
+        } else if (data.error) {
+            console.error('[Filter] API Error:', data.error);
+            showFilterError(data.error);
+        }
+    } catch (error) {
+        console.error('[Filter] Fetch error:', error);
+        showFilterError('Failed to fetch applicable discounts');
+    }
+}
+
+// Show context information about the filter results
+function showFilterContextInfo(data) {
+    const badge = document.getElementById('timeline-filter-badge');
+    if (!badge) return;
+
+    let badgeText = 'Filtered';
+
+    // Update badge based on context
+    if (data.patient_context) {
+        if (data.patient_context.is_special_group) {
+            badgeText = 'VIP Patient';
+            badge.classList.remove('bg-blue-100', 'text-blue-800');
+            badge.classList.add('bg-yellow-100', 'text-yellow-800');
+        } else if (data.patient_context.has_loyalty_card) {
+            badgeText = 'Loyalty Card Holder';
+            badge.classList.remove('bg-blue-100', 'text-blue-800');
+            badge.classList.add('bg-purple-100', 'text-purple-800');
+        }
+    }
+
+    if (data.item_context && data.item_context.item_name) {
+        badgeText = `${badgeText} - ${data.item_context.item_name}`;
+    }
+
+    badge.textContent = badgeText;
+    badge.classList.remove('hidden');
+}
+
+// Show error notification
+function showFilterError(message) {
+    // Create temporary error notification
+    const notification = document.createElement('div');
+    notification.className = 'fixed top-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded z-50';
+    notification.innerHTML = `
+        <span class="font-medium">Error:</span> ${message}
+        <button onclick="this.parentElement.remove()" class="ml-4 text-red-700 hover:text-red-900">&times;</button>
+    `;
+    document.body.appendChild(notification);
+
+    // Auto-remove after 5 seconds
+    setTimeout(() => notification.remove(), 5000);
+}
+</script>
+{% endblock %} {# End of content block #}

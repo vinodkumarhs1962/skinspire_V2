@@ -45,6 +45,8 @@ SELECT
     pd.credit_card_amount,
     pd.debit_card_amount,
     pd.upi_amount,
+    COALESCE(pd.wallet_points_amount, 0) as wallet_points_amount,
+    pd.wallet_transaction_id,
 
     -- Payment method details
     pd.card_number_last4,

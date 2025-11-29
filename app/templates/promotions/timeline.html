@@ -1,0 +1,440 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}{{ page_title }} - Skinspire{% endblock %}
+
+{% block content %}
+<!-- Inline CSS for timeline full view -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/buttons.css') }}">
+<style>
+.timeline-fullpage {
+    height: calc(100vh - 280px);
+    min-height: 500px;
+}
+/* Timeline scrollbar styling - horizontal and vertical */
+.timeline-scroll-wrapper {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 #f1f5f9;
+    overflow: auto;
+}
+.timeline-scroll-wrapper::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+.timeline-scroll-wrapper::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 5px;
+}
+.timeline-scroll-wrapper::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border-radius: 5px;
+}
+.timeline-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}
+.timeline-scroll-wrapper::-webkit-scrollbar-corner {
+    background: #f1f5f9;
+}
+/* Promotion Autocomplete Dropdown Styling */
+.promo-autocomplete-wrapper {
+    position: relative;
+}
+.promo-autocomplete-dropdown {
+    position: absolute;
+    z-index: 50;
+    width: 100%;
+    max-height: 280px;
+    overflow-y: auto;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    margin-top: 4px;
+}
+.dark .promo-autocomplete-dropdown {
+    background: #1f2937;
+    border-color: #374151;
+}
+.promo-autocomplete-item {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    border-bottom: 1px solid #f3f4f6;
+    transition: background-color 0.15s ease;
+}
+.promo-autocomplete-item:last-child {
+    border-bottom: none;
+}
+.promo-autocomplete-item:hover {
+    background: #f3f4f6;
+}
+.dark .promo-autocomplete-item {
+    border-color: #374151;
+}
+.dark .promo-autocomplete-item:hover {
+    background: #374151;
+}
+.promo-autocomplete-item-label {
+    font-weight: 500;
+    color: #111827;
+}
+.dark .promo-autocomplete-item-label {
+    color: #f9fafb;
+}
+.promo-autocomplete-item-subtitle {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 2px;
+}
+</style>
+
+<div class="container mx-auto px-4 py-4">
+    <!-- Page Header -->
+    <div class="mb-6">
+        <!-- Row 1: Title and Date -->
+        <div class="flex flex-wrap justify-between items-center">
+            <div>
+                <nav class="text-sm text-gray-500 mb-2">
+                    <a href="{{ url_for('promotion_views.dashboard') }}" class="hover:text-blue-600">
+                        <i class="fas fa-tags mr-1"></i>Promotions
+                    </a>
+                    <span class="mx-2">/</span>
+                    <span class="text-gray-900 dark:text-white">Timeline View</span>
+                </nav>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                    <i class="fas fa-stream mr-2 text-blue-600"></i>Promotion Timeline
+                </h1>
+                <p class="text-sm text-gray-500 mt-1">Full timeline view - Rolling Year (12 months)</p>
+            </div>
+            <div class="text-right px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                <div class="text-base font-semibold text-gray-900 dark:text-white" id="current-date-display">Loading...</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400" id="current-day-display"></div>
+            </div>
+        </div>
+        <!-- Row 2: Action Buttons -->
+        <div class="flex flex-wrap gap-2 mt-4">
+            <a href="{{ url_for('promotion_views.dashboard') }}" class="btn-back">
+                <i class="fas fa-arrow-left mr-2"></i>Back
+            </a>
+            <a href="{{ url_for('promotion_views.dashboard') }}" class="btn-secondary">
+                <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+            </a>
+            <a href="{{ url_for('promotion_views.campaign_create') }}" class="btn-primary">
+                <i class="fas fa-plus mr-2"></i>New Campaign
+            </a>
+            <a href="{{ url_for('promotion_views.campaign_list') }}" class="btn-secondary">
+                <i class="fas fa-bullhorn mr-2"></i>Campaigns
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters Section -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow mb-4">
+        <div class="px-6 py-4">
+            <div class="flex flex-wrap items-center gap-4">
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <i class="fas fa-filter mr-1"></i>Filter by:
+                </span>
+
+                <!-- Patient Filter -->
+                <div class="promo-autocomplete-wrapper w-64">
+                    <input type="text" id="promo_patient_search"
+                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        placeholder="Search patient...">
+                    <input type="hidden" id="promo_patient_id">
+                    <div id="promo_patient_dropdown" class="promo-autocomplete-dropdown hidden"></div>
+                </div>
+
+                <!-- Service Filter -->
+                <div class="promo-autocomplete-wrapper w-64">
+                    <input type="text" id="promo_service_search"
+                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        placeholder="Search service...">
+                    <input type="hidden" id="promo_service_id">
+                    <div id="promo_service_dropdown" class="promo-autocomplete-dropdown hidden"></div>
+                </div>
+
+                <!-- Clear Filters -->
+                <button type="button" id="clear-filters-btn" class="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+                    <i class="fas fa-times mr-1"></i>Clear
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Timeline Section -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex flex-wrap justify-between items-center">
+            <div class="flex items-center gap-3">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                    <i class="fas fa-calendar-alt mr-2 text-blue-600"></i>Timeline
+                </h3>
+                <span class="text-xs font-normal text-gray-400 dark:text-gray-500" title="Click to zoom in, Double-click to zoom out">
+                    <i class="fas fa-mouse-pointer mr-1"></i>Click: zoom in | Double-click: zoom out
+                </span>
+            </div>
+
+            <div class="flex gap-2 mt-2 sm:mt-0 flex-wrap items-center">
+                <!-- Main view switcher: Day | Week | Month -->
+                <div class="inline-flex rounded-md shadow-sm" role="group">
+                    <button type="button" class="timeline-view-btn px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-l-md hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600" data-view="day" title="Day view - 365 days">
+                        <i class="fas fa-calendar-day mr-1"></i>Day
+                    </button>
+                    <button type="button" class="timeline-view-btn px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600" data-view="week" title="Week view - 52 weeks">
+                        <i class="fas fa-calendar-week mr-1"></i>Week
+                    </button>
+                    <button type="button" class="timeline-view-btn px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-100 border border-gray-300 rounded-r-md dark:bg-blue-900 dark:text-blue-300 dark:border-gray-600 active" data-view="month" title="Month view - 12 months">
+                        <i class="fas fa-calendar-alt mr-1"></i>Month
+                    </button>
+                </div>
+                <span class="text-gray-300 dark:text-gray-600">|</span>
+                <button id="timeline-today-btn" class="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600" title="Scroll to today">
+                    <i class="fas fa-crosshairs mr-1"></i>Today
+                </button>
+                <button id="timeline-refresh-btn" class="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600" title="Refresh data">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Full Page Timeline Container -->
+        <div class="p-4">
+            <div id="timeline-container" class="timeline-fullpage bg-gray-50 dark:bg-gray-900 rounded-lg overflow-hidden">
+                <div id="timeline-loading" class="flex items-center justify-center h-full text-gray-500">
+                    <i class="fas fa-spinner fa-spin mr-2"></i>Loading timeline...
+                </div>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="px-6 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 rounded-b-lg">
+            <div class="flex flex-wrap gap-4 text-sm">
+                <span class="flex items-center">
+                    <span class="inline-block w-4 h-3 rounded mr-2" style="background-color: #93c5fd;"></span>
+                    Simple Discount
+                </span>
+                <span class="flex items-center">
+                    <span class="inline-block w-4 h-3 rounded mr-2" style="background-color: #86efac;"></span>
+                    Buy X Get Y
+                </span>
+                <span class="flex items-center">
+                    <span class="inline-block w-4 h-3 rounded mr-2" style="background-color: #fdba74;"></span>
+                    Bulk Discount
+                </span>
+                <span class="flex items-center">
+                    <span class="inline-block w-4 h-3 rounded mr-2" style="background-color: #d8b4fe;"></span>
+                    Loyalty Card
+                </span>
+                <span class="flex items-center">
+                    <span class="inline-block w-3 h-3 rounded-full mr-2" style="border: 2px dashed #f9a8d4;"></span>
+                    Personalized
+                </span>
+                <span class="flex items-center">
+                    <span class="inline-block w-3 h-3 rounded mr-2 text-xs text-center leading-3" style="background-color: #fbbf24;">&#9733;</span>
+                    VIP Only
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="{{ url_for('static', filename='js/components/promotion_timeline.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Set current date and day
+    const now = new Date();
+    const dateOptions = { year: 'numeric', month: 'short', day: 'numeric' };
+    const dayOptions = { weekday: 'long' };
+    document.getElementById('current-date-display').textContent = now.toLocaleDateString('en-IN', dateOptions);
+    document.getElementById('current-day-display').textContent = now.toLocaleDateString('en-IN', dayOptions);
+
+    // Initialize timeline
+    const timelineData = {{ timeline_data|tojson|safe }};
+    console.log('Timeline data:', timelineData);
+
+    const timelineContainer = document.getElementById('timeline-container');
+
+    if (timelineData.campaigns || timelineData.bulk_config || timelineData.loyalty_periods) {
+        if (typeof PromotionTimeline !== 'undefined') {
+            try {
+                window.promotionTimeline = new PromotionTimeline('timeline-container', {
+                    months: 12, // Rolling year
+                    data: timelineData
+                });
+                window.promotionTimeline.render();
+            } catch (e) {
+                console.error('Timeline render error:', e);
+                timelineContainer.innerHTML = `
+                    <div class="flex items-center justify-center h-full text-gray-500">
+                        <div class="text-center">
+                            <i class="fas fa-exclamation-triangle text-4xl text-yellow-400 mb-3"></i>
+                            <p>Error loading timeline</p>
+                            <p class="text-xs mt-1">${e.message}</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+    } else {
+        timelineContainer.innerHTML = `
+            <div class="flex items-center justify-center h-full text-gray-500">
+                <div class="text-center">
+                    <i class="fas fa-calendar-alt text-4xl text-gray-300 mb-3"></i>
+                    <p>No campaigns to display</p>
+                    <a href="{{ url_for('promotion_views.campaign_create') }}" class="text-blue-600 hover:underline mt-2 inline-block">
+                        Create your first campaign
+                    </a>
+                </div>
+            </div>
+        `;
+    }
+
+    // Helper functions for view buttons
+    function deactivateAllViewButtons() {
+        document.querySelectorAll('.timeline-view-btn').forEach(b => {
+            b.classList.remove('active', 'bg-blue-100', 'text-blue-700', 'dark:bg-blue-900', 'dark:text-blue-300');
+            b.classList.add('bg-white', 'text-gray-700', 'dark:bg-gray-700', 'dark:text-white');
+        });
+    }
+
+    function activateViewButton(btn) {
+        btn.classList.add('active', 'bg-blue-100', 'text-blue-700', 'dark:bg-blue-900', 'dark:text-blue-300');
+        btn.classList.remove('bg-white', 'text-gray-700', 'dark:bg-gray-700', 'dark:text-white');
+    }
+
+    // Timeline view switcher (Day | Week | Month) - Rolling Year
+    document.querySelectorAll('.timeline-view-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            deactivateAllViewButtons();
+            activateViewButton(this);
+            if (window.promotionTimeline) {
+                const view = this.dataset.view;
+                if (view === 'day') {
+                    window.promotionTimeline.setDayZoom(365);
+                } else if (view === 'week') {
+                    window.promotionTimeline.setWeekZoom(52);
+                } else if (view === 'month') {
+                    window.promotionTimeline.setZoom(12);
+                }
+            }
+        });
+    });
+
+    // Today button
+    document.getElementById('timeline-today-btn')?.addEventListener('click', function() {
+        if (window.promotionTimeline) {
+            window.promotionTimeline.scrollToToday();
+        }
+    });
+
+    // Refresh button
+    document.getElementById('timeline-refresh-btn')?.addEventListener('click', function() {
+        location.reload();
+    });
+
+    // Clear filters button
+    document.getElementById('clear-filters-btn')?.addEventListener('click', function() {
+        document.getElementById('promo_patient_search').value = '';
+        document.getElementById('promo_patient_id').value = '';
+        document.getElementById('promo_service_search').value = '';
+        document.getElementById('promo_service_id').value = '';
+        if (window.promotionTimeline) {
+            window.promotionTimeline.clearFilter();
+        }
+    });
+
+    // Simple autocomplete for patient search
+    const patientSearch = document.getElementById('promo_patient_search');
+    const patientDropdown = document.getElementById('promo_patient_dropdown');
+    const patientIdInput = document.getElementById('promo_patient_id');
+
+    let patientSearchTimeout;
+    patientSearch?.addEventListener('input', function() {
+        clearTimeout(patientSearchTimeout);
+        const query = this.value.trim();
+        if (query.length < 2) {
+            patientDropdown.classList.add('hidden');
+            return;
+        }
+        patientSearchTimeout = setTimeout(() => {
+            fetch(`/api/universal/patients/search?q=${encodeURIComponent(query)}&limit=10`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.results && data.results.length > 0) {
+                        patientDropdown.innerHTML = data.results.map(p => `
+                            <div class="promo-autocomplete-item" data-id="${p.value}" data-name="${p.label}">
+                                <div class="promo-autocomplete-item-label">${p.label}</div>
+                                <div class="promo-autocomplete-item-subtitle">${p.mobile || ''}</div>
+                            </div>
+                        `).join('');
+                        patientDropdown.classList.remove('hidden');
+
+                        patientDropdown.querySelectorAll('.promo-autocomplete-item').forEach(item => {
+                            item.addEventListener('click', function() {
+                                patientSearch.value = this.dataset.name;
+                                patientIdInput.value = this.dataset.id;
+                                patientDropdown.classList.add('hidden');
+                                // TODO: Apply filter to timeline
+                            });
+                        });
+                    } else {
+                        patientDropdown.innerHTML = '<div class="promo-autocomplete-no-results">No patients found</div>';
+                        patientDropdown.classList.remove('hidden');
+                    }
+                });
+        }, 300);
+    });
+
+    // Simple autocomplete for service search
+    const serviceSearch = document.getElementById('promo_service_search');
+    const serviceDropdown = document.getElementById('promo_service_dropdown');
+    const serviceIdInput = document.getElementById('promo_service_id');
+
+    let serviceSearchTimeout;
+    serviceSearch?.addEventListener('input', function() {
+        clearTimeout(serviceSearchTimeout);
+        const query = this.value.trim();
+        if (query.length < 2) {
+            serviceDropdown.classList.add('hidden');
+            return;
+        }
+        serviceSearchTimeout = setTimeout(() => {
+            fetch(`/api/universal/services/search?q=${encodeURIComponent(query)}&limit=10`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.results && data.results.length > 0) {
+                        serviceDropdown.innerHTML = data.results.map(s => `
+                            <div class="promo-autocomplete-item" data-id="${s.value}" data-name="${s.label}">
+                                <div class="promo-autocomplete-item-label">${s.label}</div>
+                                <div class="promo-autocomplete-item-subtitle">${s.category || ''}</div>
+                            </div>
+                        `).join('');
+                        serviceDropdown.classList.remove('hidden');
+
+                        serviceDropdown.querySelectorAll('.promo-autocomplete-item').forEach(item => {
+                            item.addEventListener('click', function() {
+                                serviceSearch.value = this.dataset.name;
+                                serviceIdInput.value = this.dataset.id;
+                                serviceDropdown.classList.add('hidden');
+                                // TODO: Apply filter to timeline
+                            });
+                        });
+                    } else {
+                        serviceDropdown.innerHTML = '<div class="promo-autocomplete-no-results">No services found</div>';
+                        serviceDropdown.classList.remove('hidden');
+                    }
+                });
+        }, 300);
+    });
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!patientSearch?.contains(e.target) && !patientDropdown?.contains(e.target)) {
+            patientDropdown?.classList.add('hidden');
+        }
+        if (!serviceSearch?.contains(e.target) && !serviceDropdown?.contains(e.target)) {
+            serviceDropdown?.classList.add('hidden');
+        }
+    });
+});
+</script>
+{% endblock %}

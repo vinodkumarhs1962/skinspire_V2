@@ -580,7 +580,7 @@ class WalletService:
         invoice_id: str,
         invoice_number: str = None,
         user_id: str = None
-    ) -> str:
+    ) -> Dict:
         """
         Redeem points for invoice payment (FIFO)
         - Deducts points from oldest batches first
@@ -595,82 +595,112 @@ class WalletService:
             user_id: User performing redemption
 
         Returns:
-            transaction_id (str)
+            Dict with success status and transaction_id
         """
         try:
-            with get_db_session() as session:
-                # Get wallet
-                wallet = session.query(PatientLoyaltyWallet).filter(
-                    PatientLoyaltyWallet.patient_id == UUID(patient_id),
-                    PatientLoyaltyWallet.is_active == True
-                ).first()
+            # Use db.session directly to avoid nested session issues in Flask context
+            from app import db
+            session = db.session
 
-                if not wallet:
-                    raise WalletError(f"No active wallet found for patient {patient_id}")
+            # Get wallet
+            wallet = session.query(PatientLoyaltyWallet).filter(
+                PatientLoyaltyWallet.patient_id == UUID(patient_id),
+                PatientLoyaltyWallet.is_active == True
+            ).first()
 
-                # Validate redemption
-                validation = WalletService.validate_redemption(
-                    patient_id=patient_id,
-                    points_amount=points_amount,
-                    hospital_id=str(wallet.hospital_id)
-                )
+            if not wallet:
+                return {
+                    'success': False,
+                    'message': f"No active wallet found for patient {patient_id}",
+                    'transaction_id': None
+                }
 
-                if not validation['valid']:
-                    raise InsufficientPointsError(validation['message'])
+            # Validate redemption inline (avoid nested session)
+            if points_amount <= 0:
+                return {
+                    'success': False,
+                    'message': 'Points amount must be greater than zero',
+                    'transaction_id': None
+                }
 
-                # Get active batches in FIFO order
-                active_batches = session.query(WalletPointsBatch).filter(
-                    WalletPointsBatch.wallet_id == wallet.wallet_id,
-                    WalletPointsBatch.is_expired == False,
-                    WalletPointsBatch.points_remaining > 0
-                ).order_by(WalletPointsBatch.batch_sequence.asc()).all()
+            if points_amount > wallet.points_balance:
+                return {
+                    'success': False,
+                    'message': f'Insufficient points. Available: {wallet.points_balance}, Required: {points_amount}',
+                    'transaction_id': None
+                }
 
-                # Redeem points from batches (FIFO)
-                points_to_redeem = points_amount
-                for batch in active_batches:
-                    if points_to_redeem == 0:
-                        break
+            # Get active batches in FIFO order
+            active_batches = session.query(WalletPointsBatch).filter(
+                WalletPointsBatch.wallet_id == wallet.wallet_id,
+                WalletPointsBatch.is_expired == False,
+                WalletPointsBatch.points_remaining > 0
+            ).order_by(WalletPointsBatch.batch_sequence.asc()).all()
 
-                    points_from_batch = min(batch.points_remaining, points_to_redeem)
-                    batch.points_remaining -= points_from_batch
-                    batch.points_redeemed += points_from_batch
-                    points_to_redeem -= points_from_batch
+            # Redeem points from batches (FIFO)
+            points_to_redeem = points_amount
+            for batch in active_batches:
+                if points_to_redeem == 0:
+                    break
 
-                # Create transaction
-                transaction = WalletTransaction(
-                    wallet_id=wallet.wallet_id,
-                    transaction_type='redeem',
-                    transaction_date=datetime.now(timezone.utc),
-                    points_redeemed=points_amount,
-                    redemption_value=Decimal(str(points_amount)),  # 1:1 ratio
-                    invoice_id=UUID(invoice_id),
-                    invoice_number=invoice_number,
-                    balance_before=wallet.points_balance,
-                    balance_after=wallet.points_balance - points_amount,
-                    created_by=user_id,
-                    notes=f"Points redeemed for invoice {invoice_number}"
-                )
-                session.add(transaction)
-                session.flush()
+                points_from_batch = min(batch.points_remaining, points_to_redeem)
+                batch.points_remaining -= points_from_batch
+                batch.points_redeemed += points_from_batch
+                points_to_redeem -= points_from_batch
 
-                # Update wallet
-                wallet.points_balance -= points_amount
-                wallet.points_value -= Decimal(str(points_amount))
-                wallet.total_points_redeemed += points_amount
-                wallet.updated_by = user_id
+            # Store balance before for transaction record
+            balance_before = wallet.points_balance
 
-                session.commit()
+            # Update wallet first
+            wallet.points_balance -= points_amount
+            # Recalculate points_value based on new balance (1 point = ₹1)
+            # This avoids issues when points_value is out of sync
+            wallet.points_value = Decimal(str(wallet.points_balance))
+            wallet.total_points_redeemed += points_amount
+            wallet.updated_by = user_id
 
-                # TODO: Call GL service to create redemption GL entries
-                # gl_service.create_wallet_redemption_gl_entries(...)
+            # Create transaction
+            transaction = WalletTransaction(
+                wallet_id=wallet.wallet_id,
+                transaction_type='redeem',
+                transaction_date=datetime.now(timezone.utc),
+                points_redeemed=points_amount,
+                redemption_value=Decimal(str(points_amount)),  # 1:1 ratio
+                invoice_id=UUID(invoice_id),
+                invoice_number=invoice_number,
+                balance_before=balance_before,
+                balance_after=wallet.points_balance,
+                created_by=user_id,
+                notes=f"Points redeemed for invoice {invoice_number}"
+            )
+            session.add(transaction)
+            session.flush()
 
-                return str(transaction.transaction_id)
+            # Get transaction_id before commit
+            transaction_id = str(transaction.transaction_id)
 
-        except (WalletError, InsufficientPointsError):
-            raise
+            session.commit()
+
+            current_app.logger.info(f"Successfully redeemed {points_amount} points for invoice {invoice_number}")
+
+            return {
+                'success': True,
+                'message': f'Successfully redeemed {points_amount} points',
+                'transaction_id': transaction_id
+            }
+
         except Exception as e:
             current_app.logger.error(f"Error in redeem_points: {str(e)}")
-            raise WalletError(f"Failed to redeem points: {str(e)}")
+            try:
+                from app import db
+                db.session.rollback()
+            except:
+                pass
+            return {
+                'success': False,
+                'message': f"Failed to redeem points: {str(e)}",
+                'transaction_id': None
+            }
 
     @staticmethod
     def refund_service(

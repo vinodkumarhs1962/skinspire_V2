@@ -929,12 +929,12 @@
                                 Points to Redeem
                             </label>
                             <input type="number" name="wallet_points_amount" id="wallet_points_amount"
-                                   min="0" max="{{ [wallet_info.points, invoice.balance_due|int]|min }}" step="1"
+                                   min="0" max="{{ wallet_info.points }}" step="1"
                                    placeholder="Enter points (1 point = ₹1)"
                                    class="w-full px-3 py-2 border border-indigo-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-indigo-600 dark:text-gray-100">
                             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                Maximum: {{ [wallet_info.points, invoice.balance_due|int]|min|string }} points
-                                (Balance Due: ₹{{ "{:,.2f}".format(invoice.balance_due) }})
+                                Available: {{ wallet_info.points|string }} points (₹{{ wallet_info.points }})
+                                | Total Outstanding: ₹{{ "{:,.2f}".format(total_outstanding) }}
                             </p>
                         </div>
 
@@ -1283,25 +1283,25 @@
             const calcPoints = document.getElementById('calc-points');
             const calcWalletAmount = document.getElementById('calc-wallet-amount');
             const calcRemaining = document.getElementById('calc-remaining');
-            const balanceDue = parseFloat('{{ invoice.balance_due|float }}');
-            const maxPoints = parseInt('{{ [wallet_info.points, invoice.balance_due|int]|min if wallet_info else 0 }}');
+            const totalOutstanding = parseFloat('{{ total_outstanding|default(invoice.balance_due)|float }}');
+            const maxPoints = parseInt('{{ wallet_info.points if wallet_info else 0 }}');
 
             walletField.addEventListener('input', function() {
                 const points = parseInt(this.value) || 0;
 
-                if (points > 0 && points <= maxPoints) {
+                if (points > 0) {
                     // Show calculation
                     if (walletCalcDiv) walletCalcDiv.classList.remove('hidden');
 
                     // Update values (1 point = ₹1)
                     const walletPayment = points;
-                    const remaining = Math.max(0, balanceDue - walletPayment);
+                    const remaining = Math.max(0, totalOutstanding - walletPayment);
 
                     if (calcPoints) calcPoints.textContent = points.toLocaleString();
                     if (calcWalletAmount) calcWalletAmount.textContent = '₹' + walletPayment.toFixed(2);
                     if (calcRemaining) calcRemaining.textContent = '₹' + remaining.toFixed(2);
 
-                    // Validate
+                    // Validate - cap at available wallet balance
                     if (points > maxPoints) {
                         this.value = maxPoints;
                     }
@@ -2272,12 +2272,13 @@
     function validateAmounts() {
         // Calculate totals
         const advanceAmount = parseFloat(advanceField?.value) || 0;
+        const walletAmount = parseFloat(walletField?.value) || 0;
         const cashAmount = parseFloat(cashField?.value) || 0;
         const creditCardAmount = parseFloat(creditCardField?.value) || 0;
         const debitCardAmount = parseFloat(debitCardField?.value) || 0;
         const upiAmount = parseFloat(upiField?.value) || 0;
 
-        const methodTotal = advanceAmount + cashAmount + creditCardAmount + debitCardAmount + upiAmount;
+        const methodTotal = advanceAmount + walletAmount + cashAmount + creditCardAmount + debitCardAmount + upiAmount;
 
         const invoiceAllocation = Object.values(state.allocations.invoices).reduce((sum, val) => sum + val, 0);
         const installmentAllocation = Object.values(state.allocations.installments).reduce((sum, val) => sum + val, 0);
@@ -2380,12 +2381,13 @@
 
             // Calculate totals
             const advanceAmount = parseFloat(advanceField?.value) || 0;
+            const walletAmount = parseFloat(walletField?.value) || 0;
             const cashAmount = parseFloat(cashField?.value) || 0;
             const creditCardAmount = parseFloat(creditCardField?.value) || 0;
             const debitCardAmount = parseFloat(debitCardField?.value) || 0;
             const upiAmount = parseFloat(upiField?.value) || 0;
 
-            const methodTotal = advanceAmount + cashAmount + creditCardAmount + debitCardAmount + upiAmount;
+            const methodTotal = advanceAmount + walletAmount + cashAmount + creditCardAmount + debitCardAmount + upiAmount;
 
             const invoiceAllocation = Object.values(state.allocations.invoices).reduce((sum, val) => sum + val, 0);
             const installmentAllocation = Object.values(state.allocations.installments).reduce((sum, val) => sum + val, 0);

@@ -1,0 +1,235 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}{{ page_title }} - Skinspire{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/buttons.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <!-- Page Header with Navigation Buttons -->
+    <div class="mb-6">
+        <!-- Row 1: Title and Date -->
+        <div class="flex flex-wrap justify-between items-center">
+            <div>
+                <nav class="text-sm text-gray-500 mb-2">
+                    <a href="{{ url_for('promotion_views.dashboard') }}" class="hover:text-blue-600">
+                        <i class="fas fa-tags mr-1"></i>Promotions
+                    </a>
+                    <span class="mx-2">/</span>
+                    <span class="text-gray-900 dark:text-white">Bulk Discount Configuration</span>
+                </nav>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                    <i class="fas fa-layer-group mr-2 text-orange-600"></i>Bulk Discount Configuration
+                </h1>
+                <p class="text-sm text-gray-500 mt-1">Configure bulk discount policy for services and medicines</p>
+            </div>
+            <div class="text-right px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                <div class="text-base font-semibold text-gray-900 dark:text-white">{{ today_display }}</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">{{ today_day }}</div>
+            </div>
+        </div>
+        <!-- Row 2: Action Buttons -->
+        <div class="flex flex-wrap gap-2 mt-4">
+            <a href="{{ url_for('promotion_views.dashboard') }}" class="btn-back">
+                <i class="fas fa-arrow-left mr-2"></i>Back
+            </a>
+            <a href="{{ url_for('promotion_views.dashboard') }}" class="btn-secondary">
+                <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+            </a>
+            <a href="{{ url_for('promotion_views.loyalty_config') }}" class="btn-secondary">
+                <i class="fas fa-heart mr-2"></i>Loyalty Config
+            </a>
+            <a href="{{ url_for('promotion_views.campaign_list') }}" class="btn-secondary">
+                <i class="fas fa-bullhorn mr-2"></i>Campaigns
+            </a>
+        </div>
+    </div>
+
+    <!-- Current Status Banner -->
+    <div class="mb-6 {{ 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800' if config.enabled else 'bg-gray-50 border-gray-200 dark:bg-gray-800 dark:border-gray-700' }} border rounded-lg p-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center">
+                {% if config.enabled %}
+                <i class="fas fa-check-circle text-green-600 text-2xl mr-3"></i>
+                <div>
+                    <p class="font-semibold text-green-800 dark:text-green-200">Bulk Discount Enabled</p>
+                    <p class="text-sm text-green-600 dark:text-green-400">
+                        Minimum {{ config.min_service_count or 5 }} items required
+                        {% if config.effective_from %}
+                        | Active since {{ config.effective_from }}
+                        {% endif %}
+                    </p>
+                </div>
+                {% else %}
+                <i class="fas fa-pause-circle text-gray-500 text-2xl mr-3"></i>
+                <div>
+                    <p class="font-semibold text-gray-700 dark:text-gray-300">Bulk Discount Disabled</p>
+                    <p class="text-sm text-gray-500">No bulk discounts are currently active</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Configuration Form -->
+        <div class="lg:col-span-1">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        <i class="fas fa-cog mr-2 text-gray-600"></i>Settings
+                    </h3>
+                </div>
+                <form method="POST" action="{{ url_for('promotion_views.bulk_config') }}" class="p-6 space-y-4">
+                    <div>
+                        <label class="flex items-center">
+                            <input type="checkbox" name="enabled" {{ 'checked' if config.enabled else '' }}
+                                   class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">Enable Bulk Discounts</span>
+                        </label>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Minimum Item Count
+                        </label>
+                        <input type="number" name="min_service_count" value="{{ config.min_service_count or 5 }}"
+                               min="2" max="100"
+                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <p class="mt-1 text-xs text-gray-500">Minimum services/medicines in invoice to trigger bulk discount</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Effective From
+                        </label>
+                        <input type="date" name="effective_from" value="{{ config.effective_from or '' }}"
+                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <p class="mt-1 text-xs text-gray-500">Date when bulk discount policy becomes active</p>
+                    </div>
+
+                    <button type="submit" class="btn-primary w-full">
+                        <i class="fas fa-save mr-2"></i>Save Configuration
+                    </button>
+                </form>
+            </div>
+
+            <!-- Info Card -->
+            <div class="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <h4 class="font-semibold text-blue-800 dark:text-blue-200 mb-2">
+                    <i class="fas fa-info-circle mr-2"></i>How Bulk Discounts Work
+                </h4>
+                <ul class="text-sm text-blue-700 dark:text-blue-300 space-y-1">
+                    <li><i class="fas fa-check mr-1"></i> Each item has its own bulk_discount_percent</li>
+                    <li><i class="fas fa-check mr-1"></i> Discount triggers when item count meets threshold</li>
+                    <li><i class="fas fa-check mr-1"></i> Priority 2 (lower than campaign promotions)</li>
+                    <li><i class="fas fa-check mr-1"></i> Can stack with loyalty based on mode</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Eligible Items -->
+        <div class="lg:col-span-2">
+            <!-- Services Tab -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow mb-6">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        <i class="fas fa-concierge-bell mr-2 text-blue-600"></i>Services with Bulk Discount
+                    </h3>
+                    <span class="text-sm text-gray-500">{{ eligible_services.total|default(0) }} items</span>
+                </div>
+                <div class="p-4">
+                    {% if eligible_services['items'] and eligible_services['items']|length > 0 %}
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-900">
+                                <tr>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Service</th>
+                                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Price</th>
+                                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Bulk Discount %</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                                {% for item in eligible_services['items'] %}
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <td class="px-4 py-2">
+                                        <span class="text-sm font-medium text-gray-900 dark:text-white">{{ item.item_name }}</span>
+                                        <span class="text-xs text-gray-400 ml-2">{{ item.code }}</span>
+                                    </td>
+                                    <td class="px-4 py-2 text-right text-sm text-gray-900 dark:text-white">
+                                        <i class="fas fa-rupee-sign text-xs"></i>{{ "{:,.2f}".format(item.price|default(0)) }}
+                                    </td>
+                                    <td class="px-4 py-2 text-right">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                            {{ item.bulk_discount_percent }}%
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-concierge-bell text-4xl text-gray-300 mb-3"></i>
+                        <p>No services configured for bulk discount</p>
+                        <p class="text-xs mt-1">Set bulk_discount_percent > 0 on services to enable</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Medicines Tab -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        <i class="fas fa-pills mr-2 text-green-600"></i>Medicines with Bulk Discount
+                    </h3>
+                    <span class="text-sm text-gray-500">{{ eligible_medicines.total|default(0) }} items</span>
+                </div>
+                <div class="p-4">
+                    {% if eligible_medicines['items'] and eligible_medicines['items']|length > 0 %}
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-900">
+                                <tr>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Medicine</th>
+                                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">MRP</th>
+                                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Bulk Discount %</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                                {% for item in eligible_medicines['items'] %}
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <td class="px-4 py-2">
+                                        <span class="text-sm font-medium text-gray-900 dark:text-white">{{ item.item_name }}</span>
+                                        <span class="text-xs text-gray-400 ml-2">{{ item.code }}</span>
+                                    </td>
+                                    <td class="px-4 py-2 text-right text-sm text-gray-900 dark:text-white">
+                                        <i class="fas fa-rupee-sign text-xs"></i>{{ "{:,.2f}".format(item.price|default(0)) }}
+                                    </td>
+                                    <td class="px-4 py-2 text-right">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                            {{ item.bulk_discount_percent }}%
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-pills text-4xl text-gray-300 mb-3"></i>
+                        <p>No medicines configured for bulk discount</p>
+                        <p class="text-xs mt-1">Set bulk_discount_percent > 0 on medicines to enable</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

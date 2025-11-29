@@ -425,6 +425,7 @@ def create_invoice_view():
                                     'quantity': Decimal(request.form.get(f'line_items-{index}-quantity', '1')),
                                     'unit_price': Decimal(request.form.get(f'line_items-{index}-unit_price', '0')),
                                     'discount_percent': Decimal(request.form.get(f'line_items-{index}-discount_percent', '0')),
+                                    'discount_override': request.form.get(f'line_items-{index}-discount_override', 'false').lower() == 'true',
                                     'included_in_consultation': bool(request.form.get(f'line_items-{index}-included_in_consultation'))
                                 }
 
@@ -534,6 +535,7 @@ def create_invoice_view():
                                 'quantity': request.form.get(f'line_items-{index}-quantity', '1'),
                                 'unit_price': request.form.get(f'line_items-{index}-unit_price', '0'),
                                 'discount_percent': request.form.get(f'line_items-{index}-discount_percent', '0'),
+                                'discount_override': request.form.get(f'line_items-{index}-discount_override', 'false').lower() == 'true',
                                 'gst_rate': request.form.get(f'line_items-{index}-gst_rate', '0'),
                                 'included_in_consultation': bool(request.form.get(f'line_items-{index}-included_in_consultation', False))
                             }
@@ -553,6 +555,11 @@ def create_invoice_view():
                     flash(f"Error creating invoice: {str(e)}", "error")
                     inventory_error = None
 
+                # Preserve patient data explicitly (form binding may not retain it)
+                preserved_patient_id = request.form.get('patient_id', '')
+                preserved_patient_name = request.form.get('patient_name', '')
+                current_app.logger.info(f"Preserved patient: ID={preserved_patient_id}, Name={preserved_patient_name}")
+
                 # Return template with preserved data
                 can_edit_discount = current_user.has_permission('billing', 'edit_discount')
                 return render_template(
@@ -565,6 +572,8 @@ def create_invoice_view():
                     user_batch_mode=user_batch_mode,
                     inventory_error=inventory_error,
                     preserved_line_items=preserved_line_items,
+                    preserved_patient_id=preserved_patient_id,
+                    preserved_patient_name=preserved_patient_name,
                     can_edit_discount=can_edit_discount
                 )
         else:
@@ -656,6 +665,7 @@ def create_invoice_view():
                                 'quantity': Decimal(request.form.get(f'{prefix}quantity', '1')),
                                 'unit_price': Decimal(request.form.get(f'{prefix}unit_price', '0')),
                                 'discount_percent': Decimal(request.form.get(f'{prefix}discount_percent', '0')),
+                                'discount_override': request.form.get(f'{prefix}discount_override', 'false').lower() == 'true',
                                 'included_in_consultation': bool(request.form.get(f'{prefix}included_in_consultation'))
                             }
                             
@@ -992,48 +1002,111 @@ def view_invoice(invoice_id):
                    f"total_balance_due={total_balance_due}")
         
         # Get payments allocated to THIS specific invoice (from AR subledger)
+        # This includes: regular payments, advance adjustments, and wallet redemptions
         invoice_payments = []
         try:
             with get_db_session() as session:
-                # Query AR subledger for payment allocations to this invoice
-                ar_entries = session.query(ARSubledger).filter(
+                from sqlalchemy import or_
+
+                # Query 1: Regular payments with line item allocations
+                regular_payment_entries = session.query(ARSubledger).filter(
                     ARSubledger.hospital_id == current_user.hospital_id,
                     ARSubledger.entry_type == 'payment',
-                    ARSubledger.reference_type == 'payment'
-                ).join(
-                    PaymentDetail,
-                    ARSubledger.reference_id == PaymentDetail.payment_id
-                ).filter(
-                    # Get allocations where line items belong to this invoice
+                    ARSubledger.reference_type == 'payment',
                     ARSubledger.reference_line_item_id.in_(
                         session.query(InvoiceLineItem.line_item_id).filter(
                             InvoiceLineItem.invoice_id == invoice_id
                         ).subquery()
                     )
-                ).order_by(ARSubledger.transaction_date.desc()).all()
+                ).all()
+
+                # Query 2: Wallet payments (reference_id = invoice_id)
+                wallet_payment_entries = session.query(ARSubledger).filter(
+                    ARSubledger.hospital_id == current_user.hospital_id,
+                    ARSubledger.entry_type == 'payment',
+                    ARSubledger.reference_type == 'wallet_payment',
+                    ARSubledger.reference_id == invoice_id
+                ).all()
+
+                # Query 3: Advance payments linked to this invoice via advance_adjustments
+                from app.models.transaction import AdvanceAdjustment
+                advance_payment_ids = session.query(AdvanceAdjustment.payment_id).filter(
+                    AdvanceAdjustment.invoice_id == invoice_id,
+                    AdvanceAdjustment.is_reversed == False
+                ).subquery()
+
+                advance_payment_entries = session.query(ARSubledger).filter(
+                    ARSubledger.hospital_id == current_user.hospital_id,
+                    ARSubledger.entry_type == 'payment',
+                    ARSubledger.reference_type == 'payment',
+                    ARSubledger.reference_id.in_(advance_payment_ids)
+                ).all()
+
+                # Combine all AR entries
+                all_ar_entries = regular_payment_entries + wallet_payment_entries + advance_payment_entries
 
                 # Group by payment and aggregate amounts
                 payment_allocations = {}
-                for ar_entry in ar_entries:
-                    payment_id = str(ar_entry.reference_id)
-                    if payment_id not in payment_allocations:
-                        payment_allocations[payment_id] = {
-                            'ar_entry': ar_entry,
-                            'total_allocated': 0
-                        }
-                    payment_allocations[payment_id]['total_allocated'] += float(ar_entry.credit_amount or 0)
+                wallet_allocations = {}  # Separate tracking for wallet (reference_id = invoice_id)
+
+                for ar_entry in all_ar_entries:
+                    if ar_entry.reference_type == 'wallet_payment':
+                        # For wallet payments, reference_id is invoice_id, not payment_id
+                        wallet_key = f"wallet_{ar_entry.reference_id}"
+                        if wallet_key not in wallet_allocations:
+                            wallet_allocations[wallet_key] = {
+                                'ar_entry': ar_entry,
+                                'total_allocated': 0,
+                                'invoice_id': ar_entry.reference_id
+                            }
+                        wallet_allocations[wallet_key]['total_allocated'] += float(ar_entry.credit_amount or 0)
+                    else:
+                        # Regular payments - reference_id is payment_id
+                        payment_id = str(ar_entry.reference_id)
+                        if payment_id not in payment_allocations:
+                            payment_allocations[payment_id] = {
+                                'ar_entry': ar_entry,
+                                'total_allocated': 0
+                            }
+                        payment_allocations[payment_id]['total_allocated'] += float(ar_entry.credit_amount or 0)
 
                 # Get full payment details for each unique payment
                 for payment_id, alloc_data in payment_allocations.items():
-                    payment_record = session.query(PaymentDetail).filter_by(
-                        hospital_id=current_user.hospital_id,
-                        payment_id=uuid.UUID(payment_id)
-                    ).first()
+                    try:
+                        payment_record = session.query(PaymentDetail).filter_by(
+                            hospital_id=current_user.hospital_id,
+                            payment_id=uuid.UUID(payment_id)
+                        ).first()
 
-                    if payment_record:
-                        payment_copy = get_detached_copy(payment_record)
-                        payment_copy.allocated_to_invoice = alloc_data['total_allocated']
-                        invoice_payments.append(payment_copy)
+                        if payment_record:
+                            payment_copy = get_detached_copy(payment_record)
+                            payment_copy.allocated_to_invoice = alloc_data['total_allocated']
+                            invoice_payments.append(payment_copy)
+                    except Exception as e:
+                        logger.warning(f"Could not get payment {payment_id}: {str(e)}")
+
+                # Add wallet payments as synthetic payment entries for display
+                for wallet_key, alloc_data in wallet_allocations.items():
+                    # Create a synthetic object for wallet payment display
+                    class WalletPaymentDisplay:
+                        pass
+
+                    wallet_display = WalletPaymentDisplay()
+                    wallet_display.payment_id = None
+                    wallet_display.payment_date = alloc_data['ar_entry'].transaction_date
+                    wallet_display.total_amount = Decimal('0')
+                    wallet_display.wallet_points_amount = Decimal(str(alloc_data['total_allocated']))
+                    wallet_display.advance_adjustment_amount = Decimal('0')
+                    wallet_display.cash_amount = Decimal('0')
+                    wallet_display.credit_card_amount = Decimal('0')
+                    wallet_display.debit_card_amount = Decimal('0')
+                    wallet_display.upi_amount = Decimal('0')
+                    wallet_display.allocated_to_invoice = alloc_data['total_allocated']
+                    wallet_display.reference_number = alloc_data['ar_entry'].reference_number
+                    wallet_display.payment_source = 'wallet_redemption'
+                    invoice_payments.append(wallet_display)
+
+                logger.info(f"Found {len(invoice_payments)} payments for invoice {invoice_id}")
 
         except Exception as e:
             logger.error(f"Error getting invoice payments from AR subledger: {str(e)}", exc_info=True)
@@ -1416,6 +1489,22 @@ def record_invoice_payment_enhanced(invoice_id):
             # Get approval threshold
             approval_threshold = float(current_app.config.get('APPROVAL_THRESHOLD_L1', '100000.00'))
 
+            # Get total outstanding for the patient (for wallet redemption display)
+            total_outstanding = Decimal('0')
+            try:
+                with get_db_session() as session:
+                    from sqlalchemy import func
+                    # InvoiceHeader already imported at module level - do not re-import locally
+                    result = session.query(func.sum(InvoiceHeader.balance_due)).filter(
+                        InvoiceHeader.hospital_id == current_user.hospital_id,
+                        InvoiceHeader.patient_id == invoice['patient_id'],
+                        InvoiceHeader.balance_due > 0
+                    ).scalar()
+                    total_outstanding = Decimal(str(result or 0))
+            except Exception as e:
+                logger.warning(f"Could not calculate total outstanding: {str(e)}")
+                total_outstanding = Decimal(str(invoice.get('balance_due', 0)))
+
             # Render enhanced payment form
             return render_template(
                 'billing/payment_form_enhanced.html',
@@ -1423,6 +1512,7 @@ def record_invoice_payment_enhanced(invoice_id):
                 patient=patient_dict,
                 wallet_info=wallet_info,
                 approval_threshold=approval_threshold,
+                total_outstanding=float(total_outstanding),
                 menu_items=get_menu_items(current_user)
             )
 
@@ -1470,10 +1560,12 @@ def record_invoice_payment_enhanced(invoice_id):
 
             save_as_draft = request.form.get('save_as_draft') == 'true'
 
-            # Calculate total payment
+            # Calculate total payment (cash/card/upi only - wallet tracked separately)
             total_payment = cash_amount + credit_card_amount + debit_card_amount + upi_amount
+            # Total payment including wallet points (for validation and record creation)
+            total_payment_with_wallet = total_payment + wallet_points_amount
 
-            logger.info(f"💰 Total payment: ₹{total_payment}, Save as draft: {save_as_draft}")
+            logger.info(f"💰 Total payment: ₹{total_payment}, Wallet: ₹{wallet_points_amount}, Combined: ₹{total_payment_with_wallet}, Save as draft: {save_as_draft}")
 
             if total_payment == 0 and advance_amount == 0 and wallet_points_amount == 0:
                 logger.warning("❌ No payment amount entered")
@@ -1514,106 +1606,210 @@ def record_invoice_payment_enhanced(invoice_id):
             from app.services.billing_service import record_multi_invoice_payment, apply_advance_payment
 
             try:
-                payment_date_obj = datetime.strptime(payment_date, '%Y-%m-%d').date() if payment_date else datetime.now().date()
-
-                # Calculate total allocated
-                total_allocated = sum(invoice_allocations.values()) + sum(installment_allocations.values())
+                # Parse date from form and combine with current time for accurate timestamp
+                if payment_date:
+                    payment_date_parsed = datetime.strptime(payment_date, '%Y-%m-%d')
+                    # Combine user-selected date with current time
+                    now = datetime.now()
+                    payment_date_obj = payment_date_parsed.replace(
+                        hour=now.hour, minute=now.minute, second=now.second, microsecond=now.microsecond
+                    )
+                else:
+                    payment_date_obj = datetime.now()
 
                 # Initialize payment_id tracking
                 last_payment_id = None
 
                 # ========================================================================
-                # STEP 1: Apply advance payments (if any)
+                # FIFO PAYMENT ALLOCATION: Apply payments to oldest invoices first
+                # Priority: 1. Advance  2. Wallet  3. Cash/Card/UPI
                 # ========================================================================
-                if advance_amount > 0:
-                    for inv_id_str, allocated_amount in invoice_allocations.items():
-                        if allocated_amount > 0:
-                            inv_uuid = uuid.UUID(inv_id_str)
 
-                            # Calculate advance portion for this invoice
-                            advance_portion = (advance_amount * Decimal(allocated_amount) / Decimal(total_allocated)) if total_allocated > 0 else Decimal('0')
+                # Track amounts applied to each invoice
+                advance_portions_applied = {}
+                wallet_portions_applied = {}
+                cash_card_portions_applied = {}
+                wallet_transaction_id_for_payment = None
 
-                            if advance_portion > 0:
-                                try:
-                                    apply_advance_payment(
-                                        hospital_id=current_user.hospital_id,
-                                        invoice_id=inv_uuid,
-                                        amount=advance_portion,
-                                        adjustment_date=payment_date_obj,
-                                        notes="Applied from enhanced payment form",
-                                        current_user_id=current_user.user_id
-                                    )
-                                    logger.info(f"Applied advance payment of ₹{advance_portion} to invoice {inv_id_str}")
-                                except Exception as e:
-                                    logger.error(f"Error applying advance payment: {str(e)}")
-                                    flash(f'Error applying advance payment: {str(e)}', 'error')
-                                    return redirect(url_for('billing_views.record_invoice_payment_enhanced', invoice_id=invoice_id))
+                # Get invoice details with balance_due, sorted by invoice_date (FIFO)
+                with get_db_session() as session:
+                    invoice_ids = [uuid.UUID(inv_id) for inv_id in invoice_allocations.keys()]
 
-                # ========================================================================
-                # STEP 1.5: Redeem wallet points (if any)
-                # ========================================================================
-                if wallet_points_amount > 0:
-                    for inv_id_str, allocated_amount in invoice_allocations.items():
-                        if allocated_amount > 0:
-                            inv_uuid = uuid.UUID(inv_id_str)
+                    invoices_query = session.query(InvoiceHeader).filter(
+                        InvoiceHeader.hospital_id == current_user.hospital_id,
+                        InvoiceHeader.invoice_id.in_(invoice_ids)
+                    ).order_by(InvoiceHeader.invoice_date.asc()).all()  # FIFO: oldest first
 
-                            # Calculate wallet portion for this invoice
-                            wallet_portion = (wallet_points_amount * Decimal(allocated_amount) / Decimal(total_allocated)) if total_allocated > 0 else Decimal('0')
+                    # Build list of invoices with their current balance
+                    fifo_invoices = []
+                    for inv in invoices_query:
+                        fifo_invoices.append({
+                            'invoice_id': str(inv.invoice_id),
+                            'invoice_number': inv.invoice_number,
+                            'invoice_date': inv.invoice_date,
+                            'balance_due': Decimal(str(inv.balance_due or 0)),
+                            'patient_id': inv.patient_id
+                        })
 
-                            if wallet_portion > 0:
-                                try:
-                                    # Get invoice to verify patient_id
-                                    from app.services.billing_service import get_invoice_by_id
-                                    inv_data = get_invoice_by_id(
-                                        hospital_id=current_user.hospital_id,
-                                        invoice_id=inv_uuid
-                                    )
+                    logger.info(f"📋 FIFO Invoice Order: {[(inv['invoice_number'], float(inv['balance_due'])) for inv in fifo_invoices]}")
 
-                                    if not inv_data or not inv_data.get('patient_id'):
-                                        raise ValueError(f"Cannot redeem wallet points - invoice {inv_id_str} has no patient")
-
-                                    # Redeem points from wallet
-                                    from app.services.wallet_service import WalletService
-                                    redemption_result = WalletService.redeem_points(
-                                        patient_id=str(inv_data['patient_id']),
-                                        hospital_id=str(current_user.hospital_id),
-                                        points_to_redeem=int(wallet_portion),
-                                        invoice_id=inv_uuid,
-                                        invoice_number=inv_data.get('invoice_number', 'N/A'),
-                                        user_id=current_user.user_id
-                                    )
-
-                                    if not redemption_result['success']:
-                                        raise ValueError(f"Wallet redemption failed: {redemption_result['message']}")
-
-                                    wallet_transaction_id = redemption_result['transaction_id']
-                                    logger.info(f"Redeemed {int(wallet_portion)} wallet points for invoice {inv_id_str}")
-
-                                    # Create GL entries for wallet redemption
-                                    from app.services.wallet_gl_service import WalletGLService
-                                    WalletGLService.create_wallet_redemption_gl_entries(
-                                        wallet_transaction_id=wallet_transaction_id,
-                                        current_user_id=current_user.user_id
-                                    )
-                                    logger.info(f"Created GL entries for wallet redemption {wallet_transaction_id}")
-
-                                except Exception as e:
-                                    logger.error(f"Error redeeming wallet points: {str(e)}")
-                                    flash(f'Error redeeming wallet points: {str(e)}', 'error')
-                                    return redirect(url_for('billing_views.record_invoice_payment_enhanced', invoice_id=invoice_id))
+                # Remaining amounts to allocate
+                remaining_advance = advance_amount
+                remaining_wallet = wallet_points_amount
+                remaining_cash_card = total_payment  # cash + card + upi
 
                 # ========================================================================
-                # STEP 2: Record payment methods (invoices and installments use SAME payment)
+                # STEP 1: Apply payments in FIFO order with payment method priority
                 # ========================================================================
-                # User has manually allocated total_payment across invoices and installments
-                # We create ONE payment record and allocate it at line-item level
+                for inv_data in fifo_invoices:
+                    inv_id_str = inv_data['invoice_id']
+                    inv_uuid = uuid.UUID(inv_id_str)
+                    inv_number = inv_data['invoice_number']
+                    inv_balance = inv_data['balance_due']
 
-                if total_payment > 0:
-                    logger.info(f"💰 Total payment: ₹{total_payment} to be allocated across invoices and installments")
+                    if inv_balance <= 0:
+                        logger.info(f"⏭️ Skipping {inv_number} - already paid (balance: ₹{inv_balance})")
+                        continue
 
-                    # Build invoice_allocations list (use direct allocation amounts from user)
+                    logger.info(f"💳 Processing {inv_number} (balance: ₹{inv_balance})")
+
+                    remaining_invoice_balance = inv_balance
+
+                    # ----- PRIORITY 1: Apply ADVANCE first -----
+                    if remaining_advance > 0 and remaining_invoice_balance > 0:
+                        advance_to_apply = min(remaining_advance, remaining_invoice_balance)
+
+                        try:
+                            apply_advance_payment(
+                                hospital_id=current_user.hospital_id,
+                                invoice_id=inv_uuid,
+                                amount=advance_to_apply,
+                                adjustment_date=payment_date_obj,
+                                notes="Applied from FIFO payment",
+                                current_user_id=current_user.user_id
+                            )
+
+                            advance_portions_applied[inv_id_str] = advance_to_apply
+                            remaining_advance -= advance_to_apply
+                            remaining_invoice_balance -= advance_to_apply
+
+                            logger.info(f"  ✓ Advance: ₹{advance_to_apply} applied to {inv_number} (remaining advance: ₹{remaining_advance})")
+
+                        except Exception as e:
+                            logger.error(f"Error applying advance payment: {str(e)}")
+                            flash(f'Error applying advance payment: {str(e)}', 'error')
+                            return redirect(url_for('billing_views.record_invoice_payment_enhanced', invoice_id=invoice_id))
+
+                    # ----- PRIORITY 2: Apply WALLET second -----
+                    if remaining_wallet > 0 and remaining_invoice_balance > 0:
+                        wallet_to_apply = min(remaining_wallet, remaining_invoice_balance)
+
+                        if not patient_id_for_redirect:
+                            flash('Cannot redeem wallet points - invoice has no patient', 'error')
+                            return redirect(url_for('billing_views.record_invoice_payment_enhanced', invoice_id=invoice_id))
+
+                        try:
+                            from app.services.wallet_service import WalletService
+                            redemption_result = WalletService.redeem_points(
+                                patient_id=str(patient_id_for_redirect),
+                                points_amount=int(wallet_to_apply),
+                                invoice_id=inv_id_str,
+                                invoice_number=inv_number,
+                                user_id=str(current_user.user_id)
+                            )
+
+                            if not redemption_result['success']:
+                                raise ValueError(f"Wallet redemption failed: {redemption_result['message']}")
+
+                            wallet_transaction_id = redemption_result['transaction_id']
+                            wallet_transaction_id_for_payment = wallet_transaction_id
+
+                            # Create GL entries for wallet redemption
+                            from app.services.wallet_gl_service import WalletGLService
+                            WalletGLService.create_wallet_redemption_gl_entries(
+                                wallet_transaction_id=wallet_transaction_id,
+                                current_user_id=current_user.user_id
+                            )
+
+                            wallet_portions_applied[inv_id_str] = Decimal(str(wallet_to_apply))
+                            remaining_wallet -= wallet_to_apply
+                            remaining_invoice_balance -= wallet_to_apply
+
+                            logger.info(f"  ✓ Wallet: ₹{wallet_to_apply} applied to {inv_number} (remaining wallet: ₹{remaining_wallet})")
+
+                        except Exception as e:
+                            logger.error(f"Error redeeming wallet points: {str(e)}")
+                            flash(f'Error redeeming wallet points: {str(e)}', 'error')
+                            return redirect(url_for('billing_views.record_invoice_payment_enhanced', invoice_id=invoice_id))
+
+                    # ----- PRIORITY 3: Apply CASH/CARD/UPI last -----
+                    if remaining_cash_card > 0 and remaining_invoice_balance > 0:
+                        cash_card_to_apply = min(remaining_cash_card, remaining_invoice_balance)
+
+                        cash_card_portions_applied[inv_id_str] = cash_card_to_apply
+                        remaining_cash_card -= cash_card_to_apply
+                        remaining_invoice_balance -= cash_card_to_apply
+
+                        logger.info(f"  ✓ Cash/Card: ₹{cash_card_to_apply} allocated to {inv_number} (remaining: ₹{remaining_cash_card})")
+
+                    # Log final status for this invoice
+                    total_applied = (
+                        advance_portions_applied.get(inv_id_str, Decimal('0')) +
+                        wallet_portions_applied.get(inv_id_str, Decimal('0')) +
+                        cash_card_portions_applied.get(inv_id_str, Decimal('0'))
+                    )
+                    logger.info(f"  📊 {inv_number}: Total ₹{total_applied} applied (Adv: ₹{advance_portions_applied.get(inv_id_str, 0)}, Wallet: ₹{wallet_portions_applied.get(inv_id_str, 0)}, Cash/Card: ₹{cash_card_portions_applied.get(inv_id_str, 0)})")
+
+                # Log any remaining unallocated amounts
+                if remaining_advance > 0:
+                    logger.warning(f"⚠️ Unallocated advance: ₹{remaining_advance}")
+                if remaining_wallet > 0:
+                    logger.warning(f"⚠️ Unallocated wallet: ₹{remaining_wallet}")
+                if remaining_cash_card > 0:
+                    logger.warning(f"⚠️ Unallocated cash/card: ₹{remaining_cash_card}")
+
+                # ========================================================================
+                # Build final invoice_allocations for cash/card payment recording
+                # ========================================================================
+                # Only include invoices that have cash/card allocation (advance/wallet handled separately)
+                invoice_allocations = {k: v for k, v in cash_card_portions_applied.items() if v > 0}
+                original_invoice_allocations = dict(invoice_allocations)  # For compatibility
+
+                logger.info(f"📋 Final cash/card allocations for payment record: {[(k[:8], float(v)) for k, v in invoice_allocations.items()]}")
+
+                # Calculate ACTUALLY applied amounts (not requested amounts)
+                total_advance_applied = sum(advance_portions_applied.values()) if advance_portions_applied else Decimal('0')
+                total_wallet_applied = sum(wallet_portions_applied.values()) if wallet_portions_applied else Decimal('0')
+                total_cash_card_applied = sum(cash_card_portions_applied.values()) if cash_card_portions_applied else Decimal('0')
+
+                logger.info(f"📊 FIFO Allocation Summary: Advance ₹{total_advance_applied}, Wallet ₹{total_wallet_applied}, Cash/Card ₹{total_cash_card_applied}")
+
+                # ========================================================================
+                # STEP 2: Record cash/card payment (if any)
+                # ========================================================================
+                # Advance and Wallet are already recorded via their respective functions
+                # Now record the cash/card/upi payment if any was allocated
+
+                # Check if ANY payment was made
+                total_all_methods = total_advance_applied + total_wallet_applied + total_cash_card_applied
+
+                if total_all_methods == 0:
+                    # No payment was actually allocated (shouldn't happen, but handle gracefully)
+                    flash('No payment was allocated to any invoice', 'warning')
+                    return redirect(url_for('billing_views.record_invoice_payment_enhanced', invoice_id=invoice_id))
+
+                elif total_cash_card_applied == 0:
+                    # Payment was ENTIRELY via advance and/or wallet
+                    # These are already committed in their respective functions
+                    logger.info(f"✅ Payment completed via Advance (₹{total_advance_applied}) + Wallet (₹{total_wallet_applied}) only - no cash/card")
+                    # Fall through to success message
+
+                elif total_cash_card_applied > 0:
+                    logger.info(f"💰 Recording cash/card payment: ₹{total_cash_card_applied}")
+
+                    # Build invoice_allocations list for cash/card portion only
                     invoice_alloc_list = []
-                    for inv_id_str, allocated_amount in invoice_allocations.items():
+                    for inv_id_str, allocated_amount in cash_card_portions_applied.items():
                         if allocated_amount > 0:
                             invoice_alloc_list.append({
                                 'invoice_id': inv_id_str,
@@ -1634,6 +1830,10 @@ def record_invoice_payment_enhanced(invoice_id):
                                 # ✅ Check if user confirmed overpayment (if needed)
                                 allow_overpayment = request.form.get('allow_overpayment') == 'true'
 
+                                # NOTE: Advance payments are already recorded separately by apply_advance_payment()
+                                # which creates its own PaymentDetail record. Do NOT pass advance_adjustment_amount
+                                # to avoid duplicate recording.
+
                                 # ✅ Call record_multi_invoice_payment with shared session
                                 # Pass TOTAL payment amounts - function will allocate to line items
                                 result = record_multi_invoice_payment(
@@ -1652,6 +1852,9 @@ def record_invoice_payment_enhanced(invoice_id):
                                     save_as_draft=save_as_draft,
                                     approval_threshold=approval_threshold,
                                     allow_overpayment=allow_overpayment,  # ✅ NEW: Pass overpayment confirmation
+                                    wallet_points_amount=total_wallet_applied,  # ✅ Actually applied wallet points
+                                    wallet_transaction_id=wallet_transaction_id_for_payment,  # ✅ Wallet transaction ID
+                                    advance_adjustment_amount=Decimal('0'),  # ✅ Advance already recorded separately
                                     session=session  # ✅ Pass shared session
                                 )
 
@@ -1718,6 +1921,7 @@ def record_invoice_payment_enhanced(invoice_id):
                                 logger.info("📦 Package installment payment: Auto-allowing overpayment (will record as advance if invoice paid)")
 
                                 # ✅ Call record_multi_invoice_payment with the package invoice
+                                # NOTE: Advance already recorded separately by apply_advance_payment()
                                 result = record_multi_invoice_payment(
                                     hospital_id=current_user.hospital_id,
                                     invoice_allocations=invoice_alloc_list,
@@ -1734,13 +1938,16 @@ def record_invoice_payment_enhanced(invoice_id):
                                     save_as_draft=save_as_draft,
                                     approval_threshold=approval_threshold,
                                     allow_overpayment=allow_overpayment,  # ✅ NEW: Pass overpayment confirmation
+                                    wallet_points_amount=total_wallet_applied,  # ✅ Actually applied wallet points
+                                    wallet_transaction_id=wallet_transaction_id_for_payment,  # ✅ Wallet transaction ID
+                                    advance_adjustment_amount=Decimal('0'),  # ✅ Advance already recorded separately
                                     session=session  # ✅ Pass shared session
                                 )
 
                                 # Track the payment_id for installment payments
                                 if result and result.get('success') and 'payment_id' in result:
                                     last_payment_id = result['payment_id']
-                                    logger.info(f"✓ Created package invoice payment {last_payment_id} for ₹{total_payment}")
+                                    logger.info(f"✓ Created package invoice payment {last_payment_id} for ₹{total_cash_card_applied}")
                                 elif result and not result.get('success'):
                                     # Payment creation failed for other reasons
                                     raise ValueError(result.get('error', 'Package payment creation failed'))
@@ -2530,29 +2737,41 @@ def web_api_medicine_batches(medicine_id):
 
             current_app.logger.info(f"[BATCH LOOKUP] Medicine FOUND: {medicine.medicine_name}, hospital_id={medicine.hospital_id}")
 
-            # CONSOLIDATE multiple records for same batch into one entry
-            # Show aggregated stock, use weighted average price, earliest expiry
-            # Backend FIFO allocation will handle distribution across multiple records
+            # Get the LATEST current_stock per batch (current_stock is a running balance, not a quantity to sum)
+            # Use window function to get the most recent record per batch
             from sqlalchemy.sql import text
 
             query = text("""
+                WITH latest_per_batch AS (
+                    SELECT
+                        i.batch,
+                        i.expiry,
+                        i.current_stock,
+                        i.sale_price,
+                        i.pack_mrp,
+                        i.cgst,
+                        i.sgst,
+                        i.igst,
+                        i.created_at,
+                        ROW_NUMBER() OVER (PARTITION BY i.batch ORDER BY i.created_at DESC) as rn
+                    FROM inventory i
+                    WHERE i.hospital_id = :hospital_id
+                      AND i.medicine_id = :medicine_id
+                )
                 SELECT
-                    i.batch,
-                    MIN(i.expiry) as expiry,  -- Earliest expiry for FIFO
-                    SUM(i.current_stock) as current_stock,  -- Total stock across all records
-                    -- Weighted average price based on stock
-                    SUM(i.sale_price * i.current_stock) / NULLIF(SUM(i.current_stock), 0) as sale_price,
-                    MAX(i.pack_mrp) as pack_mrp,  -- Use highest MRP
-                    MAX(i.cgst) as cgst,  -- GST for reference
-                    MAX(i.sgst) as sgst,
-                    MAX(i.igst) as igst,
-                    COUNT(*) as record_count  -- How many records consolidated
-                FROM inventory i
-                WHERE i.hospital_id = :hospital_id
-                  AND i.medicine_id = :medicine_id
-                  AND i.current_stock > 0  -- Only batches with stock
-                GROUP BY i.batch
-                ORDER BY MIN(i.expiry)  -- FIFO based on earliest expiry
+                    batch,
+                    expiry,
+                    current_stock,
+                    sale_price,
+                    pack_mrp,
+                    cgst,
+                    sgst,
+                    igst,
+                    1 as record_count
+                FROM latest_per_batch
+                WHERE rn = 1
+                  AND current_stock > 0  -- Only batches with available stock
+                ORDER BY expiry  -- FIFO based on expiry
             """)
 
             result_proxy = session.execute(query, {
@@ -2560,7 +2779,7 @@ def web_api_medicine_batches(medicine_id):
                 'medicine_id': medicine_id
             })
 
-            # Convert result proxy to list of consolidated batch records
+            # Convert result proxy to list of batch records
             consolidated_batches = []
             for row in result_proxy:
                 # Create a namespace object to mimic ORM record
@@ -2568,13 +2787,11 @@ def web_api_medicine_batches(medicine_id):
                 record = SimpleNamespace(**{column: getattr(row, column) for column in row._mapping.keys()})
                 consolidated_batches.append(record)
 
-                # Log consolidation info
-                if record.record_count > 1:
-                    price_str = f"{record.sale_price:.2f}" if record.sale_price else "0.00"
-                    current_app.logger.info(f"[BATCH CONSOLIDATION] Batch '{record.batch}' consolidated {record.record_count} inventory records: "
-                                          f"Total Stock={record.current_stock}, Avg Price={price_str}")
+                # Log batch info
+                price_str = f"{record.sale_price:.2f}" if record.sale_price else "0.00"
+                current_app.logger.debug(f"[BATCH LOOKUP] Batch '{record.batch}': Stock={record.current_stock}, Price={price_str}")
 
-            current_app.logger.info(f"[BATCH LOOKUP] Found {len(consolidated_batches)} unique batches for {medicine.medicine_name}")
+            current_app.logger.info(f"[BATCH LOOKUP] Found {len(consolidated_batches)} batches with stock for {medicine.medicine_name}")
             
             # IMPORTANT: Get GST rate from pricing_tax_service, NOT from inventory
             # Inventory GST is historical and may not reflect current config
@@ -2896,6 +3113,100 @@ def patient_invoice_view():
     except Exception as e:
         current_app.logger.error(f"Error loading patient invoice view: {str(e)}", exc_info=True)
         return f"Error loading patient view: {str(e)}", 500
+
+
+# ==================== PROMO CODE VALIDATION API (Added 2025-11-25) ====================
+
+@billing_views_bp.route('/web_api/promo-code/validate', methods=['POST'])
+@login_required
+def validate_promo_code_api():
+    """
+    Validate a manually entered promotion code.
+
+    Used by billing staff when patient brings a personalized promo code
+    (received via Email/WhatsApp).
+
+    Request JSON:
+        {
+            "promo_code": "FESTIVE25",
+            "patient_id": "uuid" (optional)
+        }
+
+    Response JSON:
+        {
+            "success": true/false,
+            "valid": true/false,
+            "error": "error message if invalid",
+            "promotion": {
+                "campaign_id": "uuid",
+                "campaign_code": "FESTIVE25",
+                "campaign_name": "Festive Season 25% Off",
+                "description": "...",
+                "discount_type": "percentage",
+                "discount_value": 25.0,
+                "applies_to": "all",
+                "start_date": "01-Nov-2025",
+                "end_date": "31-Dec-2025",
+                ...
+            }
+        }
+
+    Created: 2025-11-25
+    """
+    try:
+        from app.services.discount_service import DiscountService
+
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'valid': False,
+                'error': 'No data provided'
+            }), 400
+
+        promo_code = data.get('promo_code', '').strip()
+        patient_id = data.get('patient_id')
+
+        if not promo_code:
+            return jsonify({
+                'success': False,
+                'valid': False,
+                'error': 'Promotion code is required'
+            }), 400
+
+        # Get hospital_id from current user
+        hospital_id = current_user.hospital_id
+        if not hospital_id:
+            return jsonify({
+                'success': False,
+                'valid': False,
+                'error': 'Hospital not configured for user'
+            }), 400
+
+        with get_db_session() as session:
+            result = DiscountService.validate_promo_code(
+                session=session,
+                hospital_id=str(hospital_id),
+                promo_code=promo_code,
+                patient_id=patient_id,
+                invoice_date=date.today()
+            )
+
+            return jsonify({
+                'success': True,
+                'valid': result['valid'],
+                'error': result['error'],
+                'promotion': result['promotion']
+            })
+
+    except Exception as e:
+        current_app.logger.error(f"Error validating promo code: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'valid': False,
+            'error': f'Server error: {str(e)}'
+        }), 500
+
 
 @billing_views_bp.route('/<uuid:invoice_id>/print', methods=['GET'])
 @login_required
@@ -3759,6 +4070,183 @@ def universal_view_invoice(invoice_id):
     return redirect(url_for('universal_views.universal_detail_view',
                           entity_type='patient_invoices',
                           item_id=invoice_id))
+
+
+# ==================== VIP ELIGIBILITY CHECK API (Added 2025-11-29) ====================
+
+@billing_views_bp.route('/web_api/vip-eligibility/<uuid:patient_id>', methods=['GET'])
+@login_required
+def check_vip_eligibility_api(patient_id):
+    """
+    Check if a patient is VIP eligible and return VIP campaign details.
+
+    VIP patients are identified by is_special_group = True in patients table.
+    VIP campaign is configured in hospital_settings (category: 'billing', key: 'vip_discount').
+
+    Response JSON:
+        {
+            "success": true,
+            "is_vip": true/false,
+            "auto_apply_default": true/false,
+            "vip_campaign": {
+                "campaign_id": "uuid",
+                "campaign_code": "VIP2025",
+                "campaign_name": "VIP Customer Special",
+                "discount_type": "percentage",
+                "discount_value": 20.0,
+                ...
+            } or null
+        }
+    """
+    try:
+        from app.models import Patient, HospitalSettings
+        from app.models.master import PromotionCampaign
+
+        hospital_id = current_user.hospital_id
+
+        with get_db_session() as session:
+            # Check if patient is VIP (is_special_group = True)
+            patient = session.query(Patient).filter_by(patient_id=patient_id).first()
+
+            if not patient:
+                return jsonify({
+                    'success': False,
+                    'error': 'Patient not found'
+                }), 404
+
+            is_vip = getattr(patient, 'is_special_group', False) or False
+
+            if not is_vip:
+                return jsonify({
+                    'success': True,
+                    'is_vip': False,
+                    'auto_apply_default': False,
+                    'vip_campaign': None
+                })
+
+            # Get VIP discount config from hospital settings
+            billing_settings = session.query(HospitalSettings).filter_by(
+                hospital_id=hospital_id,
+                category='billing'
+            ).first()
+
+            vip_config = {}
+            if billing_settings and billing_settings.settings:
+                vip_config = billing_settings.settings.get('vip_discount', {})
+
+            if not vip_config.get('enabled', False):
+                return jsonify({
+                    'success': True,
+                    'is_vip': True,
+                    'auto_apply_default': False,
+                    'vip_campaign': None,
+                    'message': 'VIP discount is disabled in hospital settings'
+                })
+
+            # Get VIP campaign details
+            campaign_code = vip_config.get('campaign_code', 'VIP2025')
+            campaign = session.query(PromotionCampaign).filter(
+                PromotionCampaign.hospital_id == hospital_id,
+                PromotionCampaign.campaign_code == campaign_code,
+                PromotionCampaign.is_active == True,
+                PromotionCampaign.is_deleted == False,
+                PromotionCampaign.status == 'approved',
+                PromotionCampaign.start_date <= date.today(),
+                PromotionCampaign.end_date >= date.today()
+            ).first()
+
+            if not campaign:
+                return jsonify({
+                    'success': True,
+                    'is_vip': True,
+                    'auto_apply_default': False,
+                    'vip_campaign': None,
+                    'message': f'VIP campaign {campaign_code} not found or inactive'
+                })
+
+            return jsonify({
+                'success': True,
+                'is_vip': True,
+                'auto_apply_default': vip_config.get('auto_apply_default', False),
+                'vip_campaign': {
+                    'campaign_id': str(campaign.campaign_id),
+                    'campaign_code': campaign.campaign_code,
+                    'campaign_name': campaign.campaign_name,
+                    'description': campaign.description,
+                    'discount_type': campaign.discount_type,
+                    'discount_value': float(campaign.discount_value),
+                    'applies_to': campaign.applies_to,
+                    'start_date': campaign.start_date.strftime('%d-%b-%Y'),
+                    'end_date': campaign.end_date.strftime('%d-%b-%Y')
+                }
+            })
+
+    except Exception as e:
+        logger.error(f"Error checking VIP eligibility: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ==================== STAFF DISCRETIONARY CONFIG API (Added 2025-11-29) ====================
+
+@billing_views_bp.route('/web_api/staff-discretionary-config/<uuid:hospital_id>', methods=['GET'])
+@login_required
+def get_staff_discretionary_config_api(hospital_id):
+    """
+    Get staff discretionary discount configuration from hospital settings.
+
+    Response JSON:
+        {
+            "enabled": true/false,
+            "code": "SKINSPIRESPECIAL",
+            "name": "Staff Discretionary Discount",
+            "max_percent": 5,
+            "default_percent": 1,
+            "options": [1, 2, 3, 4, 5],
+            "requires_note": false,
+            "stacking_mode": "incremental"
+        }
+    """
+    try:
+        from app.models import HospitalSettings
+
+        with get_db_session() as session:
+            billing_settings = session.query(HospitalSettings).filter_by(
+                hospital_id=hospital_id,
+                category='billing'
+            ).first()
+
+            if billing_settings and billing_settings.settings:
+                discretionary_config = billing_settings.settings.get('staff_discretionary_discount', {})
+                if discretionary_config:
+                    return jsonify(discretionary_config)
+
+            # Return default config if not configured
+            return jsonify({
+                'enabled': True,
+                'code': 'SKINSPIRESPECIAL',
+                'name': 'Staff Discretionary Discount',
+                'max_percent': 5,
+                'default_percent': 1,
+                'options': [1, 2, 3, 4, 5],
+                'requires_note': False,
+                'stacking_mode': 'incremental'
+            })
+
+    except Exception as e:
+        logger.error(f"Error getting staff discretionary config: {str(e)}")
+        return jsonify({
+            'enabled': True,
+            'code': 'SKINSPIRESPECIAL',
+            'name': 'Staff Discretionary Discount',
+            'max_percent': 5,
+            'default_percent': 1,
+            'options': [1, 2, 3, 4, 5],
+            'requires_note': False,
+            'stacking_mode': 'incremental'
+        })
 
 
 # =============================================================================

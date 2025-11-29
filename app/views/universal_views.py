@@ -3267,6 +3267,7 @@ def universal_entity_search_api(entity_type: str):
         limit = min(int(request.args.get('limit', 10)), 50)  # Max 50 results
         search_fields = request.args.get('fields', '[]')
         exact_match = request.args.get('exact', 'false').lower() == 'true'
+        item_type_filter = request.args.get('item_type', '').strip()  # For medicine type cascading filter
         
         # Parse search fields
         try:
@@ -3289,11 +3290,22 @@ def universal_entity_search_api(entity_type: str):
         if not search_fields:
             search_fields = config.searchable_fields or ['name']
         
+        # Build additional filters for cascading dropdowns
+        additional_filters = {}
+
+        # Medicine type cascading filter - filter medicines by item_type (OTC, Prescription, Product, Consumable)
+        if entity_type == 'medicines' and item_type_filter:
+            additional_filters['item_type'] = item_type_filter
+            current_app.logger.info(f"[Medicine Filter] Adding item_type filter: {item_type_filter}")
+
+        current_app.logger.info(f"[Search] entity={entity_type}, additional_filters={additional_filters}")
+
         search_config = EntitySearchConfiguration(
             target_entity=entity_type,
             search_fields=search_fields,
             display_template=getattr(config, 'display_template', '{name}'),
-            min_search_length=0 if exact_match else 2
+            min_chars=0 if exact_match else 2,
+            additional_filters=additional_filters if additional_filters else None
         )
         
         # Get current context
@@ -3332,6 +3344,14 @@ def universal_entity_search_api(entity_type: str):
         formatted_results = []
         for result in results:
             if isinstance(result, dict):
+                # Add entity-specific ID field for consistency (API returns 'value' but JS may look for entity_id)
+                if 'value' in result:
+                    if entity_type == 'packages' and 'package_id' not in result:
+                        result['package_id'] = result['value']
+                    elif entity_type == 'services' and 'service_id' not in result:
+                        result['service_id'] = result['value']
+                    elif entity_type == 'medicines' and 'medicine_id' not in result:
+                        result['medicine_id'] = result['value']
                 formatted_results.append(result)
             else:
                 # Convert SQLAlchemy object to dict
@@ -3339,7 +3359,11 @@ def universal_entity_search_api(entity_type: str):
                 # Include search fields, primary key, and additional price fields for medicines
                 fields_to_include = search_fields + [config.primary_key]
                 if entity_type == 'medicines':
-                    fields_to_include.extend(['mrp', 'last_purchase_price', 'gst_rate', 'hsn_code', 'medicine_id'])
+                    fields_to_include.extend(['mrp', 'last_purchase_price', 'gst_rate', 'hsn_code', 'medicine_id', 'item_type'])
+                elif entity_type == 'packages':
+                    fields_to_include.extend(['package_id', 'price'])
+                elif entity_type == 'services':
+                    fields_to_include.extend(['service_id', 'price'])
                     
                 for field in fields_to_include:
                     if hasattr(result, field):

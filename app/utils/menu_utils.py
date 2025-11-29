@@ -455,7 +455,62 @@ def generate_menu_for_role(role):
                 }
             ]
         })
-        
+
+        # =========================================================================
+        # 3.5 PROMOTIONS & DISCOUNTS
+        # =========================================================================
+        menu.append({
+            'name': 'Promotions & Discounts',
+            'url': '#',
+            'icon': 'tags',
+            'icon_path': '7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z',
+            'children': [
+                {
+                    'name': 'Promotions Dashboard',
+                    'url': safe_url_for('promotion_views.dashboard'),
+                    'icon': 'tachometer-alt',
+                    'description': 'Overview of all promotions'
+                },
+                {
+                    'name': 'Campaign Promotions',
+                    'url': '#',
+                    'icon': 'bullhorn',
+                    'children': [
+                        {
+                            'name': 'All Campaigns',
+                            'url': safe_url_for('promotion_views.campaign_list'),
+                            'icon': 'list',
+                            'description': 'View all promotion campaigns'
+                        },
+                        {
+                            'name': 'Create Campaign',
+                            'url': safe_url_for('promotion_views.campaign_create'),
+                            'icon': 'plus-circle',
+                            'description': 'Create new promotion campaign'
+                        },
+                        {
+                            'name': 'Active Campaigns',
+                            'url': safe_url_for('promotion_views.campaign_list') + '?status=active',
+                            'icon': 'check-circle',
+                            'description': 'Currently active campaigns'
+                        }
+                    ]
+                },
+                {
+                    'name': 'Bulk Discount',
+                    'url': safe_url_for('promotion_views.bulk_config'),
+                    'icon': 'layer-group',
+                    'description': 'Configure bulk discount policy'
+                },
+                {
+                    'name': 'Loyalty Discount',
+                    'url': safe_url_for('promotion_views.loyalty_config'),
+                    'icon': 'heart',
+                    'description': 'Configure loyalty discount settings'
+                }
+            ]
+        })
+
         # =========================================================================
         # 4. CLINICAL OPERATIONS
         # =========================================================================

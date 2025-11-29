@@ -234,25 +234,51 @@ def calculate_discounts():
         hospital_id = data.get('hospital_id')
         patient_id = data.get('patient_id')
         line_items = data.get('line_items', [])
+        exclude_bulk = data.get('exclude_bulk', False)  # Staff manually unchecked bulk discount
+        exclude_loyalty = data.get('exclude_loyalty', False)  # Staff manually unchecked loyalty discount
+        exclude_standard = data.get('exclude_standard', False)  # Staff manually unchecked standard discount
+        exclude_campaign = data.get('exclude_campaign', False)  # Staff unchecked campaign discount (Added 2025-11-29)
+        excluded_campaign_ids = data.get('excluded_campaign_ids', [])  # Specific campaign IDs to exclude
+        manual_promo_code = data.get('manual_promo_code')  # Manually entered promo code
+        staff_discretionary = data.get('staff_discretionary')  # Staff discretionary discount (Added 2025-11-29)
+        vip_discount = data.get('vip_discount')  # VIP discount (Added 2025-11-29)
+        # Determine if VIP should be excluded at line-item level (Added 2025-11-29)
+        # VIP is excluded if: vip_discount is provided and enabled is False
+        exclude_vip = False
+        if vip_discount and vip_discount.get('enabled') == False:
+            exclude_vip = True
+            logger.info("VIP discount disabled by user - will exclude VIP from line-item calculations")
 
-        logger.info(f"Parsed: hospital_id={hospital_id}, patient_id={patient_id}, line_items count={len(line_items)}")
+        logger.info(f"Parsed: hospital_id={hospital_id}, patient_id={patient_id}, line_items count={len(line_items)}, exclude_bulk={exclude_bulk}, exclude_loyalty={exclude_loyalty}, exclude_standard={exclude_standard}, exclude_campaign={exclude_campaign}, excluded_campaign_ids={excluded_campaign_ids}, manual_promo={manual_promo_code}, staff_discretionary={staff_discretionary}, vip_discount={vip_discount}")
 
         if not hospital_id or not line_items:
             logger.error(f"Validation failed: hospital_id={hospital_id}, line_items={len(line_items) if line_items else 0}")
             return jsonify({'error': 'Missing required fields', 'success': False}), 400
 
         with get_db_session() as session:
+            # Get hospital config early for stacking configuration - Added 2025-11-29
+            hospital = session.query(Hospital).filter_by(hospital_id=hospital_id).first()
+
             # Apply discounts using multi-discount service (supports stacking)
             discounted_items = DiscountService.apply_discounts_to_invoice_items_multi(
                 session=session,
                 hospital_id=hospital_id,
                 patient_id=patient_id,
                 line_items=line_items,
-                respect_max_discount=True
+                respect_max_discount=True,
+                exclude_bulk=exclude_bulk,  # Pass to service
+                exclude_loyalty=exclude_loyalty,  # Pass to service
+                exclude_standard=exclude_standard,  # Pass to service
+                exclude_campaign=exclude_campaign,  # Pass to service (Added 2025-11-29)
+                excluded_campaign_ids=excluded_campaign_ids,  # Per-campaign exclusion
+                manual_promo_code=manual_promo_code,  # Manually entered promo code
+                staff_discretionary=staff_discretionary,  # Staff discretionary discount (Added 2025-11-29)
+                exclude_vip=exclude_vip  # Staff disabled VIP discount (Added 2025-11-29)
             )
 
-            # Calculate summary for services
-            service_items = [item for item in discounted_items if item.get('item_type') == 'Service']
+            # Calculate summary for services (including Package) - Updated 2025-11-29
+            service_types = ['Service', 'Package']
+            service_items = [item for item in discounted_items if item.get('item_type') in service_types]
             total_service_count = sum(int(item.get('quantity', 1)) for item in service_items)
 
             service_original_price = sum(
@@ -280,8 +306,9 @@ def calculate_discounts():
                 elif item.get('discount_type') in ['loyalty', 'loyalty_percent']:
                     loyalty_discount_amount += float(item.get('discount_amount', 0))
 
-            # Calculate summary for medicines
-            medicine_items = [item for item in discounted_items if item.get('item_type') == 'Medicine']
+            # Calculate summary for medicines (including OTC, Prescription, Product, Consumable) - Updated 2025-11-29
+            medicine_types = ['Medicine', 'OTC', 'Prescription', 'Product', 'Consumable']
+            medicine_items = [item for item in discounted_items if item.get('item_type') in medicine_types]
             total_medicine_count = sum(int(item.get('quantity', 1)) for item in medicine_items)
 
             medicine_original_price = sum(
@@ -294,13 +321,93 @@ def calculate_discounts():
                 for item in medicine_items
             )
 
-            # Combined totals
+            # Combined totals (line-item level discounts)
             total_original_price = service_original_price + medicine_original_price
-            total_discount = service_discount + medicine_discount
+            line_item_discount = service_discount + medicine_discount
+            subtotal_after_line_discounts = total_original_price - line_item_discount
+
+            # =================================================================
+            # INVOICE-LEVEL DISCOUNTS (VIP and Staff Discretionary) - Added 2025-11-29
+            # These are applied based on hospital's stacking configuration
+            # =================================================================
+            vip_discount_amount = 0
+            vip_discount_percent = 0
+            staff_discretionary_amount = 0
+            staff_discretionary_percent = 0
+            vip_stacking_mode = 'incremental'  # Default mode
+
+            # Get VIP stacking mode from hospital's discount_stacking_config
+            if hospital and hospital.discount_stacking_config:
+                vip_config = hospital.discount_stacking_config.get('vip', {})
+                vip_stacking_mode = vip_config.get('mode', 'incremental')
+                logger.info(f"VIP stacking mode from config: {vip_stacking_mode}")
+
+            # VIP Discount - Added 2025-11-29
+            # Mode 'exclusive': VIP replaces ALL line-item discounts (only VIP applies)
+            # Mode 'absolute': VIP competes with line-item discounts (better discount wins)
+            # Mode 'incremental': VIP stacks on top of line-item discounts
+            if vip_discount and vip_discount.get('enabled'):
+                vip_discount_percent = float(vip_discount.get('percent', 0))
+                if vip_discount_percent > 0:
+                    if vip_stacking_mode == 'exclusive':
+                        # EXCLUSIVE MODE: VIP replaces ALL line-item discounts
+                        # VIP discount is calculated on original price, line-item discounts are zeroed
+                        vip_on_original = (total_original_price * vip_discount_percent) / 100
+
+                        # Zero out line-item discounts - VIP is the ONLY discount
+                        logger.info(f"VIP (exclusive): Replacing line-item discounts Rs.{line_item_discount:.2f} with VIP {vip_discount_percent}% = Rs.{vip_on_original:.2f}")
+
+                        # Clear line-item discounts from items
+                        for item in discounted_items:
+                            item['discount_amount'] = 0
+                            item['discount_percent'] = 0
+                            item['discount_type'] = None
+                            item['final_price'] = float(item.get('unit_price', 0)) * int(item.get('quantity', 1))
+
+                        # Reset line-item totals
+                        line_item_discount = 0
+                        bulk_discount_amount = 0
+                        loyalty_discount_amount = 0
+                        subtotal_after_line_discounts = total_original_price
+
+                        # Set VIP discount as the only discount
+                        vip_discount_amount = vip_on_original
+                        logger.info(f"VIP (exclusive): Only VIP discount applies: Rs.{vip_discount_amount:.2f} on Rs.{total_original_price:.2f}")
+
+                    elif vip_stacking_mode == 'absolute':
+                        # Calculate VIP on original price (competes with line-item discounts)
+                        vip_on_original = (total_original_price * vip_discount_percent) / 100
+
+                        # Compare: VIP discount vs line-item discounts - better one wins
+                        if vip_on_original > line_item_discount:
+                            # VIP is better - replace line-item discounts
+                            vip_discount_amount = vip_on_original - line_item_discount
+                            logger.info(f"VIP (absolute): {vip_discount_percent}% on Rs.{total_original_price:.2f} = Rs.{vip_on_original:.2f} > line discounts Rs.{line_item_discount:.2f}. Additional VIP: Rs.{vip_discount_amount:.2f}")
+                        else:
+                            # Line-item discounts are better - VIP doesn't add anything
+                            vip_discount_amount = 0
+                            logger.info(f"VIP (absolute): {vip_discount_percent}% = Rs.{vip_on_original:.2f} <= line discounts Rs.{line_item_discount:.2f}. Line discounts win.")
+                    else:
+                        # Incremental mode (default): VIP stacks on top of line-item discounts
+                        vip_discount_amount = (subtotal_after_line_discounts * vip_discount_percent) / 100
+                        logger.info(f"VIP (incremental): {vip_discount_percent}% on Rs.{subtotal_after_line_discounts:.2f} = Rs.{vip_discount_amount:.2f}")
+
+            # Staff Discretionary Discount (applied on subtotal after VIP)
+            subtotal_after_vip = subtotal_after_line_discounts - vip_discount_amount
+            if staff_discretionary and staff_discretionary.get('enabled'):
+                staff_discretionary_percent = float(staff_discretionary.get('percent', 0))
+                if staff_discretionary_percent > 0:
+                    staff_discretionary_amount = (subtotal_after_vip * staff_discretionary_percent) / 100
+                    logger.info(f"Invoice-level Staff Discretionary: {staff_discretionary_percent}% = Rs.{staff_discretionary_amount:.2f}")
+
+            # Total invoice-level discount
+            invoice_level_discount = vip_discount_amount + staff_discretionary_amount
+
+            # Final totals
+            total_discount = line_item_discount + invoice_level_discount
             total_final_price = total_original_price - total_discount
 
-            # Get hospital config for eligibility check
-            hospital = session.query(Hospital).filter_by(hospital_id=hospital_id).first()
+            # Get min threshold from hospital (hospital already queried earlier)
             min_threshold = hospital.bulk_discount_min_service_count if hospital else 5
 
             # Calculate potential savings if user adds more services/medicines
@@ -316,9 +423,30 @@ def calculate_discounts():
                 first_item = discounted_items[0]
                 logger.info(f"First item metadata: {first_item.get('discount_metadata', {})}")
                 if 'all_eligible_discounts' in first_item.get('discount_metadata', {}):
-                    logger.info(f"✅ all_eligible_discounts found: {first_item['discount_metadata']['all_eligible_discounts']}")
+                    logger.info(f"all_eligible_discounts found: {first_item['discount_metadata']['all_eligible_discounts']}")
                 else:
-                    logger.warning(f"❌ all_eligible_discounts NOT found in metadata")
+                    logger.warning(f"all_eligible_discounts NOT found in metadata")
+
+            # Extract eligible campaigns from discount metadata (Added 2025-11-29)
+            eligible_campaigns = []
+            for item in discounted_items:
+                metadata = item.get('discount_metadata', {})
+                all_eligible = metadata.get('all_eligible_discounts', [])
+                for disc in all_eligible:
+                    if disc.get('type') == 'campaign':
+                        # Check if already in list
+                        campaign_id = disc.get('promotion_id')
+                        if not any(c.get('campaign_id') == campaign_id for c in eligible_campaigns):
+                            eligible_campaigns.append({
+                                'campaign_id': campaign_id,
+                                'campaign_code': disc.get('campaign_code', disc.get('name', '')),
+                                'campaign_name': disc.get('campaign_name', disc.get('name', 'Campaign')),
+                                'discount_type': 'percentage',
+                                'discount_value': disc.get('percent', 0),
+                                'applied': disc.get('applied', False),
+                                'reason': disc.get('reason', ''),
+                                'end_date': disc.get('end_date', '')
+                            })
 
             return jsonify({
                 'success': True,
@@ -337,16 +465,29 @@ def calculate_discounts():
                     # Combined summary
                     'bulk_discount_threshold': min_threshold,
                     'total_original_price': round(total_original_price, 2),
+                    'line_item_discount': round(line_item_discount, 2),  # Added 2025-11-29
+                    'subtotal_after_line_discounts': round(subtotal_after_line_discounts, 2),  # Added 2025-11-29
                     'total_discount': round(total_discount, 2),
                     'bulk_discount_amount': round(bulk_discount_amount, 2),
                     'loyalty_discount_amount': round(loyalty_discount_amount, 2),
                     'total_final_price': round(total_final_price, 2),
                     'discount_percentage': round((total_discount / total_original_price * 100), 2) if total_original_price > 0 else 0,
 
+                    # Invoice-level discounts (Added 2025-11-29)
+                    'invoice_level_discounts': {
+                        'vip_discount_percent': vip_discount_percent,
+                        'vip_discount_amount': round(vip_discount_amount, 2),
+                        'vip_stacking_mode': vip_stacking_mode,  # 'absolute' or 'incremental'
+                        'staff_discretionary_percent': staff_discretionary_percent,
+                        'staff_discretionary_amount': round(staff_discretionary_amount, 2),
+                        'total_invoice_discount': round(invoice_level_discount, 2)
+                    },
+
                     # Potential savings by type
                     'potential_savings_services': potential_savings_services,
                     'potential_savings_medicines': potential_savings_medicines
-                }
+                },
+                'eligible_campaigns': eligible_campaigns  # Added 2025-11-29
             })
 
     except Exception as e:

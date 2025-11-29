@@ -66,6 +66,7 @@ def entity_search(entity_type: str):
         limit = min(int(request.args.get('limit', 10)), 50)
         search_fields = request.args.get('fields', '[]')
         exact_match = request.args.get('exact', 'false').lower() == 'true'
+        item_type = request.args.get('item_type', '').strip()  # For medicine type filter (OTC/Prescription)
         
         # Parse search fields
         try:
@@ -115,8 +116,8 @@ def entity_search(entity_type: str):
             # Special handling for services
             results = search_services(search_term, hospital_id, branch_id, limit)
         elif entity_type in ['medicine', 'medicines']:  # Handle both singular and plural
-            # Special handling for medicines
-            results = search_medicines(search_term, hospital_id, branch_id, limit)
+            # Special handling for medicines - pass item_type for cascading filter
+            results = search_medicines(search_term, hospital_id, branch_id, limit, item_type)
         else:
             # Generic entity search
             results = generic_entity_search(
@@ -468,31 +469,43 @@ def search_services(search_term: str, hospital_id: uuid.UUID,
 
 
 def search_medicines(search_term: str, hospital_id: uuid.UUID,
-                    branch_id: uuid.UUID, limit: int) -> List[Dict]:
+                    branch_id: uuid.UUID, limit: int, item_type: str = None) -> List[Dict]:
     """
     Search medicines - returns name for display and filtering
+
+    Args:
+        search_term: Search query
+        hospital_id: Hospital UUID
+        branch_id: Branch UUID
+        limit: Max results
+        item_type: Optional medicine type filter (OTC/Prescription) - for cascading dropdown
     """
     try:
         from app.models.master import Medicine
-        
+
         with get_db_session() as session:
             query = session.query(Medicine).filter(
                 Medicine.hospital_id == hospital_id
             )
-            
+
             # Apply soft delete filter
             if hasattr(Medicine, 'deleted_at'):
                 query = query.filter(Medicine.deleted_at.is_(None))
             elif hasattr(Medicine, 'is_deleted'):
                 query = query.filter(Medicine.is_deleted == False)
-            
+
             # Filter active medicines only (if status field exists)
             if hasattr(Medicine, 'status'):
                 query = query.filter(Medicine.status == 'active')
-            
+
             # Add branch filter if specified (some medicines might not have branch)
             if branch_id and hasattr(Medicine, 'branch_id'):
                 query = query.filter(Medicine.branch_id == branch_id)
+
+            # ✅ Add item_type filter for cascading dropdown (OTC/Prescription)
+            if item_type and hasattr(Medicine, 'medicine_type'):
+                logger.info(f"[Medicine Search] Filtering by item_type: {item_type}")
+                query = query.filter(Medicine.medicine_type == item_type)
             
             # Add search filter only if search term provided
             if search_term and search_term.strip():
@@ -720,20 +733,35 @@ def generic_entity_search(entity_type: str, search_term: str, hospital_id: uuid.
                     display_name = getattr(item, config.title_field)
                 elif hasattr(item, 'name'):
                     display_name = item.name
-                
-                # Get ID field
+
+                # Get ID field - MUST return actual UUID, not display name
                 id_field = config.primary_key if config else f'{entity_type[:-1]}_id'
                 item_id = getattr(item, id_field) if hasattr(item, id_field) else None
-                
-                results.append({
-                    'id': display_name,                # Use name as ID
-                    'uuid': str(item_id) if item_id else '',
+                item_id_str = str(item_id) if item_id else ''
+
+                result_dict = {
+                    'id': item_id_str,                 # UUID for selection
+                    'uuid': item_id_str,
+                    'value': item_id_str,              # UUID for form submission
                     'name': display_name,
-                    'value': display_name,
                     'label': display_name,
                     'display': display_name,
                     'text': display_name
-                })
+                }
+
+                # Add entity-specific ID field for JavaScript compatibility
+                if entity_type == 'packages':
+                    result_dict['package_id'] = item_id_str
+                    result_dict['package_name'] = display_name
+                    if hasattr(item, 'price'):
+                        result_dict['price'] = float(item.price) if item.price else 0
+                elif entity_type == 'services':
+                    result_dict['service_id'] = item_id_str
+                    result_dict['service_name'] = display_name
+                    if hasattr(item, 'price'):
+                        result_dict['price'] = float(item.price) if item.price else 0
+
+                results.append(result_dict)
             
             return results
             

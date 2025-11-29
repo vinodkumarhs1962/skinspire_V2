@@ -23,43 +23,53 @@ class UniversalEntitySearchService:
     def __init__(self):
         self.entity_type = 'entity_search'  # ✅ ADD: For cache identification
     
-    @cache_service_method('entity_search', 'search_entities')  # ✅ ADD: Cache entity searches
+    # TEMPORARILY DISABLED CACHE for debugging item_type filter
+    # @cache_service_method('entity_search', 'search_entities')
     def search_entities(self, config: EntitySearchConfiguration, search_term: str,
                        hospital_id: uuid.UUID, branch_id: uuid.UUID = None) -> List[Dict]:
         """Universal search - works for ANY entity via configuration"""
         try:
+            logger.info(f"[SEARCH] Entity: {config.target_entity}, term: '{search_term}', min_chars: {config.min_chars}")
+            logger.info(f"[SEARCH] Additional filters: {config.additional_filters}")
+
             if len(search_term) < config.min_chars:
+                logger.info(f"[SEARCH] Skipped - term too short ({len(search_term)} < {config.min_chars})")
                 return []
-            
+
             # ✅ Get model class from configuration (not hardcoded)
             model_class = self._get_model_class_from_config(config)
             if not model_class:
                 logger.error(f"No model class found for {config.target_entity}")
                 return []
-            
+
             with get_db_session() as session:
                 # ✅ Build query (entity-agnostic)
                 query = session.query(model_class).filter_by(hospital_id=hospital_id)
-                
+
                 # Apply branch filter if applicable
                 if branch_id and hasattr(model_class, 'branch_id'):
                     query = query.filter_by(branch_id=branch_id)
-                
+
                 # ✅ Build search conditions from configuration
                 search_conditions = []
                 for field_name in config.search_fields:
                     if hasattr(model_class, field_name):
                         field = getattr(model_class, field_name)
                         search_conditions.append(field.ilike(f"%{search_term}%"))
-                
+
                 if search_conditions:
                     from sqlalchemy import or_
                     query = query.filter(or_(*search_conditions))
-                
+
                 # ✅ Apply additional filters from configuration
-                for filter_key, filter_value in config.additional_filters.items():
-                    if hasattr(model_class, filter_key):
-                        query = query.filter(getattr(model_class, filter_key) == filter_value)
+                if config.additional_filters:
+                    logger.info(f"[SEARCH] Applying {len(config.additional_filters)} additional filter(s)")
+                    for filter_key, filter_value in config.additional_filters.items():
+                        if hasattr(model_class, filter_key):
+                            logger.info(f"[SEARCH] Filter: {filter_key} = {filter_value}")
+                            query = query.filter(getattr(model_class, filter_key) == filter_value)
+                        else:
+                            logger.warning(f"[SEARCH] Model {model_class} has no attribute '{filter_key}'")
                 
                 # ✅ Apply sorting from configuration
                 if hasattr(model_class, config.sort_field):

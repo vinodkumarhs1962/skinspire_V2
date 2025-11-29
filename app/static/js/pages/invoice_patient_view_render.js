@@ -33,12 +33,34 @@ function loadInvoiceData(data) {
                     </div>
                 `;
             } else if (item.discountAmount > 0) {
-                const discountTypeName = item.discountType.charAt(0).toUpperCase() + item.discountType.slice(1);
-                itemDetails += `
-                    <div style="font-size: 13px; color: #dc2626; margin-top: 4px;">
-                        ${item.discountPercent}% ${discountTypeName} Discount
-                    </div>
-                `;
+                // Handle stacked discounts with breakdown
+                if (item.discountType === 'stacked' && item.discountMetadata?.breakdown) {
+                    const breakdownParts = item.discountMetadata.breakdown.map(b => {
+                        const label = b.source.charAt(0).toUpperCase() + b.source.slice(1);
+                        const colors = {
+                            'bulk': '#1e40af',
+                            'loyalty': '#92400e',
+                            'campaign': '#166534',
+                            'vip': '#db2777'
+                        };
+                        const color = colors[b.source] || '#374151';
+                        return `<span style="color: ${color}; font-weight: 500;">${label} ${b.percent.toFixed(0)}%</span>`;
+                    });
+                    itemDetails += `
+                        <div style="font-size: 13px; margin-top: 4px;">
+                            <span style="color: #6b7280;">Discounts: </span>
+                            ${breakdownParts.join(' + ')}
+                            <span style="color: #8b5cf6; font-weight: 600;"> = ${item.discountPercent}%</span>
+                        </div>
+                    `;
+                } else {
+                    const discountTypeName = item.discountType.charAt(0).toUpperCase() + item.discountType.slice(1);
+                    itemDetails += `
+                        <div style="font-size: 13px; color: #dc2626; margin-top: 4px;">
+                            ${item.discountPercent}% ${discountTypeName} Discount
+                        </div>
+                    `;
+                }
             }
 
             let amountDisplay = formatCurrency(item.subtotal);
