@@ -276,6 +276,10 @@ def calculate_discounts():
                 exclude_vip=exclude_vip  # Staff disabled VIP discount (Added 2025-11-29)
             )
 
+            # Add index to each item for UI row matching
+            for idx, item in enumerate(discounted_items):
+                item['index'] = idx
+
             # Calculate summary for services (including Package) - Updated 2025-11-29
             service_types = ['Service', 'Package']
             service_items = [item for item in discounted_items if item.get('item_type') in service_types]
@@ -437,12 +441,24 @@ def calculate_discounts():
                         # Check if already in list
                         campaign_id = disc.get('promotion_id')
                         if not any(c.get('campaign_id') == campaign_id for c in eligible_campaigns):
+                            promotion_type = disc.get('promotion_type', 'simple_discount')
+                            # Get actual discount_type from campaign (percentage or fixed_amount)
+                            if promotion_type == 'buy_x_get_y':
+                                discount_type = 'free_item'
+                                discount_value = disc.get('percent', 0)
+                            else:
+                                discount_type = disc.get('discount_type', 'percentage')
+                                # For fixed_amount, use amount; for percentage, use percent
+                                discount_value = disc.get('amount', 0) if discount_type == 'fixed_amount' else disc.get('percent', 0)
+
                             eligible_campaigns.append({
                                 'campaign_id': campaign_id,
                                 'campaign_code': disc.get('campaign_code', disc.get('name', '')),
                                 'campaign_name': disc.get('campaign_name', disc.get('name', 'Campaign')),
-                                'discount_type': 'percentage',
-                                'discount_value': disc.get('percent', 0),
+                                'discount_type': discount_type,  # percentage, fixed_amount, or free_item
+                                'discount_value': discount_value,
+                                'discount_amount': disc.get('amount', 0),  # Always include calculated amount
+                                'promotion_type': promotion_type,  # buy_x_get_y or simple_discount
                                 'applied': disc.get('applied', False),
                                 'reason': disc.get('reason', ''),
                                 'end_date': disc.get('end_date', '')
@@ -717,4 +733,244 @@ def get_savings_tips():
 
     except Exception as e:
         logger.error(f"Error getting savings tips: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
+# ========================================================================
+# ========================================================================
+# ACTIVE CAMPAIGNS ENDPOINTS
+# ========================================================================
+
+@discount_bp.route('/campaigns/active', methods=['GET'])
+def get_all_active_campaigns():
+    """
+    Get all active promotion campaigns for a hospital.
+    Used to display eligible promotions on invoice creation page.
+
+    Query Parameters:
+        hospital_id: Hospital UUID (required)
+        patient_id: Patient UUID (optional, for VIP targeting)
+
+    Returns:
+        campaigns: List of all active campaigns with details
+    """
+    from app.models.master import PromotionCampaign, Patient
+    from datetime import date
+
+    hospital_id = request.args.get('hospital_id')
+    patient_id = request.args.get('patient_id')
+
+    if not hospital_id:
+        return jsonify({'error': 'hospital_id is required'}), 400
+
+    try:
+        with get_db_session() as session:
+            today = date.today()
+
+            # Check if patient is VIP
+            patient_is_vip = False
+            if patient_id:
+                patient = session.query(Patient).filter_by(patient_id=patient_id).first()
+                if patient:
+                    patient_is_vip = getattr(patient, 'is_special_group', False) or getattr(patient, 'is_vip', False)
+
+            # Query all active campaigns
+            query = session.query(PromotionCampaign).filter(
+                PromotionCampaign.hospital_id == hospital_id,
+                PromotionCampaign.is_active == True,
+                PromotionCampaign.is_deleted.is_(False),
+                PromotionCampaign.status == 'approved',
+                PromotionCampaign.start_date <= today,
+                PromotionCampaign.end_date >= today
+            )
+
+            campaigns = query.all()
+
+            # Filter and format results
+            result = []
+            for campaign in campaigns:
+                # Skip VIP-only campaigns entirely - VIP discount is handled separately
+                # VIP has its own dedicated UI card and invoice-level stacking logic
+                if getattr(campaign, 'target_special_group', False):
+                    continue
+
+                promotion_type = campaign.promotion_type or 'simple_discount'
+
+                # Determine discount display
+                if promotion_type == 'buy_x_get_y':
+                    discount_type = 'free_item'
+                    discount_value = 0
+                else:
+                    discount_type = campaign.discount_type or 'percentage'
+                    discount_value = float(campaign.discount_value) if campaign.discount_value else 0
+
+                result.append({
+                    'campaign_id': str(campaign.campaign_id),
+                    'campaign_code': campaign.campaign_code,
+                    'campaign_name': campaign.campaign_name,
+                    'description': campaign.description,
+                    'promotion_type': promotion_type,
+                    'promotion_rules': campaign.promotion_rules,  # Include for Buy X Get Y display
+                    'discount_type': discount_type,
+                    'discount_value': discount_value,
+                    'start_date': campaign.start_date.isoformat() if campaign.start_date else None,
+                    'end_date': campaign.end_date.isoformat() if campaign.end_date else None,
+                    'applied': False  # Will be set when item is added
+                })
+
+            logger.info(f"Found {len(result)} active campaigns for hospital {hospital_id}")
+
+            return jsonify({
+                'campaigns': result,
+                'count': len(result)
+            }), 200
+
+    except Exception as e:
+        logger.error(f"Error fetching active campaigns: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
+# BUY X GET Y FREE ENDPOINTS
+# ========================================================================
+
+@discount_bp.route('/buy-x-get-y/active', methods=['GET'])
+def get_active_buy_x_get_y_campaigns():
+    """
+    Get active Buy X Get Y campaigns for a hospital.
+    Used by invoice UI to auto-add free items.
+
+    Query Parameters:
+        hospital_id: Hospital UUID (required)
+        patient_id: Patient UUID (optional, for VIP targeting)
+
+    Returns:
+        campaigns: List of active Buy X Get Y campaigns with promotion_rules
+    """
+    from app.models.master import PromotionCampaign, Patient
+    from datetime import date
+
+    hospital_id = request.args.get('hospital_id')
+    patient_id = request.args.get('patient_id')
+
+    if not hospital_id:
+        return jsonify({'error': 'hospital_id is required'}), 400
+
+    try:
+        with get_db_session() as session:
+            today = date.today()
+
+            # Check if patient is VIP
+            patient_is_vip = False
+            if patient_id:
+                patient = session.query(Patient).filter_by(patient_id=patient_id).first()
+                if patient:
+                    patient_is_vip = getattr(patient, 'is_special_group', False) or getattr(patient, 'is_vip', False)
+
+            # Query active Buy X Get Y campaigns
+            query = session.query(PromotionCampaign).filter(
+                PromotionCampaign.hospital_id == hospital_id,
+                PromotionCampaign.is_active == True,
+                PromotionCampaign.is_deleted.is_(False),
+                PromotionCampaign.status == 'approved',
+                PromotionCampaign.promotion_type == 'buy_x_get_y',
+                PromotionCampaign.start_date <= today,
+                PromotionCampaign.end_date >= today
+            )
+
+            campaigns = query.all()
+
+            # Filter by VIP targeting
+            result = []
+            for campaign in campaigns:
+                # Skip VIP-only campaigns if patient is not VIP
+                if getattr(campaign, 'target_special_group', False) and not patient_is_vip:
+                    continue
+
+                result.append({
+                    'campaign_id': str(campaign.campaign_id),
+                    'campaign_code': campaign.campaign_code,
+                    'campaign_name': campaign.campaign_name,
+                    'description': campaign.description,
+                    'promotion_type': campaign.promotion_type,
+                    'promotion_rules': campaign.promotion_rules,
+                    'start_date': campaign.start_date.isoformat() if campaign.start_date else None,
+                    'end_date': campaign.end_date.isoformat() if campaign.end_date else None
+                })
+
+            logger.info(f"Found {len(result)} active Buy X Get Y campaigns for hospital {hospital_id}")
+
+            return jsonify({
+                'campaigns': result,
+                'count': len(result)
+            }), 200
+
+    except Exception as e:
+        logger.error(f"Error fetching Buy X Get Y campaigns: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
+@discount_bp.route('/item/<item_type>/<item_id>', methods=['GET'])
+def get_item_details(item_type, item_id):
+    """
+    Get item details by type and ID.
+    Used by Buy X Get Y handler to fetch reward item details.
+
+    Path Parameters:
+        item_type: 'service', 'medicine', 'package', or medicine subtypes ('OTC', 'Prescription', 'Product', 'Consumable')
+        item_id: Item UUID
+
+    Returns:
+        Item details including name, price, GST rate
+    """
+    from app.models.master import Service, Medicine, Package
+
+    # Medicine subtypes should be treated as medicine lookups
+    medicine_types = ['medicine', 'otc', 'prescription', 'product', 'consumable']
+
+    try:
+        with get_db_session() as session:
+            item = None
+
+            if item_type.lower() == 'service':
+                item = session.query(Service).filter_by(service_id=item_id).first()
+                if item:
+                    return jsonify({
+                        'id': str(item.service_id),
+                        'name': item.service_name,
+                        'type': 'service',
+                        'price': float(item.price) if item.price else 0,
+                        'gst_rate': float(item.gst_rate) if item.gst_rate else 0,
+                        'is_gst_exempt': item.is_gst_exempt or False
+                    }), 200
+
+            elif item_type.lower() in medicine_types:
+                # Handle all medicine subtypes (OTC, Prescription, Product, Consumable)
+                item = session.query(Medicine).filter_by(medicine_id=item_id).first()
+                if item:
+                    return jsonify({
+                        'id': str(item.medicine_id),
+                        'name': item.medicine_name,
+                        'type': 'medicine',
+                        'subtype': item.medicine_type,  # OTC, Prescription, Product, Consumable
+                        'price': float(item.mrp) if item.mrp else 0,
+                        'gst_rate': float(item.gst_rate) if item.gst_rate else 0,
+                        'is_gst_exempt': item.is_gst_exempt or False
+                    }), 200
+
+            elif item_type.lower() == 'package':
+                item = session.query(Package).filter_by(package_id=item_id).first()
+                if item:
+                    return jsonify({
+                        'id': str(item.package_id),
+                        'name': item.package_name,
+                        'type': 'package',
+                        'price': float(item.price) if item.price else 0,
+                        'gst_rate': float(item.gst_rate) if item.gst_rate else 0,
+                        'is_gst_exempt': item.is_gst_exempt or False
+                    }), 200
+
+            return jsonify({'error': 'Item not found'}), 404
+
+    except Exception as e:
+        logger.error(f"Error fetching item details: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500

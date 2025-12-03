@@ -297,7 +297,8 @@ class LineItemsHandler:
                         'grand_total': float(totals['grand_total'])
                     },
                     'context': context,
-                    'has_medicine_items': any(line.item_type == 'Medicine' for line in lines)
+                    # Medicine types include OTC, Prescription, Product, Consumable (from DB)
+                    'has_medicine_items': any(line.item_type in ['Medicine', 'OTC', 'Prescription', 'Product', 'Consumable'] for line in lines)
                 }
 
         except Exception as e:

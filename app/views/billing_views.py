@@ -426,9 +426,18 @@ def create_invoice_view():
                                     'unit_price': Decimal(request.form.get(f'line_items-{index}-unit_price', '0')),
                                     'discount_percent': Decimal(request.form.get(f'line_items-{index}-discount_percent', '0')),
                                     'discount_override': request.form.get(f'line_items-{index}-discount_override', 'false').lower() == 'true',
-                                    'included_in_consultation': bool(request.form.get(f'line_items-{index}-included_in_consultation'))
+                                    'included_in_consultation': bool(request.form.get(f'line_items-{index}-included_in_consultation')),
+                                    # Free Item support (promotional - GST on MRP)
+                                    'is_free_item': request.form.get(f'line_items-{index}-is_free_item', 'false').lower() == 'true',
+                                    'free_item_reason': request.form.get(f'line_items-{index}-free_item_reason', ''),
+                                    # Sample/Trial item support (no GST, no charge)
+                                    'is_sample': request.form.get(f'line_items-{index}-is_sample', 'false').lower() == 'true',
+                                    'sample_reason': request.form.get(f'line_items-{index}-sample_reason', '')
                                 }
-
+                                # Debug log for free/sample fields
+                                raw_is_free = request.form.get(f'line_items-{index}-is_free_item', 'NOT_FOUND')
+                                raw_is_sample = request.form.get(f'line_items-{index}-is_sample', 'NOT_FOUND')
+                                current_app.logger.info(f"🎁 Line {index} FREE/SAMPLE raw values: is_free_item={raw_is_free}, is_sample={raw_is_sample}")
                                 current_app.logger.info(f"📋 Line item {index}: {item}")
                                 line_items.append(item)
                             except (ValueError, TypeError, decimal.InvalidOperation) as e:

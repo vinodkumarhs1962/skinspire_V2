@@ -556,13 +556,27 @@ class InvoiceLineItem(Base, TimestampMixin, TenantMixin):
     # For profitability tracking (Business Rule #11)
     cost_price = Column(Numeric(12, 2))  # Cost of medicine or service
     profit_margin = Column(Numeric(12, 2))  # Calculated profit
-    
+
+    # Buy X Get Y Free support (Added 2025-11-30)
+    is_free_item = Column(Boolean, default=False)  # True if this is a promotional free item
+    trigger_line_id = Column(UUID(as_uuid=True))  # Reference to the line item that triggered this free item
+    promotion_campaign_id = Column(UUID(as_uuid=True), ForeignKey('promotion_campaigns.campaign_id'))  # Campaign that granted the free item
+    free_item_reason = Column(String(100))  # e.g., "Buy 5 Get 1 Free - DIWALI2025"
+
+    # Sample/Trial Item Support (Added 2025-12-02)
+    # For tracking free samples given to patients - no GST, inventory still deducted
+    is_sample = Column(Boolean, default=False)  # True if this is a sample/trial item
+    sample_authorized_by = Column(String(15), ForeignKey('users.user_id'))  # Doctor who authorized the sample
+    sample_reason = Column(String(200))  # e.g., "Trial for new acne treatment", "Product sample for skin test"
+
     # Relationships
     hospital = relationship("Hospital")
     invoice = relationship("InvoiceHeader", back_populates="line_items")
     package = relationship("Package")
     service = relationship("Service")
     medicine = relationship("Medicine")
+    promotion_campaign = relationship("PromotionCampaign")
+    sample_authorizer = relationship("User", foreign_keys=[sample_authorized_by])
 
 class InvoiceDocument(Base, TimestampMixin, TenantMixin):
     """

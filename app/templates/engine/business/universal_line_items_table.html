@@ -67,15 +67,22 @@
                 </tr>
                 {% endif %}
 
-                <tr class="{% if item.is_free %}table-info{% endif %}{% if item.is_prescription_item and item.consolidation_group_id %} prescription-consolidated-item{% endif %}">
+                <tr class="{% if item.is_free_item %}table-success{% elif item.is_sample %}table-info{% endif %}{% if item.is_prescription_item and item.consolidation_group_id %} prescription-consolidated-item{% endif %}">
                     <td style="text-align: left !important;">{{ loop.index }}</td>
                     <td class="text-left item-name-cell">
-                        <div class="truncate-text" title="{{ item.item_name }}{% if item.is_free %} (FREE){% endif %}">
+                        <div class="truncate-text" title="{{ item.item_name }}{% if item.is_free_item %} (FREE){% elif item.is_sample %} (SAMPLE){% endif %}">
                             <strong>{{ item.item_name }}</strong>
-                            {% if item.is_free %}
-                                <span class="badge bg-info ms-1" style="font-size: 0.7rem; padding: 0.2rem 0.3rem;">FREE</span>
+                        </div>
+                        {% if item.is_free_item or item.is_sample %}
+                        <div class="mt-1">
+                            {% if item.is_free_item %}
+                                <span class="status-badge status-success" style="font-size: 0.65rem; padding: 0.15rem 0.35rem;"><i class="fas fa-gift"></i> FREE</span>
+                            {% endif %}
+                            {% if item.is_sample %}
+                                <span class="status-badge status-purple" style="font-size: 0.65rem; padding: 0.15rem 0.35rem;"><i class="fas fa-flask"></i> SAMPLE</span>
                             {% endif %}
                         </div>
+                        {% endif %}
                     </td>
 
                     {% if data.entity_type == 'po' %}

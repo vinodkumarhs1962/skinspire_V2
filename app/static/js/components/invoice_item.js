@@ -36,23 +36,56 @@ class InvoiceItemComponent {
       
       // Event delegation for row actions
       if (this.container) {
+        console.log('📦 Container found for event delegation:', this.container.id);
         this.container.addEventListener('click', (e) => {
           const target = e.target;
-          
+          console.log('🖱️ Click detected on:', target.tagName, target.className);
+
           // Handle delete button
           if (target.closest('.remove-line-item')) {
             this.removeItem(target.closest('.line-item-row'));
           }
-          
+
           // Handle save button
           if (target.closest('.save-line-item')) {
             this.saveItem(target.closest('.line-item-row'));
+          }
+
+          // Handle free/sample dropdown toggle
+          if (target.closest('.free-sample-toggle')) {
+            console.log('🎁 Free/Sample toggle clicked');
+            e.stopPropagation();
+            this.toggleFreeSampleMenu(target.closest('.line-item-row'));
+          }
+
+          // Handle free item option
+          if (target.closest('.free-item-option')) {
+            this.setFreeItem(target.closest('.line-item-row'));
+          }
+
+          // Handle sample item option
+          if (target.closest('.sample-item-option')) {
+            this.setSampleItem(target.closest('.line-item-row'));
+          }
+
+          // Handle clear free/sample status
+          if (target.closest('.clear-free-sample-option')) {
+            this.clearFreeSampleStatus(target.closest('.line-item-row'));
+          }
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+          if (!e.target.closest('.free-sample-dropdown')) {
+            document.querySelectorAll('.free-sample-menu').forEach(menu => {
+              menu.classList.add('hidden');
+            });
           }
         });
         
         // Event delegation for input changes
         this.container.addEventListener('input', (e) => {
-          if (e.target.matches('.quantity, .unit-price, .discount-percent')) {
+          if (e.target.matches('.quantity, .unit-price, .discount-percent, .discount-amount')) {
             this.calculateLineTotal(e.target.closest('.line-item-row'));
             this.calculateTotals();
             // Notify bulk discount manager of line item changes
@@ -133,10 +166,11 @@ class InvoiceItemComponent {
         return;
       }
       
-      // For medicine-based types, validate batch
+      // For medicine-based types, validate batch (skip for sample items)
       const itemType = row.querySelector('.item-type').value;
+      const isSample = row.querySelector('.is-sample')?.value === 'true';
       const medicineBasedTypes = ['OTC', 'Prescription', 'Product', 'Consumable'];
-      if (medicineBasedTypes.includes(itemType)) {
+      if (medicineBasedTypes.includes(itemType) && !isSample) {
         const batch = row.querySelector('.batch-select').value;
         if (!batch) {
           alert('Please select a batch for this item');
@@ -159,7 +193,350 @@ class InvoiceItemComponent {
       this.calculateLineTotal(row);
       this.calculateTotals();
     }
-    
+
+    /**
+     * Toggle free/sample dropdown menu
+     */
+    toggleFreeSampleMenu(row) {
+      console.log('🎁 toggleFreeSampleMenu called, row:', row);
+      if (!row) return;
+      const menu = row.querySelector('.free-sample-menu');
+      console.log('🎁 Menu element found:', menu);
+      if (menu) {
+        // Close all other menus first
+        document.querySelectorAll('.free-sample-menu').forEach(m => {
+          if (m !== menu) m.classList.add('hidden');
+        });
+        menu.classList.toggle('hidden');
+        console.log('🎁 Menu visibility toggled, hidden:', menu.classList.contains('hidden'));
+      }
+    }
+
+    /**
+     * Set item as FREE (Promotional) - GST calculated on MRP, 100% discount
+     */
+    setFreeItem(row) {
+      if (!row) return;
+
+      const itemId = row.querySelector('.item-id')?.value;
+      if (!itemId) {
+        alert('Please select an item first.');
+        return;
+      }
+
+      const reason = prompt('Free Item Reason:\n(e.g., "Promotional offer", "Customer loyalty reward")', '');
+      if (reason === null) return;
+
+      // Close menu
+      row.querySelector('.free-sample-menu')?.classList.add('hidden');
+
+      // Get elements
+      const isFreeItemInput = row.querySelector('.is-free-item');
+      const freeItemReasonInput = row.querySelector('.free-item-reason');
+      const isSampleInput = row.querySelector('.is-sample');
+      const sampleReasonInput = row.querySelector('.sample-reason');
+      const unitPriceInput = row.querySelector('.unit-price');
+      const discountInput = row.querySelector('.discount-percent');
+      const toggleBtn = row.querySelector('.free-sample-toggle i');
+
+      // Store original values
+      row.dataset.originalPrice = unitPriceInput?.value || '0';
+      row.dataset.originalDiscount = discountInput?.value || '0';
+      row.dataset.originalGstRate = row.querySelector('.gst-rate')?.value || '0';
+
+      // Set free item state (keep price, 100% discount, GST on MRP)
+      console.log('🎁 Setting free item - isFreeItemInput found:', !!isFreeItemInput);
+      if (isFreeItemInput) {
+        isFreeItemInput.value = 'true';
+        console.log('🎁 Set is-free-item to:', isFreeItemInput.value);
+      }
+      if (freeItemReasonInput) freeItemReasonInput.value = reason || 'Promotional free item';
+      if (isSampleInput) isSampleInput.value = 'false';
+      if (sampleReasonInput) sampleReasonInput.value = '';
+
+      // Keep original price (for GST calculation), set 100% discount
+      if (discountInput) {
+        discountInput.value = '100';
+        discountInput.disabled = true;
+      }
+      if (unitPriceInput) unitPriceInput.disabled = true;
+
+      // Update icon and styling
+      if (toggleBtn) {
+        toggleBtn.className = 'fas fa-gift text-sm text-green-600';
+      }
+      row.classList.remove('sample-item-row', 'bg-purple-50', 'dark:bg-purple-900/20');
+      row.classList.add('free-item-row', 'bg-green-50', 'dark:bg-green-900/20');
+
+      // Add badge
+      this.addStatusBadge(row, 'FREE', 'green', 'fa-gift', reason);
+
+      console.log(`🎁 Item marked as FREE: ${row.querySelector('.item-name')?.value}`);
+
+      this.calculateLineTotal(row);
+      this.calculateTotals();
+      document.dispatchEvent(new Event('line-item-changed'));
+    }
+
+    /**
+     * Set item as SAMPLE - No GST, price = 0
+     */
+    setSampleItem(row) {
+      if (!row) return;
+
+      const itemId = row.querySelector('.item-id')?.value;
+      if (!itemId) {
+        alert('Please select an item first.');
+        return;
+      }
+
+      const reason = prompt('Sample/Trial Reason:\n(e.g., "Product trial", "New treatment trial with consent")', '');
+      if (reason === null) return;
+
+      // Close menu
+      row.querySelector('.free-sample-menu')?.classList.add('hidden');
+
+      // Get elements
+      const isFreeItemInput = row.querySelector('.is-free-item');
+      const freeItemReasonInput = row.querySelector('.free-item-reason');
+      const isSampleInput = row.querySelector('.is-sample');
+      const sampleReasonInput = row.querySelector('.sample-reason');
+      const unitPriceInput = row.querySelector('.unit-price');
+      const discountInput = row.querySelector('.discount-percent');
+      const gstRateInput = row.querySelector('.gst-rate');
+      const isGstExemptInput = row.querySelector('.is-gst-exempt');
+      const toggleBtn = row.querySelector('.free-sample-toggle i');
+
+      // Store original values
+      row.dataset.originalPrice = unitPriceInput?.value || '0';
+      row.dataset.originalDiscount = discountInput?.value || '0';
+      row.dataset.originalGstRate = gstRateInput?.value || '0';
+
+      // Set sample state (price = 0, no GST)
+      if (isSampleInput) isSampleInput.value = 'true';
+      if (sampleReasonInput) sampleReasonInput.value = reason || 'Sample item';
+      if (isFreeItemInput) isFreeItemInput.value = 'false';
+      if (freeItemReasonInput) freeItemReasonInput.value = '';
+
+      // Set price = 0, GST = 0
+      if (unitPriceInput) {
+        unitPriceInput.value = '0';
+        unitPriceInput.disabled = true;
+      }
+      if (discountInput) {
+        discountInput.value = '0';
+        discountInput.disabled = true;
+      }
+      if (gstRateInput) gstRateInput.value = '0';
+      if (isGstExemptInput) isGstExemptInput.value = 'true';
+
+      // Update GST display
+      const gstRateDisplay = row.querySelector('.gst-rate-display');
+      if (gstRateDisplay) gstRateDisplay.textContent = '0%';
+
+      // Update icon and styling
+      if (toggleBtn) {
+        toggleBtn.className = 'fas fa-flask text-sm text-purple-600';
+      }
+      row.classList.remove('free-item-row', 'bg-green-50', 'dark:bg-green-900/20');
+      row.classList.add('sample-item-row', 'bg-purple-50', 'dark:bg-purple-900/20');
+
+      // Add badge
+      this.addStatusBadge(row, 'SAMPLE', 'purple', 'fa-flask', reason);
+
+      console.log(`🧪 Item marked as SAMPLE: ${row.querySelector('.item-name')?.value}`);
+
+      this.calculateLineTotal(row);
+      this.calculateTotals();
+      document.dispatchEvent(new Event('line-item-changed'));
+    }
+
+    /**
+     * Clear free/sample status
+     */
+    clearFreeSampleStatus(row) {
+      if (!row) return;
+
+      // Close menu
+      row.querySelector('.free-sample-menu')?.classList.add('hidden');
+
+      const isFreeItem = row.querySelector('.is-free-item')?.value === 'true';
+      const isSample = row.querySelector('.is-sample')?.value === 'true';
+
+      if (!isFreeItem && !isSample) return;
+
+      if (!confirm('Clear free/sample status? This will restore the original pricing.')) return;
+
+      // Get elements
+      const isFreeItemInput = row.querySelector('.is-free-item');
+      const freeItemReasonInput = row.querySelector('.free-item-reason');
+      const isSampleInput = row.querySelector('.is-sample');
+      const sampleReasonInput = row.querySelector('.sample-reason');
+      const unitPriceInput = row.querySelector('.unit-price');
+      const discountInput = row.querySelector('.discount-percent');
+      const gstRateInput = row.querySelector('.gst-rate');
+      const isGstExemptInput = row.querySelector('.is-gst-exempt');
+      const toggleBtn = row.querySelector('.free-sample-toggle i');
+
+      // Clear states
+      if (isFreeItemInput) isFreeItemInput.value = 'false';
+      if (freeItemReasonInput) freeItemReasonInput.value = '';
+      if (isSampleInput) isSampleInput.value = 'false';
+      if (sampleReasonInput) sampleReasonInput.value = '';
+
+      // Restore original values
+      if (unitPriceInput) {
+        unitPriceInput.value = row.dataset.originalPrice || '0';
+        unitPriceInput.disabled = false;
+      }
+      if (discountInput) {
+        discountInput.value = row.dataset.originalDiscount || '0';
+        discountInput.disabled = false;
+      }
+      if (gstRateInput) gstRateInput.value = row.dataset.originalGstRate || '0';
+      if (isGstExemptInput) isGstExemptInput.value = 'false';
+
+      // Reset icon and styling
+      if (toggleBtn) {
+        toggleBtn.className = 'fas fa-gift text-sm';
+      }
+      row.classList.remove('free-item-row', 'bg-green-50', 'dark:bg-green-900/20');
+      row.classList.remove('sample-item-row', 'bg-purple-50', 'dark:bg-purple-900/20');
+
+      // Remove badge
+      this.removeStatusBadge(row);
+
+      console.log(`✖️ Free/Sample status cleared: ${row.querySelector('.item-name')?.value}`);
+
+      this.calculateLineTotal(row);
+      this.calculateTotals();
+      document.dispatchEvent(new Event('line-item-changed'));
+    }
+
+    /**
+     * Add status badge (FREE or SAMPLE)
+     */
+    addStatusBadge(row, label, color, icon, reason) {
+      this.removeStatusBadge(row); // Remove existing badge first
+
+      const nameCell = row.querySelector('.item-search')?.parentElement;
+      if (!nameCell) return;
+
+      const badge = document.createElement('span');
+      badge.className = `status-badge ml-2 px-2 py-0.5 text-xs bg-${color}-100 text-${color}-800 dark:bg-${color}-900 dark:text-${color}-200 rounded-full font-medium`;
+      badge.innerHTML = `<i class="fas ${icon} mr-1"></i>${label}`;
+      badge.title = reason || `${label} item`;
+      nameCell.appendChild(badge);
+    }
+
+    /**
+     * Remove status badge
+     */
+    removeStatusBadge(row) {
+      const badge = row.querySelector('.status-badge');
+      if (badge) badge.remove();
+    }
+
+    /**
+     * Switch discount display mode between 'percentage' and 'fixed_amount'
+     * Called when a campaign discount is applied to show the appropriate input field
+     * BACKWARD COMPATIBLE: Works with legacy templates that only have percentage field
+     * NOTE: Display mode is determined by which row is visible (no hidden field needed)
+     * @param {HTMLElement} row - The line item row
+     * @param {string} discountType - 'percentage' or 'fixed_amount'
+     * @param {number} value - The discount value to set
+     */
+    setDiscountMode(row, discountType, value = 0) {
+      if (!row) return;
+
+      const percentRow = row.querySelector('.discount-percent-row');
+      const amountRow = row.querySelector('.discount-amount-row');
+      const percentInput = row.querySelector('.discount-percent');
+      const amountInput = row.querySelector('.discount-amount');
+
+      // ✅ BACKWARD COMPATIBILITY: If amount field doesn't exist, use percentage-only mode
+      if (!amountRow || !amountInput) {
+        console.log('💡 setDiscountMode: Legacy template detected (no amount field), using percentage mode');
+        // For fixed_amount on legacy template, convert to percentage
+        if (discountType === 'fixed_amount' && percentInput) {
+          const quantity = parseFloat(row.querySelector('.quantity')?.value || 1);
+          const unitPrice = parseFloat(row.querySelector('.unit-price')?.value || 0);
+          const grossAmount = quantity * unitPrice;
+          // Convert fixed amount to percentage
+          const equivalentPercent = grossAmount > 0 ? (value / grossAmount) * 100 : 0;
+          percentInput.value = equivalentPercent.toFixed(2);
+          console.log(`💡 Converted fixed amount ₹${value} to ${equivalentPercent.toFixed(2)}% (legacy mode)`);
+        } else if (percentInput) {
+          percentInput.value = parseFloat(value || 0);
+        }
+        this.calculateLineTotal(row);
+        this.calculateTotals();
+        return;
+      }
+
+      console.log(`💰 setDiscountMode: type=${discountType}, value=${value}`);
+
+      if (discountType === 'fixed_amount') {
+        // Show amount input, hide percentage input
+        if (percentRow) percentRow.style.display = 'none';
+        amountRow.style.display = 'flex';
+
+        // Set the value
+        amountInput.value = parseFloat(value || 0).toFixed(2);
+        if (percentInput) percentInput.value = '0';  // Reset percentage
+
+        console.log(`💵 Switched to FIXED AMOUNT mode: ₹${value}`);
+      } else {
+        // Show percentage input, hide amount input (default)
+        if (percentRow) percentRow.style.display = 'flex';
+        amountRow.style.display = 'none';
+
+        // Set the value
+        if (percentInput) percentInput.value = parseFloat(value || 0);
+        amountInput.value = '0';  // Reset amount
+
+        console.log(`📊 Switched to PERCENTAGE mode: ${value}%`);
+      }
+
+      // Recalculate after mode switch
+      this.calculateLineTotal(row);
+      this.calculateTotals();
+    }
+
+    /**
+     * Get the current discount mode for a row
+     * Determines mode based on which input row is visible (no hidden field needed)
+     * @param {HTMLElement} row - The line item row
+     * @returns {string} 'percentage' or 'fixed_amount'
+     */
+    getDiscountMode(row) {
+      if (!row) return 'percentage';
+      const amountRow = row.querySelector('.discount-amount-row');
+      // If amount row exists and is visible, it's fixed_amount mode
+      if (amountRow && amountRow.style.display !== 'none') {
+        return 'fixed_amount';
+      }
+      return 'percentage';
+    }
+
+    /**
+     * Get effective discount for a row (amount or percentage based on mode)
+     * @param {HTMLElement} row - The line item row
+     * @returns {object} {type: 'percentage'|'fixed_amount', value: number}
+     */
+    getEffectiveDiscount(row) {
+      if (!row) return { type: 'percentage', value: 0 };
+
+      const mode = this.getDiscountMode(row);
+      if (mode === 'fixed_amount') {
+        const amountInput = row.querySelector('.discount-amount');
+        return { type: 'fixed_amount', value: parseFloat(amountInput?.value || 0) };
+      } else {
+        const percentInput = row.querySelector('.discount-percent');
+        return { type: 'percentage', value: parseFloat(percentInput?.value || 0) };
+      }
+    }
+
     initRow(row) {
       // Initialize batch and expiry fields - disabled and hidden by default until type is selected
       const batchSelect = row.querySelector('.batch-select');
@@ -357,6 +734,14 @@ class InvoiceItemComponent {
           newRow.querySelector('.item-id').value = medicineId;
           newRow.querySelector('.item-name').value = medicineName;
           newRow.querySelector('.item-search').value = medicineName;
+          newRow.querySelector('.item-search').title = medicineName; // Tooltip
+
+          // Show full item name in wrap display if name is long
+          const itemNameDisplay = newRow.querySelector('.item-name-display');
+          if (itemNameDisplay && medicineName.length > 25) {
+            itemNameDisplay.textContent = medicineName;
+            itemNameDisplay.classList.remove('hidden');
+          }
 
           // Populate batch data
           this.populateBatchInRow(newRow, batch);
@@ -498,6 +883,18 @@ class InvoiceItemComponent {
               itemIdInput.value = item.id;
               itemNameInput.value = item.name;
               itemSearchInput.value = item.name;
+              itemSearchInput.title = item.name; // Tooltip for full name
+
+              // Show full item name in wrap display if name is long
+              const itemNameDisplay = row.querySelector('.item-name-display');
+              if (itemNameDisplay) {
+                if (item.name.length > 25) {
+                  itemNameDisplay.textContent = item.name;
+                  itemNameDisplay.classList.remove('hidden');
+                } else {
+                  itemNameDisplay.classList.add('hidden');
+                }
+              }
 
               // Set GST info - ensure string values for hidden inputs
               const gstRateValue = item.gst_rate || 0;
@@ -730,7 +1127,6 @@ class InvoiceItemComponent {
     calculateLineTotal(row) {
       const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
       const unitPrice = parseFloat(row.querySelector('.unit-price').value) || 0;
-      const discountPercent = parseFloat(row.querySelector('.discount-percent').value) || 0;
       const gstRate = parseFloat(row.querySelector('.gst-rate').value) || 0;
       const isGstExempt = row.querySelector('.is-gst-exempt').value === 'true';
       const gstInclusive = row.querySelector('.gst-inclusive').value === 'true';  // ✅ CRITICAL: Check if GST is inclusive
@@ -740,6 +1136,30 @@ class InvoiceItemComponent {
       const isInterstateValue = document.getElementById('is_interstate')?.value || 'false';
       const isInterstate = isInterstateValue === 'true';
 
+      // Calculate gross amount
+      const grossAmount = quantity * unitPrice;
+
+      // ✅ BACKWARD COMPATIBLE: Handle both percentage and fixed_amount discount types
+      // Determine mode based on which input is visible (no hidden field needed)
+      const discountTypeMode = this.getDiscountMode(row);
+
+      let discountPercent = 0;
+      let discountAmount = 0;
+
+      if (discountTypeMode === 'fixed_amount') {
+        // Fixed amount discount - use the discount-amount field
+        const discountAmountInput = row.querySelector('.discount-amount');
+        discountAmount = parseFloat(discountAmountInput?.value || 0);
+        // Calculate equivalent percentage for storage (both fields synced)
+        discountPercent = grossAmount > 0 ? (discountAmount / grossAmount) * 100 : 0;
+      } else {
+        // Percentage discount (default/legacy) - use the discount-percent field
+        const discountPercentInput = row.querySelector('.discount-percent');
+        discountPercent = parseFloat(discountPercentInput?.value || 0);
+        // Calculate amount from percentage (both fields synced)
+        discountAmount = (grossAmount * discountPercent) / 100;
+      }
+
       console.log('💰 Calculate Line Total - Input values:', {
         quantity,
         unitPrice,
@@ -747,14 +1167,11 @@ class InvoiceItemComponent {
         isGstInvoice,
         isGstExempt,
         gstInclusive,  // ✅ Log inclusive flag
-        isInterstate
+        isInterstate,
+        discountTypeMode,  // ✅ Log discount type mode
+        discountPercent,
+        discountAmount
       });
-
-      // Calculate gross amount
-      const grossAmount = quantity * unitPrice;
-
-      // Calculate discount
-      const discountAmount = (grossAmount * discountPercent) / 100;
 
       // Amount after discount
       const amountAfterDiscount = grossAmount - discountAmount;

@@ -1163,9 +1163,11 @@ def _update_inventory_for_invoice(
     """
     try:
         inventory_entries = []
-        
+
         # Filter line items to only include medicines
-        medicine_items = [item for item in line_items if item.get('item_type') == 'Medicine']
+        # Medicine types include OTC, Prescription, Product, Consumable (from frontend)
+        MEDICINE_TYPES = ['Medicine', 'OTC', 'Prescription', 'Product', 'Consumable']
+        medicine_items = [item for item in line_items if item.get('item_type') in MEDICINE_TYPES]
         
         for item in medicine_items:
             medicine_id = item.get('medicine_id')

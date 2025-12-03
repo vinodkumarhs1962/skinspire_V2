@@ -44,9 +44,17 @@ class InvoiceLineItemForm(FlaskForm):
         Optional(),
         NumberRange(min=0, max=100, message="Discount must be between 0 and 100%")
     ], default=0)
-    
+
     included_in_consultation = BooleanField('Included in Consultation', default=False)
-    
+
+    # Free Item support (promotional - GST on MRP, 100% discount)
+    is_free_item = HiddenField('Is Free Item', default='false')
+    free_item_reason = HiddenField('Free Item Reason', default='')
+
+    # Sample/Trial item support (no GST, no charge)
+    is_sample = HiddenField('Is Sample', default='false')
+    sample_reason = HiddenField('Sample Reason', default='')
+
     class Meta:
         # Disable CSRF for subforms
         csrf = False
@@ -143,8 +151,9 @@ class InvoiceForm(FlaskForm):
                 app.logger.warning(f"Line item {i+1} missing type or ID: {item}")
                 raise ValidationError(f"Line item {i+1} is missing type or ID")
             
-            # For Medicine and Prescription types, batch is required
-            if item['item_type'] in ['Medicine', 'Prescription'] and not item.get('batch'):
+            # For Medicine and Prescription types, batch is required (skip for sample items)
+            is_sample = item.get('is_sample', False)
+            if item['item_type'] in ['Medicine', 'Prescription'] and not item.get('batch') and not is_sample:
                 app.logger.warning(f"Line item {i+1} missing batch: {item}")
                 raise ValidationError(f"Batch is required for Medicine/Prescription items (line {i+1})")
 
@@ -209,7 +218,13 @@ class InvoiceForm(FlaskForm):
                         'quantity': Decimal(str(item.get('quantity', 1))),
                         'unit_price': Decimal(str(item.get('unit_price', 0))),
                         'discount_percent': Decimal(str(item.get('discount_percent', 0))),
-                        'included_in_consultation': bool(item.get('included_in_consultation', False))
+                        'included_in_consultation': bool(item.get('included_in_consultation', False)),
+                        # Free Item support (promotional - GST on MRP, 100% discount)
+                        'is_free_item': str(item.get('is_free_item', 'false')).lower() == 'true',
+                        'free_item_reason': item.get('free_item_reason', ''),
+                        # Sample/Trial item support (no GST, no charge)
+                        'is_sample': str(item.get('is_sample', 'false')).lower() == 'true',
+                        'sample_reason': item.get('sample_reason', '')
                     }
                     
                     line_items.append(line_item)

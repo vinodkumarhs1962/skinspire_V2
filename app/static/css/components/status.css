@@ -632,3 +632,55 @@
 .status-badge.status-deleted i {
     margin-right: 0.25rem !important;
 }
+
+/* ==========================================
+   ADDITIONAL STATUS VARIANTS (for invoices)
+   ========================================== */
+
+/* Success status - Green (for FREE items indicator) */
+.status-success {
+    background-color: rgb(220 252 231) !important; /* green-100 */
+    color: rgb(22 101 52) !important; /* green-800 */
+    border: 1px solid rgb(187 247 208) !important; /* green-200 */
+}
+
+.status-success i {
+    margin-right: 0.25rem !important;
+}
+
+/* Purple status - for SAMPLE items indicator */
+.status-purple {
+    background-color: rgb(243 232 255) !important; /* purple-100 */
+    color: rgb(107 33 168) !important; /* purple-800 */
+    border: 1px solid rgb(216 180 254) !important; /* purple-200 */
+}
+
+.status-purple i {
+    margin-right: 0.25rem !important;
+}
+
+/* Danger status - Red (for alerts/errors) */
+.status-danger {
+    background-color: rgb(254 226 226) !important; /* red-100 */
+    color: rgb(153 27 27) !important; /* red-800 */
+    border: 1px solid rgb(252 165 165) !important; /* red-200 */
+}
+
+/* Dark mode variants */
+.dark .status-success {
+    background-color: rgba(20, 83, 45, 0.5) !important; /* green-900/50 */
+    color: rgb(134 239 172) !important; /* green-300 */
+    border-color: rgb(34 197 94) !important; /* green-500 */
+}
+
+.dark .status-purple {
+    background-color: rgba(88, 28, 135, 0.5) !important; /* purple-900/50 */
+    color: rgb(216 180 254) !important; /* purple-300 */
+    border-color: rgb(168 85 247) !important; /* purple-500 */
+}
+
+.dark .status-danger {
+    background-color: rgba(127, 29, 29, 0.5) !important; /* red-900/50 */
+    color: rgb(252 165 165) !important; /* red-300 */
+    border-color: rgb(239 68 68) !important; /* red-500 */
+}

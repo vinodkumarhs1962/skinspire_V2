@@ -4,6 +4,91 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/components/buttons.css') }}">
+<style>
+/* Buy X Get Y Autocomplete Styling (matching promotions dashboard) */
+.bxy-autocomplete-wrapper {
+    position: relative;
+}
+.bxy-autocomplete-dropdown {
+    position: absolute;
+    z-index: 50;
+    width: 100%;
+    max-height: 280px;
+    overflow-y: auto;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    margin-top: 4px;
+}
+.dark .bxy-autocomplete-dropdown {
+    background: #1f2937;
+    border-color: #374151;
+}
+.bxy-autocomplete-item {
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    border-bottom: 1px solid #f3f4f6;
+    transition: background-color 0.15s ease;
+    font-size: 0.8125rem;
+}
+.bxy-autocomplete-item:last-child {
+    border-bottom: none;
+}
+.bxy-autocomplete-item:hover {
+    background: #eff6ff;
+}
+.dark .bxy-autocomplete-item {
+    border-color: #374151;
+}
+.dark .bxy-autocomplete-item:hover {
+    background: #1e3a5f;
+}
+.bxy-autocomplete-item-label {
+    font-weight: 500;
+    color: #111827;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 70%;
+}
+.dark .bxy-autocomplete-item-label {
+    color: #f9fafb;
+}
+.bxy-autocomplete-no-results {
+    padding: 1rem;
+    text-align: center;
+    color: #9ca3af;
+}
+.bxy-form-input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.bxy-form-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+.dark .bxy-form-input {
+    background: #374151;
+    border-color: #4b5563;
+    color: #f9fafb;
+}
+.dark .bxy-form-input:focus {
+    border-color: #60a5fa;
+}
+.bxy-form-input:disabled {
+    background: #f3f4f6;
+    cursor: not-allowed;
+}
+.dark .bxy-form-input:disabled {
+    background: #1f2937;
+}
+</style>
 {% endblock %}
 
 {% block content %}
@@ -101,6 +186,9 @@
                         <option value="simple_discount" {{ 'selected' if data.get('promotion_type') == 'simple_discount' else '' }}>Simple Discount</option>
                         <option value="buy_x_get_y" {{ 'selected' if data.get('promotion_type') == 'buy_x_get_y' else '' }}>Buy X Get Y Free</option>
                     </select>
+                    <p id="buy-x-get-y-hint" class="mt-1 text-xs text-purple-600 dark:text-purple-400 hidden">
+                        <i class="fas fa-arrow-down mr-1"></i>Configure X (trigger) and Y (reward) items below
+                    </p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -114,11 +202,182 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Discount Value <span class="text-red-500">*</span>
+                        <span id="discount-value-label">Discount Value</span> <span class="text-red-500">*</span>
+                        <span id="discount-unit-hint" class="text-xs text-gray-500 ml-1">(in %)</span>
                     </label>
-                    <input type="number" name="discount_value" value="{{ data.get('discount_value', '') }}"
-                           required step="0.01" min="0" placeholder="e.g., 10 for 10%"
-                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                    <div class="relative">
+                        <span id="discount-unit-prefix" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 hidden">₹</span>
+                        <input type="number" name="discount_value" id="discount_value_input" value="{{ data.get('discount_value', '') }}"
+                               required step="0.01" min="0" placeholder="e.g., 10 for 10%"
+                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <span id="discount-unit-suffix" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">%</span>
+                    </div>
+                    <p id="discount-value-help" class="mt-1 text-xs text-gray-500">Enter percentage (e.g., 10 for 10% off)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Buy X Get Y Configuration (shown when promotion_type = buy_x_get_y) -->
+        <div id="buy-x-get-y-config" class="bg-white dark:bg-gray-800 rounded-lg shadow border-2 border-purple-400 hidden">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-purple-50 dark:bg-purple-900/20">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                    <i class="fas fa-gift mr-2 text-purple-600"></i>Buy X Get Y Configuration
+                </h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    <strong>X</strong> = What customer must buy (Trigger) | <strong>Y</strong> = What they get free/discounted (Reward)
+                </p>
+            </div>
+            <div class="p-6 space-y-6">
+                <!-- Trigger Section (X) -->
+                <div class="border-2 border-blue-400 rounded-lg p-4 bg-blue-50 dark:bg-blue-900/20">
+                    <h4 class="font-medium text-blue-800 dark:text-blue-300 mb-3 text-lg">
+                        <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 text-white font-bold mr-2">X</span>
+                        When Customer Buys... (Trigger)
+                    </h4>
+
+                    <div class="space-y-4">
+                        <!-- Item Type + Search (same row, half width) -->
+                        <div class="md:w-1/2">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Item Type <span class="text-red-500">*</span></label>
+                                    <select id="trigger_item_type" name="trigger_item_type" class="bxy-form-input" required>
+                                        <option value="">-- Select Type --</option>
+                                        <optgroup label="Services & Packages">
+                                            <option value="Package">Package</option>
+                                            <option value="Service">Service</option>
+                                        </optgroup>
+                                        <optgroup label="Medicines & Products">
+                                            <option value="OTC">OTC Medicine</option>
+                                            <option value="Prescription">Prescription Medicine</option>
+                                            <option value="Product">Product</option>
+                                            <option value="Consumable">Consumable</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Item <span class="text-red-500">*</span></label>
+                                    <div class="relative">
+                                        <input type="text"
+                                               id="trigger_item_search"
+                                               class="bxy-form-input"
+                                               placeholder="Select type first..."
+                                               autocomplete="off"
+                                               disabled>
+                                        <input type="hidden" id="trigger_item_id" name="trigger_item_id">
+                                        <input type="hidden" id="trigger_item_name" name="trigger_item_name">
+                                        <div id="trigger_item_dropdown" class="bxy-autocomplete-dropdown hidden"></div>
+                                        <div id="trigger_item_loading" class="absolute right-3 top-2.5 hidden">
+                                            <i class="fas fa-spinner fa-spin text-gray-400"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Trigger Conditions -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-blue-200 dark:border-blue-700">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Minimum Quantity</label>
+                                <input type="number" name="trigger_min_quantity" id="trigger_min_quantity" min="1" step="1" value="1"
+                                       class="bxy-form-input">
+                                <p class="text-xs text-gray-500 mt-1">How many items must be purchased</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Or Minimum Amount (Rs.)</label>
+                                <input type="number" name="trigger_min_amount" id="trigger_min_amount" min="0" step="0.01" placeholder="Optional"
+                                       class="bxy-form-input">
+                                <p class="text-xs text-gray-500 mt-1">Alternative: minimum purchase amount</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reward Section (Y) - Multiple Items Supported -->
+                <div class="border-2 border-green-400 rounded-lg p-4 bg-green-50 dark:bg-green-900/20">
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="font-medium text-green-800 dark:text-green-300 text-lg">
+                            <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-green-600 text-white font-bold mr-2">Y</span>
+                            They Get... (Rewards)
+                        </h4>
+                        <button type="button" id="add-reward-item-btn"
+                                class="px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                            <i class="fas fa-plus mr-1"></i>Add Another Reward
+                        </button>
+                    </div>
+
+                    <!-- Container for reward items -->
+                    <div id="reward-items-container" class="space-y-4">
+                        <!-- First reward item (required) -->
+                        <div class="reward-item-row border border-green-300 rounded-lg p-3 bg-white dark:bg-gray-800" data-reward-index="0">
+                            <div class="flex justify-between items-start mb-2">
+                                <span class="text-sm font-medium text-green-700 dark:text-green-400">Reward Item #1</span>
+                                <button type="button" class="remove-reward-btn text-red-500 hover:text-red-700 hidden" title="Remove this reward">
+                                    <i class="fas fa-times-circle"></i>
+                                </button>
+                            </div>
+                            <!-- Item Type + Search (same row, half width) -->
+                            <div class="md:w-3/4">
+                                <div class="grid grid-cols-4 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Type <span class="text-red-500">*</span></label>
+                                        <select class="reward-item-type bxy-form-input text-sm" name="reward_item_types[]" required>
+                                            <option value="">-- Type --</option>
+                                            <optgroup label="Services & Packages">
+                                                <option value="Package">Package</option>
+                                                <option value="Service">Service</option>
+                                            </optgroup>
+                                            <optgroup label="Medicines & Products">
+                                                <option value="OTC">OTC Medicine</option>
+                                                <option value="Prescription">Prescription</option>
+                                                <option value="Product">Product</option>
+                                                <option value="Consumable">Consumable</option>
+                                            </optgroup>
+                                        </select>
+                                    </div>
+                                    <div class="col-span-2">
+                                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Item <span class="text-red-500">*</span></label>
+                                        <div class="relative">
+                                            <input type="text" class="reward-item-search bxy-form-input text-sm"
+                                                   placeholder="Select type first..." autocomplete="off" disabled>
+                                            <input type="hidden" class="reward-item-id" name="reward_item_ids[]">
+                                            <input type="hidden" class="reward-item-name" name="reward_item_names[]">
+                                            <div class="reward-item-dropdown bxy-autocomplete-dropdown hidden"></div>
+                                            <div class="reward-item-loading absolute right-3 top-2 hidden">
+                                                <i class="fas fa-spinner fa-spin text-gray-400 text-sm"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Qty</label>
+                                            <input type="number" class="reward-quantity bxy-form-input text-sm" name="reward_quantities[]"
+                                                   min="1" value="1" step="1">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Disc %</label>
+                                            <input type="number" class="reward-discount bxy-form-input text-sm" name="reward_discounts[]"
+                                                   min="0" max="100" value="100" step="1" title="100% = FREE">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="text-xs text-green-600 dark:text-green-400 mt-3">
+                        <i class="fas fa-info-circle mr-1"></i>Add multiple rewards for promotions like "Free consultation + Free product samples"
+                    </p>
+                </div>
+
+                <!-- Preview -->
+                <div class="border rounded-lg p-4 bg-gray-50 dark:bg-gray-700">
+                    <h4 class="font-medium text-gray-800 dark:text-gray-200 mb-2">
+                        <i class="fas fa-eye mr-2"></i>Preview
+                    </h4>
+                    <p id="buy-x-get-y-preview" class="text-gray-600 dark:text-gray-400 italic">
+                        Configure the trigger and reward above to see preview
+                    </p>
                 </div>
             </div>
         </div>
@@ -308,7 +567,8 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}
+{% block scripts %}
+{{ super() }}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Auto-uppercase campaign code
@@ -331,6 +591,537 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // =========================================
+    // BUY X GET Y CONFIGURATION
+    // =========================================
+    const promotionTypeSelect = document.getElementById('promotion_type');
+    const buyXGetYConfig = document.getElementById('buy-x-get-y-config');
+    const discountTypeSelect = document.querySelector('select[name="discount_type"]');
+    const discountValueInput = document.querySelector('input[name="discount_value"]');
+    const buyXGetYHint = document.getElementById('buy-x-get-y-hint');
+
+    // Toggle Buy X Get Y config visibility
+    function toggleBuyXGetYConfig(scrollToConfig = false) {
+        if (!promotionTypeSelect || !buyXGetYConfig) return;
+
+        // Get all required fields in Buy X Get Y section
+        const bxyRequiredFields = buyXGetYConfig.querySelectorAll('[required], [data-was-required]');
+
+        if (promotionTypeSelect.value === 'buy_x_get_y') {
+            buyXGetYConfig.classList.remove('hidden');
+            if (buyXGetYHint) buyXGetYHint.classList.remove('hidden');
+            // Hide standard discount fields for buy_x_get_y
+            if (discountTypeSelect) discountTypeSelect.closest('div').classList.add('hidden');
+            if (discountValueInput) discountValueInput.closest('div').classList.add('hidden');
+            // Set default values for buy_x_get_y
+            if (discountTypeSelect) discountTypeSelect.value = 'percentage';
+            if (discountValueInput) discountValueInput.value = '100';
+
+            // Re-enable required attribute on Buy X Get Y fields
+            bxyRequiredFields.forEach(field => {
+                if (field.hasAttribute('data-was-required')) {
+                    field.setAttribute('required', '');
+                    field.removeAttribute('data-was-required');
+                }
+            });
+
+            // Scroll to the config section and highlight it
+            if (scrollToConfig) {
+                setTimeout(() => {
+                    buyXGetYConfig.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    buyXGetYConfig.classList.add('ring-4', 'ring-purple-300');
+                    setTimeout(() => buyXGetYConfig.classList.remove('ring-4', 'ring-purple-300'), 2000);
+                }, 100);
+            }
+        } else {
+            buyXGetYConfig.classList.add('hidden');
+            if (buyXGetYHint) buyXGetYHint.classList.add('hidden');
+            if (discountTypeSelect) discountTypeSelect.closest('div').classList.remove('hidden');
+            if (discountValueInput) discountValueInput.closest('div').classList.remove('hidden');
+
+            // Remove required attribute from hidden Buy X Get Y fields (to prevent validation errors)
+            bxyRequiredFields.forEach(field => {
+                if (field.hasAttribute('required')) {
+                    field.setAttribute('data-was-required', 'true');
+                    field.removeAttribute('required');
+                }
+            });
+        }
+    }
+
+    if (promotionTypeSelect) {
+        promotionTypeSelect.addEventListener('change', function() {
+            toggleBuyXGetYConfig(true);
+        });
+        toggleBuyXGetYConfig(false);
+    }
+
+    // =========================================
+    // DISCOUNT TYPE TOGGLE (Percentage vs Fixed Amount)
+    // =========================================
+    function updateDiscountValueUI() {
+        if (!discountTypeSelect) return;
+
+        const discountValueInput = document.getElementById('discount_value_input');
+        const unitHint = document.getElementById('discount-unit-hint');
+        const unitPrefix = document.getElementById('discount-unit-prefix');
+        const unitSuffix = document.getElementById('discount-unit-suffix');
+        const helpText = document.getElementById('discount-value-help');
+
+        if (discountTypeSelect.value === 'fixed_amount') {
+            // Fixed Amount mode
+            if (unitHint) unitHint.textContent = '(in ₹)';
+            if (unitPrefix) unitPrefix.classList.remove('hidden');
+            if (unitSuffix) unitSuffix.classList.add('hidden');
+            if (discountValueInput) {
+                discountValueInput.placeholder = 'e.g., 50 for ₹50 off';
+                discountValueInput.classList.add('pl-8');  // Add left padding for ₹ symbol
+            }
+            if (helpText) helpText.textContent = 'Enter amount in rupees (e.g., 50 for ₹50 off per item)';
+        } else {
+            // Percentage mode (default)
+            if (unitHint) unitHint.textContent = '(in %)';
+            if (unitPrefix) unitPrefix.classList.add('hidden');
+            if (unitSuffix) unitSuffix.classList.remove('hidden');
+            if (discountValueInput) {
+                discountValueInput.placeholder = 'e.g., 10 for 10%';
+                discountValueInput.classList.remove('pl-8');
+            }
+            if (helpText) helpText.textContent = 'Enter percentage (e.g., 10 for 10% off)';
+        }
+    }
+
+    if (discountTypeSelect) {
+        discountTypeSelect.addEventListener('change', updateDiscountValueUI);
+        // Initialize on page load
+        updateDiscountValueUI();
+    }
+
+    // =========================================
+    // BUY X GET Y ITEM SEARCH (Invoice-style)
+    // =========================================
+
+    // Setup item search for a section (trigger or reward)
+    function setupBxyItemSearch(prefix) {
+        const typeSelect = document.getElementById(`${prefix}_item_type`);
+        const searchInput = document.getElementById(`${prefix}_item_search`);
+        const dropdown = document.getElementById(`${prefix}_item_dropdown`);
+        const loadingEl = document.getElementById(`${prefix}_item_loading`);
+        const itemIdInput = document.getElementById(`${prefix}_item_id`);
+        const itemNameInput = document.getElementById(`${prefix}_item_name`);
+
+        if (!typeSelect || !searchInput) return;
+
+        let searchTimeout;
+
+        // Type change handler - enable search and show initial list
+        typeSelect.addEventListener('change', function() {
+            const selectedType = this.value;
+            if (selectedType) {
+                searchInput.disabled = false;
+                searchInput.placeholder = `Search ${selectedType.toLowerCase()}...`;
+                searchInput.value = '';
+                itemIdInput.value = '';
+                itemNameInput.value = '';
+                searchInput.focus();
+                // Show initial list
+                performSearch('');
+            } else {
+                searchInput.disabled = true;
+                searchInput.placeholder = 'Select type first...';
+                searchInput.value = '';
+                itemIdInput.value = '';
+                itemNameInput.value = '';
+                dropdown.classList.add('hidden');
+            }
+            updatePreview();
+        });
+
+        // Search on input
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => performSearch(this.value.trim()), 300);
+        });
+
+        // Show list on focus (if type is selected)
+        searchInput.addEventListener('focus', function() {
+            if (typeSelect.value && !dropdown.classList.contains('hidden') === false) {
+                performSearch(this.value.trim());
+            }
+        });
+
+        // Perform search
+        function performSearch(query) {
+            const itemType = typeSelect.value;
+            if (!itemType) return;
+
+            if (loadingEl) loadingEl.classList.remove('hidden');
+
+            // Use invoice API (same as create_invoice.html)
+            fetch(`/invoice/web_api/item/search?q=${encodeURIComponent(query)}&type=${encodeURIComponent(itemType)}`)
+                .then(response => response.json())
+                .then(items => {
+                    if (loadingEl) loadingEl.classList.add('hidden');
+                    dropdown.innerHTML = '';
+
+                    if (!items || items.length === 0) {
+                        dropdown.innerHTML = '<div class="bxy-autocomplete-no-results"><i class="fas fa-search mr-2"></i>No items found</div>';
+                        dropdown.classList.remove('hidden');
+                        return;
+                    }
+
+                    // Limit to first 20 items
+                    items.slice(0, 20).forEach(item => {
+                        const div = document.createElement('div');
+                        div.className = 'bxy-autocomplete-item';
+
+                        // Compact single-line format
+                        const price = item.price ? parseFloat(item.price).toFixed(0) : '0';
+                        const gstRate = item.gst_rate || 0;
+                        div.innerHTML = `
+                            <span class="bxy-autocomplete-item-label">${item.name}</span>
+                            <span class="text-xs text-gray-500 ml-2">₹${price} | GST: ${gstRate}%</span>
+                        `;
+                        div.style.display = 'flex';
+                        div.style.justifyContent = 'space-between';
+                        div.style.alignItems = 'center';
+
+                        div.addEventListener('click', () => {
+                            searchInput.value = item.name;
+                            itemIdInput.value = item.id;
+                            itemNameInput.value = item.name;
+                            dropdown.classList.add('hidden');
+                            updatePreview();
+                        });
+
+                        dropdown.appendChild(div);
+                    });
+
+                    dropdown.classList.remove('hidden');
+                })
+                .catch(err => {
+                    if (loadingEl) loadingEl.classList.add('hidden');
+                    console.error('Search error:', err);
+                    dropdown.innerHTML = '<div class="bxy-autocomplete-no-results text-red-500">Error searching</div>';
+                    dropdown.classList.remove('hidden');
+                });
+        }
+
+        // Hide dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!searchInput.contains(e.target) && !dropdown.contains(e.target) && !typeSelect.contains(e.target)) {
+                dropdown.classList.add('hidden');
+            }
+        });
+    }
+
+    // Setup trigger section
+    setupBxyItemSearch('trigger');
+
+    // =========================================
+    // MULTIPLE REWARD ITEMS SUPPORT
+    // =========================================
+    let rewardItemCounter = 1;
+    const rewardItemsContainer = document.getElementById('reward-items-container');
+    const addRewardBtn = document.getElementById('add-reward-item-btn');
+
+    // Setup search for a reward item row
+    function setupRewardItemSearch(row) {
+        const typeSelect = row.querySelector('.reward-item-type');
+        const searchInput = row.querySelector('.reward-item-search');
+        const dropdown = row.querySelector('.reward-item-dropdown');
+        const loadingEl = row.querySelector('.reward-item-loading');
+        const itemIdInput = row.querySelector('.reward-item-id');
+        const itemNameInput = row.querySelector('.reward-item-name');
+
+        console.log('[RewardSearch] Setting up row:', row.dataset.rewardIndex);
+        console.log('[RewardSearch] Elements found:', { typeSelect: !!typeSelect, searchInput: !!searchInput, dropdown: !!dropdown });
+
+        if (!typeSelect || !searchInput || !dropdown) {
+            console.error('[RewardSearch] Missing elements in row');
+            return;
+        }
+
+        let searchTimeout;
+
+        // Type change handler
+        typeSelect.addEventListener('change', function() {
+            const selectedType = this.value;
+            console.log('[RewardSearch] Type changed to:', selectedType);
+            if (selectedType) {
+                searchInput.disabled = false;
+                searchInput.placeholder = `Search ${selectedType.toLowerCase()}...`;
+                searchInput.value = '';
+                itemIdInput.value = '';
+                itemNameInput.value = '';
+                searchInput.focus();
+                performSearch('');
+            } else {
+                searchInput.disabled = true;
+                searchInput.placeholder = 'Select type first...';
+                dropdown.classList.add('hidden');
+            }
+        });
+
+        // Search input handler
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => performSearch(this.value), 300);
+        });
+
+        searchInput.addEventListener('focus', function() {
+            if (typeSelect.value && this.value === '') {
+                performSearch('');
+            }
+        });
+
+        function performSearch(query) {
+            const itemType = typeSelect.value;
+            if (!itemType) return;
+
+            console.log('[RewardSearch] Performing search:', { itemType, query });
+            if (loadingEl) loadingEl.classList.remove('hidden');
+
+            // Map item types to API types: Service->service, Package->package, OTC/Prescription/Product/Consumable->medicine
+            const typeMap = {
+                'Service': 'service',
+                'Package': 'package',
+                'OTC': 'medicine',
+                'Prescription': 'medicine',
+                'Product': 'medicine',
+                'Consumable': 'medicine'
+            };
+            const apiType = typeMap[itemType] || itemType.toLowerCase();
+            // For medicine subtypes, pass the original type as subtype filter
+            const isMedicineSubtype = ['OTC', 'Prescription', 'Product', 'Consumable'].includes(itemType);
+            const subtypeParam = isMedicineSubtype ? `&subtype=${encodeURIComponent(itemType)}` : '';
+            const url = `/promotions/api/items/${apiType}?search=${encodeURIComponent(query)}${subtypeParam}`;
+            console.log('[RewardSearch] Fetching:', url);
+
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    console.log('[RewardSearch] Response:', data);
+                    if (loadingEl) loadingEl.classList.add('hidden');
+                    dropdown.innerHTML = '';
+
+                    const items = data.items || data.results || data;
+                    console.log('[RewardSearch] Items array:', items);
+
+                    if (!items || !Array.isArray(items) || items.length === 0) {
+                        dropdown.innerHTML = '<div class="bxy-autocomplete-no-results">No items found</div>';
+                        dropdown.classList.remove('hidden');
+                        return;
+                    }
+
+                    items.forEach(item => {
+                        const div = document.createElement('div');
+                        div.className = 'bxy-autocomplete-item';
+                        const price = item.price ? parseFloat(item.price).toFixed(0) : '0';
+                        div.innerHTML = `<span>${item.name}</span><span class="text-xs text-gray-500 ml-2">₹${price}</span>`;
+                        div.style.cssText = 'display:flex;justify-content:space-between;align-items:center;';
+
+                        div.addEventListener('click', () => {
+                            searchInput.value = item.name;
+                            itemIdInput.value = item.id;
+                            itemNameInput.value = item.name;
+                            dropdown.classList.add('hidden');
+                            updatePreview();
+                        });
+
+                        dropdown.appendChild(div);
+                    });
+
+                    dropdown.classList.remove('hidden');
+                    console.log('[RewardSearch] Dropdown populated with', items.length, 'items');
+                })
+                .catch(err => {
+                    if (loadingEl) loadingEl.classList.add('hidden');
+                    console.error('[RewardSearch] Error:', err);
+                    dropdown.innerHTML = '<div class="bxy-autocomplete-no-results text-red-500">Error loading items</div>';
+                    dropdown.classList.remove('hidden');
+                });
+        }
+
+        // Hide dropdown on outside click
+        document.addEventListener('click', function(e) {
+            if (!row.contains(e.target)) {
+                dropdown.classList.add('hidden');
+            }
+        });
+    }
+
+    // Setup first reward item
+    const firstRewardRow = rewardItemsContainer.querySelector('.reward-item-row');
+    if (firstRewardRow) {
+        setupRewardItemSearch(firstRewardRow);
+    }
+
+    // Add new reward item
+    if (addRewardBtn) {
+        addRewardBtn.addEventListener('click', function() {
+            rewardItemCounter++;
+            const newRow = document.createElement('div');
+            newRow.className = 'reward-item-row border border-green-300 rounded-lg p-3 bg-white dark:bg-gray-800';
+            newRow.dataset.rewardIndex = rewardItemCounter - 1;
+
+            newRow.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-sm font-medium text-green-700 dark:text-green-400">Reward Item #${rewardItemCounter}</span>
+                    <button type="button" class="remove-reward-btn text-red-500 hover:text-red-700" title="Remove this reward">
+                        <i class="fas fa-times-circle"></i>
+                    </button>
+                </div>
+                <div class="md:w-3/4">
+                    <div class="grid grid-cols-4 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Type <span class="text-red-500">*</span></label>
+                            <select class="reward-item-type bxy-form-input text-sm" name="reward_item_types[]" required>
+                                <option value="">-- Type --</option>
+                                <optgroup label="Services & Packages">
+                                    <option value="Package">Package</option>
+                                    <option value="Service">Service</option>
+                                </optgroup>
+                                <optgroup label="Medicines & Products">
+                                    <option value="OTC">OTC Medicine</option>
+                                    <option value="Prescription">Prescription</option>
+                                    <option value="Product">Product</option>
+                                    <option value="Consumable">Consumable</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Item <span class="text-red-500">*</span></label>
+                            <div class="relative">
+                                <input type="text" class="reward-item-search bxy-form-input text-sm"
+                                       placeholder="Select type first..." autocomplete="off" disabled>
+                                <input type="hidden" class="reward-item-id" name="reward_item_ids[]">
+                                <input type="hidden" class="reward-item-name" name="reward_item_names[]">
+                                <div class="reward-item-dropdown bxy-autocomplete-dropdown hidden"></div>
+                                <div class="reward-item-loading absolute right-3 top-2 hidden">
+                                    <i class="fas fa-spinner fa-spin text-gray-400 text-sm"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Qty</label>
+                                <input type="number" class="reward-quantity bxy-form-input text-sm" name="reward_quantities[]"
+                                       min="1" value="1" step="1">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Disc %</label>
+                                <input type="number" class="reward-discount bxy-form-input text-sm" name="reward_discounts[]"
+                                       min="0" max="100" value="100" step="1" title="100% = FREE">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            rewardItemsContainer.appendChild(newRow);
+            setupRewardItemSearch(newRow);
+            updateRemoveButtons();
+            updatePreview();
+
+            // Focus the type select of new row
+            newRow.querySelector('.reward-item-type').focus();
+        });
+    }
+
+    // Remove reward item
+    rewardItemsContainer.addEventListener('click', function(e) {
+        if (e.target.closest('.remove-reward-btn')) {
+            const row = e.target.closest('.reward-item-row');
+            if (row && rewardItemsContainer.querySelectorAll('.reward-item-row').length > 1) {
+                row.remove();
+                updateRewardNumbers();
+                updateRemoveButtons();
+                updatePreview();
+            }
+        }
+    });
+
+    // Update reward item numbers after removal
+    function updateRewardNumbers() {
+        const rows = rewardItemsContainer.querySelectorAll('.reward-item-row');
+        rows.forEach((row, index) => {
+            row.dataset.rewardIndex = index;
+            const label = row.querySelector('.text-green-700, .text-green-400');
+            if (label) label.textContent = `Reward Item #${index + 1}`;
+        });
+        rewardItemCounter = rows.length;
+    }
+
+    // Show/hide remove buttons (hide if only one item)
+    function updateRemoveButtons() {
+        const rows = rewardItemsContainer.querySelectorAll('.reward-item-row');
+        rows.forEach(row => {
+            const removeBtn = row.querySelector('.remove-reward-btn');
+            if (removeBtn) {
+                removeBtn.classList.toggle('hidden', rows.length <= 1);
+            }
+        });
+    }
+
+    // Legacy variable references for preview
+    const triggerItemName = document.getElementById('trigger_item_name');
+
+    // Update preview - now supports multiple rewards
+    function updatePreview() {
+        const preview = document.getElementById('buy-x-get-y-preview');
+        if (!preview) return;
+
+        const triggerType = document.querySelector('select[name="trigger_item_type"]')?.value || 'any item';
+        const triggerName = triggerItemName?.value || '';
+        const minQty = document.querySelector('input[name="trigger_min_quantity"]')?.value;
+        const minAmt = document.querySelector('input[name="trigger_min_amount"]')?.value;
+
+        let triggerText = 'When customer buys';
+        if (minQty) triggerText += ` ${minQty}+`;
+        else if (minAmt) triggerText += ` Rs.${minAmt}+ worth of`;
+
+        if (triggerName) {
+            triggerText += ` "${triggerName}"`;
+        } else {
+            triggerText += ` ${triggerType || 'any item'}`;
+        }
+
+        // Collect all reward items
+        const rewardRows = rewardItemsContainer.querySelectorAll('.reward-item-row');
+        let rewardTexts = [];
+
+        rewardRows.forEach(row => {
+            const name = row.querySelector('.reward-item-name')?.value || 'item';
+            const qty = row.querySelector('.reward-quantity')?.value || 1;
+            const discount = row.querySelector('.reward-discount')?.value || 100;
+
+            if (name) {
+                if (discount == 100) {
+                    rewardTexts.push(`${qty}x ${name} FREE`);
+                } else {
+                    rewardTexts.push(`${qty}x ${name} at ${discount}% off`);
+                }
+            }
+        });
+
+        let rewardText = rewardTexts.length > 0 ? rewardTexts.join(' + ') : 'reward items';
+        preview.innerHTML = `<strong>${triggerText}</strong>, they get ${rewardText}!`;
+    }
+
+    // Attach preview update to trigger fields
+    const triggerTypeEl = document.querySelector('select[name="trigger_item_type"]');
+    if (triggerTypeEl) triggerTypeEl.addEventListener('change', updatePreview);
+
+    ['trigger_min_quantity', 'trigger_min_amount'].forEach(name => {
+        const el = document.querySelector(`input[name="${name}"]`);
+        if (el) el.addEventListener('input', updatePreview);
+    });
+
+    // Update preview when reward fields change
+    rewardItemsContainer.addEventListener('input', updatePreview);
+    rewardItemsContainer.addEventListener('change', updatePreview);
 
 });
 </script>

@@ -220,11 +220,82 @@ def campaign_create():
             auto_apply = not is_personalized  # Auto-apply if not personalized
 
             # Parse form data
+            promotion_type = request.form.get('promotion_type', 'simple_discount')
+
+            # Build promotion_rules for Buy X Get Y campaigns
+            promotion_rules = None
+            if promotion_type == 'buy_x_get_y':
+                # Build trigger configuration
+                trigger_item_type = request.form.get('trigger_item_type') or None
+                trigger_item_id = request.form.get('trigger_item_id') or None
+                trigger_item_name = request.form.get('trigger_item_name') or None
+                trigger_min_quantity = request.form.get('trigger_min_quantity')
+                trigger_min_amount = request.form.get('trigger_min_amount')
+
+                trigger_conditions = {}
+                if trigger_item_type:
+                    trigger_conditions['item_type'] = trigger_item_type
+                # Add specific trigger item if selected
+                if trigger_item_id:
+                    trigger_conditions['item_ids'] = [trigger_item_id]
+                    if trigger_item_name:
+                        trigger_conditions['item_name'] = trigger_item_name
+                if trigger_min_quantity:
+                    trigger_conditions['min_quantity'] = int(trigger_min_quantity)
+                if trigger_min_amount:
+                    trigger_conditions['min_amount'] = float(trigger_min_amount)
+
+                # Build reward configuration - now supports MULTIPLE reward items (Updated 2025-12-02)
+                reward_item_types = request.form.getlist('reward_item_types[]')
+                reward_item_ids = request.form.getlist('reward_item_ids[]')
+                reward_item_names = request.form.getlist('reward_item_names[]')
+                reward_quantities = request.form.getlist('reward_quantities[]')
+                reward_discounts = request.form.getlist('reward_discounts[]')
+
+                # Build reward items array
+                reward_items = []
+                for i in range(len(reward_item_ids)):
+                    if reward_item_ids[i]:  # Only add if item_id is set
+                        reward_items.append({
+                            'item_type': reward_item_types[i] if i < len(reward_item_types) else 'Service',
+                            'item_id': reward_item_ids[i],
+                            'item_name': reward_item_names[i] if i < len(reward_item_names) else '',
+                            'quantity': int(reward_quantities[i]) if i < len(reward_quantities) and reward_quantities[i] else 1,
+                            'discount_percent': float(reward_discounts[i]) if i < len(reward_discounts) and reward_discounts[i] else 100
+                        })
+
+                # Fallback for backward compatibility (old single-item form)
+                if not reward_items:
+                    reward_item_type = request.form.get('reward_item_type', 'Service')
+                    reward_item_id = request.form.get('reward_item_id')
+                    reward_item_name = request.form.get('reward_item_name', '')
+                    reward_quantity = int(request.form.get('reward_quantity') or 1)
+                    reward_discount_percent = float(request.form.get('reward_discount_percent') or 100)
+                    if reward_item_id:
+                        reward_items.append({
+                            'item_type': reward_item_type,
+                            'item_id': reward_item_id,
+                            'item_name': reward_item_name,
+                            'quantity': reward_quantity,
+                            'discount_percent': reward_discount_percent
+                        })
+
+                promotion_rules = {
+                    'trigger': {
+                        'type': 'item_purchase',
+                        'conditions': trigger_conditions
+                    },
+                    'reward': {
+                        'items': reward_items
+                    }
+                }
+
             data = {
                 'campaign_code': request.form.get('campaign_code', '').strip().upper(),
                 'campaign_name': request.form.get('campaign_name', '').strip(),
                 'description': request.form.get('description', '').strip(),
-                'promotion_type': request.form.get('promotion_type', 'simple_discount'),
+                'promotion_type': promotion_type,
+                'promotion_rules': promotion_rules,
                 'discount_type': request.form.get('discount_type'),
                 'discount_value': request.form.get('discount_value'),
                 'start_date': datetime.strptime(request.form.get('start_date'), '%Y-%m-%d').date() if request.form.get('start_date') else None,
@@ -373,11 +444,65 @@ def campaign_edit(campaign_id):
             is_personalized = request.form.get('is_personalized') == 'on'
             auto_apply = not is_personalized  # Auto-apply if not personalized
 
+            # Build promotion_rules if this is a Buy X Get Y promotion
+            promotion_type = request.form.get('promotion_type', 'simple_discount')
+            promotion_rules = None
+
+            if promotion_type == 'buy_x_get_y':
+                # Build trigger configuration
+                trigger_item_type = request.form.get('trigger_item_type') or None
+                trigger_item_id = request.form.get('trigger_item_id') or None
+                trigger_item_name = request.form.get('trigger_item_name') or None
+                trigger_min_quantity = request.form.get('trigger_min_quantity')
+                trigger_min_amount = request.form.get('trigger_min_amount')
+
+                trigger_conditions = {}
+                if trigger_item_type:
+                    trigger_conditions['item_type'] = trigger_item_type
+                if trigger_item_id:
+                    trigger_conditions['item_ids'] = [trigger_item_id]
+                    if trigger_item_name:
+                        trigger_conditions['item_name'] = trigger_item_name
+                if trigger_min_quantity:
+                    trigger_conditions['min_quantity'] = int(trigger_min_quantity)
+                if trigger_min_amount:
+                    trigger_conditions['min_amount'] = float(trigger_min_amount)
+
+                # Build reward configuration - now supports MULTIPLE reward items (Updated 2025-12-02)
+                reward_item_types = request.form.getlist('reward_item_types[]')
+                reward_item_ids = request.form.getlist('reward_item_ids[]')
+                reward_item_names = request.form.getlist('reward_item_names[]')
+                reward_quantities = request.form.getlist('reward_quantities[]')
+                reward_discounts = request.form.getlist('reward_discounts[]')
+
+                # Build reward items array
+                reward_items = []
+                for i in range(len(reward_item_ids)):
+                    if reward_item_ids[i]:  # Only add if item_id is set
+                        reward_items.append({
+                            'item_type': reward_item_types[i] if i < len(reward_item_types) else 'Service',
+                            'item_id': reward_item_ids[i],
+                            'item_name': reward_item_names[i] if i < len(reward_item_names) else '',
+                            'quantity': int(reward_quantities[i]) if i < len(reward_quantities) and reward_quantities[i] else 1,
+                            'discount_percent': float(reward_discounts[i]) if i < len(reward_discounts) and reward_discounts[i] else 100
+                        })
+
+                promotion_rules = {
+                    'trigger': {
+                        'type': 'item_purchase',
+                        'conditions': trigger_conditions
+                    },
+                    'reward': {
+                        'items': reward_items
+                    }
+                }
+
             data = {
                 'campaign_code': request.form.get('campaign_code', '').strip().upper(),
                 'campaign_name': request.form.get('campaign_name', '').strip(),
                 'description': request.form.get('description', '').strip(),
-                'promotion_type': request.form.get('promotion_type', 'simple_discount'),
+                'promotion_type': promotion_type,
+                'promotion_rules': promotion_rules,
                 'discount_type': request.form.get('discount_type'),
                 'discount_value': request.form.get('discount_value'),
                 'start_date': datetime.strptime(request.form.get('start_date'), '%Y-%m-%d').date() if request.form.get('start_date') else None,
@@ -1382,11 +1507,24 @@ def api_items_list(item_type):
 
             elif item_type == 'medicine':
                 # Medicine model: medicine_name, mrp, status (no code field)
+                # Subtype filter: OTC, Prescription, Product, Consumable (Added 2025-12-02)
+                subtype = request.args.get('subtype', '')
                 query = session.query(Medicine).filter(
                     Medicine.hospital_id == hospital_id,
                     Medicine.status == 'active',
                     Medicine.is_deleted == False
                 )
+                # Filter by medicine_type if subtype specified
+                if subtype:
+                    # Map common names to medicine_type values
+                    subtype_map = {
+                        'OTC': 'OTC',
+                        'Prescription': 'Prescription',
+                        'Product': 'Product',
+                        'Consumable': 'Consumable'
+                    }
+                    mapped_subtype = subtype_map.get(subtype, subtype)
+                    query = query.filter(Medicine.medicine_type == mapped_subtype)
                 if search:
                     query = query.filter(
                         or_(

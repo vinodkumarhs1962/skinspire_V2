@@ -192,6 +192,16 @@
                                     {% else %}
                                         <span class="text-xs bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300 px-2 py-0.5 rounded">Non-GST</span>
                                     {% endif %}
+                                    {% if invoice.line_items and invoice.line_items|selectattr('is_sample')|list %}
+                                        <span class="text-xs bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300 px-2 py-0.5 rounded ml-1" title="Contains sample items">
+                                            <i class="fas fa-flask"></i> Sample
+                                        </span>
+                                    {% endif %}
+                                    {% if invoice.line_items and invoice.line_items|selectattr('is_free_item')|list %}
+                                        <span class="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 px-2 py-0.5 rounded ml-1" title="Contains promotional free items">
+                                            <i class="fas fa-gift"></i> Free
+                                        </span>
+                                    {% endif %}
                                 </td>
                                 <td class="py-3 px-4 text-right">
                                     {{ invoice.currency_code }} {{ "%.2f"|format(invoice.grand_total|float) }}

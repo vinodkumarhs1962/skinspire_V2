@@ -348,16 +348,19 @@ class EnhancedUniversalDataAssembler:
         try:
             virtual_target = getattr(field, 'virtual_target', None)
             virtual_key = getattr(field, 'virtual_key', None)
-            
+
             if virtual_target and virtual_key:
+                # JSONB virtual field - extract from nested structure
                 target_data = item.get(virtual_target, {})
                 if isinstance(target_data, dict):
                     return target_data.get(virtual_key, '')
                 else:
                     return ''
             else:
-                return ''
-        
+                # Computed virtual field - get directly from item by field name
+                # These are fields computed by the service layer (e.g., has_free_items, has_sample_items)
+                return item.get(field.name, '')
+
         except Exception as e:
             logger.error(f"Error extracting virtual field value for {field.name}: {str(e)}")
             return ''
@@ -520,6 +523,7 @@ class EnhancedUniversalDataAssembler:
         """
         Format status badge with CSS class
         ENHANCED: Universal deleted status detection
+        ENHANCED: Append free/sample item indicators for payment_status field
         """
         try:
             # Universal DELETED STATUS DETECTION
@@ -527,14 +531,14 @@ class EnhancedUniversalDataAssembler:
             if item:
                 # Check multiple possible deleted flags (handle both dict and object)
                 if isinstance(item, dict):
-                    is_deleted = (item.get('is_deleted', False) or 
+                    is_deleted = (item.get('is_deleted', False) or
                                 item.get('deleted_flag', False) or
                                 item.get('deleted', False))
                 else:
-                    is_deleted = (getattr(item, 'is_deleted', False) or 
+                    is_deleted = (getattr(item, 'is_deleted', False) or
                                 getattr(item, 'deleted_flag', False) or
                                 getattr(item, 'deleted', False))
-            
+
             # If deleted, override status to show "Deleted" regardless of actual status
             if is_deleted:
                 logger.debug(f"[STATUS_BADGE_DEBUG] Detected deleted item, showing Deleted badge")
@@ -544,23 +548,47 @@ class EnhancedUniversalDataAssembler:
                     'badge_html': '<span class="status-badge status-deleted"><i class="fas fa-trash-alt"></i> Deleted</span>'
                 }
 
+            # Build the main badge HTML
+            badge_html = ''
+            formatted_value = str(value).title()
+            css_class = 'status-badge status-default'
+
             # ✅ FIXED: Return consistent structure for non-deleted status
             if hasattr(field, 'options') and field.options:
                 for option in field.options:
                     if str(option.get('value', '')).lower() == str(value).lower():
-                        return {
-                            'formatted_value': option.get('label', value),
-                            'css_class': f"status-badge {option.get('css_class', 'status-default')}",
-                            'badge_html': f'<span class="status-badge {option.get("css_class", "status-default")}">{option.get("label", value)}</span>'
-                        }
+                        formatted_value = option.get('label', value)
+                        css_class = f"status-badge {option.get('css_class', 'status-default')}"
+                        badge_html = f'<span class="{css_class}">{formatted_value}</span>'
+                        break
 
-            # ✅ FIXED: Default case with consistent structure
+            # Default badge if no option matched
+            if not badge_html:
+                badge_html = f'<span class="{css_class}">{formatted_value}</span>'
+
+            # ENHANCEMENT: Append free/sample indicators for payment_status field
+            field_name = getattr(field, 'name', '')
+            if field_name == 'payment_status' and item and isinstance(item, dict):
+                extra_badges = []
+
+                # Check for free items
+                if item.get('has_free_items') == 'true':
+                    extra_badges.append('<span class="status-badge status-success" style="font-size: 0.65rem; padding: 0.15rem 0.35rem;"><i class="fas fa-gift"></i> FREE</span>')
+
+                # Check for sample items
+                if item.get('has_sample_items') == 'true':
+                    extra_badges.append('<span class="status-badge status-purple" style="font-size: 0.65rem; padding: 0.15rem 0.35rem;"><i class="fas fa-flask"></i> SAMPLE</span>')
+
+                # Append extra badges below the main badge
+                if extra_badges:
+                    badge_html += '<br>' + ' '.join(extra_badges)
+
             return {
-                'formatted_value': str(value).title(),
-                'css_class': 'status-badge status-default',
-                'badge_html': f'<span class="status-badge status-default">{str(value).title()}</span>'
+                'formatted_value': formatted_value,
+                'css_class': css_class,
+                'badge_html': badge_html
             }
-            
+
         except Exception as e:
             logger.error(f"Error formatting status badge: {str(e)}")
             return {'text': str(value), 'css_class': 'status-default'}

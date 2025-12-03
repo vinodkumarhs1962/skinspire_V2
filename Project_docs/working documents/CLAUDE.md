@@ -795,6 +795,116 @@ def _should_display_section(self, section: Dict, item: Any) -> bool:
 - Modify only error-related lines
 - Provide minimal, targeted solutions
 
+### CRITICAL: Debugging Approach
+
+**MANDATORY: Trace Data Flow BEFORE Blaming Cache or Environment**
+
+When debugging issues where data is not being saved or displayed correctly, follow this systematic approach:
+
+#### Step 1: Map the Complete Data Flow (FIRST!)
+
+Before making ANY changes, trace the full path:
+
+```
+Frontend (HTML/JS) → Form Submission → Flask Form Class → View Function → Service Layer → Database
+```
+
+**For the Free Item issue, the correct trace would have been:**
+1. HTML hidden field: `.is-free-item` in template
+2. JavaScript: `setFreeItem()` sets hidden field value
+3. Form submission: `line_items-0-is_free_item=true` in POST data
+4. **Flask Form Class**: `InvoiceLineItemForm` - DOES IT HAVE THIS FIELD?
+5. Form processing: `form.process_line_items()` - DOES IT EXTRACT THIS FIELD?
+6. View function: `billing_views.py` - extracts line items
+7. Service layer: `billing_service.py` - saves to database
+8. Database: `invoice_line_item.is_free_item` column
+
+#### Step 2: Identify WHERE Data is Lost
+
+Check each layer systematically:
+
+```python
+# Layer 1: Is form data being submitted?
+# Check browser DevTools → Network → Form Data
+# Look for: line_items-0-is_free_item=true
+
+# Layer 2: Is Flask Form receiving it?
+# Check: Does InvoiceLineItemForm have is_free_item field?
+grep -n "is_free_item" app/forms/billing_forms.py
+
+# Layer 3: Is form.process_line_items() extracting it?
+# Read the function - does it include is_free_item in the dict?
+
+# Layer 4: Is the view passing it to service?
+# Check billing_views.py line item extraction
+
+# Layer 5: Is the service saving it?
+# Check billing_service.py InvoiceLineItem creation
+```
+
+#### Step 3: Fix at the Correct Layer
+
+**Common Mistake**: Adding field extraction in view when the form class doesn't define the field!
+
+```python
+# ❌ WRONG: Adding extraction code without checking form class
+# billing_views.py
+item['is_free_item'] = request.form.get(f'line_items-{index}-is_free_item')
+# This WON'T WORK if InvoiceLineItemForm doesn't have is_free_item field!
+
+# ✅ CORRECT: First add field to form class
+# billing_forms.py - InvoiceLineItemForm
+is_free_item = HiddenField('Is Free Item', default='false')
+
+# THEN the form will include it in line_items.data
+```
+
+#### Step 4: Cache is LAST Resort, Not First
+
+**DO NOT blame cache until you've verified:**
+1. The code logic is correct
+2. The data flow is complete
+3. All required fields are defined in form classes
+4. All layers are processing the data correctly
+
+**Cache issues are RARE. Logic errors are COMMON.**
+
+```bash
+# Only clear cache AFTER verifying code is correct:
+find app/ -name "*.pyc" -delete
+find app/ -type d -name "__pycache__" -exec rm -rf {} +
+```
+
+#### Debugging Checklist
+
+Before asking user to "restart and try again":
+
+- [ ] Traced complete data flow from frontend to database
+- [ ] Verified form class defines all required fields
+- [ ] Verified form processing method extracts all fields
+- [ ] Verified view function passes all fields to service
+- [ ] Verified service saves all fields to model
+- [ ] Verified database column exists
+- [ ] ONLY THEN consider cache issues
+
+#### Real Example: Free Item Bug (December 2025)
+
+**What went wrong:**
+1. Kept blaming cache and asking for server restarts
+2. Added debug logs in multiple places
+3. Made fixes in billing_views.py (wrong layer)
+4. Made fixes in billing_service.py (wrong layer)
+5. Finally discovered: `InvoiceLineItemForm` was missing `is_free_item` field
+
+**What should have been done:**
+1. Trace: HTML → JS → Form Class → View → Service → DB
+2. Check: `InvoiceLineItemForm` has `is_free_item`? NO!
+3. Fix: Add `is_free_item = HiddenField(...)` to form class
+4. Done in ONE fix instead of 10+ iterations
+
+**Time wasted**: ~1 hour
+**Time if done correctly**: ~5 minutes
+
 ### Problem-Solving Method
 1. Understand current implementation
 2. Identify precise issue

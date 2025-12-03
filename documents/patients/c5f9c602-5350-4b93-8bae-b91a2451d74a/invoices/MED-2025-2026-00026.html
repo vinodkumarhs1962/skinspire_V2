@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta name="csrf-token" content="IjQ4YjdiYzlmNmQ4MTcyMjMwZTY4MTMwNjBhZTY3OGE1M2Q2MTc5OGIi.aSXR4w.PmJn8od2uJrKuPuZeBCh5T7m15w">
+        <meta name="csrf-token" content="ImM5MWZjZGU5YjgwYmUyYTZlNzlhYzU1YTNkZTZmNWZiNDhjNjY0MDQi.aS50UA.2Y_XCoAeuUDiKzFit65VrjSYzU4">
         <title>Invoice #MED/2025-2026/00026 - Skinspire Clinic</title>
         <!-- Replace the inline styles with centralized CSS -->
         <link rel="stylesheet" href="/static/css/components/invoice.css">
@@ -118,7 +118,7 @@
             <div class="meta-section">
                 <div class="meta-title">Invoice Details:</div>
                 <div>Invoice #: MED/2025-2026/00026</div>
-                <div>Date: 25-Nov-2025</div>
+                <div>Date: 02-Dec-2025</div>
                 <div>Type: Product</div>
                 
                 <div>Supply Type: Intrastate</div>
@@ -142,9 +142,7 @@
             
             
             
-        
-            
-            
+                
             
         
 
@@ -168,37 +166,42 @@
         <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
             <tr>
                 <td colspan="2" style="border: 1px solid #ddd; background-color: #f9f9f9; padding: 8px; width: 100%;">
-                    <strong>Amount in Words:</strong> INR Three Hundred only
+                    <strong>Amount in Words:</strong> INR Three only
                 </td>
             </tr>
             <tr>
                 <td style="text-align: right; padding: 5px; width: 70%;">Subtotal:</td>
-                <td style="text-align: right; padding: 5px; width: 30%;">300.00</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">3.00</td>
             </tr>
             
+            
+            <tr>
+                <td style="text-align: right; padding: 5px; width: 70%;">Total Discount:</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">25.00</td>
+            </tr>
             
             
             
             <tr>
                 <td style="text-align: right; padding: 5px; width: 70%;">Taxable Value:</td>
-                <td style="text-align: right; padding: 5px; width: 30%;">267.86</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">0.00</td>
             </tr>
             
             
             <tr>
                 <td style="text-align: right; padding: 5px; width: 70%;">CGST:</td>
-                <td style="text-align: right; padding: 5px; width: 30%;">16.07</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">1.50</td>
             </tr>
             <tr>
                 <td style="text-align: right; padding: 5px; width: 70%;">SGST:</td>
-                <td style="text-align: right; padding: 5px; width: 30%;">16.07</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">1.50</td>
             </tr>
             
             
             
             <tr style="font-weight: bold; border-top: 1px solid #333;">
                 <td style="text-align: right; padding: 5px; width: 70%;">GRAND TOTAL:</td>
-                <td style="text-align: right; padding: 5px; width: 30%;">300.00</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">3.00</td>
             </tr>
             
             
@@ -208,7 +211,7 @@
             <tr class="balance-due-row" style="font-weight: bold; color: #d32f2f;">
             
                 <td style="text-align: right; padding: 5px; width: 70%;">Balance Due:</td>
-                <td style="text-align: right; padding: 5px; width: 30%;">300.00</td>
+                <td style="text-align: right; padding: 5px; width: 30%;">3.00</td>
             </tr>
         </table>
           
@@ -242,26 +245,26 @@
                     
                         <tr>
                             <td>GST 12.0%</td>
-                            <td>267.86</td>
+                            <td>0.00</td>
                             <td>12.0%</td>
                             
-                            <td>16.07</td>
-                            <td>16.07</td>
+                            <td>1.50</td>
+                            <td>1.50</td>
                             
-                            <td>32.14</td>
+                            <td>3.00</td>
                         </tr>
                     
                     
                     <!-- Display totals row using the accumulated totals from backend -->
                     <tr style="font-weight: bold;">
                         <td>Total</td>
-                        <td>267.86</td>
+                        <td>0.00</td>
                         <td></td>
                         
-                        <td>16.07</td>
-                        <td>16.07</td>
+                        <td>1.50</td>
+                        <td>1.50</td>
                         
-                        <td>32.14</td>
+                        <td>3.00</td>
                     </tr>
                 </tbody>
             </table>
@@ -292,10 +295,22 @@
             </div>
         </div>
         
-        <!-- Footer -->
+        <!-- Footer (screen only) -->
         <div class="footer no-print">
             <div style="text-align: center;">
                 Skinspire Clinic
+            </div>
+        </div>
+
+        <!-- Print Footer with Intelli-Clinic branding -->
+        <div class="print-footer" style="margin-top: 30px; padding-top: 10px; border-top: 1px solid #e5e5e5; text-align: center; font-size: 9px; color: #888;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 5px;">
+                <span>Generated by</span>
+                <img src="/static/images/intelli-clinic-icon.png"
+                     alt="Intelli-Clinic"
+                     style="height: 14px; width: 14px; vertical-align: middle;">
+                <span style="font-weight: 500; color: #666;">Intelli-Clinic</span>
+                <span>| Intelligent Healthcare Management</span>
             </div>
         </div>
     </div>
@@ -309,7 +324,7 @@
             // Create form with CSRF token
             const form = document.createElement('form');
             form.method = 'POST';
-            form.action = '/invoice/e44b90ef-c35a-4af5-aed4-11dd4a0788b6/send-email';
+            form.action = '/invoice/8b4c3b16-7a8b-467b-abcd-8275ea78b1be/send-email';
             
             // Add CSRF token from meta
             const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
@@ -331,7 +346,7 @@
             // Create form with CSRF token
             const form = document.createElement('form');
             form.method = 'POST';
-            form.action = '/invoice/e44b90ef-c35a-4af5-aed4-11dd4a0788b6/send-whatsapp';
+            form.action = '/invoice/8b4c3b16-7a8b-467b-abcd-8275ea78b1be/send-whatsapp';
             
             // Add CSRF token from meta
             const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');

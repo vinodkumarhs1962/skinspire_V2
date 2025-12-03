@@ -259,6 +259,20 @@ function prepareLineItemsForSubmission() {
         addField(`line_items-${index}-unit_price`, unitPrice);
         addField(`line_items-${index}-discount_percent`, discountPercent);
 
+        // Free Item fields (promotional - GST on MRP)
+        const isFreeItem = row.querySelector('.is-free-item')?.value || 'false';
+        const freeItemReason = row.querySelector('.free-item-reason')?.value || '';
+        addField(`line_items-${index}-is_free_item`, isFreeItem);
+        addField(`line_items-${index}-free_item_reason`, freeItemReason);
+        console.log(`📦 Line ${index} - Free Item: ${isFreeItem}, Reason: ${freeItemReason}`);
+
+        // Sample/Trial item fields (no GST, no charge)
+        const isSample = row.querySelector('.is-sample')?.value || 'false';
+        const sampleReason = row.querySelector('.sample-reason')?.value || '';
+        addField(`line_items-${index}-is_sample`, isSample);
+        addField(`line_items-${index}-sample_reason`, sampleReason);
+        console.log(`📦 Line ${index} - Sample: ${isSample}, Reason: ${sampleReason}`);
+
         // Medicine-specific fields for all medicine-based types
         const medicineBasedTypes = ['OTC', 'Prescription', 'Product', 'Consumable'];
         if (medicineBasedTypes.includes(itemType)) {

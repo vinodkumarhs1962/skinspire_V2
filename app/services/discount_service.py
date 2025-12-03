@@ -642,7 +642,8 @@ class DiscountService:
         unit_price: Decimal,
         quantity: int = 1,
         invoice_date: date = None,
-        invoice_items: List[Dict] = None  # NEW: Full invoice context for buy_x_get_y
+        invoice_items: List[Dict] = None,  # Full invoice context for buy_x_get_y
+        excluded_campaign_ids: List[str] = None  # Campaign IDs to skip (Added 2025-12-02)
     ) -> Optional[DiscountCalculationResult]:
         """
         Calculate promotion/campaign discount from promotion_campaigns table
@@ -653,6 +654,7 @@ class DiscountService:
         - Enforces campaign constraints (dates, usage limits, min purchase)
         - Priority: 1 (highest)
         - Tracks usage in promotion_usage_log
+        - Skips campaigns in excluded_campaign_ids list (Added 2025-12-02)
 
         Args:
             session: Database session
@@ -663,6 +665,7 @@ class DiscountService:
             unit_price: Unit price of the item
             quantity: Quantity of this item
             invoice_date: Invoice date (defaults to today)
+            excluded_campaign_ids: List of campaign IDs to exclude from consideration
 
         Returns:
             DiscountCalculationResult if promotion applies
@@ -690,8 +693,22 @@ class DiscountService:
             )
         ).all()
 
+        logger.info(f"🎁 Found {len(promotions)} promotions for {item_type} (applies_to='all' or '{item_type.lower()}s')")
+        for p in promotions:
+            logger.info(f"   - {p.campaign_name}: applies_to={p.applies_to}, target_special_group={p.target_special_group}, target_groups={p.target_groups is not None}")
+
         if not promotions:
             return None
+
+        # Filter out excluded campaigns (Added 2025-12-02)
+        if excluded_campaign_ids:
+            excluded_set = set(str(cid) for cid in excluded_campaign_ids)
+            original_count = len(promotions)
+            promotions = [p for p in promotions if str(p.campaign_id) not in excluded_set]
+            if len(promotions) < original_count:
+                logger.info(f"Filtered out {original_count - len(promotions)} excluded campaigns, {len(promotions)} remaining")
+            if not promotions:
+                return None
 
         # Check if patient is in special group (Added 2025-11-27)
         patient_is_special_group = False
@@ -701,139 +718,177 @@ class DiscountService:
                 patient_is_special_group = patient.is_special_group
 
         # Check each promotion for eligibility
-        for promotion in promotions:
+        # PRIORITY: Check buy_x_get_y promotions FIRST (they should take precedence for reward items)
+        # This ensures that if an item is a reward in a Buy X Get Y campaign, it gets 100% discount
+        # even if other simple_discount campaigns would also apply to it
+        buy_x_get_y_promotions = [p for p in promotions if p.promotion_type == 'buy_x_get_y']
+        simple_discount_promotions = [p for p in promotions if p.promotion_type != 'buy_x_get_y']
+
+        # First pass: Check buy_x_get_y promotions
+        for promotion in buy_x_get_y_promotions:
             # Check special group targeting (Added 2025-11-27)
             if hasattr(promotion, 'target_special_group') and promotion.target_special_group:
                 # This promotion only applies to special group patients
                 if not patient_is_special_group:
                     continue  # Skip - patient is not in special group
-            # NEW: Dispatch based on promotion_type
-            if promotion.promotion_type == 'buy_x_get_y':
-                # Handle Buy X Get Y promotions
-                if invoice_items is None:
-                    logger.debug(f"Skipping buy_x_get_y promotion {promotion.campaign_name} - no invoice context provided")
-                    continue  # Need invoice context for buy_x_get_y
 
-                # Check if campaign targets specific groups (Added 2025-11-28)
-                if promotion.target_groups:
-                    target_group_ids = promotion.target_groups.get('group_ids', [])
-                    if target_group_ids:
-                        # Check if item belongs to any of the target groups
-                        item_in_group = session.query(PromotionGroupItem).join(
-                            PromotionCampaignGroup,
-                            PromotionGroupItem.group_id == PromotionCampaignGroup.group_id
-                        ).filter(
-                            PromotionCampaignGroup.is_active == True,
-                            PromotionGroupItem.group_id.in_(target_group_ids),
-                            PromotionGroupItem.item_type == item_type.lower(),
-                            PromotionGroupItem.item_id == item_id
-                        ).first()
+            # Handle Buy X Get Y promotions
+            if invoice_items is None:
+                logger.debug(f"Skipping buy_x_get_y promotion {promotion.campaign_name} - no invoice context provided")
+                continue  # Need invoice context for buy_x_get_y
 
-                        if not item_in_group:
-                            continue  # Item not in any target group
+            # Check if campaign targets specific groups (Added 2025-11-28)
+            if promotion.target_groups:
+                target_group_ids = promotion.target_groups.get('group_ids', [])
+                if target_group_ids:
+                    # Check if item belongs to any of the target groups
+                    item_in_group = session.query(PromotionGroupItem).join(
+                        PromotionCampaignGroup,
+                        PromotionGroupItem.group_id == PromotionCampaignGroup.group_id
+                    ).filter(
+                        PromotionCampaignGroup.is_active == True,
+                        PromotionGroupItem.group_id.in_(target_group_ids),
+                        PromotionGroupItem.item_type == item_type.lower(),
+                        PromotionGroupItem.item_id == item_id
+                    ).first()
 
-                result = DiscountService.handle_buy_x_get_y(
-                    session=session,
-                    promotion=promotion,
-                    invoice_items=invoice_items,
-                    current_item_type=item_type,
-                    current_item_id=item_id,
-                    unit_price=unit_price,
-                    quantity=quantity
-                )
-                if result:
-                    return result
+                    if not item_in_group:
+                        continue  # Item not in any target group
 
-            elif promotion.promotion_type == 'simple_discount' or promotion.promotion_type is None:
-                # Handle simple discount promotions (original logic)
+            result = DiscountService.handle_buy_x_get_y(
+                session=session,
+                promotion=promotion,
+                invoice_items=invoice_items,
+                current_item_type=item_type,
+                current_item_id=item_id,
+                unit_price=unit_price,
+                quantity=quantity
+            )
+            if result:
+                return result  # Buy X Get Y reward takes priority
 
-                # Check if campaign targets specific groups (Added 2025-11-28)
-                if promotion.target_groups:
-                    target_group_ids = promotion.target_groups.get('group_ids', [])
-                    if target_group_ids:
-                        # Check if item belongs to any of the target groups
-                        item_in_group = session.query(PromotionGroupItem).join(
-                            PromotionCampaignGroup,
-                            PromotionGroupItem.group_id == PromotionCampaignGroup.group_id
-                        ).filter(
-                            PromotionCampaignGroup.is_active == True,
-                            PromotionGroupItem.group_id.in_(target_group_ids),
-                            PromotionGroupItem.item_type == item_type.lower(),
-                            PromotionGroupItem.item_id == item_id
-                        ).first()
+        # Second pass: Check simple_discount promotions
+        # Collect ALL eligible promotions and find the BEST one (highest discount)
+        eligible_promotions = []
+        original_price = unit_price * quantity
 
-                        if not item_in_group:
-                            continue  # Item not in any target group
+        logger.info(f"📋 Checking {len(simple_discount_promotions)} simple_discount promotions for eligibility...")
+        for promotion in simple_discount_promotions:
+            logger.info(f"   Evaluating: {promotion.campaign_name}")
+            # Check special group targeting (Added 2025-11-27)
+            if hasattr(promotion, 'target_special_group') and promotion.target_special_group:
+                # This promotion only applies to special group patients
+                if not patient_is_special_group:
+                    logger.info(f"      ❌ Skipped: target_special_group=True but patient not in special group")
+                    continue  # Skip - patient is not in special group
 
-                # Check if specific items list (if set) - for fine-grained override
-                if promotion.specific_items:
-                    specific_item_ids = promotion.specific_items.get('item_ids', [])
-                    if specific_item_ids and item_id not in specific_item_ids:
-                        continue  # This promotion doesn't apply to this specific item
+            # Handle simple discount promotions (original logic)
 
-                # Check max total uses
-                if promotion.max_total_uses and promotion.current_uses >= promotion.max_total_uses:
-                    continue  # Campaign usage limit reached
+            # Check if campaign targets specific groups (Added 2025-11-28)
+            if promotion.target_groups:
+                target_group_ids = promotion.target_groups.get('group_ids', [])
+                if target_group_ids:
+                    # Check if item belongs to any of the target groups
+                    item_in_group = session.query(PromotionGroupItem).join(
+                        PromotionCampaignGroup,
+                        PromotionGroupItem.group_id == PromotionCampaignGroup.group_id
+                    ).filter(
+                        PromotionCampaignGroup.is_active == True,
+                        PromotionGroupItem.group_id.in_(target_group_ids),
+                        PromotionGroupItem.item_type == item_type.lower(),
+                        PromotionGroupItem.item_id == item_id
+                    ).first()
 
-                # Check max uses per patient
-                if promotion.max_uses_per_patient:
-                    patient_usage_count = session.query(PromotionUsageLog).filter(
-                        and_(
-                            PromotionUsageLog.campaign_id == promotion.campaign_id,
-                            PromotionUsageLog.patient_id == patient_id
-                        )
-                    ).count()
-                    if patient_usage_count >= promotion.max_uses_per_patient:
-                        continue  # Patient has reached usage limit for this campaign
+                    if not item_in_group:
+                        logger.info(f"      ❌ Skipped: item not in target_groups {target_group_ids}")
+                        continue  # Item not in any target group
 
-                # Calculate discount
-                original_price = unit_price * quantity
+            # Check if specific items list (if set) - for fine-grained override
+            if promotion.specific_items:
+                specific_item_ids = promotion.specific_items.get('item_ids', [])
+                if specific_item_ids and item_id not in specific_item_ids:
+                    continue  # This promotion doesn't apply to this specific item
 
-                if promotion.discount_type == 'percentage':
-                    discount_percent = promotion.discount_value
-                    discount_amount = (original_price * discount_percent) / 100
-                elif promotion.discount_type == 'fixed_amount':
-                    discount_amount = promotion.discount_value
-                    discount_percent = (discount_amount / original_price * 100) if original_price > 0 else Decimal('0')
-                else:
-                    logger.warning(f"Unknown promotion discount type: {promotion.discount_type}")
-                    continue
+            # Check max total uses
+            if promotion.max_total_uses and promotion.current_uses >= promotion.max_total_uses:
+                continue  # Campaign usage limit reached
 
-                # Apply max_discount_amount cap if set
-                if promotion.max_discount_amount and discount_amount > promotion.max_discount_amount:
-                    discount_amount = promotion.max_discount_amount
-                    discount_percent = (discount_amount / original_price * 100) if original_price > 0 else Decimal('0')
+            # Check max uses per patient
+            if promotion.max_uses_per_patient:
+                patient_usage_count = session.query(PromotionUsageLog).filter(
+                    and_(
+                        PromotionUsageLog.campaign_id == promotion.campaign_id,
+                        PromotionUsageLog.patient_id == patient_id
+                    )
+                ).count()
+                if patient_usage_count >= promotion.max_uses_per_patient:
+                    continue  # Patient has reached usage limit for this campaign
 
-                final_price = original_price - discount_amount
+            # Check min_purchase_amount (item price must meet minimum threshold)
+            if promotion.min_purchase_amount and original_price < promotion.min_purchase_amount:
+                logger.info(f"      ❌ Skipped: item price ₹{original_price} < min_purchase_amount ₹{promotion.min_purchase_amount}")
+                continue  # Item price below minimum threshold
 
-                # This promotion is eligible - return it (highest priority)
-                return DiscountCalculationResult(
-                    discount_type='promotion',
-                    discount_percent=discount_percent,
-                    discount_amount=discount_amount,
-                    final_price=final_price,
-                    original_price=original_price,
-                    promotion_id=str(promotion.campaign_id),  # RENAMED from campaign_hook_id
-                    metadata={
-                        'promotion_type': 'simple_discount',
-                        'item_type': item_type,
-                        'campaign_id': str(promotion.campaign_id),
-                        'campaign_name': promotion.campaign_name,
-                        'campaign_code': promotion.campaign_code,
-                        'discount_type': promotion.discount_type,
-                        'discount_value': float(promotion.discount_value),
-                        'priority': 1,  # Highest priority
-                        'auto_applied': promotion.auto_apply,
-                        'end_date': promotion.end_date.strftime('%d-%b-%Y') if promotion.end_date else ''
-                    }
-                )
-
-            # TODO: Future promotion types (tiered_discount, bundle) can be added here
+            # Calculate discount
+            if promotion.discount_type == 'percentage':
+                discount_percent = promotion.discount_value
+                discount_amount = (original_price * discount_percent) / 100
+            elif promotion.discount_type == 'fixed_amount':
+                discount_amount = promotion.discount_value
+                discount_percent = (discount_amount / original_price * 100) if original_price > 0 else Decimal('0')
             else:
-                logger.warning(f"Unknown promotion_type: {promotion.promotion_type} for campaign {promotion.campaign_name}")
+                logger.warning(f"Unknown promotion discount type: {promotion.discount_type}")
+                continue
 
-        # No eligible promotion found
-        return None
+            # Apply max_discount_amount cap if set
+            if promotion.max_discount_amount and discount_amount > promotion.max_discount_amount:
+                discount_amount = promotion.max_discount_amount
+                discount_percent = (discount_amount / original_price * 100) if original_price > 0 else Decimal('0')
+
+            # Add to eligible list for comparison
+            eligible_promotions.append({
+                'promotion': promotion,
+                'discount_percent': discount_percent,
+                'discount_amount': discount_amount
+            })
+            logger.info(f"      ✅ ELIGIBLE: {promotion.campaign_name} - {discount_percent}% = Rs.{discount_amount}")
+
+        # Find the BEST promotion (highest discount amount)
+        if not eligible_promotions:
+            return None
+
+        # Sort by discount_amount descending and pick the best one
+        best = max(eligible_promotions, key=lambda x: x['discount_amount'])
+        promotion = best['promotion']
+        discount_percent = best['discount_percent']
+        discount_amount = best['discount_amount']
+        final_price = original_price - discount_amount
+
+        logger.info(f"Selected BEST promotion: {promotion.campaign_name} ({discount_percent}%) over {len(eligible_promotions)-1} other(s)")
+
+        return DiscountCalculationResult(
+            discount_type='promotion',
+            discount_percent=discount_percent,
+            discount_amount=discount_amount,
+            final_price=final_price,
+            original_price=original_price,
+            promotion_id=str(promotion.campaign_id),  # RENAMED from campaign_hook_id
+            metadata={
+                'promotion_type': 'simple_discount',
+                'item_type': item_type,
+                'campaign_id': str(promotion.campaign_id),
+                'campaign_name': promotion.campaign_name,
+                'campaign_code': promotion.campaign_code,
+                'discount_type': promotion.discount_type,
+                'discount_value_type': promotion.discount_type,  # ✅ For frontend conditional display
+                'discount_value': float(promotion.discount_value),
+                'discount_amount': float(discount_amount),  # ✅ Calculated discount amount for display
+                'priority': 1,  # Highest priority
+                'auto_applied': promotion.auto_apply,
+                'end_date': promotion.end_date.strftime('%d-%b-%Y') if promotion.end_date else '',
+                'eligible_count': len(eligible_promotions)  # How many promotions were eligible
+            }
+        )
 
     @staticmethod
     def handle_buy_x_get_y(
@@ -888,10 +943,10 @@ class DiscountService:
             # Check each item in invoice to see if trigger condition is met
             for item in invoice_items:
                 item_id = item.get('item_id') or item.get('service_id') or item.get('medicine_id') or item.get('package_id')
-                item_type = item.get('item_type')
+                item_type = (item.get('item_type') or '').lower()
 
-                # Check if item type matches
-                if trigger_item_type and item_type != trigger_item_type:
+                # Check if item type matches (case-insensitive)
+                if trigger_item_type and item_type != trigger_item_type.lower():
                     continue
 
                 # Check if specific item_ids required (if list is not empty)
@@ -927,8 +982,12 @@ class DiscountService:
         # Step 2: Check if current item is a reward item
         reward_items = reward.get('items', [])
         for reward_item in reward_items:
+            # Normalize item types to lowercase for comparison (promotion_rules stores lowercase)
+            reward_type = (reward_item.get('item_type') or '').lower()
+            current_type = (current_item_type or '').lower()
+
             if (reward_item.get('item_id') == current_item_id and
-                reward_item.get('item_type') == current_item_type):
+                reward_type == current_type):
 
                 # Calculate discount (usually 100% for "free")
                 discount_percent = Decimal(str(reward_item.get('discount_percent', 100)))
@@ -1111,20 +1170,15 @@ class DiscountService:
 
         # 1. PROMOTION/CAMPAIGN DISCOUNT
         # Skip if exclude_campaign is True (Added 2025-11-29)
-        # Or if specific campaign is in excluded_campaign_ids
+        # Pass excluded_campaign_ids to filter during selection (Updated 2025-12-02)
         auto_promotion_discount = None
         if not exclude_campaign:
-            # Check for automatic promotions
+            # Check for automatic promotions - now passes exclusion list to get next-best if top is excluded
             auto_promotion_discount = DiscountService.calculate_promotion_discount(
                 session, hospital_id, patient_id, item_type, item_id, unit_price, quantity, invoice_date,
-                invoice_items=invoice_items
+                invoice_items=invoice_items,
+                excluded_campaign_ids=excluded_campaign_ids  # Filter excluded campaigns during selection
             )
-            # Check if this specific campaign is excluded
-            if auto_promotion_discount and excluded_campaign_ids:
-                campaign_id = auto_promotion_discount.promotion_id
-                if campaign_id and str(campaign_id) in [str(cid) for cid in excluded_campaign_ids]:
-                    logger.info(f"Campaign {campaign_id} excluded by user selection")
-                    auto_promotion_discount = None
 
         # Then, calculate manual promo code discount if provided
         manual_promotion_discount = None
@@ -1174,7 +1228,8 @@ class DiscountService:
             logger.info(f"Using manual promotion: {manual_promotion_discount.discount_percent}%")
 
         if promotion_discount:
-            campaign_type = promotion_discount.metadata.get('discount_type', 'percentage')
+            # Check both discount_type and promotion_type (buy_x_get_y uses promotion_type)
+            campaign_type = promotion_discount.metadata.get('promotion_type') or promotion_discount.metadata.get('discount_type', 'percentage')
             discount_data['campaign'] = {
                 'percent': float(promotion_discount.discount_percent),
                 'amount': float(promotion_discount.discount_amount),
@@ -1194,7 +1249,10 @@ class DiscountService:
                 'campaign_name': promotion_discount.metadata.get('campaign_name', 'Promotion Campaign'),
                 'campaign_code': promotion_discount.metadata.get('campaign_code', ''),
                 'end_date': promotion_discount.metadata.get('end_date', ''),
-                'promotion_id': promotion_discount.promotion_id
+                'promotion_id': promotion_discount.promotion_id,
+                'promotion_type': campaign_type,  # buy_x_get_y or simple_discount
+                'discount_type': promotion_discount.metadata.get('discount_type', 'percentage'),  # percentage or fixed_amount
+                'discount_value': promotion_discount.metadata.get('discount_value', 0)  # Original campaign value
             })
 
         # 2. BULK DISCOUNT
@@ -1366,6 +1424,28 @@ class DiscountService:
         # It is NOT applied at line-item level anymore
         # The staff_discretionary parameter is ignored here - handled at invoice total level in API
 
+        # Build metadata with discount_value_type if campaign is applied
+        # This is critical for frontend to show ₹ field for fixed_amount campaigns
+        result_metadata = {
+            'selection_reason': f'Calculated using hospital stacking config',
+            'stacking_config': stacking_config,
+            'stacking_applied': stacking_applied,  # True when bulk + loyalty combined
+            'breakdown': stacked_result.get('breakdown', []),
+            'applied_discounts': applied_discounts,
+            'excluded_discounts': stacked_result.get('excluded_discounts', []),
+            'all_eligible_discounts': all_eligible,
+            'capped': stacked_result.get('capped', False),
+            'cap_applied': stacked_result.get('cap_applied')
+        }
+
+        # Include discount_value_type from campaign if a campaign is applied
+        # This enables frontend to show the correct input field (% or ₹)
+        if promotion_discount and any(a.get('source') == 'campaign' for a in applied_discounts):
+            result_metadata['discount_value_type'] = promotion_discount.metadata.get('discount_type', 'percentage')
+            result_metadata['discount_amount'] = float(promotion_discount.discount_amount)
+            result_metadata['campaign_name'] = promotion_discount.metadata.get('campaign_name', '')
+            result_metadata['campaign_code'] = promotion_discount.metadata.get('campaign_code', '')
+
         return DiscountCalculationResult(
             discount_type=discount_type,
             discount_percent=total_percent,
@@ -1374,17 +1454,7 @@ class DiscountService:
             original_price=original_price,
             card_type_id=card_type_id,
             promotion_id=promotion_id,
-            metadata={
-                'selection_reason': f'Calculated using hospital stacking config',
-                'stacking_config': stacking_config,
-                'stacking_applied': stacking_applied,  # True when bulk + loyalty combined
-                'breakdown': stacked_result.get('breakdown', []),
-                'applied_discounts': applied_discounts,
-                'excluded_discounts': stacked_result.get('excluded_discounts', []),
-                'all_eligible_discounts': all_eligible,
-                'capped': stacked_result.get('capped', False),
-                'cap_applied': stacked_result.get('cap_applied')
-            }
+            metadata=result_metadata
         )
 
     @staticmethod
@@ -1443,6 +1513,9 @@ class DiscountService:
         Returns:
             Updated line_items with discount_percent and discount_metadata populated
         """
+        # Medicine types include OTC, Prescription, Product, Consumable (from frontend)
+        MEDICINE_TYPES = ['Medicine', 'OTC', 'Prescription', 'Product', 'Consumable']
+
         # Count total services in the invoice (sum of quantities, not just line items)
         service_items = [item for item in line_items if item.get('item_type') == 'Service']
 
@@ -1453,7 +1526,7 @@ class DiscountService:
         logger.info(f"Total service count: {total_service_count} ({len(service_items)} line items)")
 
         # Count total medicines in the invoice (same logic as services)
-        medicine_items = [item for item in line_items if item.get('item_type') == 'Medicine']
+        medicine_items = [item for item in line_items if item.get('item_type') in MEDICINE_TYPES]
         total_medicine_count = sum(int(item.get('quantity', 1)) for item in medicine_items)
 
         logger.info(f"Total medicine count: {total_medicine_count} ({len(medicine_items)} line items)")
@@ -1604,9 +1677,12 @@ class DiscountService:
         Returns:
             Updated line_items with discount_percent and discount_metadata populated
         """
+        # Medicine types include OTC, Prescription, Product, Consumable (from frontend)
+        MEDICINE_TYPES = ['Medicine', 'OTC', 'Prescription', 'Product', 'Consumable']
+
         # Separate items by type
         service_items = [item for item in line_items if item.get('item_type') == 'Service']
-        medicine_items = [item for item in line_items if item.get('item_type') == 'Medicine']
+        medicine_items = [item for item in line_items if item.get('item_type') in MEDICINE_TYPES]
         package_items = [item for item in line_items if item.get('item_type') == 'Package']
 
         # Count total quantities (for bulk discount eligibility)
@@ -1682,9 +1758,12 @@ class DiscountService:
             item['promotion_id'] = best_discount.promotion_id  # RENAMED from campaign_hook_id
 
         # Process each MEDICINE item
+        logger.info(f"🔍 Processing {len(medicine_items)} medicine items (types: {[item.get('item_type') for item in medicine_items]})")
         for item in medicine_items:
             medicine_id = item.get('item_id') or item.get('medicine_id')
+            logger.info(f"🧪 Medicine item: {item.get('item_name')} (type={item.get('item_type')}, id={medicine_id}, price={item.get('unit_price')})")
             if not medicine_id:
+                logger.warning(f"⚠️ Skipping medicine item with no ID: {item.get('item_name')}")
                 continue
 
             # Check for staff override
@@ -1718,6 +1797,11 @@ class DiscountService:
                 excluded_campaign_ids=excluded_campaign_ids,  # Per-campaign exclusion
                 exclude_vip=exclude_vip  # Staff manually unchecked VIP discount (Added 2025-11-29)
             )
+
+            # Log calculated discount for medicine
+            logger.info(f"💊 Medicine {item.get('item_name')}: discount_type={best_discount.discount_type}, percent={best_discount.discount_percent}%, amount={best_discount.discount_amount}")
+            if best_discount.metadata.get('all_eligible_discounts'):
+                logger.info(f"   All eligible: {best_discount.metadata.get('all_eligible_discounts')}")
 
             # Apply max_discount cap (EXCEPT for promotions and stacked discounts)
             is_stacked = best_discount.metadata.get('stacking_applied', False)
@@ -2358,20 +2442,28 @@ class DiscountService:
 
         # Campaign discount
         campaign_percent = Decimal('0')
-        if campaign.get('applicable') or campaign.get('percent', 0) > 0:
+        campaign_amount = Decimal('0')
+        if campaign.get('applicable') or campaign.get('percent', 0) > 0 or campaign.get('amount', 0) > 0:
             campaign_type = campaign.get('type', 'percentage')
             if campaign_type == 'buy_x_get_y':
                 campaign_percent = Decimal(str(campaign.get('effective_percent', 0)))
-            elif campaign_type == 'fixed' and item_price and item_price > 0:
-                amount = Decimal(str(campaign.get('amount', 0)))
-                campaign_percent = (amount / item_price) * 100
+                campaign_amount = Decimal(str(item_price or 0)) * campaign_percent / 100
+            elif campaign_type in ('fixed', 'fixed_amount') and item_price and item_price > 0:
+                # Fixed amount discount - convert to percentage for comparison
+                campaign_amount = Decimal(str(campaign.get('amount', 0)))
+                campaign_percent = (campaign_amount / Decimal(str(item_price))) * 100
+                logger.info(f"  Fixed amount campaign: ₹{campaign_amount} = {campaign_percent:.2f}% of ₹{item_price}")
             else:
+                # Percentage discount
                 campaign_percent = Decimal(str(campaign.get('percent', 0)))
+                campaign_amount = Decimal(str(item_price or 0)) * campaign_percent / 100
         discount_values['campaign'] = {
             'percent': campaign_percent,
+            'amount': campaign_amount,  # Store actual amount for stacking calculations
             'config': campaign_config,
             'name': campaign.get('name', 'Campaign'),
-            'type': campaign.get('type', 'percentage')
+            'type': campaign.get('type', 'percentage'),
+            'discount_value_type': 'fixed_amount' if campaign.get('type') in ('fixed', 'fixed_amount') else 'percentage'
         }
 
         # Bulk discount
@@ -2427,11 +2519,17 @@ class DiscountService:
             best_exclusive = max(exclusive_candidates, key=lambda x: x['percent'])
             logger.info(f"  Best exclusive: {best_exclusive['source']} at {best_exclusive['percent']}%")
             total_percent = best_exclusive['percent']
-            breakdown.append({
+            breakdown_item = {
                 'source': best_exclusive['source'],
                 'percent': float(best_exclusive['percent']),
                 'mode': 'exclusive'
-            })
+            }
+            # Include amount and type for fixed_amount campaigns
+            if best_exclusive['source'] == 'campaign':
+                campaign_data = discount_values['campaign']
+                breakdown_item['amount'] = float(campaign_data.get('amount', 0))
+                breakdown_item['type'] = campaign_data.get('discount_value_type', 'percentage')
+            breakdown.append(breakdown_item)
             applied.append({
                 'source': best_exclusive['source'],
                 'percent': float(best_exclusive['percent']),
@@ -2474,11 +2572,16 @@ class DiscountService:
 
                 if mode == 'incremental':
                     total_percent += data['percent']
-                    breakdown.append({
+                    breakdown_item = {
                         'source': source,
                         'percent': float(data['percent']),
                         'mode': 'incremental'
-                    })
+                    }
+                    # Include amount and type for fixed_amount campaigns
+                    if source == 'campaign':
+                        breakdown_item['amount'] = float(data.get('amount', 0))
+                        breakdown_item['type'] = data.get('discount_value_type', 'percentage')
+                    breakdown.append(breakdown_item)
                     applied.append({
                         'source': source,
                         'percent': float(data['percent']),
@@ -2523,11 +2626,17 @@ class DiscountService:
                 total_percent += best_absolute['percent']
                 logger.info(f"  --> Absolute STACKS with incrementals: {total_percent}%")
 
-                breakdown.append({
+                breakdown_item = {
                     'source': best_absolute['source'],
                     'percent': float(best_absolute['percent']),
                     'mode': 'absolute (stacked)'
-                })
+                }
+                # Include amount and type for fixed_amount campaigns
+                if best_absolute['source'] == 'campaign':
+                    campaign_data = discount_values['campaign']
+                    breakdown_item['amount'] = float(campaign_data.get('amount', 0))
+                    breakdown_item['type'] = campaign_data.get('discount_value_type', 'percentage')
+                breakdown.append(breakdown_item)
                 applied.append({
                     'source': best_absolute['source'],
                     'percent': float(best_absolute['percent']),
@@ -2561,12 +2670,17 @@ class DiscountService:
 
         # =====================================================================
         # STEP 7: Apply Max Discount Cap
+        # EXCEPTION: Buy X Get Y promotions bypass max_total_discount cap
+        # because "free" items should be truly free (100% off)
         # =====================================================================
         capped = False
         cap_applied = None
         max_cap = stacking_config.get('max_total_discount')
 
-        if max_cap is not None and total_percent > Decimal(str(max_cap)):
+        # Check if this is a buy_x_get_y campaign - they bypass max cap
+        is_buy_x_get_y = campaign.get('type') == 'buy_x_get_y'
+
+        if max_cap is not None and total_percent > Decimal(str(max_cap)) and not is_buy_x_get_y:
             cap_applied = float(total_percent)
             total_percent = Decimal(str(max_cap))
             capped = True

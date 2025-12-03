@@ -45,6 +45,76 @@ class PatientInvoiceService(UniversalEntityService):
         logger.info("✅ Initialized PatientInvoiceService with PatientInvoiceView")
 
     # =========================================================================
+    # OVERRIDE: Add virtual field computation for list view
+    # =========================================================================
+
+    def _convert_items_to_dict(self, items: list, session) -> list:
+        """
+        Override parent method to add virtual fields for list view.
+        Adds has_free_items and has_sample_items flags for each invoice.
+        """
+        # First, call parent method to get base dictionaries
+        items_dict = super()._convert_items_to_dict(items, session)
+
+        if not items_dict:
+            return items_dict
+
+        # Get all invoice IDs from the batch
+        invoice_ids = []
+        for item_dict in items_dict:
+            invoice_id = item_dict.get('invoice_id')
+            if invoice_id:
+                try:
+                    invoice_ids.append(uuid.UUID(invoice_id) if isinstance(invoice_id, str) else invoice_id)
+                except (ValueError, TypeError):
+                    pass
+
+        if not invoice_ids:
+            return items_dict
+
+        # Efficient batch query: Get free/sample status for all invoices at once
+        try:
+            from sqlalchemy import func
+
+            # Query to find which invoices have free items
+            free_items_query = session.query(
+                InvoiceLineItem.invoice_id
+            ).filter(
+                InvoiceLineItem.invoice_id.in_(invoice_ids),
+                InvoiceLineItem.is_free_item == True
+            ).distinct().all()
+
+            free_invoice_ids = {str(row[0]) for row in free_items_query}
+
+            # Query to find which invoices have sample items
+            sample_items_query = session.query(
+                InvoiceLineItem.invoice_id
+            ).filter(
+                InvoiceLineItem.invoice_id.in_(invoice_ids),
+                InvoiceLineItem.is_sample == True
+            ).distinct().all()
+
+            sample_invoice_ids = {str(row[0]) for row in sample_items_query}
+
+            # Add virtual fields to each item
+            for item_dict in items_dict:
+                invoice_id_str = str(item_dict.get('invoice_id', ''))
+                item_dict['has_free_items'] = 'true' if invoice_id_str in free_invoice_ids else 'false'
+                item_dict['has_sample_items'] = 'true' if invoice_id_str in sample_invoice_ids else 'false'
+
+            logger.debug(f"Added has_free_items/has_sample_items to {len(items_dict)} invoices. "
+                        f"Free: {len(free_invoice_ids)}, Sample: {len(sample_invoice_ids)}")
+
+        except Exception as e:
+            logger.error(f"Error computing free/sample virtual fields: {str(e)}")
+            # Fallback: Set all to false
+            for item_dict in items_dict:
+                item_dict['has_free_items'] = 'false'
+                item_dict['has_sample_items'] = 'false'
+
+        return items_dict
+
+    # =========================================================================
     # UNIVERSAL ENGINE INTERFACE METHODS
     # =========================================================================
 
@@ -169,6 +239,9 @@ class PatientInvoiceService(UniversalEntityService):
                             if field == 'parent_transaction_id':
                                 logger.info(f"🔍 [UUID_DEBUG] Converted parent_transaction_id from {original_value} ({type(original_value)}) to {invoice_data[field]} ({type(invoice_data[field])})")
 
+                    # Compute has_free_items and has_sample_items virtual fields
+                    invoice_data = self._compute_free_sample_flags(session, invoice_uuid, invoice_data)
+
                     logger.info(f"Retrieved invoice {item_id} from view with payment_status={invoice_data.get('payment_status')}, parent_transaction_id={invoice_data.get('parent_transaction_id')}")
                     return invoice_data
                 else:
@@ -286,7 +359,13 @@ class PatientInvoiceService(UniversalEntityService):
                         # Prescription consolidation metadata
                         'is_prescription_item': item.is_prescription_item or False,
                         'consolidation_group_id': str(item.consolidation_group_id) if item.consolidation_group_id else None,
-                        'print_as_consolidated': item.print_as_consolidated or False
+                        'print_as_consolidated': item.print_as_consolidated or False,
+                        # Free Item support (promotional - GST on MRP, 100% discount)
+                        'is_free_item': item.is_free_item or False,
+                        'free_item_reason': item.free_item_reason or '',
+                        # Sample/Trial item support (no GST, no charge)
+                        'is_sample': item.is_sample or False,
+                        'sample_reason': item.sample_reason or ''
                     }
 
                     items_list.append(item_dict)
@@ -752,6 +831,38 @@ class PatientInvoiceService(UniversalEntityService):
     # =========================================================================
     # HELPER METHODS
     # =========================================================================
+
+    def _compute_free_sample_flags(self, session, invoice_uuid: uuid.UUID, invoice_data: Dict) -> Dict:
+        """
+        Compute has_free_items and has_sample_items virtual fields for a single invoice.
+        Used by get_by_id for detail view display.
+        """
+        try:
+            # Query to check if invoice has any free items
+            has_free = session.query(InvoiceLineItem).filter(
+                InvoiceLineItem.invoice_id == invoice_uuid,
+                InvoiceLineItem.is_free_item == True
+            ).first() is not None
+
+            # Query to check if invoice has any sample items
+            has_sample = session.query(InvoiceLineItem).filter(
+                InvoiceLineItem.invoice_id == invoice_uuid,
+                InvoiceLineItem.is_sample == True
+            ).first() is not None
+
+            invoice_data['has_free_items'] = 'true' if has_free else 'false'
+            invoice_data['has_sample_items'] = 'true' if has_sample else 'false'
+
+            logger.debug(f"Computed free/sample flags for invoice {invoice_uuid}: "
+                        f"has_free_items={invoice_data['has_free_items']}, "
+                        f"has_sample_items={invoice_data['has_sample_items']}")
+
+        except Exception as e:
+            logger.error(f"Error computing free/sample flags: {str(e)}")
+            invoice_data['has_free_items'] = 'false'
+            invoice_data['has_sample_items'] = 'false'
+
+        return invoice_data
 
     def _empty_line_items_result(self, message: str = '') -> Dict:
         """Return empty result structure for line items"""

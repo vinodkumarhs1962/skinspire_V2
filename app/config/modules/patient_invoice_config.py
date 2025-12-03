@@ -471,6 +471,55 @@ PATIENT_INVOICE_FIELDS = [
         css_classes="payment-status-column"
     ),
 
+    # === FREE/SAMPLE ITEM INDICATORS ===
+    # Note: In list view, these are rendered below payment_status (not separate columns)
+    # This is handled by _format_status_badge in data_assembler.py
+    FieldDefinition(
+        name="has_free_items",
+        label="Free Items",
+        field_type=FieldType.STATUS_BADGE,
+        virtual=True,
+        options=[
+            {"value": "true", "label": "<i class='fas fa-gift'></i> FREE", "css_class": "status-success"},
+            {"value": "false", "label": "", "css_class": ""}
+        ],
+        show_in_list=False,  # Rendered below payment_status instead
+        show_in_detail=True,
+        show_in_form=False,
+        searchable=False,
+        sortable=False,
+        filterable=False,
+        readonly=True,
+        tab_group="invoice_details",
+        section="payment_status",
+        view_order=51,
+        css_classes="free-items-indicator",
+        conditional_display="item.get('has_free_items') == 'true'"  # Only show when true
+    ),
+
+    FieldDefinition(
+        name="has_sample_items",
+        label="Sample Items",
+        field_type=FieldType.STATUS_BADGE,
+        virtual=True,
+        options=[
+            {"value": "true", "label": "<i class='fas fa-flask'></i> SAMPLE", "css_class": "status-purple"},
+            {"value": "false", "label": "", "css_class": ""}
+        ],
+        show_in_list=False,  # Rendered below payment_status instead
+        show_in_detail=True,
+        show_in_form=False,
+        searchable=False,
+        sortable=False,
+        filterable=False,
+        readonly=True,
+        tab_group="invoice_details",
+        section="payment_status",
+        view_order=52,
+        css_classes="sample-items-indicator",
+        conditional_display="item.get('has_sample_items') == 'true'"  # Only show when true
+    ),
+
     # === CANCELLATION INFORMATION ===
     FieldDefinition(
         name="is_cancelled",

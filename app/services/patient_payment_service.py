@@ -138,7 +138,8 @@ class PatientPaymentService(UniversalEntityService):
                     'grand_total': float(total_grand_total)
                 },
                 'context': 'payment_invoice_many_to_many',
-                'has_medicine_items': any(item.get('item_type') == 'Medicine' for item in all_items),
+                # Medicine types include OTC, Prescription, Product, Consumable (from frontend/DB)
+                'has_medicine_items': any(item.get('item_type') in ['Medicine', 'OTC', 'Prescription', 'Product', 'Consumable'] for item in all_items),
                 'invoice_count': len(invoice_ids),
                 'invoices': all_invoices,
                 'is_multi_invoice': len(invoice_ids) > 1

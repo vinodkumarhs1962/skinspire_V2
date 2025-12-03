@@ -174,6 +174,20 @@ class BulkDiscountManager {
                 // Show loyalty card badge
                 this.displayLoyaltyCardBadge(data.card);
 
+                // Update loyalty eligible list
+                const loyaltyList = document.getElementById('loyalty-eligible-list');
+                if (loyaltyList) {
+                    loyaltyList.innerHTML = `
+                        <div style="display: flex; align-items: center; padding: 8px; background: linear-gradient(90deg, ${data.card.card_color}20, white); border-radius: 6px; border-left: 4px solid ${data.card.card_color};">
+                            <span style="font-size: 20px; margin-right: 10px;">🎁</span>
+                            <div>
+                                <div style="font-weight: 600; color: #1f2937;">${data.card.card_type_name}</div>
+                                <div style="font-size: 12px; color: #6b7280;">${data.card.discount_percent}% discount on eligible items</div>
+                            </div>
+                        </div>
+                    `;
+                }
+
                 // Enable and check loyalty checkbox
                 const loyaltyCheckbox = document.getElementById('apply-loyalty-discount');
                 if (loyaltyCheckbox) {
@@ -182,6 +196,20 @@ class BulkDiscountManager {
                     console.log('Loyalty checkbox enabled and checked');
                 }
             } else {
+                this.currentPatientLoyalty = null;
+
+                // Hide loyalty card display
+                const loyaltyDisplay = document.getElementById('patient-loyalty-card-display');
+                if (loyaltyDisplay) {
+                    loyaltyDisplay.style.display = 'none';
+                }
+
+                // Update loyalty eligible list
+                const loyaltyList = document.getElementById('loyalty-eligible-list');
+                if (loyaltyList) {
+                    loyaltyList.innerHTML = '<span style="color: #9ca3af; font-style: italic;">Patient has no loyalty card</span>';
+                }
+
                 // Disable loyalty checkbox if no card
                 const loyaltyCheckbox = document.getElementById('apply-loyalty-discount');
                 if (loyaltyCheckbox) {
@@ -398,23 +426,40 @@ class BulkDiscountManager {
             const isEligible = serviceCount >= this.hospitalConfig.bulk_discount_min_service_count;
             const checkbox = document.getElementById('bulk-discount-enabled');
 
-            // Auto-check/uncheck checkbox based on eligibility (if checkbox exists)
+            // Manage bulk checkbox enable/disable based on line items and eligibility
             if (checkbox) {
-                if (isEligible) {
-                    // Only auto-check if user hasn't manually unchecked
-                    if (!this.userToggledCheckbox) {
-                        checkbox.checked = true;
-                    }
-                    checkbox.disabled = false;
-                    this.updateEligibilityBadge('eligible', serviceCount);
-                } else {
-                    // Not eligible - always uncheck and reset user toggle
-                    // (can't have bulk discount if below threshold)
+                // If no line items at all, disable checkbox
+                if (lineItems.length === 0) {
                     checkbox.checked = false;
-                    checkbox.disabled = false;
-                    this.userToggledCheckbox = false;  // Reset so next eligibility auto-checks
-                    const servicesNeeded = this.hospitalConfig.bulk_discount_min_service_count - serviceCount;
-                    this.updateEligibilityBadge('not-eligible', serviceCount, servicesNeeded);
+                    checkbox.disabled = true;
+                    this.userToggledCheckbox = false;
+                    this.updateEligibilityBadge('not-eligible', 0, this.hospitalConfig.bulk_discount_min_service_count);
+                }
+                // If has line items with services, manage checkbox based on eligibility
+                else if (serviceItems.length > 0) {
+                    if (isEligible) {
+                        // Eligible - enable checkbox and auto-check if user hasn't manually unchecked
+                        checkbox.disabled = false;
+                        if (!this.userToggledCheckbox) {
+                            checkbox.checked = true;
+                        }
+                        this.updateEligibilityBadge('eligible', serviceCount);
+                    } else {
+                        // Not eligible - disable checkbox, uncheck, and reset user toggle
+                        // Checkbox stays disabled until threshold is met again
+                        checkbox.checked = false;
+                        checkbox.disabled = true;
+                        this.userToggledCheckbox = false;  // Reset so next eligibility auto-checks
+                        const servicesNeeded = this.hospitalConfig.bulk_discount_min_service_count - serviceCount;
+                        this.updateEligibilityBadge('not-eligible', serviceCount, servicesNeeded);
+                    }
+                }
+                // Has line items but no services - disable checkbox
+                else {
+                    checkbox.checked = false;
+                    checkbox.disabled = true;
+                    this.userToggledCheckbox = false;
+                    this.updateEligibilityBadge('not-eligible', 0, this.hospitalConfig.bulk_discount_min_service_count);
                 }
             }
 
@@ -585,8 +630,9 @@ class BulkDiscountManager {
                 this.updateDiscountBreakdown(data.line_items);
 
                 // Update eligible campaigns display (Added 2025-11-29)
+                // Use mergeMode=true to update applied status while keeping master list
                 if (window.updateEligibleCampaigns && data.eligible_campaigns) {
-                    window.updateEligibleCampaigns(data.eligible_campaigns);
+                    window.updateEligibleCampaigns(data.eligible_campaigns, true);
                 }
 
             } else {
@@ -612,10 +658,12 @@ class BulkDiscountManager {
         this.isUpdatingDiscounts = true;
 
         discountedItems.forEach((item) => {
-            if (item.item_type !== 'Service') return;
+            // Process Services, Medicines (OTC, Prescription, Product, Consumable), and Packages
+            const validTypes = ['Service', 'Package', 'Medicine', 'OTC', 'Prescription', 'Product', 'Consumable'];
+            if (!validTypes.includes(item.item_type)) return;
 
             // Use the index from the API response to match the correct row
-            // This handles multiple rows with the same service_id
+            // This handles multiple rows with the same service_id/medicine_id
             const itemIndex = item.index;
             let matchedRow = null;
 
@@ -624,14 +672,14 @@ class BulkDiscountManager {
                 matchedRow = rowsArray[itemIndex];
             } else {
                 // Fallback: Find row with matching item-id value
-                const serviceId = item.service_id || item.item_id;
-                if (!serviceId) {
-                    console.warn('Item missing service_id:', item);
+                const itemId = item.service_id || item.medicine_id || item.package_id || item.item_id;
+                if (!itemId) {
+                    console.warn('Item missing item_id:', item);
                     return;
                 }
                 rowsArray.forEach(row => {
                     const itemIdInput = row.querySelector('.item-id');
-                    if (itemIdInput && itemIdInput.value === serviceId) {
+                    if (itemIdInput && itemIdInput.value === itemId) {
                         matchedRow = row;
                     }
                 });
@@ -642,54 +690,112 @@ class BulkDiscountManager {
                 return;
             }
 
-            const discountInput = matchedRow.querySelector('.discount-percent');
-            if (discountInput) {
-                console.log(`Setting discount for row ${itemIndex} (${item.item_name}): ${item.discount_percent}%`);
-                discountInput.value = item.discount_percent.toFixed(2);
+            // ✅ FIXED AMOUNT DISCOUNT SUPPORT: Check discount type from campaign/item
+            // Handle both percentage and fixed_amount discounts
+            const discountType = item.discount_type || 'percentage';
+            const metadata = item.discount_metadata || {};
 
-                // Clear override flag when auto-discount is applied
-                try {
-                    this.clearDiscountOverride(matchedRow);
-                } catch (err) {
-                    console.warn('Error clearing discount override:', err);
+            // Determine if we should use amount mode:
+            // 1. If campaign discount is fixed_amount (check metadata.discount_value_type)
+            // 2. If discount_type itself is fixed_amount
+            // 3. If stacked discounts include any fixed_amount component
+            // Note: discount_type from service is 'promotion' for campaigns, so check metadata
+            const hasFixedAmountComponent = metadata.discount_value_type === 'fixed_amount' ||
+                                            discountType === 'fixed_amount';
+            const isStackedWithAmount = discountType === 'stacked' &&
+                                        metadata.breakdown &&
+                                        metadata.breakdown.some(b => b.type === 'fixed_amount');
+            const useAmountMode = hasFixedAmountComponent || isStackedWithAmount;
+
+            console.log(`🎯 Applying discount for row ${itemIndex} (${item.item_name}):`, {
+                discountType,
+                hasFixedAmountComponent,
+                isStackedWithAmount,
+                useAmountMode,
+                discountPercent: item.discount_percent,
+                discountAmount: item.discount_amount
+            });
+
+            // Get the InvoiceItemComponent instance if available
+            const invoiceItemComponent = window.invoiceItemComponent;
+
+            if (useAmountMode && invoiceItemComponent && typeof invoiceItemComponent.setDiscountMode === 'function') {
+                // Use fixed amount mode - switch the display and set amount value
+                const discountAmount = item.discount_amount || 0;
+                invoiceItemComponent.setDiscountMode(matchedRow, 'fixed_amount', discountAmount);
+                console.log(`💵 Applied FIXED AMOUNT discount: ₹${discountAmount}`);
+            } else {
+                // Use percentage mode (default)
+                const discountInput = matchedRow.querySelector('.discount-percent');
+                if (discountInput) {
+                    // Show whole number if no decimals, otherwise 1 decimal
+                    const pct = parseFloat(item.discount_percent) || 0;
+                    discountInput.value = pct % 1 === 0 ? pct.toFixed(0) : pct.toFixed(1);
+
+                    // If we have invoiceItemComponent, ensure we're in percentage mode
+                    if (invoiceItemComponent && typeof invoiceItemComponent.setDiscountMode === 'function') {
+                        // Show percentage row, hide amount row (no hidden field needed)
+                        const percentRow = matchedRow.querySelector('.discount-percent-row');
+                        const amountRow = matchedRow.querySelector('.discount-amount-row');
+                        if (percentRow) percentRow.style.display = 'flex';
+                        if (amountRow) amountRow.style.display = 'none';
+                    }
+                    console.log(`📊 Applied PERCENTAGE discount: ${pct}%`);
+                } else {
+                    console.warn('Discount input not found in row');
                 }
+            }
 
-                // Enforce readonly state based on user permission
-                if (!this.canEditDiscount) {
+            // Clear override flag when auto-discount is applied
+            try {
+                this.clearDiscountOverride(matchedRow);
+            } catch (err) {
+                console.warn('Error clearing discount override:', err);
+            }
+
+            // Enforce readonly state based on user permission
+            const discountInput = matchedRow.querySelector('.discount-percent');
+            const discountAmountInput = matchedRow.querySelector('.discount-amount');
+            if (!this.canEditDiscount) {
+                if (discountInput) {
                     discountInput.setAttribute('readonly', true);
                     discountInput.style.backgroundColor = '#f3f4f6';
                     discountInput.style.cursor = 'not-allowed';
                     discountInput.title = 'Auto-calculated discount (Manager can edit)';
                 }
-
-                // Store discount metadata in hidden input for patient view access
-                let metadataInput = matchedRow.querySelector('.discount-metadata');
-                if (!metadataInput) {
-                    metadataInput = document.createElement('input');
-                    metadataInput.type = 'hidden';
-                    metadataInput.className = 'discount-metadata';
-                    matchedRow.appendChild(metadataInput);
+                if (discountAmountInput) {
+                    discountAmountInput.setAttribute('readonly', true);
+                    discountAmountInput.style.backgroundColor = '#f3f4f6';
+                    discountAmountInput.style.cursor = 'not-allowed';
+                    discountAmountInput.title = 'Auto-calculated discount (Manager can edit)';
                 }
-                metadataInput.value = JSON.stringify(item.discount_metadata || {});
-
-                // Store discount type for patient view
-                let discountTypeInput = matchedRow.querySelector('.discount-type');
-                if (!discountTypeInput) {
-                    discountTypeInput = document.createElement('input');
-                    discountTypeInput.type = 'hidden';
-                    discountTypeInput.className = 'discount-type';
-                    matchedRow.appendChild(discountTypeInput);
-                }
-                discountTypeInput.value = item.discount_type || 'none';
-
-                // Add discount badge (pass metadata for stacked discounts)
-                this.addDiscountBadge(matchedRow, item.discount_type, item.discount_percent, item.discount_metadata);
-
-                // Trigger input event to recalculate line total (but not updatePricing)
-                discountInput.dispatchEvent(new Event('input', { bubbles: true }));
-            } else {
-                console.warn('Discount input not found in row');
             }
+
+            // Store discount metadata in hidden input for patient view access
+            let metadataInput = matchedRow.querySelector('.discount-metadata');
+            if (!metadataInput) {
+                metadataInput = document.createElement('input');
+                metadataInput.type = 'hidden';
+                metadataInput.className = 'discount-metadata';
+                matchedRow.appendChild(metadataInput);
+            }
+            metadataInput.value = JSON.stringify(item.discount_metadata || {});
+
+            // Store discount type for patient view
+            let discountTypeInputEl = matchedRow.querySelector('.discount-type');
+            if (!discountTypeInputEl) {
+                discountTypeInputEl = document.createElement('input');
+                discountTypeInputEl.type = 'hidden';
+                discountTypeInputEl.className = 'discount-type';
+                matchedRow.appendChild(discountTypeInputEl);
+            }
+            discountTypeInputEl.value = item.discount_type || 'none';
+
+            // Add discount badge with tooltip showing breakdown (pass metadata for stacked discounts)
+            this.addDiscountBadge(matchedRow, item.discount_type, item.discount_percent, item.discount_metadata);
+
+            // Trigger input event to recalculate line total (but not updatePricing)
+            if (discountInput) discountInput.dispatchEvent(new Event('input', { bubbles: true }));
         });
 
         console.log('Discount update complete');
@@ -1160,164 +1266,223 @@ class BulkDiscountManager {
 
     /**
      * Add discount badge to line item
+     * Shows a simple badge (BULK, PROMO, LOYALTY, MIXED) with hover tooltip for details
+     * ✅ FIXED AMOUNT SUPPORT: Handles both percentage and fixed_amount discounts
      */
     addDiscountBadge(row, type, percent, metadata = null) {
         // Remove existing badges
         const existingBadges = row.querySelectorAll('.discount-badge');
         existingBadges.forEach(badge => badge.remove());
 
-        const discountInput = row.querySelector('.discount-percent');
-        if (!discountInput || !discountInput.parentElement) return;
+        // Find discount input - could be either percent or amount depending on mode
+        const discountPercentInput = row.querySelector('.discount-percent');
+        const discountAmountInput = row.querySelector('.discount-amount');
+        const badgeRowEl = row.querySelector('.discount-badge-row');
+
+        // Find a suitable parent element for the badge
+        if (!badgeRowEl && !discountPercentInput?.parentElement && !discountAmountInput?.parentElement) return;
+
+        // ✅ Check if this is a fixed_amount discount
+        const isFixedAmount = metadata?.discount_value_type === 'fixed_amount' ||
+                             (type === 'fixed_amount') ||
+                             (type === 'campaign' && metadata?.discount_value_type === 'fixed_amount');
+        const discountAmount = metadata?.discount_amount || 0;
+
+        // Determine badge text, color and tooltip
+        let badgeText = '';
+        let badgeColor = '';
+        let tooltipText = '';
 
         // Handle bulk_plus_loyalty stacked discount
         if (type === 'bulk_plus_loyalty' && metadata) {
-            // Create bulk badge
-            const bulkBadge = document.createElement('span');
-            bulkBadge.className = 'discount-badge bulk-discount';
-            bulkBadge.textContent = `Bulk ${metadata.bulk_percent || 0}%`;
-            bulkBadge.style.cssText = `
-                display: inline-block;
-                background: #3b82f6;
-                color: white;
-                padding: 2px 8px;
-                border-radius: 4px;
-                font-size: 11px;
-                margin-left: 8px;
-                font-weight: 500;
-            `;
-            discountInput.parentElement.appendChild(bulkBadge);
-
-            // Create loyalty badge
-            const loyaltyBadge = document.createElement('span');
-            loyaltyBadge.className = 'discount-badge loyalty-discount';
-            loyaltyBadge.textContent = `Loyalty ${metadata.loyalty_percent || 0}%`;
-            loyaltyBadge.style.cssText = `
-                display: inline-block;
-                background: #f59e0b;
-                color: white;
-                padding: 2px 8px;
-                border-radius: 4px;
-                font-size: 11px;
-                margin-left: 4px;
-                font-weight: 500;
-            `;
-            discountInput.parentElement.appendChild(loyaltyBadge);
-            return;
+            badgeText = 'MIXED';
+            badgeColor = '#8b5cf6'; // Purple
+            tooltipText = `Bulk: ${metadata.bulk_percent || 0}%\nLoyalty: ${metadata.loyalty_percent || 0}%\nTotal: ${percent.toFixed(1)}%`;
+        }
+        // Handle stacked discounts with breakdown (may include mixed types)
+        else if (type === 'stacked' && metadata && metadata.breakdown && metadata.breakdown.length > 0) {
+            badgeText = 'MIXED';
+            badgeColor = '#8b5cf6'; // Purple
+            // Check if any component is fixed_amount
+            const hasFixedAmount = metadata.breakdown.some(item => item.type === 'fixed_amount');
+            if (hasFixedAmount) {
+                // Show amounts for stacked discounts with fixed_amount components
+                tooltipText = metadata.breakdown.map(item => {
+                    let label = item.source;
+                    switch(item.source) {
+                        case 'bulk': label = 'Bulk'; break;
+                        case 'loyalty': label = this.currentPatientLoyalty?.card_type_code || 'Loyalty'; break;
+                        case 'campaign': label = 'Promo'; break;
+                        case 'vip': label = 'VIP'; break;
+                    }
+                    // Show amount for fixed_amount, percentage for percentage
+                    if (item.type === 'fixed_amount') {
+                        return `${label}: ₹${(item.amount || 0).toFixed(2)}`;
+                    } else {
+                        return `${label}: ${(item.percent || 0).toFixed(1)}% (₹${(item.amount || 0).toFixed(2)})`;
+                    }
+                }).join('\n') + `\nTotal: ₹${(metadata.total_amount || discountAmount).toFixed(2)}`;
+            } else {
+                tooltipText = metadata.breakdown.map(item => {
+                    let label = item.source;
+                    switch(item.source) {
+                        case 'bulk': label = 'Bulk'; break;
+                        case 'loyalty': label = this.currentPatientLoyalty?.card_type_code || 'Loyalty'; break;
+                        case 'campaign': label = 'Promo'; break;
+                        case 'vip': label = 'VIP'; break;
+                    }
+                    return `${label}: ${item.percent.toFixed(1)}%`;
+                }).join('\n') + `\nTotal: ${percent.toFixed(1)}%`;
+            }
+        }
+        // ✅ Fixed amount discount (single type)
+        else if (isFixedAmount || type === 'fixed_amount') {
+            badgeText = 'PROMO';
+            badgeColor = '#10b981'; // Green
+            tooltipText = `Promotional discount: ₹${discountAmount.toFixed(2)}`;
+        }
+        // Single discount types (percentage)
+        else {
+            switch(type) {
+                case 'bulk':
+                    badgeText = 'BULK';
+                    badgeColor = '#3b82f6'; // Blue
+                    tooltipText = `Bulk discount: ${percent.toFixed(1)}%`;
+                    break;
+                case 'loyalty':
+                case 'loyalty_percent':
+                    badgeText = this.currentPatientLoyalty?.card_type_code || 'LOYALTY';
+                    badgeColor = '#f59e0b'; // Amber
+                    tooltipText = `Loyalty discount: ${percent.toFixed(1)}%`;
+                    break;
+                case 'campaign':
+                case 'promotion':
+                    badgeText = 'PROMO';
+                    badgeColor = '#10b981'; // Green
+                    tooltipText = `Promotional discount: ${percent.toFixed(1)}%`;
+                    break;
+                case 'standard':
+                    badgeText = 'STD';
+                    badgeColor = '#6b7280'; // Gray
+                    tooltipText = `Standard discount: ${percent.toFixed(1)}%`;
+                    break;
+                default:
+                    badgeText = type ? type.toUpperCase().substring(0, 5) : 'DISC';
+                    badgeColor = '#6b7280'; // Gray
+                    tooltipText = `Discount: ${percent.toFixed(1)}%`;
+            }
         }
 
-        // Single discount type
+        // Create single compact badge with styled tooltip
         const badge = document.createElement('span');
         badge.className = `discount-badge ${type}-discount`;
-
-        let badgeText = '';
-        let badgeColor = '';
-
-        switch(type) {
-            case 'bulk':
-                badgeText = `Bulk ${percent.toFixed(0)}%`;
-                badgeColor = '#3b82f6'; // Blue
-                break;
-            case 'loyalty':
-            case 'loyalty_percent':
-                badgeText = `${this.currentPatientLoyalty?.card_type_code || 'Loyalty'} ${percent.toFixed(0)}%`;
-                badgeColor = '#f59e0b'; // Amber
-                break;
-            case 'campaign':
-            case 'promotion':
-                badgeText = `Promo ${percent.toFixed(0)}%`;
-                badgeColor = '#10b981'; // Green
-                break;
-            case 'stacked':
-                // Handle stacked discounts - show individual badges for each component
-                if (metadata && metadata.breakdown && metadata.breakdown.length > 0) {
-                    // Create individual badges for each discount component
-                    metadata.breakdown.forEach((item, index) => {
-                        const componentBadge = document.createElement('span');
-                        componentBadge.className = `discount-badge ${item.source}-discount`;
-
-                        let componentColor = '#6b7280'; // Default gray
-                        let componentLabel = item.source;
-
-                        switch(item.source) {
-                            case 'bulk':
-                                componentColor = '#3b82f6'; // Blue
-                                componentLabel = 'Bulk';
-                                break;
-                            case 'loyalty':
-                                componentColor = '#f59e0b'; // Amber
-                                componentLabel = this.currentPatientLoyalty?.card_type_code || 'Loyalty';
-                                break;
-                            case 'campaign':
-                                componentColor = '#10b981'; // Green
-                                componentLabel = 'Promo';
-                                break;
-                            case 'vip':
-                                componentColor = '#ec4899'; // Pink
-                                componentLabel = 'VIP';
-                                break;
-                        }
-
-                        componentBadge.textContent = `${componentLabel} ${item.percent.toFixed(0)}%`;
-                        componentBadge.style.cssText = `
-                            display: inline-block;
-                            background: ${componentColor};
-                            color: white;
-                            padding: 2px 8px;
-                            border-radius: 4px;
-                            font-size: 11px;
-                            margin-left: ${index === 0 ? '8px' : '4px'};
-                            font-weight: 500;
-                            cursor: help;
-                        `;
-                        componentBadge.title = `${componentLabel} discount: ${item.percent.toFixed(1)}%`;
-                        discountInput.parentElement.appendChild(componentBadge);
-                    });
-
-                    // Add total indicator
-                    const totalBadge = document.createElement('span');
-                    totalBadge.className = 'discount-badge total-discount';
-                    totalBadge.textContent = `= ${percent.toFixed(0)}%`;
-                    totalBadge.style.cssText = `
-                        display: inline-block;
-                        background: #8b5cf6;
-                        color: white;
-                        padding: 2px 8px;
-                        border-radius: 4px;
-                        font-size: 11px;
-                        margin-left: 4px;
-                        font-weight: 600;
-                        cursor: help;
-                    `;
-                    totalBadge.title = 'Total stacked discount';
-                    discountInput.parentElement.appendChild(totalBadge);
-                    return; // Already added badges, exit switch
-                } else {
-                    badgeText = `${percent.toFixed(0)}%`;
-                    badgeColor = '#6b7280'; // Gray
-                }
-                break;
-            case 'standard':
-                badgeText = `Std ${percent.toFixed(0)}%`;
-                badgeColor = '#6b7280'; // Gray
-                break;
-            default:
-                badgeText = `${percent.toFixed(0)}%`;
-                badgeColor = '#6b7280'; // Gray
-        }
-
         badge.textContent = badgeText;
         badge.style.cssText = `
-            display: inline-block;
+            display: block;
             background: ${badgeColor};
             color: white;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            margin-left: 8px;
-            font-weight: 500;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-size: 9px;
+            margin-top: 4px;
+            font-weight: 600;
+            cursor: help;
+            white-space: nowrap;
+            position: relative;
+            width: fit-content;
+            margin-left: auto;
+            margin-right: auto;
         `;
 
-        discountInput.parentElement.appendChild(badge);
+        // Create styled tooltip
+        const tooltip = document.createElement('div');
+        tooltip.className = 'discount-tooltip';
+        tooltip.style.cssText = `
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1f2937;
+            color: white;
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            white-space: nowrap;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            margin-bottom: 6px;
+        `;
+
+        // Helper to format percent - show 1 decimal only if needed
+        const formatPct = (val) => {
+            const num = parseFloat(val) || 0;
+            return num % 1 === 0 ? num.toFixed(0) + '%' : num.toFixed(1) + '%';
+        };
+
+        // Helper to format amount
+        const formatAmt = (val) => {
+            const num = parseFloat(val) || 0;
+            return '₹' + num.toFixed(2);
+        };
+
+        // Build tooltip content with colored badges
+        let tooltipHTML = '';
+        if (type === 'bulk_plus_loyalty' && metadata) {
+            tooltipHTML = `
+                <div style="margin-bottom:6px;"><span style="background:#3b82f6;color:white;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">BULK</span> ${formatPct(metadata.bulk_percent)}</div>
+                <div style="margin-bottom:6px;"><span style="background:#f59e0b;color:white;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">LOYALTY</span> ${formatPct(metadata.loyalty_percent)}</div>
+                <div style="border-top:1px solid #4b5563;padding-top:6px;margin-top:6px;font-weight:600;">Total: ${formatPct(percent)}</div>
+            `;
+        } else if (type === 'stacked' && metadata && metadata.breakdown && metadata.breakdown.length > 0) {
+            // Check if any component is fixed_amount
+            const hasFixedAmount = metadata.breakdown.some(item => item.type === 'fixed_amount');
+            tooltipHTML = metadata.breakdown.map(item => {
+                let label = item.source;
+                let color = '#6b7280';
+                switch(item.source) {
+                    case 'bulk': label = 'BULK'; color = '#3b82f6'; break;
+                    case 'loyalty': label = this.currentPatientLoyalty?.card_type_code || 'LOYALTY'; color = '#f59e0b'; break;
+                    case 'campaign': label = 'PROMO'; color = '#10b981'; break;
+                    case 'vip': label = 'VIP'; color = '#ec4899'; break;
+                }
+                // ✅ Show amount for fixed_amount, percentage with amount for percentage
+                if (item.type === 'fixed_amount') {
+                    return `<div style="margin-bottom:6px;"><span style="background:${color};color:white;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">${label}</span> ${formatAmt(item.amount)}</div>`;
+                } else if (hasFixedAmount) {
+                    // When mixed, show both % and amount for clarity
+                    return `<div style="margin-bottom:6px;"><span style="background:${color};color:white;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">${label}</span> ${formatPct(item.percent)} (${formatAmt(item.amount)})</div>`;
+                } else {
+                    return `<div style="margin-bottom:6px;"><span style="background:${color};color:white;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">${label}</span> ${formatPct(item.percent)}</div>`;
+                }
+            }).join('');
+            // Total line - show amount if mixed, percentage otherwise
+            if (hasFixedAmount) {
+                tooltipHTML += `<div style="border-top:1px solid #4b5563;padding-top:6px;margin-top:6px;font-weight:600;">Total: ${formatAmt(metadata.total_amount || discountAmount)}</div>`;
+            } else {
+                tooltipHTML += `<div style="border-top:1px solid #4b5563;padding-top:6px;margin-top:6px;font-weight:600;">Total: ${formatPct(percent)}</div>`;
+            }
+        } else if (isFixedAmount || type === 'fixed_amount') {
+            // ✅ Fixed amount single discount - show amount
+            tooltipHTML = `<div><span style="background:${badgeColor};color:white;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">${badgeText}</span> ${formatAmt(discountAmount)}</div>`;
+        } else {
+            tooltipHTML = `<div><span style="background:${badgeColor};color:white;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">${badgeText}</span> ${formatPct(percent)}</div>`;
+        }
+        tooltip.innerHTML = tooltipHTML;
+
+        badge.appendChild(tooltip);
+
+        // Show/hide tooltip on hover
+        badge.addEventListener('mouseenter', () => { tooltip.style.display = 'block'; });
+        badge.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+
+        // Append to badge row if exists, otherwise to parent
+        const badgeRow = row.querySelector('.discount-badge-row');
+        if (badgeRow) {
+            badgeRow.appendChild(badge);
+        } else {
+            discountInput.parentElement.appendChild(badge);
+        }
     }
 
     /**

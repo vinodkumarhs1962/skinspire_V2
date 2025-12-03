@@ -65,6 +65,58 @@ from app.config.core_definitions import InvoiceSplitCategory
 # Configure logger
 logger = logging.getLogger(__name__)
 
+
+def _sync_discount_fields(
+    base_amount: Decimal,
+    discount_percent: Decimal = None,
+    discount_amount: Decimal = None,
+    discount_type: str = 'percentage'
+) -> Tuple[Decimal, Decimal]:
+    """
+    Ensure both discount_percent and discount_amount are populated and in sync.
+
+    This helper ensures that both discount fields are always populated in the database,
+    making reporting, views, and analytics simpler (no complex CASE statements needed).
+
+    Business Rules:
+    - If discount_type is 'percentage': discount_percent is source, calculate amount
+    - If discount_type is 'fixed_amount': discount_amount is source, calculate percentage
+    - Both fields are always returned with values (synced)
+
+    Args:
+        base_amount: The pre-discount amount (quantity × unit_price)
+        discount_percent: Percentage value (if known)
+        discount_amount: Amount value (if known)
+        discount_type: 'percentage' or 'fixed_amount' - indicates source of truth
+
+    Returns:
+        tuple: (discount_percent, discount_amount) - both populated and in sync
+
+    Example:
+        # For a ₹1000 item with 10% discount:
+        pct, amt = _sync_discount_fields(Decimal('1000'), discount_percent=Decimal('10'))
+        # Returns: (Decimal('10.00'), Decimal('100.00'))
+
+        # For a ₹1000 item with ₹50 fixed discount:
+        pct, amt = _sync_discount_fields(Decimal('1000'), discount_amount=Decimal('50'), discount_type='fixed_amount')
+        # Returns: (Decimal('5.00'), Decimal('50.00'))
+    """
+    base = Decimal(str(base_amount)) if base_amount else Decimal('0')
+
+    if discount_type == 'fixed_amount' and discount_amount is not None:
+        # Source is amount → calculate percentage
+        amt = Decimal(str(discount_amount)) if discount_amount else Decimal('0')
+        pct = (amt / base * 100) if base > 0 else Decimal('0')
+        logger.debug(f"💰 Sync discount (fixed_amount): ₹{amt} = {pct:.2f}% of ₹{base}")
+        return (pct.quantize(Decimal('0.01')), amt.quantize(Decimal('0.01')))
+    else:
+        # Source is percentage (default) → calculate amount
+        pct = Decimal(str(discount_percent or 0))
+        amt = (base * pct / 100)
+        logger.debug(f"💰 Sync discount (percentage): {pct}% of ₹{base} = ₹{amt:.2f}")
+        return (pct.quantize(Decimal('0.01')), amt.quantize(Decimal('0.01')))
+
+
 def create_invoice(
     hospital_id: uuid.UUID,
     branch_id: uuid.UUID,
@@ -588,10 +640,16 @@ def _update_prescription_inventory(
         medicine_name = item.get('item_name', 'Unknown Medicine')
         quantity = Decimal(str(item.get('quantity', 1)))
         batch = item.get('batch')
+        is_sample = item.get('is_sample', False)
 
-        # Validate batch is provided
+        # Validate batch is provided (skip for sample items - batch is optional for samples)
         if not batch:
-            raise ValueError(f"Inventory Error: Batch number required for {medicine_name}")
+            if is_sample:
+                # Sample items without batch - skip inventory deduction but log it
+                logger.info(f"📦 Sample item '{medicine_name}' has no batch - skipping inventory deduction")
+                continue  # Skip this item and process next one
+            else:
+                raise ValueError(f"Inventory Error: Batch number required for {medicine_name}")
 
         # Get the LATEST inventory record for this batch (current_stock is a running balance snapshot)
         # The most recent record contains the actual available stock
@@ -984,6 +1042,20 @@ def _create_single_invoice_with_category(
 
     # Create line items
     for item_data in processed_line_items:
+        # ✅ SYNC DISCOUNT FIELDS: Ensure both percent and amount are populated
+        # This makes reporting and views simpler (no complex CASE statements)
+        quantity = item_data.get('quantity', Decimal('1'))
+        unit_price = item_data.get('unit_price', Decimal('0'))
+        base_amount = Decimal(str(quantity)) * Decimal(str(unit_price))
+        discount_type = item_data.get('discount_type', 'percentage')
+
+        synced_discount_percent, synced_discount_amount = _sync_discount_fields(
+            base_amount=base_amount,
+            discount_percent=item_data.get('discount_percent'),
+            discount_amount=item_data.get('discount_amount'),
+            discount_type=discount_type
+        )
+
         line_item = InvoiceLineItem(
             hospital_id=hospital_id,
             invoice_id=invoice.invoice_id,
@@ -1000,10 +1072,10 @@ def _create_single_invoice_with_category(
             is_prescription_item=item_data.get('is_prescription_item', False),
             consolidation_group_id=item_data.get('consolidation_group_id'),
             print_as_consolidated=item_data.get('print_as_consolidated', False),
-            quantity=item_data.get('quantity', Decimal('1')),
-            unit_price=item_data.get('unit_price'),
-            discount_percent=item_data.get('discount_percent', Decimal('0')),
-            discount_amount=item_data.get('discount_amount', Decimal('0')),
+            quantity=quantity,
+            unit_price=unit_price,
+            discount_percent=synced_discount_percent,
+            discount_amount=synced_discount_amount,
             taxable_amount=item_data.get('taxable_amount'),
             gst_rate=item_data.get('gst_rate'),
             cgst_rate=item_data.get('cgst_rate'),
@@ -1015,7 +1087,14 @@ def _create_single_invoice_with_category(
             total_gst_amount=item_data.get('total_gst_amount', Decimal('0')),
             line_total=item_data.get('line_total'),
             cost_price=item_data.get('cost_price'),
-            profit_margin=item_data.get('profit_margin')
+            profit_margin=item_data.get('profit_margin'),
+            # Free Item support (promotional - GST on MRP, 100% discount)
+            is_free_item=item_data.get('is_free_item', False),
+            free_item_reason=item_data.get('free_item_reason'),
+            # Sample/Trial item support (Added 2025-12-02)
+            is_sample=item_data.get('is_sample', False),
+            sample_authorized_by=item_data.get('sample_authorized_by') or (current_user_id if item_data.get('is_sample') else None),
+            sample_reason=item_data.get('sample_reason')
         )
 
         if current_user_id:
@@ -1211,12 +1290,25 @@ def _create_single_invoice(
     
     if current_user_id:
         invoice.created_by = current_user_id
-        
+
     session.add(invoice)
     session.flush()
-    
+
     # Create line items
     for item_data in processed_line_items:
+        # ✅ SYNC DISCOUNT FIELDS: Ensure both percent and amount are populated
+        quantity = item_data.get('quantity', Decimal('1'))
+        unit_price = item_data.get('unit_price', Decimal('0'))
+        base_amount = Decimal(str(quantity)) * Decimal(str(unit_price))
+        discount_type = item_data.get('discount_type', 'percentage')
+
+        synced_discount_percent, synced_discount_amount = _sync_discount_fields(
+            base_amount=base_amount,
+            discount_percent=item_data.get('discount_percent'),
+            discount_amount=item_data.get('discount_amount'),
+            discount_type=discount_type
+        )
+
         line_item = InvoiceLineItem(
             hospital_id=hospital_id,
             invoice_id=invoice.invoice_id,
@@ -1233,10 +1325,10 @@ def _create_single_invoice(
             is_prescription_item=item_data.get('is_prescription_item', False),
             consolidation_group_id=item_data.get('consolidation_group_id'),
             print_as_consolidated=item_data.get('print_as_consolidated', False),
-            quantity=item_data.get('quantity', Decimal('1')),
-            unit_price=item_data.get('unit_price'),
-            discount_percent=item_data.get('discount_percent', Decimal('0')),
-            discount_amount=item_data.get('discount_amount', Decimal('0')),
+            quantity=quantity,
+            unit_price=unit_price,
+            discount_percent=synced_discount_percent,
+            discount_amount=synced_discount_amount,
             taxable_amount=item_data.get('taxable_amount'),
             gst_rate=item_data.get('gst_rate'),
             cgst_rate=item_data.get('cgst_rate'),
@@ -1248,16 +1340,23 @@ def _create_single_invoice(
             total_gst_amount=item_data.get('total_gst_amount', Decimal('0')),
             line_total=item_data.get('line_total'),
             cost_price=item_data.get('cost_price'),
-            profit_margin=item_data.get('profit_margin')
+            profit_margin=item_data.get('profit_margin'),
+            # Free Item support (promotional - GST on MRP, 100% discount)
+            is_free_item=item_data.get('is_free_item', False),
+            free_item_reason=item_data.get('free_item_reason'),
+            # Sample/Trial item support (Added 2025-12-02)
+            is_sample=item_data.get('is_sample', False),
+            sample_authorized_by=item_data.get('sample_authorized_by') or (current_user_id if item_data.get('is_sample') else None),
+            sample_reason=item_data.get('sample_reason')
         )
-        
+
         if current_user_id:
             line_item.created_by = current_user_id
-            
+
         session.add(line_item)
-        
+
     session.flush()
-    
+
     # Update inventory for all medicine types (Medicine, Prescription, OTC, Product, Consumable)
     medicine_types = ['Medicine', 'Prescription', 'OTC', 'Product', 'Consumable']
     if any(item.get('item_type') in medicine_types for item in processed_line_items):
@@ -1582,7 +1681,14 @@ def _process_invoice_line_item(session: Session, hospital_id: uuid.UUID, item: D
             # Prescription consolidation flags (new fields for split invoice tracking)
             'is_prescription_item': item.get('is_prescription_item', False),
             'consolidation_group_id': item.get('consolidation_group_id'),
-            'print_as_consolidated': item.get('print_as_consolidated', False)
+            'print_as_consolidated': item.get('print_as_consolidated', False),
+            # Free Item support (promotional - GST on MRP, 100% discount)
+            'is_free_item': item.get('is_free_item', False),
+            'free_item_reason': item.get('free_item_reason'),
+            # Sample/Trial item support (no GST, no charge)
+            'is_sample': item.get('is_sample', False),
+            'sample_authorized_by': item.get('sample_authorized_by'),
+            'sample_reason': item.get('sample_reason')
         }
 
         # Add ID fields based on type

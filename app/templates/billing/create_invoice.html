@@ -854,6 +854,7 @@
                                 <input
                                     type="checkbox"
                                     id="bulk-discount-enabled"
+                                    disabled
                                     style="width: 18px; height: 18px; margin-right: 10px;">
                                 <div style="flex: 1;">
                                     <span class="badge-discount-bulk" style="font-size: 11px; font-weight: 600;">BULK</span>
@@ -896,6 +897,8 @@
                                     ℹ️ Details
                                 </button>
                             </label>
+                            <!-- Patient Loyalty Card Display -->
+                            <div id="patient-loyalty-card-display" style="display: none; margin-top: 12px;"></div>
                             <div id="loyalty-discount-info" style="margin-top: 12px; font-size: 13px; color: #1f2937; display: none;">
                                 <strong style="font-weight: 500;">Card:</strong> <span id="loyalty-card-type">None</span> |
                                 <strong style="font-weight: 500;">Amount:</strong> <span id="loyalty-amount">Rs. 0.00</span>
@@ -904,7 +907,7 @@
                             <div id="loyalty-eligible-discounts" style="display: block; margin-top: 12px; padding: 12px; background: #f9fafb; border-radius: 4px; border: 1px solid #e5e7eb;">
                                 <div style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">ALL ELIGIBLE DISCOUNTS:</div>
                                 <div id="loyalty-eligible-list" style="font-size: 13px; color: #374151;">
-                                    <span style="color: #9ca3af; font-style: italic;">Select patient with loyalty card</span>
+                                    <span style="color: #9ca3af; font-style: italic;">Select patient to see loyalty card</span>
                                 </div>
                             </div>
                         </div>
@@ -1171,17 +1174,17 @@
                     <table class="universal-table w-full">
                         <thead class="universal-table-header">
                             <tr>
-                                <th class="text-center w-12">#</th>
-                                <th class="w-20">Type</th>
-                                <th class="w-1/5">Item</th>
-                                <th class="text-left w-20">Batch</th>
-                                <th class="text-left w-20">Expiry</th>
-                                <th class="text-right w-14">Qty</th>
-                                <th class="text-right w-20">Price</th>
-                                <th class="text-right w-40">Disc%</th>
-                                <th class="text-center w-14">GST%</th>
-                                <th class="text-right w-28">Amount</th>
-                                <th class="text-center w-12">Action</th>
+                                <th class="text-center w-10 px-1">#</th>
+                                <th class="w-20 px-1">Type</th>
+                                <th class="px-1" style="width: 18%;">Item</th>
+                                <th class="text-left w-24 px-1">Batch</th>
+                                <th class="text-left w-12 px-1">Expiry</th>
+                                <th class="text-right w-14 px-1">Qty</th>
+                                <th class="text-right w-24 px-1">Price</th>
+                                <th class="text-right w-24 px-1">Disc%</th>
+                                <th class="text-center w-12 px-1">GST%</th>
+                                <th class="text-right w-28 px-1">Amount</th>
+                                <th class="text-center w-10 px-1">Action</th>
                             </tr>
                         </thead>
                         <tbody id="line-items-container" class="universal-table-body">
@@ -1194,8 +1197,8 @@
                         </tbody>
                         <tfoot class="table-footer-totals">
                             <tr>
-                                <td colspan="9" class="text-right font-semibold px-4 py-2">Subtotal:</td>
-                                <td class="text-right font-semibold px-4 py-2">
+                                <td colspan="9" class="text-right font-semibold px-1 py-2">Subtotal:</td>
+                                <td class="text-right font-semibold px-1 py-2">
                                     <span class="currency-symbol">₹</span>
                                     <span id="subtotal-display">0.00</span>
                                 </td>
@@ -1203,11 +1206,11 @@
                             </tr>
                             <!-- VIP Discount Row (Invoice-Level) - Added 2025-11-29 -->
                             <tr id="vip-discount-row" style="display: none; background: linear-gradient(90deg, #fef3c7 0%, #ffffff 100%);">
-                                <td colspan="9" class="text-right font-semibold px-4 py-2" style="color: #d97706;">
+                                <td colspan="9" class="text-right font-semibold px-1 py-2" style="color: #d97706;">
                                     <span style="background: #f59e0b; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-right: 8px;">VIP</span>
                                     VIP Discount (<span id="vip-discount-percent-display">0</span>%):
                                 </td>
-                                <td class="text-right font-semibold px-4 py-2" style="color: #d97706;">
+                                <td class="text-right font-semibold px-1 py-2" style="color: #d97706;">
                                     <span>- ₹</span>
                                     <span id="vip-discount-amount-display">0.00</span>
                                 </td>
@@ -1215,51 +1218,51 @@
                             </tr>
                             <!-- Staff Special Discount Row (Invoice-Level) - Added 2025-11-29 -->
                             <tr id="staff-special-discount-row" style="display: none; background: linear-gradient(90deg, #ede9fe 0%, #ffffff 100%);">
-                                <td colspan="9" class="text-right font-semibold px-4 py-2" style="color: #7c3aed;">
+                                <td colspan="9" class="text-right font-semibold px-1 py-2" style="color: #7c3aed;">
                                     <span style="background: #8b5cf6; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-right: 8px;">STAFF</span>
                                     Staff Special (<span id="staff-special-percent-display">0</span>%):
                                 </td>
-                                <td class="text-right font-semibold px-4 py-2" style="color: #7c3aed;">
+                                <td class="text-right font-semibold px-1 py-2" style="color: #7c3aed;">
                                     <span>- ₹</span>
                                     <span id="staff-special-amount-display">0.00</span>
                                 </td>
                                 <td></td>
                             </tr>
                             <tr>
-                                <td colspan="9" class="text-right font-semibold px-4 py-2">Total Discount:</td>
-                                <td class="text-right font-semibold px-4 py-2">
+                                <td colspan="9" class="text-right font-semibold px-1 py-2">Total Discount:</td>
+                                <td class="text-right font-semibold px-1 py-2">
                                     <span class="currency-symbol">₹</span>
                                     <span id="total-discount-display">0.00</span>
                                 </td>
                                 <td></td>
                             </tr>
                             <tr class="cgst-row">
-                                <td colspan="9" class="text-right font-semibold px-4 py-2">CGST:</td>
-                                <td class="text-right font-semibold px-4 py-2">
+                                <td colspan="9" class="text-right font-semibold px-1 py-2">CGST:</td>
+                                <td class="text-right font-semibold px-1 py-2">
                                     <span class="currency-symbol">₹</span>
                                     <span id="cgst-display">0.00</span>
                                 </td>
                                 <td></td>
                             </tr>
                             <tr class="sgst-row">
-                                <td colspan="9" class="text-right font-semibold px-4 py-2">SGST:</td>
-                                <td class="text-right font-semibold px-4 py-2">
+                                <td colspan="9" class="text-right font-semibold px-1 py-2">SGST:</td>
+                                <td class="text-right font-semibold px-1 py-2">
                                     <span class="currency-symbol">₹</span>
                                     <span id="sgst-display">0.00</span>
                                 </td>
                                 <td></td>
                             </tr>
                             <tr class="igst-row hidden">
-                                <td colspan="9" class="text-right font-semibold px-4 py-2">IGST:</td>
-                                <td class="text-right font-semibold px-4 py-2">
+                                <td colspan="9" class="text-right font-semibold px-1 py-2">IGST:</td>
+                                <td class="text-right font-semibold px-1 py-2">
                                     <span class="currency-symbol">₹</span>
                                     <span id="igst-display">0.00</span>
                                 </td>
                                 <td></td>
                             </tr>
                             <tr class="grand-total-row">
-                                <td colspan="9" class="text-right font-bold text-base px-4 py-3">Grand Total:</td>
-                                <td class="text-right font-bold text-base text-blue-600 dark:text-blue-400 px-4 py-3">
+                                <td colspan="9" class="text-right font-bold text-base px-1 py-3">Grand Total:</td>
+                                <td class="text-right font-bold text-base text-blue-600 dark:text-blue-400 px-1 py-3">
                                     <span class="currency-symbol text-base">₹</span>
                                     <span id="grand-total-display" class="text-base">0.00</span>
                                 </td>
@@ -1335,13 +1338,13 @@
 <!-- Line Item Template -->
 <template id="line-item-template">
     <tr class="line-item-row universal-table-row bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
-        <td class="text-center px-2 py-2">
+        <td class="text-center px-1 py-2">
             <span class="line-number text-sm font-medium">1</span>
         </td>
 
         <!-- Item Type Dropdown -->
-        <td class="px-2 py-2">
-            <select class="item-type form-select text-sm w-full border rounded px-2 py-1" required>
+        <td class="px-1 py-2">
+            <select class="item-type form-select text-sm w-full border rounded px-1 py-1" required>
                 <option value="">-- Select Type --</option>
                 <optgroup label="Services & Packages">
                     <option value="Package">Package</option>
@@ -1358,36 +1361,39 @@
         </td>
 
         <!-- Item Search with Autocomplete -->
-        <td class="px-2 py-2">
+        <td class="px-1 py-2">
             <div class="relative">
                 <input type="text"
-                       class="item-search form-input text-sm w-full border rounded px-2 py-1"
+                       class="item-search form-input text-sm w-full border rounded px-1 py-1"
                        placeholder="Type to search..."
-                       autocomplete="off">
+                       autocomplete="off"
+                       style="text-overflow: ellipsis;">
                 <input type="hidden" class="item-name">
+                <div class="item-name-display text-xs text-gray-600 dark:text-gray-400 mt-1 hidden"
+                     style="word-wrap: break-word; overflow-wrap: break-word; line-height: 1.2;"></div>
                 <div class="item-search-results absolute z-50 bg-white dark:bg-gray-700 shadow-md rounded w-64 max-h-40 overflow-y-auto hidden text-xs">
                 </div>
             </div>
         </td>
 
         <!-- Batch (Medicine-specific) -->
-        <td class="px-2 py-2">
-            <select class="batch-select form-select text-sm w-full border rounded px-2 py-1 medicine-field hidden">
+        <td class="px-1 py-2 w-24">
+            <select class="batch-select form-select text-sm w-full border rounded px-1 py-1 medicine-field hidden">
                 <option value="">Select Batch</option>
             </select>
         </td>
 
         <!-- Expiry Date (Medicine-specific) -->
-        <td class="px-2 py-2">
+        <td class="px-1 py-2 w-12">
             <input type="date"
-                   class="expiry-date form-input text-sm w-full border rounded px-2 py-1 medicine-field hidden"
+                   class="expiry-date form-input text-xs w-full border rounded px-1 py-1 medicine-field hidden"
                    readonly>
         </td>
 
         <!-- Quantity -->
-        <td class="px-2 py-2 w-16">
+        <td class="px-1 py-2 w-16">
             <input type="number"
-                   class="quantity form-input text-sm w-full text-right border rounded px-2 py-1"
+                   class="quantity form-input text-sm w-full text-right border rounded px-1 py-1"
                    value="1"
                    min="0.01"
                    step="0.01"
@@ -1395,34 +1401,52 @@
         </td>
 
         <!-- Unit Price -->
-        <td class="px-2 py-2 w-20">
+        <td class="px-1 py-2 w-20">
             <input type="number"
-                   class="unit-price form-input text-sm w-full text-right border rounded px-2 py-1"
+                   class="unit-price form-input text-sm w-full text-right border rounded px-1 py-1"
                    value="0.00"
                    min="0"
                    step="0.01"
                    required>
         </td>
 
-        <!-- Discount Percent -->
-        <td class="px-2 py-2" style="position: relative;">
-            <input type="number"
-                   class="discount-percent form-input text-sm w-full text-right border rounded px-2 py-1"
-                   value="0"
-                   min="0"
-                   max="100"
-                   step="0.01"
-                   {% if not can_edit_discount %}readonly title="Auto-calculated discount (Manager can edit)"{% endif %}
-                   style="{% if not can_edit_discount %}background-color: #f3f4f6; cursor: not-allowed;{% endif %}">
+        <!-- Discount (Percentage OR Fixed Amount - Conditional Display) -->
+        <td class="px-1 py-2 w-24" style="position: relative;">
+            <div class="discount-cell-wrapper">
+                <!-- Percentage Input (Default - shown when discount_type_mode is 'percentage' or empty) -->
+                <div class="discount-input-row discount-percent-row flex items-center">
+                    <input type="number"
+                           class="discount-percent form-input text-sm w-12 text-right border rounded px-1 py-1"
+                           value="0"
+                           min="0"
+                           max="100"
+                           step="0.01"
+                           {% if not can_edit_discount %}readonly title="Auto-calculated discount (Manager can edit)"{% endif %}
+                           style="{% if not can_edit_discount %}background-color: #f3f4f6; cursor: not-allowed;{% endif %}">
+                    <span class="discount-percent-label text-sm text-gray-600 ml-1">%</span>
+                </div>
+                <!-- Fixed Amount Input (Hidden by default - shown for fixed_amount campaigns) -->
+                <div class="discount-input-row discount-amount-row flex items-center" style="display: none;">
+                    <span class="discount-amount-label text-sm text-gray-600 mr-1">₹</span>
+                    <input type="number"
+                           class="discount-amount form-input text-sm w-14 text-right border rounded px-1 py-1"
+                           value="0"
+                           min="0"
+                           step="0.01"
+                           {% if not can_edit_discount %}readonly title="Auto-calculated discount (Manager can edit)"{% endif %}
+                           style="{% if not can_edit_discount %}background-color: #f3f4f6; cursor: not-allowed;{% endif %}">
+                </div>
+                <div class="discount-badge-row"></div>
+            </div>
             {% if not can_edit_discount %}
-            <span style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #9ca3af; font-size: 12px;">
+            <span class="discount-lock-icon" style="position: absolute; right: 24px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #9ca3af; font-size: 12px;">
                 <i class="fas fa-lock"></i>
             </span>
             {% endif %}
         </td>
 
         <!-- GST Rate Display -->
-        <td class="text-center px-2 py-2">
+        <td class="text-center px-1 py-2">
             <span class="gst-rate-display text-sm">0%</span>
             <input type="hidden" class="gst-rate" value="0">
             <input type="hidden" class="is-gst-exempt" value="false">
@@ -1430,18 +1454,57 @@
         </td>
 
         <!-- Line Total -->
-        <td class="text-right px-4 py-2 w-32">
+        <td class="text-right px-2 py-2 w-32">
             <span class="currency-symbol">₹</span>
             <span class="line-total-display font-medium">0.00</span>
         </td>
 
-        <!-- Remove Button -->
+        <!-- Actions: Free/Sample Dropdown + Remove Button -->
         <td class="text-center px-2 py-2">
-            <button type="button"
-                    class="remove-line-item text-red-500 hover:text-red-700"
-                    title="Remove this item">
-                <i class="fas fa-trash"></i>
-            </button>
+            <div class="flex items-center justify-center gap-2">
+                <!-- Free/Sample Dropdown -->
+                <div class="relative free-sample-dropdown">
+                    <button type="button"
+                            class="free-sample-toggle text-gray-400 hover:text-green-600 transition-colors"
+                            title="Mark as Free Item or Sample">
+                        <i class="fas fa-gift text-sm"></i>
+                    </button>
+                    <div class="free-sample-menu hidden absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+                        <div class="py-1">
+                            <button type="button" class="free-item-option w-full text-left px-3 py-2 text-sm hover:bg-green-50 dark:hover:bg-green-900/20 flex items-center">
+                                <i class="fas fa-gift text-green-600 mr-2"></i>
+                                <div>
+                                    <div class="font-medium text-gray-800 dark:text-gray-200">Free Item</div>
+                                    <div class="text-xs text-gray-500">Promotional - GST on MRP</div>
+                                </div>
+                            </button>
+                            <button type="button" class="sample-item-option w-full text-left px-3 py-2 text-sm hover:bg-purple-50 dark:hover:bg-purple-900/20 flex items-center">
+                                <i class="fas fa-flask text-purple-600 mr-2"></i>
+                                <div>
+                                    <div class="font-medium text-gray-800 dark:text-gray-200">Sample/Trial</div>
+                                    <div class="text-xs text-gray-500">No charge, no GST</div>
+                                </div>
+                            </button>
+                            <div class="border-t border-gray-200 dark:border-gray-700 my-1"></div>
+                            <button type="button" class="clear-free-sample-option w-full text-left px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center text-gray-600 dark:text-gray-400">
+                                <i class="fas fa-times mr-2"></i>
+                                <div class="font-medium">Clear Status</div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Remove Button -->
+                <button type="button"
+                        class="remove-line-item text-red-500 hover:text-red-700"
+                        title="Remove this item">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+            <!-- Free/Sample hidden fields -->
+            <input type="hidden" class="is-free-item" value="false">
+            <input type="hidden" class="free-item-reason" value="">
+            <input type="hidden" class="is-sample" value="false">
+            <input type="hidden" class="sample-reason" value="">
         </td>
     </tr>
 </template>
@@ -1453,11 +1516,12 @@
 <!-- Include JavaScript files (WORKING VERSION - RESTORED) -->
 <!-- FIFO Allocation Modal Component -->
 <script src="{{ url_for('static', filename='js/components/fifo_allocation_modal.js') }}"></script>
-<script src="{{ url_for('static', filename='js/components/invoice_item.js') }}?v=20251120_2025"></script><!-- Fixed batch API endpoint + Added line-item-changed events -->
-<script src="{{ url_for('static', filename='js/pages/invoice.js') }}?v=20251117_1900"></script><!-- Cache bust - fixed 404 errors, corrected API endpoint -->
+<script src="{{ url_for('static', filename='js/components/invoice_item.js') }}?v=20251202_1400"></script><!-- Added Free/Sample debug logs -->
+<script src="{{ url_for('static', filename='js/pages/invoice.js') }}?v=20251202_1300"></script><!-- Added Free/Sample debug logs -->
 <!-- Bulk Discount Real-Time Pricing -->
 <script src="{{ url_for('static', filename='js/components/invoice_bulk_discount.js') }}?v=20251121_0100"></script>
 <script src="{{ url_for('static', filename='js/components/invoice_patient_view.js') }}?v=20251122_0100"></script><!-- Patient view pop-up launcher -->
+<script src="{{ url_for('static', filename='js/components/buy_x_get_y_handler.js') }}?v=20251130_0100"></script><!-- Buy X Get Y Free promotions -->
 
 <script>
 // Global auth token for API calls
@@ -1583,7 +1647,13 @@ function initializePatientSearch() {
         // Trigger change event for state calculation
         hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
 
-        console.log(`✅ Patient selected: ${patient.name} (${patient.id})`);
+        // Update BuyXGetYHandler with new patient (for VIP targeting)
+        if (window.buyXGetYHandler) {
+            window.buyXGetYHandler.patientId = patient.id;
+            window.buyXGetYHandler.loadCampaigns();
+        }
+
+        console.log(`Patient selected: ${patient.name} (${patient.id})`);
     }
 
     // Show/hide functions
@@ -1659,7 +1729,28 @@ document.addEventListener('DOMContentLoaded', function() {
     if (patientId && window.checkVipEligibility) {
         window.checkVipEligibility(patientId);
     }
-    console.log("✅ VIP and Staff Discretionary sections initialized");
+    console.log("VIP and Staff Discretionary sections initialized");
+
+    // Load active campaigns on page load (Added 2025-12-01)
+    // Use setTimeout to ensure loadActiveCampaigns is defined (it's in a later script block)
+    setTimeout(() => {
+        if (window.loadActiveCampaigns) {
+            window.loadActiveCampaigns(patientId);
+        }
+    }, 100);
+
+    // =================================================================
+    // INITIALIZE BUY X GET Y HANDLER (Auto-adds free items)
+    // =================================================================
+    if (typeof BuyXGetYHandler !== 'undefined') {
+        window.buyXGetYHandler = new BuyXGetYHandler({
+            hospitalId: hospitalId,
+            patientId: patientId,
+            invoiceItemComponent: invoiceItemComponent,
+            container: document.getElementById('line-items-container')
+        });
+        console.log("BuyXGetYHandler initialized");
+    }
 
     // =================================================================
     // DISCOUNT CONTROLS COLLAPSE/EXPAND TOGGLE
@@ -1882,13 +1973,108 @@ document.addEventListener('DOMContentLoaded', function() {
                 container.innerHTML = '<tr id="no-items-row"><td colspan="11" class="py-4 px-2 text-center text-gray-500 dark:text-gray-400"><i class="fas fa-shopping-cart text-gray-300 text-3xl mb-2"></i><p>No items added. Click "Add Item" to add products or services.</p></td></tr>';
             }
 
-            // Reset totals
-            updateTotalsDisplay();
+            // Reset totals - explicitly zero everything
+            const subtotalDisplay = document.getElementById('subtotal-display');
+            const discountDisplay = document.getElementById('total-discount-display');
+            const grandTotalDisplay = document.getElementById('grand-total-display');
+            if (subtotalDisplay) subtotalDisplay.textContent = '0.00';
+            if (discountDisplay) discountDisplay.textContent = '0.00';
+            if (grandTotalDisplay) grandTotalDisplay.textContent = '0.00';
+
+            // Also reset GST displays
+            const gstDisplay = document.getElementById('total-gst-display');
+            if (gstDisplay) gstDisplay.textContent = '0.00';
+
+            // Reset bulk discount checkbox (disable until line items added)
+            const bulkCheckbox = document.getElementById('bulk-discount-enabled');
+            if (bulkCheckbox) {
+                bulkCheckbox.checked = false;
+                bulkCheckbox.disabled = true;
+            }
+            const bulkEligibleList = document.getElementById('bulk-eligible-list');
+            if (bulkEligibleList) {
+                bulkEligibleList.innerHTML = '<span style="color: #9ca3af; font-style: italic;">Add 5+ items for bulk discount</span>';
+            }
+
+            // =================================================================
+            // RESET STAFF VIEW CARDS
+            // =================================================================
+
+            // Reset campaign card
+            window.eligibleCampaigns = [];
+            window.allAvailableCampaigns = [];
+            window.excludedCampaignIds = [];
+            window.appliedCampaign = null;
+            window.appliedCampaigns = [];  // Reset all applied campaigns array
+            const campaignList = document.getElementById('campaign-list-content');
+            if (campaignList) {
+                campaignList.innerHTML = '<span style="color: #9ca3af; font-style: italic;">Select a patient to see eligible campaigns</span>';
+            }
+            const campaignAppliedInfo = document.getElementById('campaign-applied-info');
+            if (campaignAppliedInfo) campaignAppliedInfo.style.display = 'none';
+
+            // Reset loyalty card
+            const loyaltyList = document.getElementById('loyalty-eligible-list');
+            if (loyaltyList) {
+                loyaltyList.innerHTML = '<span style="color: #9ca3af; font-style: italic;">Select a patient to see loyalty info</span>';
+            }
+            const loyaltyCheckbox = document.getElementById('apply-loyalty-discount');
+            if (loyaltyCheckbox) {
+                loyaltyCheckbox.checked = false;
+                loyaltyCheckbox.disabled = true;
+            }
+            // Reset loyalty card display
+            const loyaltyDisplay = document.getElementById('patient-loyalty-card-display');
+            if (loyaltyDisplay) {
+                loyaltyDisplay.style.display = 'none';
+            }
+            // Reset bulk discount manager loyalty state
+            if (window.bulkDiscountManager) {
+                window.bulkDiscountManager.currentPatientLoyalty = null;
+                window.bulkDiscountManager.userToggledLoyaltyCheckbox = false;
+            }
+
+            // Reset VIP card
+            window.patientIsVip = false;
+            window.vipDiscountConfig = null;
+            const vipSection = document.getElementById('vip-discount-section');
+            if (vipSection) vipSection.style.display = 'none';
+            const vipCheckbox = document.getElementById('vip-discount-checkbox');
+            if (vipCheckbox) vipCheckbox.checked = false;
+            const vipAmountDisplay = document.getElementById('vip-discount-amount-display');
+            if (vipAmountDisplay) vipAmountDisplay.textContent = '0';
+
+            // Reset staff discretionary card
+            window.staffDiscretionaryConfig = null;
+            const staffCheckbox = document.getElementById('staff-discretionary-checkbox');
+            if (staffCheckbox) staffCheckbox.checked = false;
+            const staffControls = document.getElementById('staff-discretionary-controls');
+            if (staffControls) staffControls.style.display = 'none';
+            const staffInfo = document.getElementById('staff-discretionary-info');
+            if (staffInfo) staffInfo.style.display = 'none';
+            const staffEnabled = document.getElementById('staff-discretionary-enabled');
+            if (staffEnabled) staffEnabled.value = 'false';
+            const staffValue = document.getElementById('staff-discretionary-value');
+            if (staffValue) staffValue.value = '0';
+            const staffNote = document.getElementById('staff-discretionary-note');
+            if (staffNote) staffNote.value = '';
+            const staffAmountDisplay = document.getElementById('staff-special-amount-display');
+            if (staffAmountDisplay) staffAmountDisplay.textContent = '0';
+
+            // Reset Buy X Get Y handler
+            if (window.buyXGetYHandler) {
+                window.buyXGetYHandler.clearAllFreeItems();
+            }
+
+            // Reset bulk discount manager excluded IDs
+            if (window.bulkDiscountManager) {
+                window.bulkDiscountManager.setExcludedCampaignIds([]);
+            }
 
             // Focus on patient dropdown
             document.getElementById('patient_id')?.focus();
 
-            console.log("✅ Form reset complete");
+            console.log("✅ Form reset complete (including staff cards)");
         }
     };
 
@@ -2048,6 +2234,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         await window.checkVipEligibility(patientId);
                     }
 
+                    // Load active campaigns for this hospital/patient (Added 2025-12-01)
+                    if (window.loadActiveCampaigns) {
+                        await window.loadActiveCampaigns(patientId);
+                    }
+
                     console.log(`State set to: ${stateToUse}, Interstate: ${data.is_interstate}`);
                 } else {
                     console.error('❌ Failed to get patient state:', data.message);
@@ -2189,14 +2380,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // Update master checkbox state
-        const masterCheckbox = document.getElementById('campaign-apply-checkbox');
-        if (masterCheckbox) {
-            const allEnabled = window.excludedCampaignIds.length === 0;
-            const allDisabled = window.excludedCampaignIds.length === window.eligibleCampaigns.length;
-            masterCheckbox.checked = !allDisabled;
-            masterCheckbox.indeterminate = !allEnabled && !allDisabled;
-        }
+        // Re-render the campaign list (removes unchecked from visible list)
+        renderCampaignList();
 
         // Trigger discount recalculation
         if (window.bulkDiscountManager) {
@@ -2204,85 +2389,319 @@ document.addEventListener('DOMContentLoaded', function() {
             window.bulkDiscountManager.updatePricing();
         }
 
+        // Re-check Buy X Get Y promotions (respects excluded list)
+        if (window.buyXGetYHandler) {
+            window.buyXGetYHandler.checkBuyXGetY();
+        }
+
         console.log('Campaign', campaignId, checkbox.checked ? 'enabled' : 'disabled');
     }
 
-    // Update eligible campaigns display (called from discount response)
-    function updateEligibleCampaigns(campaigns) {
-        window.eligibleCampaigns = campaigns || [];
-        const listContent = document.getElementById('campaign-list-content');
-        const appliedInfo = document.getElementById('campaign-applied-info');
+    // Re-add excluded campaign back to the list
+    function reAddCampaign(campaignId) {
+        window.excludedCampaignIds = window.excludedCampaignIds.filter(id => id !== campaignId);
+        renderCampaignList();
 
-        if (!campaigns || campaigns.length === 0) {
-            listContent.innerHTML = '<span style="color: #9ca3af; font-style: italic;">No campaigns available for current items</span>';
-            appliedInfo.style.display = 'none';
-            window.appliedCampaign = null;
-            return;
+        // Trigger discount recalculation
+        if (window.bulkDiscountManager) {
+            window.bulkDiscountManager.setExcludedCampaignIds(window.excludedCampaignIds);
+            window.bulkDiscountManager.updatePricing();
         }
 
-        // Build campaigns list HTML with per-campaign checkboxes
-        let html = '';
-        campaigns.forEach((c, idx) => {
-            const discountDisplay = c.discount_type === 'percentage' ? `${c.discount_value}%` : `Rs.${c.discount_value}`;
-            const isExcluded = window.excludedCampaignIds.includes(c.campaign_id);
-            const isChecked = !isExcluded;
-            const statusBadge = c.applied && isChecked
-                ? '<span style="background: #22c55e; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">APPLIED</span>'
-                : isChecked
-                    ? '<span style="background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 4px; font-size: 10px;">ELIGIBLE</span>'
-                    : '<span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 4px; font-size: 10px;">BYPASSED</span>';
+        // Re-check Buy X Get Y promotions (may re-add free items)
+        if (window.buyXGetYHandler) {
+            window.buyXGetYHandler.checkBuyXGetY();
+        }
 
-            // Format valid till date
-            const validTillText = c.end_date ? `Valid till: ${c.end_date}` : '';
+        console.log('Campaign', campaignId, 're-added');
+    }
 
-            html += `
-                <div style="display: flex; align-items: flex-start; padding: 10px 0; ${idx > 0 ? 'border-top: 1px solid #e5e7eb;' : ''}">
-                    <div style="margin-right: 10px; padding-top: 2px;">
-                        <input type="checkbox" id="campaign-checkbox-${c.campaign_id}"
-                               ${isChecked ? 'checked' : ''}
-                               onchange="toggleIndividualCampaign('${c.campaign_id}')"
-                               style="width: 16px; height: 16px; cursor: pointer; accent-color: #22c55e;">
-                    </div>
-                    <div style="flex: 1;">
-                        <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
-                            <span style="font-weight: 600; color: ${isChecked ? '#166534' : '#9ca3af'};">${c.campaign_name}</span>
-                            ${statusBadge}
-                        </div>
-                        <div style="font-size: 12px; color: #374151; margin-top: 4px;">
-                            <span style="background: ${isChecked ? '#f0fdf4' : '#f3f4f6'}; padding: 2px 6px; border-radius: 3px; font-weight: 500;">${c.campaign_code || ''}</span>
-                        </div>
-                        ${validTillText ? `<div style="font-size: 11px; color: #6b7280; margin-top: 4px;"><i class="bi bi-calendar-event"></i> ${validTillText}</div>` : ''}
-                    </div>
-                    <div style="text-align: right; min-width: 60px;">
-                        <div style="font-size: 18px; font-weight: 700; color: ${isChecked ? '#16a34a' : '#9ca3af'};">${discountDisplay}</div>
-                        <div style="font-size: 10px; color: #6b7280;">OFF</div>
-                    </div>
-                </div>
-            `;
+    // Render the campaign list (shows only non-excluded campaigns)
+    // Updated 2025-12-02: Sort by discount value (best first), support multiple applied campaigns
+    function renderCampaignList() {
+        if (!window.eligibleCampaigns || window.eligibleCampaigns.length === 0) return;
 
-            // Track applied campaign
-            if (c.applied) {
-                window.appliedCampaign = c;
+        const listContent = document.getElementById('campaign-list-content');
+        if (!listContent) return;
+
+        // Filter to show only non-excluded campaigns
+        let visibleCampaigns = window.eligibleCampaigns.filter(c => !window.excludedCampaignIds.includes(c.campaign_id));
+        const excludedCampaigns = window.eligibleCampaigns.filter(c => window.excludedCampaignIds.includes(c.campaign_id));
+
+        // Sort campaigns: Applied first, then by discount value (highest first)
+        // Buy X Get Y promotions are sorted by priority (they give free items)
+        visibleCampaigns = visibleCampaigns.sort((a, b) => {
+            // Applied campaigns come first
+            if (a.applied && !b.applied) return -1;
+            if (!a.applied && b.applied) return 1;
+
+            // Buy X Get Y promotions have highest priority among applied
+            if (a.applied && b.applied) {
+                if (a.promotion_type === 'buy_x_get_y' && b.promotion_type !== 'buy_x_get_y') return -1;
+                if (a.promotion_type !== 'buy_x_get_y' && b.promotion_type === 'buy_x_get_y') return 1;
             }
+
+            // Sort by discount value (highest first)
+            const aValue = parseFloat(a.discount_value) || 0;
+            const bValue = parseFloat(b.discount_value) || 0;
+            return bValue - aValue;
         });
+
+        let html = '';
+
+        if (visibleCampaigns.length === 0) {
+            html = '<span style="color: #9ca3af; font-style: italic;">No campaigns selected</span>';
+        } else {
+            visibleCampaigns.forEach((c, idx) => {
+                const isBuyXGetY = c.promotion_type === 'buy_x_get_y';
+                const discountDisplay = isBuyXGetY ? 'FREE' : (c.discount_type === 'percentage' ? `${c.discount_value}%` : `Rs.${c.discount_value}`);
+                const statusBadge = c.applied
+                    ? '<span style="background: #22c55e; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">APPLIED</span>'
+                    : '<span style="background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 4px; font-size: 10px;">ELIGIBLE</span>';
+                const validTillText = c.end_date ? `Valid till: ${c.end_date}` : '';
+
+                html += `
+                    <div style="display: flex; align-items: flex-start; padding: 10px 0; ${idx > 0 ? 'border-top: 1px solid #e5e7eb;' : ''}">
+                        <div style="margin-right: 10px; padding-top: 2px;">
+                            <input type="checkbox" id="campaign-checkbox-${c.campaign_id}"
+                                   checked
+                                   onchange="toggleIndividualCampaign('${c.campaign_id}')"
+                                   style="width: 16px; height: 16px; cursor: pointer; accent-color: #22c55e;">
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
+                                <span style="font-weight: 600; color: #166534;">${c.campaign_name}</span>
+                                ${statusBadge}
+                            </div>
+                            <div style="font-size: 12px; color: #374151; margin-top: 4px;">
+                                <span style="background: #f0fdf4; padding: 2px 6px; border-radius: 3px; font-weight: 500;">${c.campaign_code || ''}</span>
+                                ${isBuyXGetY ? '<span style="background: #8b5cf6; color: white; padding: 1px 4px; border-radius: 3px; font-size: 9px; margin-left: 4px;">BUY X GET Y</span>' : ''}
+                            </div>
+                            ${isBuyXGetY && c.promotion_rules ? `<div style="font-size: 10px; color: #6b7280; margin-top: 3px;"><span style="color: #3b82f6;">Buy:</span> ${c.promotion_rules.trigger?.conditions?.item_name || c.promotion_rules.trigger?.conditions?.item_type || 'Any'} <span style="color: #16a34a;">→ Get:</span> ${(c.promotion_rules.reward?.items || []).map(r => r.item_name || 'Item').join(' + ') || 'Free Item'}</div>` : ''}
+                            ${validTillText ? `<div style="font-size: 11px; color: #6b7280; margin-top: 4px;"><i class="bi bi-calendar-event"></i> ${validTillText}</div>` : ''}
+                        </div>
+                        <div style="text-align: right; min-width: 60px;">
+                            <div style="font-size: 18px; font-weight: 700; color: #16a34a;">${discountDisplay}</div>
+                            <div style="font-size: 10px; color: #6b7280;">OFF</div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // Show excluded campaigns section if any
+        if (excludedCampaigns.length > 0) {
+            html += `
+                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed #d1d5db;">
+                    <div style="font-size: 11px; color: #6b7280; margin-bottom: 8px;">
+                        <i class="fas fa-ban"></i> Excluded (${excludedCampaigns.length}):
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+            `;
+            excludedCampaigns.forEach(c => {
+                html += `
+                    <span onclick="reAddCampaign('${c.campaign_id}')"
+                          style="background: #f3f4f6; color: #6b7280; padding: 3px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;"
+                          title="Click to re-add">
+                        ${c.campaign_name}
+                        <i class="fas fa-plus-circle" style="color: #22c55e;"></i>
+                    </span>
+                `;
+            });
+            html += `</div></div>`;
+        }
 
         listContent.innerHTML = html;
 
-        // Update applied campaign info
-        if (window.appliedCampaign && !window.excludeCampaign) {
-            document.getElementById('applied-campaign-name').textContent = window.appliedCampaign.campaign_name;
-            document.getElementById('applied-campaign-desc').textContent = window.appliedCampaign.campaign_code || '';
-            const discDisplay = window.appliedCampaign.discount_type === 'percentage'
-                ? `${window.appliedCampaign.discount_value}%`
-                : `Rs.${window.appliedCampaign.discount_value}`;
-            document.getElementById('applied-campaign-discount').textContent = discDisplay;
+        // Update applied campaign info - now shows ALL applied campaigns (Updated 2025-12-02)
+        const appliedInfo = document.getElementById('campaign-applied-info');
+        const appliedCampaigns = visibleCampaigns.filter(c => c.applied);
+
+        if (appliedCampaigns.length > 0 && appliedInfo) {
+            // Sort applied campaigns by discount value (best first)
+            appliedCampaigns.sort((a, b) => {
+                // Buy X Get Y promotions first
+                if (a.promotion_type === 'buy_x_get_y' && b.promotion_type !== 'buy_x_get_y') return -1;
+                if (a.promotion_type !== 'buy_x_get_y' && b.promotion_type === 'buy_x_get_y') return 1;
+                // Then by discount value
+                return (parseFloat(b.discount_value) || 0) - (parseFloat(a.discount_value) || 0);
+            });
+
+            // Build HTML for multiple applied campaigns
+            let appliedHtml = '';
+            appliedCampaigns.forEach((campaign, idx) => {
+                const discDisplay = campaign.promotion_type === 'buy_x_get_y' ? 'FREE'
+                    : campaign.discount_type === 'percentage' ? `${campaign.discount_value}%` : `Rs.${campaign.discount_value}`;
+                const isBest = idx === 0;
+                appliedHtml += `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; ${idx > 0 ? 'border-top: 1px dotted #d1d5db; margin-top: 4px; padding-top: 6px;' : ''}">
+                        <div>
+                            <span style="font-weight: 600; color: #166534;">${campaign.campaign_name}</span>
+                            ${isBest ? '<span style="background: #fef08a; color: #854d0e; padding: 1px 4px; border-radius: 3px; font-size: 9px; margin-left: 4px;">BEST</span>' : ''}
+                            <div style="font-size: 11px; color: #6b7280;">${campaign.campaign_code || ''}</div>
+                        </div>
+                        <div style="font-size: 16px; font-weight: 700; color: #16a34a;">${discDisplay}</div>
+                    </div>
+                `;
+            });
+
+            // Update the applied info container
+            document.getElementById('applied-campaign-name').innerHTML = appliedHtml;
+            document.getElementById('applied-campaign-desc').textContent = `${appliedCampaigns.length} campaign${appliedCampaigns.length > 1 ? 's' : ''} applied`;
+            document.getElementById('applied-campaign-discount').textContent = '';  // Discount shown per campaign now
             appliedInfo.style.display = 'block';
 
-            // Store in hidden fields
-            document.getElementById('applied-promo-code').value = window.appliedCampaign.campaign_code || '';
-            document.getElementById('applied-campaign-id').value = window.appliedCampaign.campaign_id || '';
-        } else {
+            // Store all applied campaigns in window
+            window.appliedCampaigns = appliedCampaigns;
+        } else if (appliedInfo) {
             appliedInfo.style.display = 'none';
+            window.appliedCampaigns = [];
+        }
+    }
+
+    // Store master list of all available campaigns (loaded on patient selection)
+    window.allAvailableCampaigns = [];
+
+    // Update eligible campaigns display (called from discount response or loadActiveCampaigns)
+    // mergeMode: false = replace (initial load), true = merge with existing (line item change)
+    function updateEligibleCampaigns(campaigns, mergeMode = false) {
+        const listContent = document.getElementById('campaign-list-content');
+        const appliedInfo = document.getElementById('campaign-applied-info');
+
+        if (mergeMode && window.allAvailableCampaigns.length > 0) {
+            // Merge mode: Update applied status for existing campaigns based on calculated results
+            // and add any new campaigns that weren't in the master list
+            const calculatedCampaigns = campaigns || [];
+
+            // Update applied status for all campaigns in master list
+            window.allAvailableCampaigns.forEach(campaign => {
+                const calculated = calculatedCampaigns.find(c => c.campaign_id === campaign.campaign_id);
+                if (calculated) {
+                    campaign.applied = calculated.applied;
+                    // Copy promotion_rules if available
+                    if (calculated.promotion_rules) {
+                        campaign.promotion_rules = calculated.promotion_rules;
+                    }
+                } else {
+                    // Campaign not in calculated results
+                    // IMPORTANT: Preserve applied status for Buy X Get Y campaigns
+                    // They are managed by BuyXGetYHandler, not the discount calculation API
+                    if (campaign.promotion_type !== 'buy_x_get_y') {
+                        campaign.applied = false;
+                    }
+                    // Buy X Get Y campaigns keep their current applied status
+                }
+            });
+
+            // Add any new campaigns from calculated that aren't in master list
+            calculatedCampaigns.forEach(calc => {
+                const exists = window.allAvailableCampaigns.find(c => c.campaign_id === calc.campaign_id);
+                if (!exists) {
+                    window.allAvailableCampaigns.push(calc);
+                }
+            });
+
+            window.eligibleCampaigns = window.allAvailableCampaigns;
+            console.log('🎯 Merged campaigns - total:', window.eligibleCampaigns.length);
+        } else {
+            // Replace mode: Initial load or no existing campaigns
+            window.eligibleCampaigns = campaigns || [];
+            window.allAvailableCampaigns = [...window.eligibleCampaigns]; // Store as master list
+            console.log('🎯 Loaded campaigns - total:', window.eligibleCampaigns.length);
+        }
+
+        if (!window.eligibleCampaigns || window.eligibleCampaigns.length === 0) {
+            if (listContent) {
+                listContent.innerHTML = '<span style="color: #9ca3af; font-style: italic;">No campaigns available</span>';
+            }
+            if (appliedInfo) {
+                appliedInfo.style.display = 'none';
+            }
+            window.appliedCampaign = null;
+            window.appliedCampaigns = [];
+            return;
+        }
+
+        // Use the renderCampaignList function to display campaigns
+        renderCampaignList();
+
+        // Store ALL applied campaigns in hidden fields (Updated 2025-12-02)
+        const allAppliedCampaigns = window.eligibleCampaigns.filter(c => c.applied && !window.excludedCampaignIds.includes(c.campaign_id));
+
+        // Sort by discount value (best first) for determining primary campaign
+        allAppliedCampaigns.sort((a, b) => {
+            // Buy X Get Y first
+            if (a.promotion_type === 'buy_x_get_y' && b.promotion_type !== 'buy_x_get_y') return -1;
+            if (a.promotion_type !== 'buy_x_get_y' && b.promotion_type === 'buy_x_get_y') return 1;
+            return (parseFloat(b.discount_value) || 0) - (parseFloat(a.discount_value) || 0);
+        });
+
+        if (allAppliedCampaigns.length > 0) {
+            // Store all applied campaigns
+            window.appliedCampaigns = allAppliedCampaigns;
+            window.appliedCampaign = allAppliedCampaigns[0];  // Best campaign for backward compatibility
+
+            // Store primary (best) campaign in hidden fields
+            const promoCodeField = document.getElementById('applied-promo-code');
+            const campaignIdField = document.getElementById('applied-campaign-id');
+            if (promoCodeField) promoCodeField.value = allAppliedCampaigns[0].campaign_code || '';
+            if (campaignIdField) campaignIdField.value = allAppliedCampaigns[0].campaign_id || '';
+
+            // Store all applied campaign IDs as JSON in a separate field (if exists)
+            const allCampaignIdsField = document.getElementById('applied-campaign-ids');
+            if (allCampaignIdsField) {
+                allCampaignIdsField.value = JSON.stringify(allAppliedCampaigns.map(c => c.campaign_id));
+            }
+
+            console.log('✅ Applied campaigns:', allAppliedCampaigns.length, '- Best:', allAppliedCampaigns[0].campaign_name);
+        } else {
+            window.appliedCampaigns = [];
+            window.appliedCampaign = null;
+            if (appliedInfo) appliedInfo.style.display = 'none';
+        }
+    }
+
+    // Load active campaigns from API (called on patient selection)
+    async function loadActiveCampaigns(patientId = null) {
+        const hospitalId = '{{ current_user.hospital_id if current_user else "" }}';
+        if (!hospitalId) {
+            console.warn('No hospital ID available for loading campaigns');
+            return;
+        }
+        console.log('🎯 loadActiveCampaigns called with hospitalId:', hospitalId, 'patientId:', patientId);
+
+        try {
+            let url = `/api/discount/campaigns/active?hospital_id=${hospitalId}`;
+            if (patientId) {
+                url += `&patient_id=${patientId}`;
+            }
+
+            console.log('🎯 Loading active campaigns from:', url);
+            const response = await fetch(url);
+            console.log('📡 Response status:', response.status);
+
+            if (!response.ok) {
+                console.error('❌ API error:', response.status, response.statusText);
+                return;
+            }
+
+            const data = await response.json();
+            console.log('📦 Response data:', data);
+
+            if (data.campaigns && data.campaigns.length > 0) {
+                console.log(`✅ Found ${data.campaigns.length} active campaigns`);
+                updateEligibleCampaigns(data.campaigns);
+            } else if (data.error) {
+                console.error('❌ API returned error:', data.error);
+            } else {
+                console.log('ℹ️ No active campaigns found');
+                const listContent = document.getElementById('campaign-list-content');
+                if (listContent) {
+                    listContent.innerHTML = '<span style="color: #9ca3af; font-style: italic;">No active promotions</span>';
+                }
+            }
+        } catch (error) {
+            console.error('❌ Error loading campaigns:', error);
         }
     }
 
@@ -2290,6 +2709,9 @@ document.addEventListener('DOMContentLoaded', function() {
     window.toggleCampaignDiscount = toggleCampaignDiscount;
     window.toggleIndividualCampaign = toggleIndividualCampaign;
     window.updateEligibleCampaigns = updateEligibleCampaigns;
+    window.loadActiveCampaigns = loadActiveCampaigns;
+    window.reAddCampaign = reAddCampaign;
+    window.renderCampaignList = renderCampaignList;
 
     // Legacy function stubs for backward compatibility
     function applyPromoCode() {
