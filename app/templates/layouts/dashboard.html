@@ -1078,4 +1078,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- AR Statement JavaScript -->
 <script src="{{ url_for('static', filename='js/ar_statement.js') }}"></script>
+
+<!-- Extra JavaScript block for child templates -->
+{% block extra_js %}{% endblock %}
+
+<!-- Extra CSS block for child templates -->
+{% block extra_css %}{% endblock %}
 {% endblock %}

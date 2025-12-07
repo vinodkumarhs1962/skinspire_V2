@@ -1,0 +1,340 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Walk-In Appointment{% endblock %}
+
+{% block extra_css %}
+<style>
+    .patient-card {
+        transition: all 0.2s ease;
+    }
+    .patient-card:hover {
+        background-color: #f3f4f6;
+        cursor: pointer;
+    }
+    .patient-card.selected {
+        background-color: #dbeafe;
+        border-color: #3b82f6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">Walk-In Appointment</h1>
+            <p class="text-gray-600">Quick registration for walk-in patients</p>
+        </div>
+        <a href="{{ url_for('appointment_views.dashboard') }}" class="text-blue-600 hover:text-blue-700">
+            <i class="fas fa-arrow-left mr-2"></i> Back to Dashboard
+        </a>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Patient Search & Selection -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-4 border-b">
+                <h2 class="text-lg font-semibold text-gray-800">Select Patient</h2>
+            </div>
+            <div class="p-4">
+                <!-- Search Box -->
+                <div class="relative mb-4">
+                    <input type="text" id="patient-search"
+                        class="w-full border rounded-lg px-4 py-3 pl-10"
+                        placeholder="Search by name, MRN, or phone...">
+                    <i class="fas fa-search absolute left-3 top-4 text-gray-400"></i>
+                </div>
+
+                <!-- Search Results -->
+                <div id="search-results" class="space-y-2 max-h-80 overflow-y-auto">
+                    <div class="text-center text-gray-500 py-8">
+                        <i class="fas fa-user-search text-4xl mb-2"></i>
+                        <p>Search for an existing patient or</p>
+                        <button onclick="showNewPatientForm()" class="text-blue-600 hover:underline mt-2">
+                            Register New Patient
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Selected Patient Display -->
+                <div id="selected-patient" class="hidden mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-semibold text-lg" id="selected-patient-name"></h3>
+                            <p class="text-sm text-gray-600" id="selected-patient-details"></p>
+                        </div>
+                        <button onclick="clearPatientSelection()" class="text-red-500 hover:text-red-700">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Appointment Details -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-4 border-b">
+                <h2 class="text-lg font-semibold text-gray-800">Appointment Details</h2>
+            </div>
+            <form id="walk-in-form" class="p-4 space-y-4">
+                <input type="hidden" id="patient_id" name="patient_id">
+                <input type="hidden" id="branch_id" name="branch_id" value="{{ branch_id }}">
+
+                <!-- Doctor Selection -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Doctor (Optional)</label>
+                    <select id="staff_id" name="staff_id" class="w-full border rounded-lg px-4 py-2">
+                        <option value="">Auto-assign to next available</option>
+                        {% for doctor in doctors %}
+                        <option value="{{ doctor.staff_id }}">{{ doctor.first_name }} {{ doctor.last_name or '' }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Appointment Type -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Appointment Type</label>
+                    <select id="appointment_type_id" name="appointment_type_id" class="w-full border rounded-lg px-4 py-2">
+                        <option value="">General Consultation</option>
+                        {% for type in appointment_types %}
+                        <option value="{{ type.type_id }}">{{ type.type_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Priority -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                    <div class="flex space-x-4">
+                        <label class="flex items-center">
+                            <input type="radio" name="priority" value="normal" checked class="mr-2">
+                            <span class="text-green-600">Normal</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="priority" value="urgent" class="mr-2">
+                            <span class="text-orange-600">Urgent</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="priority" value="emergency" class="mr-2">
+                            <span class="text-red-600">Emergency</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Chief Complaint -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Chief Complaint / Reason for Visit</label>
+                    <textarea id="chief_complaint" name="chief_complaint" rows="3"
+                        class="w-full border rounded-lg px-4 py-2"
+                        placeholder="Brief description of the reason for visit..."></textarea>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" id="submit-btn" disabled
+                    class="w-full bg-green-600 text-white py-3 rounded-lg font-semibold
+                           hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                    <i class="fas fa-check mr-2"></i> Create Walk-In Appointment
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- New Patient Modal -->
+<div id="new-patient-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h3 class="text-lg font-semibold">Quick Patient Registration</h3>
+                <button onclick="closeNewPatientModal()" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="quick-register-form" class="p-4 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
+                        <input type="text" id="new_first_name" required class="w-full border rounded px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                        <input type="text" id="new_last_name" class="w-full border rounded px-3 py-2">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Mobile Number *</label>
+                    <input type="tel" id="new_mobile" required class="w-full border rounded px-3 py-2" placeholder="+91 9876543210">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input type="email" id="new_email" class="w-full border rounded px-3 py-2">
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+                    Register & Select
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let selectedPatientId = null;
+    let searchTimeout = null;
+
+    // Patient Search
+    document.getElementById('patient-search').addEventListener('input', function(e) {
+        clearTimeout(searchTimeout);
+        const query = e.target.value.trim();
+
+        if (query.length < 2) {
+            document.getElementById('search-results').innerHTML = `
+                <div class="text-center text-gray-500 py-8">
+                    <i class="fas fa-user-search text-4xl mb-2"></i>
+                    <p>Enter at least 2 characters to search</p>
+                </div>
+            `;
+            return;
+        }
+
+        searchTimeout = setTimeout(async () => {
+            try {
+                const response = await fetch(`/api/patient/search?q=${encodeURIComponent(query)}`);
+                const patients = await response.json();
+
+                if (patients.length === 0) {
+                    document.getElementById('search-results').innerHTML = `
+                        <div class="text-center text-gray-500 py-8">
+                            <i class="fas fa-user-times text-4xl mb-2"></i>
+                            <p>No patients found</p>
+                            <button onclick="showNewPatientForm()" class="text-blue-600 hover:underline mt-2">
+                                Register New Patient
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('search-results').innerHTML = patients.map(p => `
+                        <div class="patient-card p-3 border rounded-lg" onclick="selectPatient('${p.patient_id}', '${p.full_name}', '${p.mrn || ''}', '${p.phone || ''}')">
+                            <div class="font-medium">${p.full_name}</div>
+                            <div class="text-sm text-gray-600">
+                                ${p.mrn ? 'MRN: ' + p.mrn + ' | ' : ''}
+                                ${p.phone || 'No phone'}
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error searching patients:', error);
+            }
+        }, 300);
+    });
+
+    function selectPatient(patientId, name, mrn, phone) {
+        selectedPatientId = patientId;
+        document.getElementById('patient_id').value = patientId;
+        document.getElementById('selected-patient-name').textContent = name;
+        document.getElementById('selected-patient-details').textContent =
+            `${mrn ? 'MRN: ' + mrn : ''} ${phone ? '| ' + phone : ''}`;
+        document.getElementById('selected-patient').classList.remove('hidden');
+        document.getElementById('submit-btn').disabled = false;
+
+        // Highlight selected in search results
+        document.querySelectorAll('.patient-card').forEach(card => {
+            card.classList.remove('selected');
+        });
+        event.target.closest('.patient-card').classList.add('selected');
+    }
+
+    function clearPatientSelection() {
+        selectedPatientId = null;
+        document.getElementById('patient_id').value = '';
+        document.getElementById('selected-patient').classList.add('hidden');
+        document.getElementById('submit-btn').disabled = true;
+        document.querySelectorAll('.patient-card').forEach(card => {
+            card.classList.remove('selected');
+        });
+    }
+
+    function showNewPatientForm() {
+        document.getElementById('new-patient-modal').classList.remove('hidden');
+    }
+
+    function closeNewPatientModal() {
+        document.getElementById('new-patient-modal').classList.add('hidden');
+    }
+
+    // Quick Registration Form
+    document.getElementById('quick-register-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const data = {
+            first_name: document.getElementById('new_first_name').value,
+            last_name: document.getElementById('new_last_name').value,
+            mobile: document.getElementById('new_mobile').value,
+            email: document.getElementById('new_email').value
+        };
+
+        try {
+            const response = await fetch('/api/patient/quick-register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                closeNewPatientModal();
+                selectPatient(
+                    result.patient_id,
+                    `${data.first_name} ${data.last_name}`.trim(),
+                    result.mrn,
+                    data.mobile
+                );
+            } else {
+                alert(result.error || 'Failed to register patient');
+            }
+        } catch (error) {
+            alert('Error registering patient');
+        }
+    });
+
+    // Walk-In Form Submission
+    document.getElementById('walk-in-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        if (!selectedPatientId) {
+            alert('Please select a patient first');
+            return;
+        }
+
+        const formData = {
+            patient_id: document.getElementById('patient_id').value,
+            branch_id: document.getElementById('branch_id').value,
+            staff_id: document.getElementById('staff_id').value || undefined,
+            appointment_type_id: document.getElementById('appointment_type_id').value || undefined,
+            priority: document.querySelector('input[name="priority"]:checked').value,
+            chief_complaint: document.getElementById('chief_complaint').value
+        };
+
+        try {
+            const response = await fetch('/api/appointment/walk-in', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                alert(`Walk-in appointment created!\nToken Number: ${result.token_number}\nAppointment #: ${result.appointment_number}`);
+                window.location.href = '{{ url_for("appointment_views.dashboard") }}';
+            } else {
+                alert(result.error || 'Failed to create walk-in appointment');
+            }
+        } catch (error) {
+            alert('Error creating walk-in appointment');
+        }
+    });
+</script>
+{% endblock %}

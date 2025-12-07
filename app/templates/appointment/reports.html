@@ -1,0 +1,148 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Appointment Reports{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">Appointment Reports</h1>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-lg shadow p-4 mb-6">
+        <form id="filter-form" class="flex flex-wrap gap-4 items-end">
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">Start Date</label>
+                <input type="date" name="start_date" value="{{ start_date }}"
+                       class="border rounded px-3 py-2">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">End Date</label>
+                <input type="date" name="end_date" value="{{ end_date }}"
+                       class="border rounded px-3 py-2">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">Doctor</label>
+                <select name="staff_id" class="border rounded px-3 py-2">
+                    <option value="">All Doctors</option>
+                    {% for doctor in doctors %}
+                    <option value="{{ doctor.staff_id }}">{{ doctor.first_name }} {{ doctor.last_name or '' }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                <i class="fas fa-filter mr-2"></i> Apply
+            </button>
+        </form>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-lg shadow p-4 text-center">
+            <div class="text-3xl font-bold text-gray-800" id="total-appointments">-</div>
+            <div class="text-sm text-gray-600">Total Appointments</div>
+        </div>
+        <div class="bg-green-50 rounded-lg shadow p-4 text-center border-t-4 border-green-500">
+            <div class="text-3xl font-bold text-green-700" id="completed-count">-</div>
+            <div class="text-sm text-green-600">Completed</div>
+        </div>
+        <div class="bg-red-50 rounded-lg shadow p-4 text-center border-t-4 border-red-500">
+            <div class="text-3xl font-bold text-red-700" id="cancelled-count">-</div>
+            <div class="text-sm text-red-600">Cancelled</div>
+        </div>
+        <div class="bg-gray-50 rounded-lg shadow p-4 text-center border-t-4 border-gray-500">
+            <div class="text-3xl font-bold text-gray-700" id="noshow-count">-</div>
+            <div class="text-sm text-gray-600">No Shows</div>
+        </div>
+    </div>
+
+    <!-- Charts Placeholder -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-lg font-semibold mb-4">Appointments by Status</h3>
+            <div class="h-64 flex items-center justify-center text-gray-400">
+                <div class="text-center">
+                    <i class="fas fa-chart-pie text-5xl mb-2"></i>
+                    <p>Chart Coming Soon</p>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-lg font-semibold mb-4">Appointments by Day</h3>
+            <div class="h-64 flex items-center justify-center text-gray-400">
+                <div class="text-center">
+                    <i class="fas fa-chart-bar text-5xl mb-2"></i>
+                    <p>Chart Coming Soon</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slot Availability Summary -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-lg font-semibold mb-4">Slot Availability Summary</h3>
+        <div id="availability-table" class="overflow-x-auto">
+            <p class="text-gray-500 text-center py-4">Loading availability data...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        loadReportData();
+    });
+
+    async function loadReportData() {
+        const params = new URLSearchParams(window.location.search);
+        const startDate = params.get('start_date') || '{{ start_date }}';
+        const endDate = params.get('end_date') || '{{ end_date }}';
+
+        try {
+            // Load slot summary
+            const response = await fetch(`/api/appointment/slots/summary?start_date=${startDate}&end_date=${endDate}`);
+            const data = await response.json();
+
+            if (data.success && data.summary.length > 0) {
+                let tableHtml = `
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-2 text-left">Date</th>
+                                <th class="px-4 py-2 text-center">Total Slots</th>
+                                <th class="px-4 py-2 text-center">Available</th>
+                                <th class="px-4 py-2 text-center">Booked</th>
+                                <th class="px-4 py-2 text-center">Availability %</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y">
+                `;
+
+                data.summary.forEach(day => {
+                    const availPct = day.availability_percentage;
+                    const pctClass = availPct > 50 ? 'text-green-600' : availPct > 20 ? 'text-yellow-600' : 'text-red-600';
+
+                    tableHtml += `
+                        <tr>
+                            <td class="px-4 py-2">${day.date}</td>
+                            <td class="px-4 py-2 text-center">${day.total_slots}</td>
+                            <td class="px-4 py-2 text-center">${day.available_slots}</td>
+                            <td class="px-4 py-2 text-center">${day.booked_slots}</td>
+                            <td class="px-4 py-2 text-center ${pctClass}">${day.availability_percentage}%</td>
+                        </tr>
+                    `;
+                });
+
+                tableHtml += '</tbody></table>';
+                document.getElementById('availability-table').innerHTML = tableHtml;
+            } else {
+                document.getElementById('availability-table').innerHTML =
+                    '<p class="text-gray-500 text-center py-4">No data available for selected period</p>';
+            }
+        } catch (error) {
+            console.error('Error loading report data:', error);
+        }
+    }
+</script>
+{% endblock %}

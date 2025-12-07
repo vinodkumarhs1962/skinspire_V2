@@ -1,0 +1,80 @@
+{# Barcode Link Modal Component - Universal Engine Style #}
+
+<!-- Barcode Link Modal -->
+<div class="modal fade" id="barcodeLinkModal" tabindex="-1" role="dialog" aria-labelledby="barcodeLinkModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document" style="max-width: 900px; margin: 1.75rem auto;">
+        <div class="modal-content" style="background-color: #fff;">
+            <div class="modal-header bg-primary text-white py-2">
+                <h5 class="modal-title" id="barcodeLinkModalLabel">
+                    <i class="fas fa-link mr-2"></i>Link Barcode to Medicine
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Scanned Barcode Info -->
+                <div class="form-group mb-3">
+                    <label class="form-label text-muted small mb-1">Scanned Barcode</label>
+                    <div class="form-control bg-light" id="scannedGtinDisplay" style="font-weight: 600;">-</div>
+                    <span id="scannedBarcodeDisplay" style="display: none;"></span>
+                </div>
+
+                <div class="row" id="batchExpiryRow" style="display: none;">
+                    <div class="col-6">
+                        <div class="form-group mb-3">
+                            <label class="form-label text-muted small mb-1">Batch</label>
+                            <div class="form-control bg-light" id="scannedBatchDisplay">-</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="form-group mb-3">
+                            <label class="form-label text-muted small mb-1">Expiry</label>
+                            <div class="form-control bg-light" id="scannedExpiryDisplay">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hidden rows for compatibility -->
+                <div id="batchRow" style="display: none;"></div>
+                <div id="expiryRow" style="display: none;"></div>
+
+                <!-- Search Medicine -->
+                <div class="form-group mb-3">
+                    <label class="form-label text-muted small mb-1">Select Medicine</label>
+                    <input type="text"
+                           class="form-control"
+                           id="medicineLinkSearch"
+                           placeholder="Type to search medicine..."
+                           autocomplete="off">
+                </div>
+
+                <!-- Search Results Dropdown -->
+                <div id="medicineLinkResults" class="border rounded bg-white shadow-sm" style="max-height: 200px; overflow-y: auto; display: none; position: relative; z-index: 1000;">
+                    <!-- Results will be populated dynamically -->
+                </div>
+
+                <!-- Create New Medicine Link -->
+                <div id="createMedicineLink" class="mt-2" style="display: none;">
+                    <a href="#" id="createNewMedicineBtn" class="text-primary">
+                        <i class="fas fa-plus-circle mr-1"></i>Medicine not found? Create New Medicine
+                    </a>
+                </div>
+
+                <!-- Selected Medicine Display -->
+                <div id="selectedMedicineDisplay" class="alert alert-success py-2 mb-0" style="display: none;">
+                    <i class="fas fa-check-circle mr-1"></i>
+                    <span id="selectedMedicineName"></span>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times mr-1"></i>Cancel
+                </button>
+                <button type="button" class="btn btn-primary" id="linkBarcodeBtn" disabled>
+                    <i class="fas fa-link mr-1"></i>Link & Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

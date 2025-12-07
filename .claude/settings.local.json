@@ -12,7 +12,8 @@
       "Bash(PGPASSWORD=Skinspire123$ psql:*)",
       "Bash(xargs -I {} bash -c \"\nPGPASSWORD=''''Skinspire123$'''' psql -h localhost -U skinspire_admin -d skinspire_dev -c \"\"\n-- Line items for latest invoice\nSELECT line_item_id, item_name, item_type, quantity, batch, line_total \nFROM invoice_line_item \nWHERE invoice_id = ''''{}'''';\n\"\"\")",
       "Bash(timeout 15 python:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(grep:*)"
     ],
     "deny": [],
     "ask": []

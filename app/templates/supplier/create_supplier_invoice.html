@@ -239,6 +239,22 @@
         </button>
     </div>
 
+    <!-- Barcode Scanner Settings Row -->
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 24px; background: #f8f9fa; border-bottom: 1px solid #dee2e6;">
+        <span style="color: #6c757d;"><i class="fas fa-barcode mr-1"></i>Barcode Scanner</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <button type="button" class="btn btn-success btn-sm" id="enableScannerBtn" title="Enable barcode scanner">
+                <i class="fas fa-barcode mr-1"></i><span id="scannerStatusText">Scanner Enabled</span>
+            </button>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="addModeBtn" style="display: none;" title="Enable Add mode to increment quantities">
+                <i class="fas fa-plus-circle mr-1"></i><span id="addModeText">Add Mode</span>
+            </button>
+            <button type="button" class="btn btn-outline-info btn-sm" id="manualLinkBtn" title="Manually link a barcode to medicine">
+                <i class="fas fa-link mr-1"></i>Link Barcode
+            </button>
+        </div>
+    </div>
+
     <div class="px-6">
     
         <!-- Form Errors Alert -->
@@ -1405,7 +1421,431 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
         initialize();
     }
-    
+
+})();
+</script>
+
+<!-- SweetAlert2 for Barcode Link Popup -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<!-- Barcode Scanner Script - Must load before usage -->
+<script src="{{ url_for('static', filename='js/components/barcode_scanner.js') }}"></script>
+
+<script>
+//=============================================================================
+// BARCODE SCANNER INTEGRATION (Added 2025-12-03, Simplified 2025-12-04)
+// Single flow: Validate first, then offer to Add if not found
+//=============================================================================
+(function() {
+    'use strict';
+
+    var barcodeScanner = null;
+    var barcodeLinkModal = null;
+    var scannerEnabled = true;
+    var addModeEnabled = false;  // For PO scenario - allows qty increment
+
+    function initBarcodeScanner() {
+        // Only initialize if BarcodeScanner class is available
+        if (typeof BarcodeScanner === 'undefined') {
+            console.log('[SupplierInvoice] BarcodeScanner not loaded, skipping initialization');
+            return;
+        }
+
+        console.log('[SupplierInvoice] Initializing barcode scanner...');
+
+        barcodeScanner = new BarcodeScanner({
+            timeout: 50,
+            minLength: 6,
+            debug: true,
+            onScan: handleBarcodeScan,
+            onNotFound: handleBarcodeNotFound,
+            onError: function(msg) {
+                showNotification('error', msg);
+            }
+        });
+
+        // Initialize link modal if available
+        if (typeof BarcodeLinkModal !== 'undefined') {
+            barcodeLinkModal = new BarcodeLinkModal({
+                onLinked: function(linkedData) {
+                    handleLinkedBarcode(linkedData);
+                }
+            });
+        }
+
+        // Setup scanner toggle and manual link button
+        setupScannerControls();
+
+        console.log('[SupplierInvoice] Barcode scanner initialized');
+    }
+
+    function setupScannerControls() {
+        // Scanner enable/disable toggle
+        var enableScannerBtn = document.getElementById('enableScannerBtn');
+        var scannerStatusText = document.getElementById('scannerStatusText');
+        var addModeBtn = document.getElementById('addModeBtn');
+        var addModeText = document.getElementById('addModeText');
+        var poSelect = document.getElementById('po_id');
+
+        if (enableScannerBtn) {
+            enableScannerBtn.addEventListener('click', function() {
+                scannerEnabled = !scannerEnabled;
+                if (scannerEnabled) {
+                    barcodeScanner.enable();
+                    enableScannerBtn.classList.remove('btn-outline-secondary');
+                    enableScannerBtn.classList.add('btn-success');
+                    scannerStatusText.textContent = 'Scanner Enabled';
+                    showNotification('success', 'Barcode scanner enabled');
+                } else {
+                    barcodeScanner.disable();
+                    enableScannerBtn.classList.remove('btn-success');
+                    enableScannerBtn.classList.add('btn-outline-secondary');
+                    scannerStatusText.textContent = 'Scanner Disabled';
+                    showNotification('info', 'Barcode scanner disabled');
+                }
+            });
+        }
+
+        // Add Mode button (for PO scenario - allows qty increment)
+        if (addModeBtn) {
+            addModeBtn.addEventListener('click', function() {
+                addModeEnabled = !addModeEnabled;
+                if (addModeEnabled) {
+                    addModeBtn.classList.remove('btn-outline-primary');
+                    addModeBtn.classList.add('btn-primary');
+                    addModeText.textContent = 'Add Mode ON';
+                    showNotification('info', 'Add Mode enabled - scanning will increment quantities');
+                } else {
+                    addModeBtn.classList.remove('btn-primary');
+                    addModeBtn.classList.add('btn-outline-primary');
+                    addModeText.textContent = 'Add Mode';
+                    showNotification('info', 'Add Mode disabled - scanning will only validate');
+                }
+            });
+        }
+
+        // Show/hide Add Mode button based on PO selection
+        function updateAddModeVisibility() {
+            if (addModeBtn) {
+                if (poSelect && poSelect.value && poSelect.value !== '') {
+                    addModeBtn.style.display = 'inline-block';
+                } else {
+                    addModeBtn.style.display = 'none';
+                    addModeEnabled = false;  // Reset when no PO
+                    if (addModeBtn.classList.contains('btn-primary')) {
+                        addModeBtn.classList.remove('btn-primary');
+                        addModeBtn.classList.add('btn-outline-primary');
+                        addModeText.textContent = 'Add Mode';
+                    }
+                }
+            }
+        }
+
+        // Watch for PO selection changes
+        if (poSelect) {
+            poSelect.addEventListener('change', updateAddModeVisibility);
+            // Initial check
+            updateAddModeVisibility();
+        }
+
+        // Manual Link Barcode button
+        var manualLinkBtn = document.getElementById('manualLinkBtn');
+        if (manualLinkBtn) {
+            manualLinkBtn.addEventListener('click', function() {
+                Swal.fire({
+                    title: 'Enter Barcode',
+                    input: 'text',
+                    inputPlaceholder: 'Enter barcode to link...',
+                    showCancelButton: true,
+                    confirmButtonText: 'Lookup',
+                    inputValidator: function(value) {
+                        if (!value || value.trim().length < 6) {
+                            return 'Please enter a valid barcode (min 6 characters)';
+                        }
+                    }
+                }).then(function(result) {
+                    if (result.isConfirmed && result.value) {
+                        lookupAndLinkBarcode(result.value.trim());
+                    }
+                });
+            });
+        }
+    }
+
+    function lookupAndLinkBarcode(barcode) {
+        fetch('/api/barcode/lookup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ barcode: barcode })
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.success) {
+                if (data.medicine_found) {
+                    showNotification('info', 'Barcode already linked to: ' + data.medicine.medicine_name);
+                } else if (barcodeLinkModal) {
+                    barcodeLinkModal.show(data);
+                }
+            } else {
+                showNotification('error', data.error || 'Failed to lookup barcode');
+            }
+        })
+        .catch(function(error) {
+            console.error('Error:', error);
+            showNotification('error', 'Failed to lookup barcode');
+        });
+    }
+
+    function handleBarcodeScan(data) {
+        console.log('[SupplierInvoice] Barcode scanned:', data);
+
+        if (!data.medicine_found) {
+            handleBarcodeNotFound(data);
+            return;
+        }
+
+        // Try to find existing line first (Validate)
+        var existingRow = findExistingLineRow(data.medicine.medicine_id);
+
+        if (existingRow) {
+            // Medicine found in invoice - validate/update batch & expiry + increment qty
+            updateExistingLine(existingRow, data);
+        } else {
+            // Medicine NOT in invoice - add directly (user can delete if not needed)
+            addLineFromBarcode(data);
+        }
+    }
+
+    function handleBarcodeNotFound(data) {
+        console.log('[SupplierInvoice] Barcode not linked to any medicine');
+
+        if (barcodeLinkModal) {
+            barcodeLinkModal.show(data);
+        } else {
+            showNotification('warning',
+                'Barcode not linked to any medicine. GTIN: ' + (data.parsed?.gtin || 'unknown'));
+        }
+    }
+
+    function handleLinkedBarcode(linkedData) {
+        // After linking, re-fetch and process
+        console.log('[SupplierInvoice] Barcode linked, processing:', linkedData);
+
+        fetch('/api/barcode/lookup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ barcode: linkedData.barcode })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.medicine_found) {
+                var existingRow = findExistingLineRow(data.medicine.medicine_id);
+                if (existingRow) {
+                    updateExistingLine(existingRow, data);
+                } else {
+                    addLineFromBarcode(data);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('[SupplierInvoice] Error after linking:', error);
+        });
+    }
+
+    function findExistingLineRow(medicineId) {
+        var lineRows = document.querySelectorAll('#line-items-container tr.line-item-row');
+        var foundRow = null;
+
+        lineRows.forEach(function(row) {
+            var medicineSelect = row.querySelector('.medicine-select');
+            if (medicineSelect && medicineSelect.value === medicineId) {
+                foundRow = row;
+            }
+        });
+
+        return foundRow;
+    }
+
+    function isFromPO() {
+        // Check if invoice is linked to a PO
+        var poSelect = document.getElementById('po_id');
+        return poSelect && poSelect.value && poSelect.value !== '';
+    }
+
+    function updateExistingLine(row, data) {
+        var batchInput = row.querySelector('.batch-number');
+        var expiryInput = row.querySelector('.expiry-date');
+        var quantityInput = row.querySelector('.quantity');
+        var updated = [];
+        var fromPO = isFromPO();
+
+        // Increment quantity if: NOT from PO, OR Add Mode is enabled
+        if ((!fromPO || addModeEnabled) && quantityInput) {
+            var currentQty = parseInt(quantityInput.value) || 0;
+            quantityInput.value = currentQty + 1;
+            quantityInput.style.borderColor = '#28a745';
+            quantityInput.style.borderWidth = '2px';
+            updated.push('Qty +1');
+
+            // Trigger recalculation
+            if (typeof calculateLineTotal === 'function') {
+                calculateLineTotal(row);
+            }
+        }
+
+        // Update batch/expiry if barcode has the info (both PO and fresh)
+        if (batchInput && data.parsed.batch) {
+            batchInput.value = data.parsed.batch;
+            batchInput.style.borderColor = '#28a745';
+            batchInput.style.borderWidth = '2px';
+            updated.push('Batch');
+        }
+
+        if (expiryInput && data.parsed.expiry_date) {
+            expiryInput.value = data.parsed.expiry_date;
+            expiryInput.style.borderColor = '#28a745';
+            expiryInput.style.borderWidth = '2px';
+            updated.push('Expiry');
+        }
+
+        // Highlight the row briefly
+        row.style.backgroundColor = '#d4edda';
+        setTimeout(function() {
+            row.style.backgroundColor = '';
+        }, 2000);
+
+        if (updated.length > 0) {
+            showNotification('success',
+                data.medicine.medicine_name + ': ' + updated.join(', '));
+        } else {
+            showNotification('success',
+                data.medicine.medicine_name + ' validated');
+        }
+    }
+
+    function addLineFromBarcode(data) {
+        // Add a new line item using existing template
+        var template = document.getElementById('line-item-template');
+        if (!template) {
+            showNotification('error', 'Line item template not found');
+            return;
+        }
+
+        var clone = template.content.cloneNode(true);
+
+        // Increment line index (using global variable from main script)
+        if (typeof lineItemIndex !== 'undefined') {
+            lineItemIndex++;
+        } else {
+            window.lineItemIndex = document.querySelectorAll('#line-items-container tr.line-item-row').length + 1;
+        }
+
+        var row = clone.querySelector('tr');
+        row.dataset.index = lineItemIndex;
+        var lineNumber = clone.querySelector('.line-number');
+        if (lineNumber) lineNumber.textContent = lineItemIndex;
+
+        // Set medicine
+        var medicineSelect = clone.querySelector('.medicine-select');
+        if (medicineSelect && data.medicine.medicine_id) {
+            // Add option if not exists
+            var optionExists = Array.from(medicineSelect.options).some(opt => opt.value === data.medicine.medicine_id);
+            if (!optionExists) {
+                var newOption = document.createElement('option');
+                newOption.value = data.medicine.medicine_id;
+                newOption.textContent = data.medicine.medicine_name;
+                medicineSelect.appendChild(newOption);
+            }
+            medicineSelect.value = data.medicine.medicine_id;
+        }
+
+        // Set GST display
+        var gstDisplay = clone.querySelector('.gst-rate');
+        if (gstDisplay && data.medicine.gst_rate) {
+            gstDisplay.textContent = data.medicine.gst_rate + '%';
+        }
+
+        // Set batch and expiry from barcode
+        var batchInput = clone.querySelector('.batch-number');
+        if (batchInput) {
+            batchInput.value = data.parsed.batch || '';
+            if (data.parsed.batch) {
+                batchInput.classList.add('border-green-400', 'border-2');
+            }
+        }
+
+        var expiryInput = clone.querySelector('.expiry-date');
+        if (expiryInput && data.parsed.expiry_date) {
+            expiryInput.value = data.parsed.expiry_date;
+            expiryInput.classList.add('border-green-400', 'border-2');
+        }
+
+        // Set pricing from medicine master
+        var rateInput = clone.querySelector('.rate');
+        if (rateInput) rateInput.value = data.medicine.last_purchase_price || data.medicine.cost_price || 0;
+
+        var mrpInput = clone.querySelector('.mrp');
+        if (mrpInput) mrpInput.value = data.medicine.mrp || 0;
+
+        var hsnCode = clone.querySelector('.hsn-code');
+        if (hsnCode) hsnCode.value = data.medicine.hsn_code || '';
+
+        var quantityInput = clone.querySelector('.quantity');
+        if (quantityInput) quantityInput.value = 1; // Default quantity
+
+        var unitsPerPack = clone.querySelector('.units-per-pack');
+        if (unitsPerPack) unitsPerPack.value = 1;
+
+        // Add to container
+        document.getElementById('line-items-container').appendChild(clone);
+
+        // Attach handlers and calculate
+        var newRow = document.querySelector('tr[data-index="' + lineItemIndex + '"]');
+        if (typeof attachLineItemHandlers === 'function') {
+            attachLineItemHandlers(newRow);
+        }
+        if (typeof calculateLineTotal === 'function') {
+            calculateLineTotal(newRow);
+        }
+
+        showNotification('success',
+            'Added: ' + data.medicine.medicine_name + ' (Batch: ' + (data.parsed.batch || 'N/A') + ')');
+    }
+
+    function getCSRFToken() {
+        var metaToken = document.querySelector('meta[name="csrf-token"]');
+        if (metaToken) return metaToken.content;
+
+        var inputToken = document.querySelector('input[name="csrf_token"]');
+        if (inputToken) return inputToken.value;
+
+        return '';
+    }
+
+    function showNotification(type, message) {
+        // Use existing notification system if available
+        if (typeof window.showNotification === 'function') {
+            window.showNotification(type, message);
+        } else if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'success',
+                title: message,
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000
+            });
+        } else {
+            console.log('[' + type.toUpperCase() + '] ' + message);
+        }
+    }
+
+    // Initialize on DOM ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initBarcodeScanner);
+    } else {
+        initBarcodeScanner();
+    }
 })();
 </script>
 {% endblock %}

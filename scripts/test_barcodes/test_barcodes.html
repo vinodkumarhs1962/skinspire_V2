@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Barcodes - SkinSpire HMS</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .instructions {
+            background: #e7f3ff;
+            border: 1px solid #b3d7ff;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 30px;
+        }
+        .instructions h3 {
+            margin-top: 0;
+            color: #0056b3;
+        }
+        .instructions ul {
+            margin-bottom: 0;
+        }
+        .barcode-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        .barcode-card {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .barcode-card:hover {
+            border-color: #007bff;
+        }
+        .medicine-name {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .medicine-desc {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        .barcode-image {
+            text-align: center;
+            margin: 15px 0;
+            padding: 10px;
+            background: #fff;
+            border: 1px solid #eee;
+        }
+        .barcode-image img {
+            max-width: 100%;
+            height: auto;
+        }
+        .barcode-info {
+            font-size: 12px;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .barcode-info table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .barcode-info td {
+            padding: 3px 5px;
+        }
+        .barcode-info td:first-child {
+            font-weight: bold;
+            width: 80px;
+            color: #555;
+        }
+        .barcode-string {
+            font-family: monospace;
+            font-size: 11px;
+            background: #fff3cd;
+            padding: 8px;
+            border-radius: 4px;
+            margin-top: 10px;
+            word-break: break-all;
+        }
+        .barcode-string strong {
+            display: block;
+            margin-bottom: 3px;
+            color: #856404;
+        }
+        .print-button {
+            display: block;
+            width: 200px;
+            margin: 30px auto;
+            padding: 12px 24px;
+            font-size: 16px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .print-button:hover {
+            background: #0056b3;
+        }
+        @media print {
+            .instructions, .print-button {
+                display: none;
+            }
+            .barcode-card {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Barcodes - Helett HT20 Pro Scanner</h1>
+
+    <div class="instructions">
+        <h3>Testing Instructions</h3>
+        <ul>
+            <li><strong>Print this page</strong> and scan barcodes with Helett HT20 Pro</li>
+            <li><strong>GS1-128 barcodes</strong> contain GTIN + Batch + Expiry (full medicine info)</li>
+            <li><strong>EAN-13 barcodes</strong> contain only product code (no batch/expiry)</li>
+            <li>First scan will show "Link Barcode" modal (barcodes not yet linked to medicines)</li>
+            <li>After linking, future scans will auto-populate invoice line items</li>
+        </ul>
+    </div>
+
+    <div class="barcode-grid">
+
+        <div class="barcode-card">
+            <div class="medicine-name">Paracetamol 500mg</div>
+            <div class="medicine-desc">Common painkiller - OTC</div>
+
+            <div class="barcode-image">
+                <img src="gs1_08901234500001.png" alt="GS1-128 Barcode">
+                <div style="font-size: 10px; color: #666; margin-top: 5px;">GS1-128 (Full Info)</div>
+            </div>
+
+            <div class="barcode-image">
+                <img src="ean_08901234500001.png" alt="EAN-13 Barcode">
+                <div style="font-size: 10px; color: #666; margin-top: 5px;">EAN-13 (Product Only)</div>
+            </div>
+
+            <div class="barcode-info">
+                <table>
+                    <tr><td>GTIN:</td><td>08901234500001</td></tr>
+                    <tr><td>Batch:</td><td>PCM2024A</td></tr>
+                    <tr><td>Expiry:</td><td>31-Dec-2026</td></tr>
+                </table>
+            </div>
+
+            <div class="barcode-string">
+                <strong>GS1 String (for manual testing):</strong>
+                (01)08901234500001(10)PCM2024A(17)261231
+            </div>
+        </div>
+
+        <div class="barcode-card">
+            <div class="medicine-name">Amoxicillin 250mg</div>
+            <div class="medicine-desc">Antibiotic - Prescription</div>
+
+            <div class="barcode-image">
+                <img src="gs1_08901234500002.png" alt="GS1-128 Barcode">
+                <div style="font-size: 10px; color: #666; margin-top: 5px;">GS1-128 (Full Info)</div>
+            </div>
+
+            <div class="barcode-image">
+                <img src="ean_08901234500002.png" alt="EAN-13 Barcode">
+                <div style="font-size: 10px; color: #666; margin-top: 5px;">EAN-13 (Product Only)</div>
+            </div>
+
+            <div class="barcode-info">
+                <table>
+                    <tr><td>GTIN:</td><td>08901234500002</td></tr>
+                    <tr><td>Batch:</td><td>AMX2024B</td></tr>
+                    <tr><td>Expiry:</td><td>30-Nov-2025</td></tr>
+                </table>
+            </div>
+
+            <div class="barcode-string">
+                <strong>GS1 String (for manual testing):</strong>
+                (01)08901234500002(10)AMX2024B(17)251130
+            </div>
+        </div>
+
+        <div class="barcode-card">
+            <div class="medicine-name">Vitamin D3 1000IU</div>
+            <div class="medicine-desc">Supplement - OTC</div>
+
+            <div class="barcode-image">
+                <img src="gs1_08901234500003.png" alt="GS1-128 Barcode">
+                <div style="font-size: 10px; color: #666; margin-top: 5px;">GS1-128 (Full Info)</div>
+            </div>
+
+            <div class="barcode-image">
+                <img src="ean_08901234500003.png" alt="EAN-13 Barcode">
+                <div style="font-size: 10px; color: #666; margin-top: 5px;">EAN-13 (Product Only)</div>
+            </div>
+
+            <div class="barcode-info">
+                <table>
+                    <tr><td>GTIN:</td><td>08901234500003</td></tr>
+                    <tr><td>Batch:</td><td>VTD2025X</td></tr>
+                    <tr><td>Expiry:</td><td>30-Jun-2027</td></tr>
+                </table>
+            </div>
+
+            <div class="barcode-string">
+                <strong>GS1 String (for manual testing):</strong>
+                (01)08901234500003(10)VTD2025X(17)270630
+            </div>
+        </div>
+
+        <div class="barcode-card">
+            <div class="medicine-name">Omeprazole 20mg</div>
+            <div class="medicine-desc">Antacid - OTC</div>
+
+            <div class="barcode-image">
+                <img src="gs1_08901234500004.png" alt="GS1-128 Barcode">
+                <div style="font-size: 10px; color: #666; margin-top: 5px;">GS1-128 (Full Info)</div>
+            </div>
+
+            <div class="barcode-image">
+                <img src="ean_08901234500004.png" alt="EAN-13 Barcode">
+                <div style="font-size: 10px; color: #666; margin-top: 5px;">EAN-13 (Product Only)</div>
+            </div>
+
+            <div class="barcode-info">
+                <table>
+                    <tr><td>GTIN:</td><td>08901234500004</td></tr>
+                    <tr><td>Batch:</td><td>OMP2024C</td></tr>
+                    <tr><td>Expiry:</td><td>15-Mar-2026</td></tr>
+                </table>
+            </div>
+
+            <div class="barcode-string">
+                <strong>GS1 String (for manual testing):</strong>
+                (01)08901234500004(10)OMP2024C(17)260315
+            </div>
+        </div>
+
+        <div class="barcode-card">
+            <div class="medicine-name">Cetirizine 10mg</div>
+            <div class="medicine-desc">Antihistamine - OTC</div>
+
+            <div class="barcode-image">
+                <img src="gs1_08901234500005.png" alt="GS1-128 Barcode">
+                <div style="font-size: 10px; color: #666; margin-top: 5px;">GS1-128 (Full Info)</div>
+            </div>
+
+            <div class="barcode-image">
+                <img src="ean_08901234500005.png" alt="EAN-13 Barcode">
+                <div style="font-size: 10px; color: #666; margin-top: 5px;">EAN-13 (Product Only)</div>
+            </div>
+
+            <div class="barcode-info">
+                <table>
+                    <tr><td>GTIN:</td><td>08901234500005</td></tr>
+                    <tr><td>Batch:</td><td>CTZ2024D</td></tr>
+                    <tr><td>Expiry:</td><td>31-Dec-2025</td></tr>
+                </table>
+            </div>
+
+            <div class="barcode-string">
+                <strong>GS1 String (for manual testing):</strong>
+                (01)08901234500005(10)CTZ2024D(17)251231
+            </div>
+        </div>
+
+        <div class="barcode-card">
+            <div class="medicine-name">Metformin 500mg</div>
+            <div class="medicine-desc">Diabetes medication - Prescription</div>
+
+            <div class="barcode-image">
+                <img src="gs1_08901234500006.png" alt="GS1-128 Barcode">
+                <div style="font-size: 10px; color: #666; margin-top: 5px;">GS1-128 (Full Info)</div>
+            </div>
+
+            <div class="barcode-image">
+                <img src="ean_08901234500006.png" alt="EAN-13 Barcode">
+                <div style="font-size: 10px; color: #666; margin-top: 5px;">EAN-13 (Product Only)</div>
+            </div>
+
+            <div class="barcode-info">
+                <table>
+                    <tr><td>GTIN:</td><td>08901234500006</td></tr>
+                    <tr><td>Batch:</td><td>MTF2024E</td></tr>
+                    <tr><td>Expiry:</td><td>30-Sep-2026</td></tr>
+                </table>
+            </div>
+
+            <div class="barcode-string">
+                <strong>GS1 String (for manual testing):</strong>
+                (01)08901234500006(10)MTF2024E(17)260930
+            </div>
+        </div>
+
+        <div class="barcode-card">
+            <div class="medicine-name">Amlodipine 5mg</div>
+            <div class="medicine-desc">Blood pressure - Prescription</div>
+
+            <div class="barcode-image">
+                <img src="gs1_08901234500007.png" alt="GS1-128 Barcode">
+                <div style="font-size: 10px; color: #666; margin-top: 5px;">GS1-128 (Full Info)</div>
+            </div>
+
+            <div class="barcode-image">
+                <img src="ean_08901234500007.png" alt="EAN-13 Barcode">
+                <div style="font-size: 10px; color: #666; margin-top: 5px;">EAN-13 (Product Only)</div>
+            </div>
+
+            <div class="barcode-info">
+                <table>
+                    <tr><td>GTIN:</td><td>08901234500007</td></tr>
+                    <tr><td>Batch:</td><td>AML2024F</td></tr>
+                    <tr><td>Expiry:</td><td>28-Feb-2027</td></tr>
+                </table>
+            </div>
+
+            <div class="barcode-string">
+                <strong>GS1 String (for manual testing):</strong>
+                (01)08901234500007(10)AML2024F(17)270228
+            </div>
+        </div>
+
+        <div class="barcode-card">
+            <div class="medicine-name">Pantoprazole 40mg</div>
+            <div class="medicine-desc">PPI - Prescription</div>
+
+            <div class="barcode-image">
+                <img src="gs1_08901234500008.png" alt="GS1-128 Barcode">
+                <div style="font-size: 10px; color: #666; margin-top: 5px;">GS1-128 (Full Info)</div>
+            </div>
+
+            <div class="barcode-image">
+                <img src="ean_08901234500008.png" alt="EAN-13 Barcode">
+                <div style="font-size: 10px; color: #666; margin-top: 5px;">EAN-13 (Product Only)</div>
+            </div>
+
+            <div class="barcode-info">
+                <table>
+                    <tr><td>GTIN:</td><td>08901234500008</td></tr>
+                    <tr><td>Batch:</td><td>PNT2024G</td></tr>
+                    <tr><td>Expiry:</td><td>31-Jan-2026</td></tr>
+                </table>
+            </div>
+
+            <div class="barcode-string">
+                <strong>GS1 String (for manual testing):</strong>
+                (01)08901234500008(10)PNT2024G(17)260100
+            </div>
+        </div>
+
+    </div>
+
+    <button class="print-button" onclick="window.print()">Print Barcodes</button>
+
+    <div class="instructions" style="margin-top: 30px;">
+        <h3>Linking Barcodes to Medicines</h3>
+        <p>To use these test barcodes with your actual medicines:</p>
+        <ol>
+            <li>Go to <strong>Supplier Invoice</strong> or <strong>Patient Invoice</strong></li>
+            <li>Scan a barcode from this page</li>
+            <li>In the "Link Barcode" modal, search for the medicine</li>
+            <li>Select the medicine and click "Link & Continue"</li>
+            <li>The GTIN is now saved to that medicine record</li>
+        </ol>
+        <p><strong>Or</strong> add barcodes directly in Medicine Master:</p>
+        <ol>
+            <li>Go to <strong>Inventory → Medicines</strong></li>
+            <li>Edit a medicine record</li>
+            <li>Enter the GTIN in the "Barcode/GTIN" field</li>
+            <li>Save the medicine</li>
+        </ol>
+    </div>
+</body>
+</html>

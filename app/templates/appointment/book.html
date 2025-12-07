@@ -1,0 +1,3106 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Book Appointment{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ================================================================
+       APPOINTMENT BOOKING PAGE STYLES
+       ================================================================ */
+
+    /* Step Indicator - Modern horizontal stepper */
+    .step-indicator {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .step-indicator .step {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        position: relative;
+    }
+    .step-indicator .step.active {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        color: white;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+    }
+    .step-indicator .step.completed {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: white;
+    }
+    .step-indicator .step.pending {
+        background-color: #e5e7eb;
+        color: #6b7280;
+    }
+    .step-indicator .step-label {
+        position: absolute;
+        top: 44px;
+        font-size: 11px;
+        white-space: nowrap;
+        color: #6b7280;
+    }
+    .step-indicator .step.active .step-label {
+        color: #2563eb;
+        font-weight: 600;
+    }
+    .step-indicator .line {
+        height: 3px;
+        width: 80px;
+        margin: 0 8px;
+        border-radius: 2px;
+        transition: all 0.3s ease;
+    }
+    .step-indicator .line.completed {
+        background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+    }
+    .step-indicator .line.pending {
+        background-color: #e5e7eb;
+    }
+
+    /* Booking Card */
+    .booking-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+        padding: 24px;
+        margin-bottom: 20px;
+        border: 1px solid #e5e7eb;
+    }
+    .booking-card-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid #f3f4f6;
+    }
+    .booking-card-header .icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 12px;
+        font-size: 18px;
+    }
+    .booking-card-header .icon.patient { background: #dbeafe; color: #2563eb; }
+    .booking-card-header .icon.doctor { background: #d1fae5; color: #059669; }
+    .booking-card-header .icon.time { background: #fef3c7; color: #d97706; }
+    .booking-card-header .icon.confirm { background: #ede9fe; color: #7c3aed; }
+    .booking-card-header h2 {
+        font-size: 18px;
+        font-weight: 600;
+        color: #111827;
+        margin: 0;
+    }
+    .booking-card-header p {
+        font-size: 13px;
+        color: #6b7280;
+        margin: 2px 0 0 0;
+    }
+
+    /* Form Controls */
+    .form-group {
+        margin-bottom: 20px;
+    }
+    .form-label {
+        display: block;
+        font-size: 14px;
+        font-weight: 500;
+        color: #374151;
+        margin-bottom: 6px;
+    }
+    .form-input, .form-select {
+        width: 100%;
+        padding: 12px 16px;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: all 0.2s;
+        background-color: white;
+    }
+    .form-input:focus, .form-select:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+    .form-input::placeholder {
+        color: #9ca3af;
+    }
+
+    /* Slot Buttons */
+    .slot-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 10px;
+    }
+    .slot-button {
+        padding: 12px 16px;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        background: white;
+    }
+    .slot-button:not(.booked):not(.selected):hover {
+        background-color: #eff6ff;
+        border-color: #3b82f6;
+    }
+    .slot-button.selected {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        color: white;
+        border-color: #2563eb;
+    }
+    .slot-button.booked {
+        background-color: #f3f4f6;
+        color: #9ca3af;
+        cursor: not-allowed;
+        border-color: #e5e7eb;
+    }
+
+    /* Calendar Styles */
+    .calendar-container {
+        background: #f9fafb;
+        border-radius: 12px;
+        padding: 20px;
+        border: 1px solid #e5e7eb;
+    }
+    .calendar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+    }
+    .calendar-header h3 {
+        font-size: 16px;
+        font-weight: 600;
+        color: #111827;
+        margin: 0;
+    }
+    .calendar-nav-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        border: 1px solid #d1d5db;
+        background: white;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+    }
+    .calendar-nav-btn:hover {
+        background: #f3f4f6;
+        border-color: #9ca3af;
+    }
+    .calendar-weekdays {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+        margin-bottom: 8px;
+    }
+    .calendar-weekdays div {
+        text-align: center;
+        font-size: 12px;
+        font-weight: 600;
+        color: #6b7280;
+        padding: 8px 0;
+    }
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+    }
+    .calendar-day {
+        aspect-ratio: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        background: white;
+        border: 1px solid transparent;
+    }
+    .calendar-day:hover:not(.disabled):not(.selected) {
+        background-color: #dbeafe;
+        border-color: #93c5fd;
+    }
+    .calendar-day.selected {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        color: white;
+        font-weight: 600;
+    }
+    .calendar-day.disabled {
+        color: #d1d5db;
+        cursor: not-allowed;
+        background-color: transparent;
+    }
+    .calendar-day.today:not(.selected) {
+        border: 2px solid #3b82f6;
+        font-weight: 600;
+    }
+    .calendar-day.has-slots::after {
+        content: '';
+        position: absolute;
+        bottom: 4px;
+        width: 6px;
+        height: 6px;
+        background: #10b981;
+        border-radius: 50%;
+    }
+
+    /* Navigation Buttons */
+    .btn-primary {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        color: white;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-weight: 500;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .btn-primary:hover:not(:disabled) {
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+        transform: translateY(-1px);
+    }
+    .btn-primary:disabled {
+        background: #d1d5db;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+    .btn-secondary {
+        background: white;
+        color: #374151;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-weight: 500;
+        border: 1px solid #d1d5db;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .btn-secondary:hover {
+        background: #f9fafb;
+        border-color: #9ca3af;
+    }
+
+    /* Selected Patient/Doctor Display */
+    .selected-entity {
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        border: 1px solid #93c5fd;
+        border-radius: 10px;
+        padding: 16px;
+    }
+    .selected-entity .entity-name {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1e40af;
+    }
+    .selected-entity .entity-details {
+        font-size: 13px;
+        color: #3b82f6;
+        margin-top: 4px;
+    }
+
+    /* Confirmation Summary */
+    .confirmation-summary {
+        background: #f9fafb;
+        border-radius: 12px;
+        padding: 20px;
+    }
+    .confirmation-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 12px 0;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .confirmation-row:last-child {
+        border-bottom: none;
+    }
+    .confirmation-row .label {
+        color: #6b7280;
+        font-size: 14px;
+    }
+    .confirmation-row .value {
+        color: #111827;
+        font-weight: 500;
+        font-size: 14px;
+    }
+
+    /* Autocomplete Dropdown */
+    .autocomplete-dropdown {
+        position: absolute;
+        z-index: 50;
+        width: 100%;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        margin-top: 4px;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .autocomplete-item {
+        padding: 12px 16px;
+        cursor: pointer;
+        border-bottom: 1px solid #f3f4f6;
+        transition: background 0.15s;
+    }
+    .autocomplete-item:last-child {
+        border-bottom: none;
+    }
+    .autocomplete-item:hover {
+        background: #f3f4f6;
+    }
+    .autocomplete-item .name {
+        font-weight: 500;
+        color: #111827;
+    }
+    .autocomplete-item .details {
+        font-size: 13px;
+        color: #6b7280;
+        margin-top: 2px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6" style="max-width: 900px;">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">Book Appointment</h1>
+            <p class="text-gray-500 text-sm mt-1">Complete the steps below to schedule an appointment</p>
+        </div>
+        <a href="{{ url_for('appointment_views.dashboard') }}" class="btn-secondary" style="padding: 8px 16px;">
+            <i class="fas fa-arrow-left"></i> Back
+        </a>
+    </div>
+
+    <!-- Progress Steps -->
+    <div class="flex justify-center mb-8" style="padding-top: 10px; padding-bottom: 20px;">
+        <div class="step-indicator">
+            <div class="step active" id="step1-indicator">
+                1
+                <span class="step-label">Patient</span>
+            </div>
+            <div class="line pending" id="line1"></div>
+            <div class="step pending" id="step2-indicator">
+                2
+                <span class="step-label">Doctor & Date</span>
+            </div>
+            <div class="line pending" id="line2"></div>
+            <div class="step pending" id="step3-indicator">
+                3
+                <span class="step-label">Time Slot</span>
+            </div>
+            <div class="line pending" id="line3"></div>
+            <div class="step pending" id="step4-indicator">
+                4
+                <span class="step-label">Confirm</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 1: Patient Selection -->
+    <div id="step1" class="booking-card">
+        <div class="booking-card-header">
+            <div class="icon patient"><i class="fas fa-user"></i></div>
+            <div>
+                <h2>Select Patient</h2>
+                <p>Search for an existing patient or create a new one</p>
+            </div>
+        </div>
+
+        {% if patient %}
+        <!-- Pre-selected patient -->
+        <div class="selected-entity">
+            <div class="flex justify-between items-center">
+                <div>
+                    <div class="entity-name">{{ patient.name }}</div>
+                    <div class="entity-details">MRN: {{ patient.mrn }} {{ '| ' + patient.phone if patient.phone else '' }}</div>
+                </div>
+                <button onclick="clearPatient()" class="text-red-500 hover:text-red-700" style="padding: 8px;">
+                    <i class="fas fa-times"></i> Change
+                </button>
+            </div>
+        </div>
+        <input type="hidden" id="patient_id" value="{{ patient.patient_id }}">
+        {% else %}
+        <!-- Patient Search - AUTOCOMPLETE DROPDOWN -->
+        <div class="form-group" style="position: relative;">
+            <label class="form-label">Search Patient</label>
+            <div style="position: relative;">
+                <input type="text" id="patient-search"
+                    class="form-input"
+                    style="padding-left: 40px;"
+                    placeholder="Type patient name, MRN, or phone number..."
+                    autocomplete="off">
+                <i class="fas fa-search" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #9ca3af;"></i>
+
+                <!-- Dropdown results -->
+                <div id="patient-dropdown" class="autocomplete-dropdown hidden">
+                    <!-- Results will be populated by JavaScript -->
+                </div>
+
+                <!-- Loading indicator -->
+                <div id="patient-loading" style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%);" class="hidden">
+                    <i class="fas fa-spinner fa-spin text-gray-400"></i>
+                </div>
+            </div>
+        </div>
+
+        <div id="selected-patient-display" class="selected-entity hidden">
+            <div class="flex justify-between items-center">
+                <div>
+                    <div class="entity-name" id="selected-patient-name"></div>
+                    <p class="text-sm text-gray-600" id="selected-patient-info"></p>
+                </div>
+                <button onclick="clearPatient()" class="text-red-500 hover:text-red-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <input type="hidden" id="patient_id" value="">
+
+        <!-- Patient Context Card - Shows after patient selection -->
+        <div id="patient-context-card" class="hidden" style="margin-top: 20px; border: 1px solid #e5e7eb; border-radius: 12px;">
+            <!-- Patient Header -->
+            <div id="patient-context-header" style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); padding: 16px; border-bottom: 1px solid #e5e7eb;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div style="display: flex; gap: 16px; align-items: center;">
+                        <div style="width: 50px; height: 50px; background: #3b82f6; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; font-weight: 600;">
+                            <span id="patient-initials">--</span>
+                        </div>
+                        <div>
+                            <div style="font-size: 18px; font-weight: 600; color: #1f2937;" id="context-patient-name">-</div>
+                            <div style="font-size: 13px; color: #6b7280;" id="context-patient-details">-</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <!-- Financial Badge -->
+                        <div id="financial-badge" style="text-align: center; padding: 8px 16px; background: white; border-radius: 8px; border: 1px solid #e5e7eb;">
+                            <div style="font-size: 11px; color: #6b7280; text-transform: uppercase;">Outstanding</div>
+                            <div style="font-size: 16px; font-weight: 600; color: #dc2626;" id="outstanding-amount">₹0</div>
+                        </div>
+                        <!-- Wallet Badge -->
+                        <div style="text-align: center; padding: 8px 16px; background: white; border-radius: 8px; border: 1px solid #e5e7eb;">
+                            <div style="font-size: 11px; color: #6b7280; text-transform: uppercase;">Wallet</div>
+                            <div style="font-size: 16px; font-weight: 600; color: #059669;" id="wallet-balance">₹0</div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Alerts Row -->
+                <div id="patient-alerts" style="display: none; margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+                    <!-- Alerts will be populated dynamically -->
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div style="display: flex; border-bottom: 1px solid #e5e7eb; background: white;">
+                <button onclick="switchContextTab('book')" id="tab-book" class="context-tab active" style="flex: 1; padding: 12px; font-size: 13px; font-weight: 500; border: none; background: none; cursor: pointer; border-bottom: 2px solid #3b82f6; color: #3b82f6;">
+                    <i class="fas fa-calendar-plus"></i> Book New
+                </button>
+                <button onclick="switchContextTab('packages')" id="tab-packages" class="context-tab" style="flex: 1; padding: 12px; font-size: 13px; font-weight: 500; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; color: #6b7280;">
+                    <i class="fas fa-box"></i> Packages <span id="packages-count" class="badge" style="background: #dbeafe; color: #1d4ed8; padding: 2px 6px; border-radius: 10px; font-size: 11px; margin-left: 4px;">0</span>
+                </button>
+                <button onclick="switchContextTab('followups')" id="tab-followups" class="context-tab" style="flex: 1; padding: 12px; font-size: 13px; font-weight: 500; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; color: #6b7280;">
+                    <i class="fas fa-redo"></i> Follow-ups <span id="followups-count" class="badge" style="background: #fef3c7; color: #d97706; padding: 2px 6px; border-radius: 10px; font-size: 11px; margin-left: 4px;">0</span>
+                </button>
+                <button onclick="switchContextTab('history')" id="tab-history" class="context-tab" style="flex: 1; padding: 12px; font-size: 13px; font-weight: 500; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; color: #6b7280;">
+                    <i class="fas fa-history"></i> History
+                </button>
+            </div>
+
+            <!-- Tab Content: Book New -->
+            <div id="content-book" class="context-content" style="padding: 16px; background: white; overflow: visible; position: relative;">
+                <div style="margin-bottom: 16px;">
+                    <label style="font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 8px; display: block;">Booking Type</label>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; gap: 8px; padding: 10px 16px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="booking-type-option" id="type-consultation">
+                            <input type="radio" name="booking_type" value="consultation" checked onchange="onBookingTypeChange(this.value)">
+                            <i class="fas fa-stethoscope" style="color: #3b82f6;"></i>
+                            <span>Doctor Consultation</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; padding: 10px 16px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="booking-type-option" id="type-service">
+                            <input type="radio" name="booking_type" value="service" onchange="onBookingTypeChange(this.value)">
+                            <i class="fas fa-spa" style="color: #8b5cf6;"></i>
+                            <span>Direct Service</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; padding: 10px 16px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="booking-type-option" id="type-package">
+                            <input type="radio" name="booking_type" value="package_session" onchange="onBookingTypeChange(this.value)">
+                            <i class="fas fa-box" style="color: #059669;"></i>
+                            <span>Package Session</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 16px;">
+                    <label style="font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 8px; display: block;">Booking Source</label>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid #e5e7eb; border-radius: 6px; cursor: pointer; font-size: 13px;" class="source-option">
+                            <input type="radio" name="booking_source" value="front_desk" checked>
+                            <span>Front Desk</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid #e5e7eb; border-radius: 6px; cursor: pointer; font-size: 13px;" class="source-option">
+                            <input type="radio" name="booking_source" value="walk_in">
+                            <span>Walk-in</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid #e5e7eb; border-radius: 6px; cursor: pointer; font-size: 13px;" class="source-option">
+                            <input type="radio" name="booking_source" value="phone">
+                            <span>Phone</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid #e5e7eb; border-radius: 6px; cursor: pointer; font-size: 13px;" class="source-option">
+                            <input type="radio" name="booking_source" value="online">
+                            <span>Online</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Service Selection (shown when Direct Service is selected) -->
+                <div id="service-selection" style="display: none; margin-bottom: 16px; position: relative; z-index: 100;">
+                    <label style="font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 8px; display: block;">Select Service</label>
+                    <div style="position: relative;">
+                        <input type="text" id="service-search"
+                            class="form-input"
+                            style="padding-left: 40px;"
+                            placeholder="Search for a service..."
+                            autocomplete="off">
+                        <i class="fas fa-spa" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #9ca3af;"></i>
+                        <input type="hidden" id="direct_service_id" value="">
+
+                        <!-- Service Dropdown -->
+                        <div id="service-dropdown" class="autocomplete-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 9999; background: white; border: 1px solid #d1d5db; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); max-height: 300px; overflow-y: auto;">
+                            <div style="padding: 12px; text-align: center; color: #6b7280;">Loading services...</div>
+                        </div>
+                    </div>
+
+                    <!-- Selected Service Display -->
+                    <div id="selected-service-display" style="display: none; margin-top: 8px; padding: 12px; background: #f5f3ff; border: 1px solid #c4b5fd; border-radius: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div id="selected-service-name" style="font-weight: 600; color: #5b21b6;"></div>
+                                <div style="font-size: 13px; color: #7c3aed; margin-top: 2px;">
+                                    <span id="service-duration"></span> • <span id="service-price"></span>
+                                </div>
+                            </div>
+                            <button onclick="clearService()" style="color: #dc2626; background: none; border: none; cursor: pointer; padding: 4px 8px;">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Package Selection (shown when Package Session is selected) -->
+                <div id="package-selection" style="display: none; margin-bottom: 16px;">
+                    <label style="font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 8px; display: block;">Select Package</label>
+                    <div id="patient-packages-list">
+                        <div style="padding: 20px; text-align: center; color: #6b7280;">
+                            No active packages found for this patient
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Active Packages -->
+            <div id="content-packages" class="context-content" style="display: none; padding: 16px; background: white; max-height: 300px; overflow-y: auto;">
+                <div id="packages-list">
+                    <div style="text-align: center; padding: 20px; color: #6b7280;">Loading packages...</div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Follow-ups Due -->
+            <div id="content-followups" class="context-content" style="display: none; padding: 16px; background: white; max-height: 300px; overflow-y: auto;">
+                <div id="followups-list">
+                    <div style="text-align: center; padding: 20px; color: #6b7280;">Loading follow-ups...</div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Visit History -->
+            <div id="content-history" class="context-content" style="display: none; padding: 16px; background: white; max-height: 300px; overflow-y: auto;">
+                <div id="history-list">
+                    <div style="text-align: center; padding: 20px; color: #6b7280;">Loading history...</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div style="margin-top: 24px; display: flex; justify-content: flex-end;">
+            <button onclick="goToStep(2)" id="step1-next" class="btn-primary" {% if not patient %}disabled{% endif %}>
+                Next: Select Doctor <i class="fas fa-arrow-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Step 2: Doctor & Date Selection -->
+    <div id="step2" class="booking-card hidden">
+        <div class="booking-card-header">
+            <div class="icon doctor"><i class="fas fa-user-md"></i></div>
+            <div>
+                <h2>Select Doctor & Date</h2>
+                <p>Choose your preferred doctor and appointment date</p>
+            </div>
+        </div>
+
+        <!-- Selected Service/Package Display -->
+        <div id="step2-selection-banner" style="display: none; background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%); border: 1px solid #93c5fd; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div id="step2-selection-icon" style="width: 40px; height: 40px; background: #2563eb; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                    <i class="fas fa-concierge-bell text-white"></i>
+                </div>
+                <div style="flex: 1;">
+                    <div style="font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;" id="step2-selection-type">Service Selected</div>
+                    <div style="font-size: 16px; font-weight: 600; color: #1e40af;" id="step2-selection-name">-</div>
+                </div>
+                <div id="step2-selection-duration" style="text-align: right; padding: 6px 12px; background: rgba(37, 99, 235, 0.1); border-radius: 6px;">
+                    <div style="font-size: 11px; color: #6b7280;">Duration</div>
+                    <div style="font-size: 14px; font-weight: 600; color: #2563eb;">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <!-- Specialization Filter - Autocomplete -->
+            <div class="form-group" style="position: relative;">
+                <label class="form-label">Filter by Specialization</label>
+                <div style="position: relative;">
+                    <input type="text" id="specialization-search"
+                        class="form-input"
+                        style="padding-left: 40px;"
+                        placeholder="All specializations..."
+                        autocomplete="off">
+                    <i class="fas fa-stethoscope" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #9ca3af;"></i>
+                    <input type="hidden" id="selected_specialization" value="">
+
+                    <!-- Specialization Dropdown -->
+                    <div id="specialization-dropdown" class="autocomplete-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 1000; background: white; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 250px; overflow-y: auto;">
+                        <div class="text-center py-4 text-gray-500">Loading...</div>
+                    </div>
+                </div>
+                <div id="selected-specialization-display" style="display: none; margin-top: 8px; padding: 8px 12px; background: #eff6ff; border-radius: 6px; justify-content: space-between; align-items: center;">
+                    <span id="selected-specialization-text" style="color: #1d4ed8; font-weight: 500;"></span>
+                    <button onclick="clearSpecialization()" style="color: #dc2626; background: none; border: none; cursor: pointer; padding: 2px 6px;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Appointment Type -->
+            <div class="form-group">
+                <label class="form-label">Appointment Type</label>
+                <select id="appointment_type_id" class="form-select">
+                    <option value="">General Consultation</option>
+                    {% for type in appointment_types %}
+                    <option value="{{ type.type_id }}" data-duration="{{ type.default_duration_minutes }}">
+                        {{ type.type_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <!-- Doctor Selection with Availability -->
+        <div class="form-group" style="margin-top: 20px; position: relative;">
+            <label class="form-label">Select Doctor</label>
+            <div class="availability-legend" style="font-size: 12px; color: #6b7280; margin-bottom: 8px;">
+                <span style="margin-right: 16px;"><span style="color: #22c55e;">●</span> Available today</span>
+                <span style="margin-right: 16px;"><span style="color: #f59e0b;">●</span> Available this week</span>
+                <span><span style="color: #d1d5db;">●</span> No slots available</span>
+            </div>
+            <div style="position: relative;">
+                <input type="text" id="doctor-search"
+                    class="form-input"
+                    style="padding-left: 40px;"
+                    placeholder="Search doctor by name or click to see all..."
+                    autocomplete="off">
+                <i class="fas fa-user-md" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #9ca3af;"></i>
+                <i id="doctor-loading" class="fas fa-spinner fa-spin hidden" style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: #9ca3af;"></i>
+                <input type="hidden" id="staff_id" value="">
+
+                <!-- Doctor Dropdown - Dynamic -->
+                <div id="doctor-dropdown" class="autocomplete-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 1000; background: white; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 300px; overflow-y: auto;">
+                    <div class="text-center py-4 text-gray-500">Loading doctors...</div>
+                </div>
+            </div>
+            <div id="selected-doctor-display" style="display: none; margin-top: 10px; padding: 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div id="selected-doctor-name" style="font-weight: 600; color: #166534;"></div>
+                        <div id="selected-doctor-specialization" style="font-size: 13px; color: #15803d;"></div>
+                    </div>
+                    <button onclick="clearDoctor()" style="color: #dc2626; background: none; border: none; cursor: pointer; padding: 4px 8px;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Calendar -->
+        <div class="form-group" style="margin-top: 24px;">
+            <label class="form-label">Select Date</label>
+            <div class="calendar-container">
+                <div class="calendar-header">
+                    <button onclick="changeMonth(-1)" class="calendar-nav-btn">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <h3 id="calendar-month"></h3>
+                    <button onclick="changeMonth(1)" class="calendar-nav-btn">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+                <div class="calendar-weekdays">
+                    <div>Sun</div>
+                    <div>Mon</div>
+                    <div>Tue</div>
+                    <div>Wed</div>
+                    <div>Thu</div>
+                    <div>Fri</div>
+                    <div>Sat</div>
+                </div>
+                <div id="calendar-grid" class="calendar-grid"></div>
+            </div>
+            <input type="hidden" id="selected_date" value="">
+        </div>
+
+        <div style="margin-top: 24px; display: flex; justify-content: space-between;">
+            <button onclick="goToStep(1)" class="btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back
+            </button>
+            <button onclick="goToStep(3)" id="step2-next" class="btn-primary" disabled>
+                Next: Select Time <i class="fas fa-arrow-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Step 3: Time Slot Selection -->
+    <div id="step3" class="bg-white rounded-lg shadow p-6 mb-6 hidden">
+        <h2 class="text-lg font-semibold mb-4">Step 3: Select Time Slot</h2>
+
+        <!-- Prominent Service/Package Banner for Step 3 -->
+        <div id="step3-service-banner" style="display: none; margin-bottom: 20px;">
+            <div id="step3-service-banner-content" style="background: linear-gradient(135deg, #7c3aed 0%, #9333ea 100%); border-radius: 12px; padding: 16px 20px; color: white; box-shadow: 0 4px 6px -1px rgba(124, 58, 237, 0.3);">
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <div style="width: 50px; height: 50px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                            <i class="fas fa-concierge-bell text-2xl" id="step3-banner-icon"></i>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; opacity: 0.85; text-transform: uppercase; letter-spacing: 1px;">Booking For</div>
+                            <div style="font-size: 18px; font-weight: 700;" id="step3-banner-name">-</div>
+                        </div>
+                    </div>
+                    <div id="step3-duration-badge" style="background: rgba(255,255,255,0.2); border-radius: 8px; padding: 10px 16px; text-align: center;">
+                        <div style="font-size: 10px; opacity: 0.85; text-transform: uppercase;">Duration</div>
+                        <div style="font-size: 20px; font-weight: 700;" id="step3-banner-duration">30 min</div>
+                    </div>
+                </div>
+                <div id="step3-duration-note" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.2); font-size: 13px; opacity: 0.9; display: none;">
+                    <i class="fas fa-info-circle mr-2"></i>
+                    <span id="step3-duration-note-text">This service requires a longer time slot. Available slots shown are for the full service duration.</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Doctor & Date Info Bar -->
+        <div id="step3-info-banner" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                <!-- Doctor Info -->
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 36px; height: 36px; background: #0891b2; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-user-md text-white text-sm"></i>
+                    </div>
+                    <div>
+                        <div style="font-size: 10px; color: #6b7280; text-transform: uppercase;">Doctor</div>
+                        <div style="font-size: 14px; font-weight: 600; color: #164e63;" id="step3-doctor-name">-</div>
+                    </div>
+                </div>
+                <!-- Date Info -->
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 36px; height: 36px; background: #2563eb; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-calendar-alt text-white text-sm"></i>
+                    </div>
+                    <div>
+                        <div style="font-size: 10px; color: #6b7280; text-transform: uppercase;">Date</div>
+                        <div style="font-size: 14px; font-weight: 600; color: #1e40af;" id="step3-date-display">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="slots-container">
+            <div class="text-center text-gray-500 py-8">
+                <i class="fas fa-clock text-4xl mb-2"></i>
+                <p>Select a doctor and date to see available slots</p>
+            </div>
+        </div>
+        <input type="hidden" id="selected_slot_id" value="">
+
+        <!-- Resource Allocation Section (shown after slot selection) -->
+        <div id="resource-allocation-section" style="display: none; margin-top: 24px; border-top: 1px solid #e5e7eb; padding-top: 20px;">
+            <h3 style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 16px;">
+                <i class="fas fa-cogs" style="color: #6366f1; margin-right: 8px;"></i>
+                Resource Allocation
+            </h3>
+
+            <!-- Service Requirements Info -->
+            <div id="service-requirements-info" style="display: none; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                <div style="font-size: 13px; color: #92400e;">
+                    <i class="fas fa-info-circle" style="margin-right: 6px;"></i>
+                    <span id="requirements-text">This service requires specific resources</span>
+                </div>
+            </div>
+
+            <!-- Room Selection -->
+            <div class="form-group" style="margin-bottom: 16px;">
+                <label style="font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 8px; display: block;">
+                    <i class="fas fa-door-open" style="color: #8b5cf6; margin-right: 6px;"></i>
+                    Assign Room
+                </label>
+                <div style="position: relative;">
+                    <select id="room_id" class="form-select" style="width: 100%;" onchange="onRoomSelected(this.value)">
+                        <option value="">-- Select Room (Optional) --</option>
+                    </select>
+                    <div id="room-loading" style="display: none; position: absolute; right: 30px; top: 50%; transform: translateY(-50%);">
+                        <i class="fas fa-spinner fa-spin" style="color: #9ca3af;"></i>
+                    </div>
+                </div>
+                <div id="room-status" style="display: none; margin-top: 6px; font-size: 12px;"></div>
+            </div>
+
+            <!-- Staff Resource Selection (Multi-select with checkboxes) -->
+            <div id="staff-resources-container">
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label style="font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 8px; display: block;">
+                        <i class="fas fa-user-nurse" style="color: #ec4899; margin-right: 6px;"></i>
+                        Assign Staff Resources
+                    </label>
+
+                    <!-- Multi-select dropdown with checkboxes -->
+                    <div id="staff-multiselect-container" style="position: relative;">
+                        <div id="staff-multiselect-trigger"
+                             onclick="toggleStaffDropdown()"
+                             style="border: 1px solid #d1d5db; border-radius: 8px; padding: 10px 12px; cursor: pointer; background: white; display: flex; justify-content: space-between; align-items: center; min-height: 42px;">
+                            <div id="staff-selected-display" style="flex: 1; color: #6b7280; font-size: 14px;">
+                                -- Select Staff Members (Optional) --
+                            </div>
+                            <i class="fas fa-chevron-down" id="staff-dropdown-arrow" style="color: #9ca3af; transition: transform 0.2s;"></i>
+                        </div>
+
+                        <!-- Dropdown panel with checkboxes -->
+                        <div id="staff-dropdown-panel"
+                             style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #d1d5db; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-top: 4px; z-index: 100; max-height: 300px; overflow-y: auto;">
+
+                            <!-- Search box -->
+                            <div style="padding: 8px; border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; background: white;">
+                                <input type="text" id="staff-search-input" placeholder="Search staff..."
+                                       onclick="event.stopPropagation()"
+                                       oninput="filterStaffOptions(this.value)"
+                                       style="width: 100%; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 13px;">
+                            </div>
+
+                            <!-- Staff options will be populated here -->
+                            <div id="staff-options-list" style="padding: 8px;">
+                                <p style="color: #9ca3af; font-size: 12px; text-align: center; padding: 12px;">Loading...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hidden inputs for form submission -->
+                    <div id="staff-hidden-inputs"></div>
+
+                    <div id="therapist-loading" style="display: none; padding: 8px; text-align: center;">
+                        <i class="fas fa-spinner fa-spin" style="color: #9ca3af;"></i> Loading available staff...
+                    </div>
+
+                    <!-- Selected staff tags -->
+                    <div id="staff-selected-tags" style="display: none; margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px;"></div>
+                </div>
+                <div id="therapist-status" style="display: none; margin-top: 6px; font-size: 12px;"></div>
+            </div>
+
+            <!-- Allocation Summary -->
+            <div id="allocation-summary" style="display: none; background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 12px; margin-top: 12px;">
+                <div style="font-size: 13px; font-weight: 500; color: #166534; margin-bottom: 8px;">
+                    <i class="fas fa-check-circle" style="margin-right: 6px;"></i>
+                    Resources Allocated
+                </div>
+                <div id="allocation-details" style="font-size: 12px; color: #15803d;"></div>
+            </div>
+        </div>
+
+        <div class="mt-4 flex justify-between">
+            <button onclick="goToStep(2)" class="text-gray-600 hover:text-gray-800">
+                <i class="fas fa-arrow-left mr-2"></i> Back
+            </button>
+            <button onclick="goToStep(4)" id="step3-next" class="bg-blue-600 text-white px-6 py-2 rounded-lg disabled:bg-gray-400" disabled>
+                Next: Confirm <i class="fas fa-arrow-right ml-2"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Step 4: Confirmation -->
+    <div id="step4" class="bg-white rounded-lg shadow p-6 mb-6 hidden">
+        <h2 class="text-lg font-semibold mb-4">Step 4: Confirm Appointment</h2>
+
+        <!-- Summary -->
+        <div class="bg-gray-50 rounded-lg p-4 mb-6">
+            <h3 class="font-semibold mb-3">Appointment Summary</h3>
+            <div class="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                    <label class="text-gray-500">Patient</label>
+                    <p id="summary-patient" class="font-medium"></p>
+                </div>
+                <div>
+                    <label class="text-gray-500">Doctor</label>
+                    <p id="summary-doctor" class="font-medium"></p>
+                </div>
+                <div>
+                    <label class="text-gray-500">Date</label>
+                    <p id="summary-date" class="font-medium"></p>
+                </div>
+                <div>
+                    <label class="text-gray-500">Time</label>
+                    <p id="summary-time" class="font-medium"></p>
+                </div>
+                <div>
+                    <label class="text-gray-500">Appointment Type</label>
+                    <p id="summary-type" class="font-medium"></p>
+                </div>
+                <div id="summary-service-container" style="display: none;">
+                    <label class="text-gray-500">Service</label>
+                    <p id="summary-service" class="font-medium"></p>
+                </div>
+            </div>
+
+            <!-- Resource Allocation Summary -->
+            <div id="summary-resources" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+                <h4 class="font-semibold mb-2 text-sm">Resource Allocation</h4>
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div id="summary-room-container" style="display: none;">
+                        <label class="text-gray-500"><i class="fas fa-door-open" style="margin-right: 4px;"></i>Room</label>
+                        <p id="summary-room" class="font-medium"></p>
+                    </div>
+                    <div id="summary-therapist-container" style="display: none;">
+                        <label class="text-gray-500"><i class="fas fa-user-nurse" style="margin-right: 4px;"></i>Therapist</label>
+                        <p id="summary-therapist" class="font-medium"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Notes -->
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Chief Complaint / Notes (Optional)</label>
+            <textarea id="chief_complaint" class="w-full border rounded-lg px-4 py-2" rows="3"
+                placeholder="Brief description of the reason for visit..."></textarea>
+        </div>
+
+        <div class="flex justify-between">
+            <button onclick="goToStep(3)" class="text-gray-600 hover:text-gray-800">
+                <i class="fas fa-arrow-left mr-2"></i> Back
+            </button>
+            <button onclick="submitBooking()" id="submit-booking" class="bg-green-600 text-white px-8 py-2 rounded-lg hover:bg-green-700">
+                <i class="fas fa-check mr-2"></i> Confirm Booking
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    console.log('📝 Book.html script block started');
+
+    // Helper function to format date as YYYY-MM-DD in local timezone (avoids UTC conversion issues)
+    function formatLocalDate(date) {
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    }
+
+    let currentStep = 1;
+    let currentMonth = new Date();
+    let selectedDate = null;
+    let selectedSlot = null;
+    let patientData = {
+        id: '{{ patient.patient_id if patient else "" }}',
+        name: '{{ patient.name if patient else "" }}'
+    };
+
+    // Initialize - handle case where DOMContentLoaded may have already fired
+    async function initializePage() {
+        console.log('📄 Book appointment page initializing...');
+
+        // Initialize booking type state (default is consultation)
+        window.selectedBookingType = 'consultation';
+        window.doctorRequiredForBooking = true;
+
+        renderCalendar();
+        {% if patient %}
+        updateStepIndicators(1);
+        {% endif %}
+
+        // Patient Search - AUTOCOMPLETE (Same pattern as invoice)
+        // Always try to initialize - function will check if elements exist
+        initializePatientSearch();
+
+        // Doctor Search - Autocomplete (async - loads from API)
+        try {
+            console.log('🔧 Starting doctor search initialization...');
+            await initializeDoctorSearch();
+            console.log('✅ Doctor search initialization complete');
+        } catch (error) {
+            console.error('❌ Error initializing doctor search:', error);
+        }
+    }
+
+    // Check if DOM is already ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => initializePage());
+    } else {
+        // DOM already loaded, run immediately
+        initializePage();
+    }
+
+    // =================================================================
+    // PATIENT AUTOCOMPLETE SEARCH IMPLEMENTATION (from invoice pattern)
+    // =================================================================
+    function initializePatientSearch() {
+        console.log('🚀 Initializing patient search...');
+
+        const searchInput = document.getElementById('patient-search');
+        const hiddenInput = document.getElementById('patient_id');
+        const dropdown = document.getElementById('patient-dropdown');
+        const loadingIcon = document.getElementById('patient-loading');
+
+        console.log('📌 Elements found:', {
+            searchInput: !!searchInput,
+            hiddenInput: !!hiddenInput,
+            dropdown: !!dropdown,
+            loadingIcon: !!loadingIcon
+        });
+
+        if (!searchInput || !dropdown) {
+            console.error('❌ Patient search elements not found!');
+            return;
+        }
+
+        let searchTimeout = null;
+        let searchCache = new Map();
+
+        // Handle input with debounce
+        searchInput.addEventListener('input', function(e) {
+            const query = e.target.value.trim();
+
+            clearTimeout(searchTimeout);
+
+            if (query.length === 0) {
+                // Show initial list when cleared
+                searchTimeout = setTimeout(() => {
+                    performPatientSearch('', 20);  // Initial load: 20 recent patients
+                }, 200);
+            } else {
+                // Search with user query
+                searchTimeout = setTimeout(() => {
+                    performPatientSearch(query, 10);  // Search: 10 results
+                }, 300);
+            }
+        });
+
+        // Show initial list on focus
+        searchInput.addEventListener('focus', function() {
+            if (searchInput.value.trim().length === 0) {
+                performPatientSearch('', 20);  // Show 20 recent patients
+            }
+        });
+
+        // Hide dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+                hideDropdown();
+            }
+        });
+
+        // Perform search via API
+        async function performPatientSearch(query, limit = 10) {
+            const cacheKey = `${query.toLowerCase()}_${limit}`;
+
+            // Check cache first
+            if (searchCache.has(cacheKey)) {
+                displayResults(searchCache.get(cacheKey));
+                return;
+            }
+
+            showLoading();
+            console.log(`🔍 Searching patients with query: "${query}"`);
+
+            try {
+                // API returns direct array of patients: [{id, name, mrn, contact}, ...]
+                const response = await fetch(`/invoice/web_api/patient/search?q=${encodeURIComponent(query)}`);
+
+                console.log(`📡 Response status: ${response.status}`);
+
+                if (!response.ok) {
+                    console.error(`API error: ${response.status} ${response.statusText}`);
+                    showError();
+                    return;
+                }
+
+                const data = await response.json();
+                console.log(`📋 Received ${Array.isArray(data) ? data.length : 0} patients`, data);
+
+                if (Array.isArray(data) && data.length > 0) {
+                    searchCache.set(cacheKey, data);
+                    displayResults(data);
+                } else {
+                    showNoResults();
+                }
+            } catch (error) {
+                console.error('Patient search error:', error);
+                showError();
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Display search results
+        function displayResults(results) {
+            if (!results || results.length === 0) {
+                showNoResults();
+                return;
+            }
+
+            dropdown.innerHTML = '';
+
+            results.forEach(patient => {
+                const item = document.createElement('div');
+                item.className = 'px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0';
+
+                item.innerHTML = `
+                    <div class="font-medium text-gray-900">${patient.name}</div>
+                    ${patient.mrn ? `<div class="text-sm text-gray-500">MRN: ${patient.mrn}</div>` : ''}
+                    ${patient.contact ? `<div class="text-sm text-gray-500">${patient.contact}</div>` : ''}
+                `;
+
+                item.addEventListener('click', () => {
+                    selectPatientFromDropdown(patient);
+                });
+
+                dropdown.appendChild(item);
+            });
+
+            showDropdown();
+        }
+
+        // Select a patient from dropdown
+        function selectPatientFromDropdown(patient) {
+            // API returns: {id, name, mrn, contact}
+            patientData = { id: patient.id, name: patient.name };
+            hiddenInput.value = patient.id;
+
+            // Display selected patient
+            document.getElementById('selected-patient-name').textContent = patient.name;
+            document.getElementById('selected-patient-info').textContent =
+                `${patient.mrn ? 'MRN: ' + patient.mrn : ''} ${patient.contact ? '| ' + patient.contact : ''}`;
+            document.getElementById('selected-patient-display').classList.remove('hidden');
+
+            // Clear and hide search
+            searchInput.value = '';
+            hideDropdown();
+
+            // Enable next button
+            document.getElementById('step1-next').disabled = false;
+
+            // Load patient context card
+            loadPatientContext(patient.id);
+
+            console.log(`Patient selected: ${patient.name} (${patient.id})`);
+        }
+
+        // Show/hide functions
+        function showLoading() {
+            if (loadingIcon) loadingIcon.classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            if (loadingIcon) loadingIcon.classList.add('hidden');
+        }
+
+        function showDropdown() {
+            dropdown.classList.remove('hidden');
+        }
+
+        function hideDropdown() {
+            dropdown.classList.add('hidden');
+        }
+
+        function showNoResults() {
+            dropdown.innerHTML = '<div class="px-3 py-2 text-center text-gray-500">No patients found</div>';
+            showDropdown();
+        }
+
+        function showError() {
+            dropdown.innerHTML = '<div class="px-3 py-2 text-center text-red-500">Search failed. Please try again.</div>';
+            showDropdown();
+        }
+
+        console.log("✅ Patient autocomplete search initialized");
+    }
+
+    // Legacy selectPatient function (kept for backward compatibility)
+    function selectPatient(id, name, mrn, phone) {
+        patientData = { id, name };
+        document.getElementById('patient_id').value = id;
+        document.getElementById('selected-patient-name').textContent = name;
+        document.getElementById('selected-patient-info').textContent = `${mrn ? 'MRN: ' + mrn : ''} ${phone ? '| ' + phone : ''}`;
+        document.getElementById('selected-patient-display').classList.remove('hidden');
+        document.getElementById('step1-next').disabled = false;
+
+        // Load patient context
+        loadPatientContext(id);
+    }
+
+    function clearPatient() {
+        patientData = { id: '', name: '' };
+        document.getElementById('patient_id').value = '';
+        document.getElementById('selected-patient-display').classList.add('hidden');
+        document.getElementById('step1-next').disabled = true;
+
+        // Hide patient context card
+        const contextCard = document.getElementById('patient-context-card');
+        if (contextCard) contextCard.classList.add('hidden');
+
+        {% if patient %}
+        window.location.href = '{{ url_for("appointment_views.book_appointment") }}';
+        {% endif %}
+    }
+
+    // =================================================================
+    // PATIENT CONTEXT CARD FUNCTIONS
+    // =================================================================
+    let patientContext = null;
+    let bookableServices = [];
+
+    async function loadPatientContext(patientId) {
+        console.log('📋 Loading patient context for:', patientId);
+
+        try {
+            const response = await fetch(`/api/appointment/web/patient/${patientId}/booking-context`);
+            const data = await response.json();
+
+            if (data.success) {
+                patientContext = data;
+                renderPatientContext(data);
+
+                // Show context card
+                const contextCard = document.getElementById('patient-context-card');
+                if (contextCard) contextCard.classList.remove('hidden');
+
+                // Load bookable services for direct service selection
+                loadBookableServices();
+            } else {
+                console.error('Failed to load patient context:', data.error);
+            }
+        } catch (error) {
+            console.error('Error loading patient context:', error);
+        }
+    }
+
+    function renderPatientContext(data) {
+        const patient = data.patient;
+        const financial = data.financial;
+
+        // Update header
+        const initials = (patient.first_name?.[0] || '') + (patient.last_name?.[0] || '');
+        document.getElementById('patient-initials').textContent = initials.toUpperCase() || '--';
+        document.getElementById('context-patient-name').textContent = patient.full_name;
+        document.getElementById('context-patient-details').textContent =
+            `${patient.gender || ''} ${patient.age ? ', ' + patient.age + ' yrs' : ''} | ${patient.phone || ''} | MRN: ${patient.mrn || ''}`;
+
+        // Update financial info
+        document.getElementById('outstanding-amount').textContent = `₹${financial.outstanding_amount.toLocaleString()}`;
+        document.getElementById('wallet-balance').textContent = `₹${financial.wallet_balance.toLocaleString()}`;
+
+        // Color code outstanding amount
+        const outstandingEl = document.getElementById('outstanding-amount');
+        if (financial.outstanding_amount > 0) {
+            outstandingEl.style.color = '#dc2626';
+        } else {
+            outstandingEl.style.color = '#059669';
+        }
+
+        // Update tab badges
+        document.getElementById('packages-count').textContent = data.active_packages.length;
+        document.getElementById('followups-count').textContent = data.followups_due.length;
+
+        // Render alerts
+        renderAlerts(data.alerts);
+
+        // Render packages list
+        renderPackagesList(data.active_packages);
+
+        // Render follow-ups list
+        renderFollowupsList(data.followups_due);
+
+        // Render history list
+        renderHistoryList(data.visit_history);
+
+        // Update package selection in Book New tab
+        renderPatientPackagesForBooking(data.active_packages);
+    }
+
+    function renderAlerts(alerts) {
+        const container = document.getElementById('patient-alerts');
+        if (!alerts || alerts.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'flex';
+        container.innerHTML = alerts.map(alert => {
+            const bgColor = alert.severity === 'error' ? '#fef2f2' :
+                           alert.severity === 'warning' ? '#fffbeb' : '#eff6ff';
+            const textColor = alert.severity === 'error' ? '#dc2626' :
+                             alert.severity === 'warning' ? '#d97706' : '#2563eb';
+            const icon = alert.type === 'payment_due' ? 'fa-rupee-sign' :
+                        alert.type === 'followup_overdue' ? 'fa-clock' : 'fa-info-circle';
+
+            return `<div style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: ${bgColor}; border-radius: 6px; font-size: 12px; color: ${textColor};">
+                <i class="fas ${icon}"></i>
+                <span>${alert.message}</span>
+            </div>`;
+        }).join('');
+    }
+
+    function renderPackagesList(packages) {
+        const container = document.getElementById('packages-list');
+
+        if (!packages || packages.length === 0) {
+            container.innerHTML = '<div style="text-align: center; padding: 20px; color: #6b7280;">No active packages</div>';
+            return;
+        }
+
+        container.innerHTML = packages.map(pkg => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px;">
+                <div>
+                    <div style="font-weight: 600; color: #1f2937;">${pkg.package_name}</div>
+                    <div style="font-size: 12px; color: #6b7280;">
+                        ${pkg.completed_sessions}/${pkg.total_sessions} sessions completed
+                        ${pkg.last_session_date ? ' | Last: ' + pkg.last_session_date : ''}
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="text-align: right;">
+                        <div style="font-size: 18px; font-weight: 600; color: #059669;">${pkg.remaining_sessions}</div>
+                        <div style="font-size: 11px; color: #6b7280;">remaining</div>
+                    </div>
+                    <button onclick="bookPackageSession('${pkg.plan_id}', '${pkg.package_name}')"
+                            style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                        <i class="fas fa-calendar-plus"></i> Book
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function renderFollowupsList(followups) {
+        const container = document.getElementById('followups-list');
+
+        if (!followups || followups.length === 0) {
+            container.innerHTML = '<div style="text-align: center; padding: 20px; color: #6b7280;">No follow-ups due</div>';
+            return;
+        }
+
+        container.innerHTML = followups.map(f => {
+            const statusColor = f.is_overdue ? '#dc2626' : '#d97706';
+            const statusText = f.is_overdue ? `Overdue by ${f.days_overdue} days` : `Due: ${f.followup_due_date}`;
+
+            return `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px; ${f.is_overdue ? 'border-left: 3px solid #dc2626;' : ''}">
+                    <div>
+                        <div style="font-weight: 500; color: #1f2937;">${f.chief_complaint || 'Consultation'}</div>
+                        <div style="font-size: 12px; color: #6b7280;">
+                            ${f.doctor_name || 'Doctor'} | ${f.appointment_date}
+                        </div>
+                        <div style="font-size: 11px; color: ${statusColor}; margin-top: 4px;">
+                            <i class="fas fa-clock"></i> ${statusText}
+                        </div>
+                    </div>
+                    <button onclick="bookFollowup('${f.appointment_id}', '${f.doctor_id}')"
+                            style="padding: 8px 16px; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                        <i class="fas fa-redo"></i> Book
+                    </button>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function renderHistoryList(history) {
+        const container = document.getElementById('history-list');
+
+        if (!history || history.length === 0) {
+            container.innerHTML = '<div style="text-align: center; padding: 20px; color: #6b7280;">No visit history</div>';
+            return;
+        }
+
+        container.innerHTML = `
+            <table style="width: 100%; font-size: 13px;">
+                <thead>
+                    <tr style="text-align: left; color: #6b7280; border-bottom: 1px solid #e5e7eb;">
+                        <th style="padding: 8px;">Date</th>
+                        <th style="padding: 8px;">Type</th>
+                        <th style="padding: 8px;">Service</th>
+                        <th style="padding: 8px;">Doctor</th>
+                        <th style="padding: 8px;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${history.map(v => {
+                        const statusColor = v.status === 'completed' ? '#059669' :
+                                           v.status === 'cancelled' ? '#dc2626' : '#6b7280';
+                        return `
+                            <tr style="border-bottom: 1px solid #f3f4f6;">
+                                <td style="padding: 8px;">${v.date}</td>
+                                <td style="padding: 8px; text-transform: capitalize;">${v.purpose}</td>
+                                <td style="padding: 8px;">${v.service_name}</td>
+                                <td style="padding: 8px;">${v.doctor_name || '-'}</td>
+                                <td style="padding: 8px; color: ${statusColor}; text-transform: capitalize;">${v.status}</td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    function renderPatientPackagesForBooking(packages) {
+        const container = document.getElementById('patient-packages-list');
+
+        if (!packages || packages.length === 0) {
+            container.innerHTML = '<div style="padding: 20px; text-align: center; color: #6b7280;">No active packages for this patient</div>';
+            return;
+        }
+
+        container.innerHTML = packages.map(pkg => `
+            <label style="display: flex; align-items: center; gap: 12px; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer; margin-bottom: 8px;" class="package-option">
+                <input type="radio" name="selected_package" value="${pkg.plan_id}" onchange="onPackageSelected('${pkg.plan_id}')">
+                <div style="flex: 1;">
+                    <div style="font-weight: 600;">${pkg.package_name}</div>
+                    <div style="font-size: 12px; color: #6b7280;">${pkg.remaining_sessions} of ${pkg.total_sessions} sessions remaining</div>
+                </div>
+            </label>
+        `).join('');
+    }
+
+    function switchContextTab(tabName) {
+        // Update tab buttons
+        document.querySelectorAll('.context-tab').forEach(tab => {
+            tab.style.borderBottomColor = 'transparent';
+            tab.style.color = '#6b7280';
+        });
+        const activeTab = document.getElementById(`tab-${tabName}`);
+        if (activeTab) {
+            activeTab.style.borderBottomColor = '#3b82f6';
+            activeTab.style.color = '#3b82f6';
+        }
+
+        // Update content
+        document.querySelectorAll('.context-content').forEach(content => {
+            content.style.display = 'none';
+        });
+        const activeContent = document.getElementById(`content-${tabName}`);
+        if (activeContent) {
+            activeContent.style.display = 'block';
+        }
+    }
+
+    function onBookingTypeChange(type) {
+        console.log('Booking type changed to:', type);
+
+        // Update visual selection
+        document.querySelectorAll('.booking-type-option').forEach(opt => {
+            opt.style.borderColor = '#e5e7eb';
+            opt.style.background = 'white';
+        });
+        const selectedOpt = document.getElementById(`type-${type === 'package_session' ? 'package' : type}`);
+        if (selectedOpt) {
+            selectedOpt.style.borderColor = '#3b82f6';
+            selectedOpt.style.background = '#eff6ff';
+        }
+
+        // Show/hide relevant sections
+        document.getElementById('service-selection').style.display = type === 'service' ? 'block' : 'none';
+        document.getElementById('package-selection').style.display = type === 'package_session' ? 'block' : 'none';
+
+        // Store selection
+        window.selectedBookingType = type;
+
+        // Update Step 1 next button text based on booking type
+        updateStep1ButtonText(type);
+
+        // Update Step 2 UI based on booking type
+        updateStep2ForBookingType(type);
+    }
+
+    function updateStep1ButtonText(type) {
+        const btn = document.getElementById('step1-next');
+        const step2Label = document.querySelector('#step2-indicator .step-label');
+
+        // Doctor is always required for all booking types
+        btn.innerHTML = 'Next: Select Doctor <i class="fas fa-arrow-right"></i>';
+        if (step2Label) step2Label.textContent = 'Doctor & Date';
+    }
+
+    function updateStep2ForBookingType(type) {
+        const step2Header = document.querySelector('#step2 .booking-card-header');
+
+        // Doctor is always required for all booking types
+        // The difference is in slot blocking behavior (handled server-side)
+        window.doctorRequiredForBooking = true;
+
+        if (type === 'consultation') {
+            if (step2Header) {
+                step2Header.querySelector('h2').textContent = 'Select Doctor & Date';
+                step2Header.querySelector('p').textContent = 'Choose your preferred doctor and appointment date';
+            }
+        } else if (type === 'service') {
+            if (step2Header) {
+                step2Header.querySelector('h2').textContent = 'Select Consulting Doctor & Date';
+                step2Header.querySelector('p').textContent = 'Choose the consulting doctor for this service appointment';
+            }
+        } else if (type === 'package_session') {
+            if (step2Header) {
+                step2Header.querySelector('h2').textContent = 'Select Consulting Doctor & Date';
+                step2Header.querySelector('p').textContent = 'Choose the consulting doctor for this package session';
+            }
+        }
+
+        // Update step 2 validation
+        checkStep2Ready();
+    }
+
+    async function loadBookableServices() {
+        try {
+            const response = await fetch('/api/appointment/web/services/bookable');
+            const data = await response.json();
+
+            if (data.success) {
+                bookableServices = data.services;
+                console.log(`📋 Loaded ${bookableServices.length} bookable services`);
+
+                // Initialize service autocomplete after loading
+                initializeServiceAutocomplete();
+            }
+        } catch (error) {
+            console.error('Error loading bookable services:', error);
+        }
+    }
+
+    function initializeServiceAutocomplete() {
+        const searchInput = document.getElementById('service-search');
+        const dropdown = document.getElementById('service-dropdown');
+
+        if (!searchInput || !dropdown) {
+            console.warn('Service search elements not found');
+            return;
+        }
+
+        // Initially hide the dropdown
+        dropdown.style.display = 'none';
+
+        // Show dropdown on focus
+        searchInput.addEventListener('focus', function() {
+            console.log('🔧 Service input focused, rendering dropdown...');
+            renderServiceDropdown(searchInput.value.trim());
+            dropdown.style.display = 'block';
+        });
+
+        // Filter on input
+        searchInput.addEventListener('input', function(e) {
+            renderServiceDropdown(e.target.value.toLowerCase().trim());
+            dropdown.style.display = 'block';
+        });
+
+        // Hide dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+
+        console.log('✅ Service autocomplete initialized');
+    }
+
+    function renderServiceDropdown(searchQuery = '') {
+        const dropdown = document.getElementById('service-dropdown');
+
+        // Filter services by search query
+        let filteredServices = [...bookableServices];
+
+        if (searchQuery) {
+            filteredServices = filteredServices.filter(s =>
+                s.name.toLowerCase().includes(searchQuery) ||
+                (s.category && s.category.toLowerCase().includes(searchQuery))
+            );
+        }
+
+        if (filteredServices.length === 0) {
+            dropdown.innerHTML = '<div style="padding: 16px; text-align: center; color: #6b7280;">No services found</div>';
+            return;
+        }
+
+        // Group by category
+        const grouped = {};
+        filteredServices.forEach(s => {
+            const cat = s.category || 'Other';
+            if (!grouped[cat]) grouped[cat] = [];
+            grouped[cat].push(s);
+        });
+
+        let html = '';
+        Object.keys(grouped).sort().forEach(category => {
+            html += `<div style="padding: 8px 12px; background: #f9fafb; font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase;">${category}</div>`;
+
+            grouped[category].forEach(service => {
+                html += `
+                    <div onclick="selectService('${service.service_id}')"
+                        style="padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f3f4f6; display: flex; justify-content: space-between; align-items: center;"
+                        onmouseover="this.style.backgroundColor='#f9fafb'" onmouseout="this.style.backgroundColor='white'">
+                        <div>
+                            <div style="font-weight: 500; color: #1f2937;">${service.name}</div>
+                            <div style="font-size: 12px; color: #6b7280;">${service.duration_minutes} minutes</div>
+                        </div>
+                        <div style="font-weight: 600; color: #059669;">₹${service.price.toLocaleString()}</div>
+                    </div>
+                `;
+            });
+        });
+
+        dropdown.innerHTML = html;
+    }
+
+    function selectService(serviceId) {
+        const service = bookableServices.find(s => s.service_id === serviceId);
+        if (service) {
+            document.getElementById('direct_service_id').value = serviceId;
+            document.getElementById('service-search').value = '';
+            document.getElementById('service-dropdown').style.display = 'none';
+
+            // Show selected service display
+            document.getElementById('selected-service-name').textContent = service.name;
+            document.getElementById('service-duration').textContent = `⏱️ ${service.duration_minutes} minutes`;
+            document.getElementById('service-price').textContent = `₹${service.price.toLocaleString()}`;
+            document.getElementById('selected-service-display').style.display = 'block';
+
+            window.selectedService = service;
+            console.log(`✅ Service selected: ${service.name}`);
+        }
+    }
+
+    function clearService() {
+        document.getElementById('direct_service_id').value = '';
+        document.getElementById('service-search').value = '';
+        document.getElementById('selected-service-display').style.display = 'none';
+        window.selectedService = null;
+    }
+
+    function onServiceSelected(serviceId) {
+        // Legacy function - redirect to selectService
+        selectService(serviceId);
+    }
+
+    function onPackageSelected(planId) {
+        window.selectedPackagePlanId = planId;
+        console.log('Package selected:', planId);
+    }
+
+    function bookPackageSession(planId, packageName) {
+        // Switch to Book New tab and select Package Session
+        switchContextTab('book');
+        document.querySelector('input[name="booking_type"][value="package_session"]').checked = true;
+        onBookingTypeChange('package_session');
+
+        // Select this package
+        const packageRadio = document.querySelector(`input[name="selected_package"][value="${planId}"]`);
+        if (packageRadio) {
+            packageRadio.checked = true;
+            onPackageSelected(planId);
+        }
+    }
+
+    function bookFollowup(appointmentId, doctorId) {
+        // Switch to Book New tab
+        switchContextTab('book');
+        document.querySelector('input[name="booking_type"][value="consultation"]').checked = true;
+        onBookingTypeChange('consultation');
+
+        // Store follow-up reference
+        window.followUpOfAppointmentId = appointmentId;
+        window.preferredDoctorId = doctorId;
+
+        // Show message
+        alert('Follow-up booking selected. Proceed to select date and time.');
+    }
+
+    // =================================================================
+    // DOCTOR & SPECIALIZATION AUTOCOMPLETE WITH AVAILABILITY
+    // =================================================================
+    let selectedDoctorId = '';
+    let selectedDoctorName = '';
+    let selectedDoctorSpecialization = '';
+    let currentSpecializationFilter = '';
+    let allDoctors = [];
+    let allSpecializations = [];
+
+    async function initializeDoctorSearch() {
+        console.log('🔧 Initializing doctor search...');
+
+        // Check if elements exist
+        const doctorSearch = document.getElementById('doctor-search');
+        const doctorDropdown = document.getElementById('doctor-dropdown');
+        const specSearch = document.getElementById('specialization-search');
+        const specDropdown = document.getElementById('specialization-dropdown');
+
+        console.log('📌 Doctor elements:', {
+            doctorSearch: !!doctorSearch,
+            doctorDropdown: !!doctorDropdown,
+            specSearch: !!specSearch,
+            specDropdown: !!specDropdown
+        });
+
+        if (!doctorSearch || !doctorDropdown) {
+            console.error('❌ Doctor search elements not found!');
+            return;
+        }
+
+        // Load doctors from API first
+        await loadDoctorsFromAPI();
+
+        // Initialize specialization autocomplete
+        initializeSpecializationAutocomplete();
+
+        // Initialize doctor autocomplete
+        initializeDoctorAutocomplete();
+
+        console.log("✅ Doctor & Specialization autocomplete initialized");
+    }
+
+    async function loadDoctorsFromAPI() {
+        const loadingEl = document.getElementById('doctor-loading');
+        if (loadingEl) loadingEl.classList.remove('hidden');
+
+        console.log('🌐 Fetching doctors from API...');
+
+        try {
+            const response = await fetch('/api/appointment/web/doctors');
+            console.log('📡 Response status:', response.status);
+
+            if (!response.ok) {
+                console.error('API returned error status:', response.status);
+                return;
+            }
+
+            const data = await response.json();
+            console.log('📦 API response:', data);
+
+            if (data.success) {
+                allDoctors = data.doctors;
+                allSpecializations = data.specializations || [];
+                console.log(`📋 Loaded ${allDoctors.length} doctors, ${allSpecializations.length} specializations`);
+
+                // Immediately render the doctor dropdown
+                renderDoctorDropdown();
+            } else {
+                console.error('Failed to load doctors:', data.error);
+            }
+        } catch (error) {
+            console.error('Error loading doctors:', error);
+        } finally {
+            if (loadingEl) loadingEl.classList.add('hidden');
+        }
+    }
+
+    function initializeSpecializationAutocomplete() {
+        const searchInput = document.getElementById('specialization-search');
+        const dropdown = document.getElementById('specialization-dropdown');
+
+        if (!searchInput || !dropdown) {
+            console.warn('Specialization search elements not found');
+            return;
+        }
+
+        // Initially hide the dropdown
+        dropdown.style.display = 'none';
+
+        // Show dropdown on focus
+        searchInput.addEventListener('focus', function() {
+            console.log('📋 Specialization input focused, rendering dropdown...');
+            renderSpecializationDropdown(searchInput.value.trim());
+            dropdown.style.display = 'block';
+        });
+
+        // Filter on input
+        searchInput.addEventListener('input', function(e) {
+            renderSpecializationDropdown(e.target.value.toLowerCase().trim());
+            dropdown.style.display = 'block';
+        });
+
+        // Hide dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+
+        console.log('✅ Specialization autocomplete initialized');
+    }
+
+    function renderSpecializationDropdown(searchQuery = '') {
+        const dropdown = document.getElementById('specialization-dropdown');
+
+        // Add "All Specializations" option
+        let items = [{ value: '', label: 'All Specializations', count: allDoctors.length }];
+
+        // Add each specialization with doctor count
+        // allSpecializations now contains objects with {specialization_id, code, name, description}
+        allSpecializations.forEach(spec => {
+            const specName = typeof spec === 'string' ? spec : spec.name;
+            const count = allDoctors.filter(d => d.specialization === specName).length;
+            items.push({ value: specName, label: specName, count: count });
+        });
+
+        // Filter by search query
+        if (searchQuery) {
+            items = items.filter(item =>
+                item.label.toLowerCase().includes(searchQuery)
+            );
+        }
+
+        if (items.length === 0) {
+            dropdown.innerHTML = '<div style="padding: 12px; text-align: center; color: #6b7280;">No specializations found</div>';
+            return;
+        }
+
+        dropdown.innerHTML = items.map(item => `
+            <div class="spec-item" onclick="selectSpecialization('${item.value}', '${item.label}')"
+                style="padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f3f4f6; display: flex; justify-content: space-between; align-items: center;"
+                onmouseover="this.style.backgroundColor='#f9fafb'" onmouseout="this.style.backgroundColor='white'">
+                <span style="font-weight: ${item.value === '' ? '600' : '500'};">${item.label}</span>
+                <span style="font-size: 12px; color: #9ca3af; background: #f3f4f6; padding: 2px 8px; border-radius: 10px;">${item.count} doctors</span>
+            </div>
+        `).join('');
+    }
+
+    function selectSpecialization(value, label) {
+        currentSpecializationFilter = value;
+
+        document.getElementById('selected_specialization').value = value;
+        document.getElementById('specialization-search').value = '';
+        document.getElementById('specialization-dropdown').style.display = 'none';
+
+        if (value) {
+            document.getElementById('selected-specialization-text').textContent = label;
+            document.getElementById('selected-specialization-display').style.display = 'flex';
+        } else {
+            document.getElementById('selected-specialization-display').style.display = 'none';
+        }
+
+        // Refresh doctor dropdown to filter by specialization
+        renderDoctorDropdown();
+        console.log(`✅ Specialization selected: ${label}`);
+    }
+
+    function clearSpecialization() {
+        currentSpecializationFilter = '';
+        document.getElementById('selected_specialization').value = '';
+        document.getElementById('specialization-search').value = '';
+        document.getElementById('selected-specialization-display').style.display = 'none';
+
+        // Refresh doctor dropdown
+        renderDoctorDropdown();
+        console.log('🔄 Specialization cleared');
+    }
+
+    function initializeDoctorAutocomplete() {
+        const searchInput = document.getElementById('doctor-search');
+        const dropdown = document.getElementById('doctor-dropdown');
+
+        if (!searchInput || !dropdown) {
+            console.warn('Doctor search elements not found');
+            return;
+        }
+
+        // Initially hide the dropdown
+        dropdown.style.display = 'none';
+
+        // Show dropdown on focus
+        searchInput.addEventListener('focus', function() {
+            console.log('👨‍⚕️ Doctor input focused, rendering dropdown...');
+            renderDoctorDropdown(searchInput.value.trim());
+            dropdown.style.display = 'block';
+        });
+
+        // Filter on input
+        searchInput.addEventListener('input', function(e) {
+            renderDoctorDropdown(e.target.value.toLowerCase().trim());
+            dropdown.style.display = 'block';
+        });
+
+        // Hide dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+
+        // Initial render (but keep hidden)
+        renderDoctorDropdown();
+        console.log('✅ Doctor autocomplete initialized');
+    }
+
+    function renderDoctorDropdown(searchQuery = '') {
+        const dropdown = document.getElementById('doctor-dropdown');
+
+        // Filter doctors
+        let filteredDoctors = [...allDoctors];
+
+        // Apply specialization filter (exact match since staff.specialization now matches lookup table)
+        if (currentSpecializationFilter) {
+            filteredDoctors = filteredDoctors.filter(d =>
+                d.specialization && d.specialization.toLowerCase() === currentSpecializationFilter.toLowerCase()
+            );
+            console.log(`🔍 Filtering by "${currentSpecializationFilter}", found ${filteredDoctors.length} doctors`);
+        }
+
+        // Apply search query
+        if (searchQuery) {
+            filteredDoctors = filteredDoctors.filter(d =>
+                d.name.toLowerCase().includes(searchQuery) ||
+                (d.specialization && d.specialization.toLowerCase().includes(searchQuery))
+            );
+        }
+
+        if (filteredDoctors.length === 0) {
+            dropdown.innerHTML = '<div style="padding: 16px; text-align: center; color: #6b7280;">No doctors found</div>';
+            return;
+        }
+
+        // Sort: available today first, then available this week, then others
+        filteredDoctors.sort((a, b) => {
+            if (a.is_available_today && !b.is_available_today) return -1;
+            if (!a.is_available_today && b.is_available_today) return 1;
+            if (a.is_available_week && !b.is_available_week) return -1;
+            if (!a.is_available_week && b.is_available_week) return 1;
+            return a.name.localeCompare(b.name);
+        });
+
+        dropdown.innerHTML = filteredDoctors.map(doc => {
+            // Availability indicator
+            let availabilityDot, availabilityText, bgColor;
+            if (doc.is_available_today) {
+                availabilityDot = '#22c55e';
+                availabilityText = `${doc.available_slots_today} slots today`;
+                bgColor = '#f0fdf4';
+            } else if (doc.is_available_week) {
+                availabilityDot = '#f59e0b';
+                availabilityText = `${doc.available_slots_week} slots this week`;
+                bgColor = '#fffbeb';
+            } else {
+                availabilityDot = '#d1d5db';
+                availabilityText = 'No slots';
+                bgColor = '#f9fafb';
+            }
+
+            return `
+                <div onclick="selectDoctor('${doc.staff_id}', '${doc.name}', '${doc.specialization || ''}')"
+                    style="padding: 12px 14px; cursor: pointer; border-bottom: 1px solid #f3f4f6; background: ${bgColor};"
+                    onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <div style="font-weight: 600; color: #1f2937; display: flex; align-items: center; gap: 8px;">
+                                <span style="color: ${availabilityDot}; font-size: 12px;">●</span>
+                                ${doc.name}
+                            </div>
+                            <div style="font-size: 13px; color: #6366f1; margin-top: 2px;">${doc.specialization || 'General'}</div>
+                        </div>
+                        <div style="text-align: right; font-size: 11px; color: #6b7280; white-space: nowrap;">
+                            ${availabilityText}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function selectDoctor(id, name, specialization) {
+        selectedDoctorId = id;
+        selectedDoctorName = name;
+        selectedDoctorSpecialization = specialization || '';
+
+        document.getElementById('staff_id').value = id;
+        document.getElementById('doctor-search').value = '';
+        document.getElementById('doctor-dropdown').style.display = 'none';
+
+        document.getElementById('selected-doctor-name').textContent = name;
+        document.getElementById('selected-doctor-specialization').textContent = specialization || '';
+        document.getElementById('selected-doctor-display').style.display = 'block';
+
+        // Check if we can enable the next button
+        checkStep2Ready();
+
+        console.log(`✅ Doctor selected: ${name} (${id})`);
+    }
+
+    function clearDoctor() {
+        selectedDoctorId = '';
+        selectedDoctorName = '';
+        selectedDoctorSpecialization = '';
+
+        document.getElementById('staff_id').value = '';
+        document.getElementById('doctor-search').value = '';
+        document.getElementById('selected-doctor-display').style.display = 'none';
+
+        checkStep2Ready();
+    }
+
+    function checkStep2Ready() {
+        const doctorSelected = document.getElementById('staff_id').value;
+        const dateSelected = document.getElementById('selected_date').value;
+
+        console.log(`[checkStep2Ready] bookingType=${window.selectedBookingType}, doctor=${doctorSelected}, date=${dateSelected}`);
+
+        // Doctor and date are always required for all booking types
+        const enabled = !!(doctorSelected && dateSelected);
+        document.getElementById('step2-next').disabled = !enabled;
+        console.log(`[checkStep2Ready] Button ${enabled ? 'ENABLED' : 'DISABLED'}`);
+    }
+
+    // Step Navigation
+    function goToStep(step) {
+        // Hide all steps
+        for (let i = 1; i <= 4; i++) {
+            document.getElementById(`step${i}`).classList.add('hidden');
+        }
+
+        // Show current step
+        document.getElementById(`step${step}`).classList.remove('hidden');
+        currentStep = step;
+        updateStepIndicators(step);
+
+        // Update selection banner for Step 2
+        if (step === 2) {
+            updateStep2SelectionBanner();
+        }
+
+        // Update info banner for Step 3
+        if (step === 3) {
+            updateStep3InfoBanner();
+        }
+
+        // Load data for step
+        if (step === 3) {
+            loadSlots();
+        } else if (step === 4) {
+            updateSummary();
+        }
+    }
+
+    // Update the info banner in Step 3 to show service, doctor, and date
+    function updateStep3InfoBanner() {
+        const serviceBanner = document.getElementById('step3-service-banner');
+        const bannerContent = document.getElementById('step3-service-banner-content');
+        const bannerIcon = document.getElementById('step3-banner-icon');
+        const bannerName = document.getElementById('step3-banner-name');
+        const bannerDuration = document.getElementById('step3-banner-duration');
+        const durationNote = document.getElementById('step3-duration-note');
+        const durationNoteText = document.getElementById('step3-duration-note-text');
+        const doctorName = document.getElementById('step3-doctor-name');
+        const dateDisplay = document.getElementById('step3-date-display');
+
+        const bookingType = window.selectedBookingType || 'consultation';
+
+        // Update service/package banner
+        if (bookingType === 'service' && window.selectedService) {
+            serviceBanner.style.display = 'block';
+            bannerContent.style.background = 'linear-gradient(135deg, #7c3aed 0%, #9333ea 100%)';
+            bannerIcon.className = 'fas fa-concierge-bell text-2xl';
+            bannerName.textContent = window.selectedService.name;
+            bannerDuration.textContent = window.selectedService.duration_minutes + ' min';
+
+            // Show note if duration is longer than standard
+            if (window.selectedService.duration_minutes > 30) {
+                durationNote.style.display = 'block';
+                durationNoteText.textContent = `This service requires ${window.selectedService.duration_minutes} minutes. Time slots shown accommodate the full service duration.`;
+            } else {
+                durationNote.style.display = 'none';
+            }
+        } else if (bookingType === 'package_session' && window.selectedPackageName) {
+            serviceBanner.style.display = 'block';
+            bannerContent.style.background = 'linear-gradient(135deg, #059669 0%, #047857 100%)';
+            bannerIcon.className = 'fas fa-box text-2xl';
+            bannerName.textContent = window.selectedPackageName;
+            bannerDuration.textContent = (window.selectedPackageDuration || 30) + ' min';
+
+            if (window.selectedPackageDuration && window.selectedPackageDuration > 30) {
+                durationNote.style.display = 'block';
+                durationNoteText.textContent = `This package session requires ${window.selectedPackageDuration} minutes.`;
+            } else {
+                durationNote.style.display = 'none';
+            }
+        } else {
+            // Consultation - hide the prominent banner
+            serviceBanner.style.display = 'none';
+        }
+
+        // Update doctor name
+        doctorName.textContent = selectedDoctorName || 'Not selected';
+
+        // Update date
+        if (selectedDate) {
+            const dateObj = new Date(selectedDate + 'T00:00:00');
+            const options = { weekday: 'short', month: 'short', day: 'numeric' };
+            dateDisplay.textContent = dateObj.toLocaleDateString('en-US', options);
+        } else {
+            dateDisplay.textContent = 'Not selected';
+        }
+    }
+
+    // Update the selection banner in Step 2 to show what service/package was selected
+    function updateStep2SelectionBanner() {
+        const banner = document.getElementById('step2-selection-banner');
+        const iconDiv = document.getElementById('step2-selection-icon');
+        const typeLabel = document.getElementById('step2-selection-type');
+        const nameLabel = document.getElementById('step2-selection-name');
+        const durationDiv = document.getElementById('step2-selection-duration');
+
+        const bookingType = window.selectedBookingType || 'consultation';
+
+        if (bookingType === 'service' && window.selectedService) {
+            banner.style.display = 'block';
+            iconDiv.innerHTML = '<i class="fas fa-concierge-bell text-white"></i>';
+            iconDiv.style.background = '#7c3aed';  // Purple for service
+            typeLabel.textContent = 'Service Selected';
+            nameLabel.textContent = window.selectedService.name;
+            durationDiv.innerHTML = `
+                <div style="font-size: 11px; color: #6b7280;">Duration</div>
+                <div style="font-size: 14px; font-weight: 600; color: #7c3aed;">${window.selectedService.duration_minutes} min</div>
+            `;
+        } else if (bookingType === 'package_session' && window.selectedPackageName) {
+            banner.style.display = 'block';
+            iconDiv.innerHTML = '<i class="fas fa-box text-white"></i>';
+            iconDiv.style.background = '#059669';  // Green for package
+            typeLabel.textContent = 'Package Session';
+            nameLabel.textContent = window.selectedPackageName;
+            durationDiv.innerHTML = `
+                <div style="font-size: 11px; color: #6b7280;">Sessions</div>
+                <div style="font-size: 14px; font-weight: 600; color: #059669;">${window.selectedPackageRemaining || '-'}</div>
+            `;
+        } else if (bookingType === 'consultation') {
+            banner.style.display = 'block';
+            iconDiv.innerHTML = '<i class="fas fa-stethoscope text-white"></i>';
+            iconDiv.style.background = '#2563eb';  // Blue for consultation
+            typeLabel.textContent = 'Consultation';
+            nameLabel.textContent = 'Doctor Consultation';
+            durationDiv.style.display = 'none';
+        } else {
+            banner.style.display = 'none';
+        }
+    }
+
+    function updateStepIndicators(step) {
+        for (let i = 1; i <= 4; i++) {
+            const indicator = document.getElementById(`step${i}-indicator`);
+            indicator.classList.remove('active', 'completed', 'pending');
+
+            if (i < step) {
+                indicator.classList.add('completed');
+                indicator.innerHTML = '<i class="fas fa-check"></i>';
+            } else if (i === step) {
+                indicator.classList.add('active');
+                indicator.textContent = i;
+            } else {
+                indicator.classList.add('pending');
+                indicator.textContent = i;
+            }
+        }
+
+        // Update lines
+        for (let i = 1; i <= 3; i++) {
+            const line = document.getElementById(`line${i}`);
+            line.classList.remove('completed', 'pending');
+            line.classList.add(i < step ? 'completed' : 'pending');
+        }
+    }
+
+    // Calendar
+    function renderCalendar() {
+        const year = currentMonth.getFullYear();
+        const month = currentMonth.getMonth();
+
+        document.getElementById('calendar-month').textContent =
+            new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        let html = '';
+
+        // Empty cells before first day
+        for (let i = 0; i < firstDay; i++) {
+            html += '<div class="calendar-day"></div>';
+        }
+
+        // Days
+        for (let day = 1; day <= daysInMonth; day++) {
+            const date = new Date(year, month, day);
+            // Use local date format to avoid timezone issues (toISOString converts to UTC)
+            const dateStr = formatLocalDate(date);
+            const isPast = date < today;
+            const isSelected = selectedDate === dateStr;
+
+            html += `
+                <div class="calendar-day ${isPast ? 'disabled' : ''} ${isSelected ? 'selected' : ''}"
+                     onclick="${isPast ? '' : `selectDate('${dateStr}')`}">
+                    ${day}
+                </div>
+            `;
+        }
+
+        document.getElementById('calendar-grid').innerHTML = html;
+    }
+
+    function changeMonth(delta) {
+        currentMonth.setMonth(currentMonth.getMonth() + delta);
+        renderCalendar();
+    }
+
+    function selectDate(dateStr) {
+        selectedDate = dateStr;
+        document.getElementById('selected_date').value = dateStr;
+        renderCalendar();
+
+        // Check if we can enable the next button
+        checkStep2Ready();
+    }
+
+    // Load Slots
+    async function loadSlots() {
+        console.log('[loadSlots] Called - loading slots...');
+        const staffId = document.getElementById('staff_id').value;
+        const date = document.getElementById('selected_date').value;
+        const bookingType = window.selectedBookingType || 'consultation';
+        const serviceId = document.getElementById('direct_service_id')?.value || '';
+        const packagePlanId = window.selectedPackagePlanId || '';
+
+        console.log(`[loadSlots] bookingType=${bookingType}, staffId=${staffId}, date=${date}, serviceId=${serviceId}`);
+
+        // For consultation, require doctor selection
+        // For service/package, we can show all available therapist slots
+        if (bookingType === 'consultation' && (!staffId || !date)) {
+            document.getElementById('slots-container').innerHTML = `
+                <div class="text-center text-gray-500 py-8">
+                    <i class="fas fa-clock text-4xl mb-2"></i>
+                    <p>Select a doctor and date to see available slots</p>
+                </div>
+            `;
+            return;
+        }
+
+        if (bookingType === 'service' && (!serviceId || !date)) {
+            document.getElementById('slots-container').innerHTML = `
+                <div class="text-center text-gray-500 py-8">
+                    <i class="fas fa-spa text-4xl mb-2"></i>
+                    <p>Select a service and date to see available slots</p>
+                </div>
+            `;
+            return;
+        }
+
+        if (bookingType === 'package_session' && (!packagePlanId || !date)) {
+            document.getElementById('slots-container').innerHTML = `
+                <div class="text-center text-gray-500 py-8">
+                    <i class="fas fa-box text-4xl mb-2"></i>
+                    <p>Select a package and date to see available slots</p>
+                </div>
+            `;
+            return;
+        }
+
+        try {
+            // Build URL with booking type specific parameters
+            let url = `/api/appointment/web/slots/available?date=${date}&booking_type=${bookingType}`;
+
+            if (bookingType === 'consultation' && staffId) {
+                url += `&staff_id=${staffId}`;
+            } else if (bookingType === 'service' && serviceId) {
+                url += `&service_id=${serviceId}`;
+            } else if (bookingType === 'package_session' && packagePlanId) {
+                url += `&package_plan_id=${packagePlanId}`;
+            }
+
+            console.log(`Loading slots: ${url}`);
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (!data.success || data.slots.length === 0) {
+                const reason = data.no_slots_reason || 'No available slots for this date';
+                const isWeekend = reason.includes('weekend');
+                document.getElementById('slots-container').innerHTML = `
+                    <div class="text-center text-gray-500 py-8">
+                        <i class="fas ${isWeekend ? 'fa-calendar-week' : 'fa-calendar-times'} text-4xl mb-2" style="color: ${isWeekend ? '#f59e0b' : '#9ca3af'};"></i>
+                        <p class="font-medium">${reason}</p>
+                        ${isWeekend ? '<p class="text-sm mt-2">Please select a weekday (Monday - Friday)</p>' : ''}
+                    </div>
+                `;
+                console.log('[loadSlots] No slots:', reason);
+                return;
+            }
+
+            // Show duration info for service/package bookings
+            // bookingType already declared at function start
+            let headerInfo = '';
+            if (data.required_duration && bookingType !== 'consultation') {
+                headerInfo = `
+                    <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-clock" style="color: #3b82f6;"></i>
+                            <span style="font-weight: 500; color: #1e40af;">
+                                Slot Duration: ${data.required_duration} minutes
+                            </span>
+                        </div>
+                        <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+                            Available time slots for your selected ${bookingType === 'service' ? 'service' : 'package session'}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Group slots by time periods
+            const morning = data.slots.filter(s => parseInt(s.start_time.split(':')[0]) < 12);
+            const afternoon = data.slots.filter(s => {
+                const hour = parseInt(s.start_time.split(':')[0]);
+                return hour >= 12 && hour < 17;
+            });
+            const evening = data.slots.filter(s => parseInt(s.start_time.split(':')[0]) >= 17);
+
+            let html = headerInfo + '<div class="space-y-6">';
+
+            if (morning.length > 0) {
+                html += `
+                    <div>
+                        <h4 class="font-medium text-gray-700 mb-2">Morning</h4>
+                        <div class="flex flex-wrap gap-2">
+                            ${morning.map(slot => renderSlotButton(slot)).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (afternoon.length > 0) {
+                html += `
+                    <div>
+                        <h4 class="font-medium text-gray-700 mb-2">Afternoon</h4>
+                        <div class="flex flex-wrap gap-2">
+                            ${afternoon.map(slot => renderSlotButton(slot)).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (evening.length > 0) {
+                html += `
+                    <div>
+                        <h4 class="font-medium text-gray-700 mb-2">Evening</h4>
+                        <div class="flex flex-wrap gap-2">
+                            ${evening.map(slot => renderSlotButton(slot)).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += '</div>';
+            document.getElementById('slots-container').innerHTML = html;
+
+        } catch (error) {
+            console.error('Error loading slots:', error);
+            document.getElementById('slots-container').innerHTML = `
+                <div class="text-center text-red-500 py-8">
+                    <i class="fas fa-exclamation-triangle text-4xl mb-2"></i>
+                    <p>Error loading slots. Please try again.</p>
+                </div>
+            `;
+        }
+    }
+
+    function renderSlotButton(slot) {
+        const available = slot.available_capacity > 0;
+        const duration = slot.duration_minutes ? ` (${slot.duration_minutes}m)` : '';
+        const endTime = slot.end_time ? ` - ${slot.end_time}` : '';
+        const therapistName = slot.doctor_name && slot.doctor_name !== 'Unknown' ? `<div style="font-size: 10px; color: #6b7280;">${slot.doctor_name}</div>` : '';
+
+        // For service/package bookings, show time range and therapist
+        const bookingType = window.selectedBookingType || 'consultation';
+        if (bookingType === 'service' || bookingType === 'package_session') {
+            return `
+                <button class="slot-button ${available ? '' : 'booked'}" style="min-width: 120px; padding: 8px 12px;"
+                        ${available ? `onclick="selectSlot('${slot.slot_id}', '${slot.start_time}', '${slot.end_time || ''}', '${slot.staff_id || ''}')"` : 'disabled'}>
+                    <div style="font-weight: 600;">${slot.start_time}${endTime}</div>
+                    ${therapistName}
+                </button>
+            `;
+        }
+
+        // For consultations, simpler button
+        return `
+            <button class="slot-button ${available ? '' : 'booked'}"
+                    ${available ? `onclick="selectSlot('${slot.slot_id}', '${slot.start_time}')"` : 'disabled'}>
+                ${slot.start_time}
+            </button>
+        `;
+    }
+
+    function selectSlot(slotId, time, endTime = '', staffId = '') {
+        selectedSlot = { id: slotId, time: time, endTime: endTime, staffId: staffId };
+        document.getElementById('selected_slot_id').value = slotId;
+
+        // Calculate end time if not provided
+        if (!endTime) {
+            const duration = window.selectedService?.duration_minutes || 30;
+            const [hours, minutes] = time.split(':').map(Number);
+            const endDate = new Date(2000, 0, 1, hours, minutes + duration);
+            endTime = endDate.toTimeString().slice(0, 5);
+        }
+        selectedSlot.endTime = endTime;
+
+        // For service/package bookings, store the therapist/staff ID
+        if (staffId && (window.selectedBookingType === 'service' || window.selectedBookingType === 'package_session')) {
+            document.getElementById('staff_id').value = staffId;
+        }
+
+        // Update button styles
+        document.querySelectorAll('.slot-button').forEach(btn => {
+            btn.classList.remove('selected');
+        });
+        event.target.classList.add('selected');
+
+        // Show resource allocation section and load available resources
+        showResourceAllocation();
+
+        document.getElementById('step3-next').disabled = false;
+    }
+
+    // Resource Allocation Functions
+    async function showResourceAllocation() {
+        const section = document.getElementById('resource-allocation-section');
+        section.style.display = 'block';
+
+        // Load available rooms and therapists for the selected time
+        await Promise.all([
+            loadAvailableRooms(),
+            loadAvailableTherapists()
+        ]);
+
+        // Check service requirements if a service is selected
+        const serviceId = document.getElementById('direct_service_id')?.value;
+        if (serviceId) {
+            await loadServiceRequirements(serviceId);
+        }
+    }
+
+    async function loadAvailableRooms() {
+        const roomSelect = document.getElementById('room_id');
+        const loadingDiv = document.getElementById('room-loading');
+
+        if (!roomSelect) return;
+
+        loadingDiv.style.display = 'block';
+        roomSelect.innerHTML = '<option value="">Loading rooms...</option>';
+
+        try {
+            const date = document.getElementById('selected_date').value;
+            const startTime = selectedSlot?.time || '';
+            const endTime = selectedSlot?.endTime || '';
+            const serviceId = document.getElementById('direct_service_id')?.value || '';
+
+            let url = `/api/appointment/web/rooms/available?date=${date}&start_time=${startTime}&end_time=${endTime}`;
+            if (serviceId) url += `&service_id=${serviceId}`;
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            roomSelect.innerHTML = '<option value="">-- Select Room (Optional) --</option>';
+
+            if (data.success && data.rooms) {
+                // Group by room type
+                const grouped = {};
+                data.rooms.forEach(room => {
+                    const type = room.room_type || 'other';
+                    if (!grouped[type]) grouped[type] = [];
+                    grouped[type].push(room);
+                });
+
+                Object.keys(grouped).sort().forEach(type => {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = type.charAt(0).toUpperCase() + type.slice(1) + ' Rooms';
+
+                    grouped[type].forEach(room => {
+                        const option = document.createElement('option');
+                        option.value = room.room_id;
+                        option.textContent = `${room.room_name} ${room.is_available ? '' : '(Busy)'}`;
+                        option.disabled = !room.is_available;
+                        if (!room.is_available) {
+                            option.style.color = '#9ca3af';
+                        }
+                        optgroup.appendChild(option);
+                    });
+
+                    roomSelect.appendChild(optgroup);
+                });
+
+                // Show required room type if service has requirements
+                if (data.required_room_type) {
+                    document.getElementById('service-requirements-info').style.display = 'block';
+                    document.getElementById('requirements-text').textContent =
+                        `This service requires a ${data.required_room_type} room`;
+                }
+            }
+        } catch (error) {
+            console.error('Error loading rooms:', error);
+            roomSelect.innerHTML = '<option value="">-- Error loading rooms --</option>';
+        } finally {
+            loadingDiv.style.display = 'none';
+        }
+    }
+
+    // Store available staff data for multi-select dropdown
+    let availableStaffData = [];
+    let serviceStaffRequirements = [];
+    let selectedStaffIds = new Set();  // Track selected staff IDs
+    let staffDropdownOpen = false;
+
+    async function loadAvailableTherapists() {
+        const optionsList = document.getElementById('staff-options-list');
+        const loadingDiv = document.getElementById('therapist-loading');
+
+        console.log('[loadAvailableTherapists] Starting...');
+
+        if (!optionsList) {
+            console.warn('[loadAvailableTherapists] staff-options-list not found, skipping');
+            return;
+        }
+
+        if (loadingDiv) loadingDiv.style.display = 'block';
+        optionsList.innerHTML = '<p style="color: #9ca3af; font-size: 12px; text-align: center; padding: 12px;">Loading...</p>';
+
+        try {
+            const date = document.getElementById('selected_date').value;
+            const startTime = selectedSlot?.time || '';
+            const endTime = selectedSlot?.endTime || '';
+            const serviceId = document.getElementById('direct_service_id')?.value || '';
+
+            // First, get service requirements to know what staff types are needed
+            let staffRequirements = [];
+            if (serviceId) {
+                try {
+                    const reqResponse = await fetch(`/api/appointment/web/service/${serviceId}/requirements`);
+                    const reqData = await reqResponse.json();
+                    if (reqData.success && reqData.requirements) {
+                        staffRequirements = reqData.requirements.filter(r => r.resource_type === 'staff' && r.staff_type !== 'doctor');
+                        serviceStaffRequirements = staffRequirements;
+                        console.log('[loadAvailableTherapists] Staff requirements:', staffRequirements);
+                    }
+                } catch (e) {
+                    console.error('[loadAvailableTherapists] Error loading requirements:', e);
+                }
+            }
+
+            // Get available staff
+            let url = `/api/appointment/web/therapists/available?date=${date}&start_time=${startTime}&end_time=${endTime}`;
+            if (serviceId) url += `&service_id=${serviceId}`;
+
+            console.log('[loadAvailableTherapists] Fetching:', url);
+            const response = await fetch(url);
+            const data = await response.json();
+            console.log('[loadAvailableTherapists] Response:', data);
+
+            // Store for later use
+            availableStaffData = data.success ? data.therapists : [];
+
+            // Build the multi-select checkbox options
+            buildStaffCheckboxOptions(availableStaffData, staffRequirements);
+
+            // Update requirements text
+            if (data.required_staff_types && data.required_staff_types.length > 0) {
+                const reqInfo = document.getElementById('service-requirements-info');
+                const reqText = document.getElementById('requirements-text');
+                if (reqInfo && reqText) {
+                    reqInfo.style.display = 'block';
+                    const staffTypesText = data.required_staff_types.join(', ');
+                    if (reqText.textContent.includes('room')) {
+                        reqText.textContent += ` and ${staffTypesText}`;
+                    } else {
+                        reqText.textContent = `This service requires: ${staffTypesText}`;
+                    }
+                }
+            }
+
+            console.log('[loadAvailableTherapists] Found', availableStaffData.length, 'staff members');
+
+        } catch (error) {
+            console.error('[loadAvailableTherapists] Error:', error);
+            optionsList.innerHTML = '<p style="color: #ef4444; font-size: 12px; text-align: center; padding: 12px;">Error loading staff</p>';
+        } finally {
+            if (loadingDiv) loadingDiv.style.display = 'none';
+        }
+    }
+
+    function buildStaffCheckboxOptions(staffList, requirements = []) {
+        const optionsList = document.getElementById('staff-options-list');
+        if (!optionsList) return;
+
+        if (staffList.length === 0) {
+            optionsList.innerHTML = '<p style="color: #9ca3af; font-size: 12px; text-align: center; padding: 12px;">No staff available</p>';
+            return;
+        }
+
+        // Group staff by type
+        const grouped = {};
+        staffList.forEach(s => {
+            const type = s.staff_type || 'other';
+            if (!grouped[type]) grouped[type] = [];
+            grouped[type].push(s);
+        });
+
+        // Determine required staff types from requirements
+        const requiredTypes = new Set(requirements.filter(r => r.is_mandatory).map(r => r.staff_type));
+
+        let html = '';
+        Object.keys(grouped).sort().forEach(type => {
+            const isRequiredType = requiredTypes.has(type);
+            const typeLabel = type.charAt(0).toUpperCase() + type.slice(1) + 's';
+
+            html += `
+                <div class="staff-type-group" data-type="${type}" style="margin-bottom: 12px;">
+                    <div style="font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; padding: 4px 0; border-bottom: 1px solid #e5e7eb; margin-bottom: 6px;">
+                        ${typeLabel} ${isRequiredType ? '<span style="color: #dc2626;">*</span>' : ''}
+                    </div>
+            `;
+
+            grouped[type].forEach(staff => {
+                const isChecked = selectedStaffIds.has(staff.staff_id);
+                const isDisabled = !staff.is_available;
+                const busyBadge = isDisabled ? '<span style="color: #ef4444; font-size: 10px; margin-left: 4px;">(Busy)</span>' : '';
+
+                html += `
+                    <label class="staff-option-item" data-name="${staff.name.toLowerCase()}" data-type="${type}"
+                           style="display: flex; align-items: center; padding: 8px; cursor: ${isDisabled ? 'not-allowed' : 'pointer'}; border-radius: 6px; margin-bottom: 2px; ${isDisabled ? 'opacity: 0.5;' : ''} ${isChecked ? 'background: #eff6ff;' : ''}"
+                           onmouseover="if(!this.querySelector('input').disabled) this.style.background='#f3f4f6'"
+                           onmouseout="if(!this.querySelector('input').checked) this.style.background=''">
+                        <input type="checkbox"
+                               value="${staff.staff_id}"
+                               data-staff-name="${staff.name}"
+                               data-staff-type="${staff.staff_type}"
+                               ${isChecked ? 'checked' : ''}
+                               ${isDisabled ? 'disabled' : ''}
+                               onclick="event.stopPropagation(); onStaffCheckboxChange(this)"
+                               style="width: 16px; height: 16px; margin-right: 10px; accent-color: #2563eb;">
+                        <span style="flex: 1; font-size: 13px; color: ${isDisabled ? '#9ca3af' : '#374151'};">
+                            ${staff.name}${busyBadge}
+                        </span>
+                    </label>
+                `;
+            });
+
+            html += '</div>';
+        });
+
+        optionsList.innerHTML = html;
+    }
+
+    function toggleStaffDropdown() {
+        const panel = document.getElementById('staff-dropdown-panel');
+        const arrow = document.getElementById('staff-dropdown-arrow');
+
+        if (!panel) return;
+
+        staffDropdownOpen = !staffDropdownOpen;
+        panel.style.display = staffDropdownOpen ? 'block' : 'none';
+        if (arrow) arrow.style.transform = staffDropdownOpen ? 'rotate(180deg)' : '';
+
+        // Focus search input when opening
+        if (staffDropdownOpen) {
+            const searchInput = document.getElementById('staff-search-input');
+            if (searchInput) setTimeout(() => searchInput.focus(), 100);
+        }
+    }
+
+    function filterStaffOptions(searchText) {
+        const items = document.querySelectorAll('.staff-option-item');
+        const groups = document.querySelectorAll('.staff-type-group');
+        const query = searchText.toLowerCase().trim();
+
+        items.forEach(item => {
+            const name = item.dataset.name || '';
+            item.style.display = name.includes(query) ? 'flex' : 'none';
+        });
+
+        // Hide empty groups
+        groups.forEach(group => {
+            const visibleItems = group.querySelectorAll('.staff-option-item[style*="flex"]');
+            group.style.display = visibleItems.length > 0 ? 'block' : 'none';
+        });
+    }
+
+    function onStaffCheckboxChange(checkbox) {
+        const staffId = checkbox.value;
+        const staffName = checkbox.dataset.staffName;
+        const staffType = checkbox.dataset.staffType;
+
+        if (checkbox.checked) {
+            selectedStaffIds.add(staffId);
+        } else {
+            selectedStaffIds.delete(staffId);
+        }
+
+        // Update highlight on parent label
+        const label = checkbox.closest('.staff-option-item');
+        if (label) {
+            label.style.background = checkbox.checked ? '#eff6ff' : '';
+        }
+
+        updateStaffSelectionDisplay();
+        updateStaffHiddenInputs();
+        updateAllocationSummary();
+    }
+
+    function updateStaffSelectionDisplay() {
+        const display = document.getElementById('staff-selected-display');
+        const tagsContainer = document.getElementById('staff-selected-tags');
+
+        if (!display) return;
+
+        if (selectedStaffIds.size === 0) {
+            display.innerHTML = '-- Select Staff Members (Optional) --';
+            display.style.color = '#6b7280';
+            if (tagsContainer) tagsContainer.style.display = 'none';
+            return;
+        }
+
+        // Get names of selected staff
+        const selectedNames = [];
+        selectedStaffIds.forEach(id => {
+            const staff = availableStaffData.find(s => s.staff_id === id);
+            if (staff) selectedNames.push(staff.name);
+        });
+
+        // Update trigger display
+        if (selectedNames.length <= 2) {
+            display.innerHTML = selectedNames.join(', ');
+        } else {
+            display.innerHTML = `${selectedNames[0]}, ${selectedNames[1]} <span style="color: #2563eb;">+${selectedNames.length - 2} more</span>`;
+        }
+        display.style.color = '#111827';
+
+        // Update tags below dropdown
+        if (tagsContainer) {
+            tagsContainer.style.display = 'flex';
+            tagsContainer.innerHTML = selectedNames.map((name, idx) => {
+                const staffId = Array.from(selectedStaffIds)[idx];
+                return `
+                    <span style="display: inline-flex; align-items: center; background: #dbeafe; color: #1e40af; padding: 4px 8px; border-radius: 12px; font-size: 12px;">
+                        ${name}
+                        <button type="button" onclick="removeStaffSelection('${staffId}')" style="background: none; border: none; color: #1e40af; margin-left: 4px; cursor: pointer; padding: 0; font-size: 14px;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </span>
+                `;
+            }).join('');
+        }
+    }
+
+    function removeStaffSelection(staffId) {
+        selectedStaffIds.delete(staffId);
+
+        // Uncheck the checkbox
+        const checkbox = document.querySelector(`#staff-options-list input[value="${staffId}"]`);
+        if (checkbox) {
+            checkbox.checked = false;
+            const label = checkbox.closest('.staff-option-item');
+            if (label) label.style.background = '';
+        }
+
+        updateStaffSelectionDisplay();
+        updateStaffHiddenInputs();
+        updateAllocationSummary();
+    }
+
+    function updateStaffHiddenInputs() {
+        const container = document.getElementById('staff-hidden-inputs');
+        if (!container) return;
+
+        container.innerHTML = '';
+        selectedStaffIds.forEach(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'staff_resources[]';
+            input.value = id;
+            container.appendChild(input);
+        });
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        const container = document.getElementById('staff-multiselect-container');
+        if (container && !container.contains(e.target) && staffDropdownOpen) {
+            toggleStaffDropdown();
+        }
+    });
+
+    function onStaffResourceSelected() {
+        updateAllocationSummary();
+    }
+
+    // Keep backward compatibility
+    function onTherapistSelected(therapistId) {
+        updateAllocationSummary();
+    }
+
+    async function loadServiceRequirements(serviceId) {
+        try {
+            const response = await fetch(`/api/appointment/web/service/${serviceId}/requirements`);
+            const data = await response.json();
+
+            if (data.success && data.requirements.length > 0) {
+                const reqInfo = document.getElementById('service-requirements-info');
+                const reqText = document.getElementById('requirements-text');
+
+                const requirements = data.requirements.map(r => {
+                    if (r.resource_type === 'room') return `${r.room_type} room`;
+                    if (r.resource_type === 'staff') return r.staff_type;
+                    return r.resource_type;
+                });
+
+                reqInfo.style.display = 'block';
+                reqText.textContent = `This service requires: ${requirements.join(', ')}`;
+            }
+        } catch (error) {
+            console.error('Error loading service requirements:', error);
+        }
+    }
+
+    function onRoomSelected(roomId) {
+        updateAllocationSummary();
+    }
+
+    function onTherapistSelected(therapistId) {
+        updateAllocationSummary();
+    }
+
+    function updateAllocationSummary() {
+        const roomSelect = document.getElementById('room_id');
+        const summary = document.getElementById('allocation-summary');
+        const details = document.getElementById('allocation-details');
+
+        const allocations = [];
+
+        if (roomSelect && roomSelect.value) {
+            const roomText = roomSelect.options[roomSelect.selectedIndex].text;
+            allocations.push(`<i class="fas fa-door-open"></i> ${roomText}`);
+        }
+
+        // Handle multiple staff selections from the multi-select dropdown
+        if (selectedStaffIds && selectedStaffIds.size > 0) {
+            selectedStaffIds.forEach(staffId => {
+                const staff = availableStaffData.find(s => s.staff_id === staffId);
+                if (staff) {
+                    const staffType = staff.staff_type ? staff.staff_type.charAt(0).toUpperCase() + staff.staff_type.slice(1) : 'Staff';
+                    allocations.push(`<i class="fas fa-user-nurse"></i> ${staff.name} (${staffType})`);
+                }
+            });
+        }
+
+        if (allocations.length > 0) {
+            summary.style.display = 'block';
+            details.innerHTML = allocations.join('<br>');
+        } else {
+            summary.style.display = 'none';
+        }
+    }
+
+    // Summary
+    function updateSummary() {
+        document.getElementById('summary-patient').textContent = patientData.name;
+        document.getElementById('summary-doctor').textContent = selectedDoctorName || 'Not selected';
+        document.getElementById('summary-date').textContent = selectedDate;
+        document.getElementById('summary-time').textContent = selectedSlot ? selectedSlot.time : '';
+
+        const typeSelect = document.getElementById('appointment_type_id');
+        document.getElementById('summary-type').textContent =
+            typeSelect.value ? typeSelect.options[typeSelect.selectedIndex].text : 'General Consultation';
+
+        // Show service if selected
+        if (window.selectedService) {
+            document.getElementById('summary-service-container').style.display = 'block';
+            document.getElementById('summary-service').textContent = window.selectedService.name;
+        }
+
+        // Show resource allocation
+        const roomSelect = document.getElementById('room_id');
+        let hasResources = false;
+
+        if (roomSelect && roomSelect.value) {
+            document.getElementById('summary-room-container').style.display = 'block';
+            document.getElementById('summary-room').textContent = roomSelect.options[roomSelect.selectedIndex].text;
+            hasResources = true;
+        }
+
+        // Handle multiple staff selections
+        if (selectedStaffIds && selectedStaffIds.size > 0) {
+            const selectedNames = [];
+            selectedStaffIds.forEach(staffId => {
+                const staff = availableStaffData.find(s => s.staff_id === staffId);
+                if (staff) selectedNames.push(staff.name);
+            });
+            document.getElementById('summary-therapist-container').style.display = 'block';
+            document.getElementById('summary-therapist').textContent = selectedNames.join(', ');
+            hasResources = true;
+        } else {
+            document.getElementById('summary-therapist-container').style.display = 'none';
+        }
+
+        if (hasResources) {
+            document.getElementById('summary-resources').style.display = 'block';
+        }
+    }
+
+    // Submit Booking
+    async function submitBooking() {
+        console.log('🚀 [submitBooking] Starting booking submission...');
+
+        const bookingType = window.selectedBookingType || 'consultation';
+
+        // Collect selected staff IDs as an array
+        const staffResourceIds = Array.from(selectedStaffIds || []);
+
+        const bookingData = {
+            patient_id: document.getElementById('patient_id').value,
+            branch_id: '{{ current_branch_id }}',
+            staff_id: document.getElementById('staff_id').value,
+            slot_id: document.getElementById('selected_slot_id').value,
+            appointment_type_id: document.getElementById('appointment_type_id').value || undefined,
+            chief_complaint: document.getElementById('chief_complaint').value,
+            // Resource allocation
+            room_id: document.getElementById('room_id')?.value || undefined,
+            staff_resource_ids: staffResourceIds.length > 0 ? staffResourceIds : undefined,  // Array of staff IDs
+            // Service/Package info - appointment_purpose determines slot blocking logic
+            service_id: document.getElementById('direct_service_id')?.value || undefined,
+            package_plan_id: window.selectedPackagePlanId || undefined,
+            appointment_purpose: bookingType,  // 'consultation', 'service', or 'package_session'
+            booking_source: window.selectedBookingSource || 'front_desk'
+        };
+
+        console.log('📦 [submitBooking] Initial booking data:', bookingData);
+
+        // Remove undefined values
+        Object.keys(bookingData).forEach(key => {
+            if (bookingData[key] === undefined || bookingData[key] === '') {
+                delete bookingData[key];
+            }
+        });
+
+        console.log('📦 [submitBooking] Cleaned booking data:', bookingData);
+
+        try {
+            document.getElementById('submit-booking').disabled = true;
+            document.getElementById('submit-booking').innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Booking...';
+
+            console.log('📡 [submitBooking] Sending POST to /api/appointment/web/book');
+            const response = await fetch('/api/appointment/web/book', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(bookingData)
+            });
+            console.log('📡 [submitBooking] Response status:', response.status);
+            const result = await response.json();
+            console.log('📡 [submitBooking] Response data:', result);
+
+            if (result.success) {
+                // If resources were selected, allocate them
+                const roomId = document.getElementById('room_id')?.value;
+                const staffIds = Array.from(selectedStaffIds || []);
+
+                if ((roomId || staffIds.length > 0) && result.appointment_id) {
+                    try {
+                        await fetch(`/api/appointment/web/appointment/${result.appointment_id}/allocate-resources`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                room_id: roomId || undefined,
+                                staff_ids: staffIds.length > 0 ? staffIds : undefined,  // Array of staff IDs
+                                approve: true
+                            })
+                        });
+                    } catch (allocError) {
+                        console.error('Resource allocation error:', allocError);
+                    }
+                }
+
+                // Format appointment date for display
+                let dateStr = '';
+                let redirectUrl = '{{ url_for("appointment_views.dashboard") }}';
+
+                if (result.appointment_date) {
+                    const apptDate = new Date(result.appointment_date + 'T00:00:00');
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+
+                    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+                    dateStr = `\nDate: ${apptDate.toLocaleDateString('en-US', options)}`;
+                    if (result.appointment_time) {
+                        dateStr += ` at ${result.appointment_time}`;
+                    }
+
+                    // If appointment is for future date, redirect to week view
+                    if (apptDate > today) {
+                        redirectUrl = '{{ url_for("appointment_views.dashboard") }}?range=week';
+                    }
+                }
+
+                console.log('✅ [submitBooking] Booking successful! Redirecting to:', redirectUrl);
+                alert(`Appointment booked successfully!\nAppointment #: ${result.appointment_number}${dateStr}`);
+                window.location.href = redirectUrl;
+            } else {
+                console.error('❌ [submitBooking] Booking failed:', result.error);
+                alert(result.error || 'Failed to book appointment');
+                document.getElementById('submit-booking').disabled = false;
+                document.getElementById('submit-booking').innerHTML = '<i class="fas fa-check mr-2"></i> Confirm Booking';
+            }
+        } catch (error) {
+            console.error('❌ [submitBooking] Exception:', error);
+            alert('Error booking appointment: ' + error.message);
+            document.getElementById('submit-booking').disabled = false;
+            document.getElementById('submit-booking').innerHTML = '<i class="fas fa-check mr-2"></i> Confirm Booking';
+        }
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,568 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Resource Calendar{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css" rel="stylesheet">
+
+<style>
+    /* Resource Tabs */
+    .resource-tabs {
+        display: flex;
+        gap: 4px;
+        background: #f3f4f6;
+        padding: 4px;
+        border-radius: 10px;
+    }
+    .resource-tab {
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-weight: 500;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: none;
+        background: transparent;
+        color: #6b7280;
+    }
+    .resource-tab:hover {
+        color: #374151;
+    }
+    .resource-tab.active {
+        background: white;
+        color: #2563eb;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    /* Resource Row */
+    .resource-row {
+        display: flex;
+        border-bottom: 1px solid #e5e7eb;
+        min-height: 80px;
+    }
+    .resource-row:last-child {
+        border-bottom: none;
+    }
+    .resource-info {
+        width: 200px;
+        min-width: 200px;
+        padding: 12px 16px;
+        background: #f9fafb;
+        border-right: 1px solid #e5e7eb;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .resource-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        color: white;
+    }
+    .resource-avatar.doctor { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
+    .resource-avatar.room { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
+    .resource-avatar.therapist { background: linear-gradient(135deg, #10b981, #059669); }
+    .resource-avatar.nurse { background: linear-gradient(135deg, #f59e0b, #d97706); }
+
+    .resource-details h4 {
+        font-weight: 600;
+        color: #111827;
+        font-size: 14px;
+    }
+    .resource-details p {
+        font-size: 12px;
+        color: #6b7280;
+    }
+
+    /* Timeline */
+    .timeline-container {
+        flex: 1;
+        overflow-x: auto;
+        position: relative;
+    }
+    .timeline-header {
+        display: flex;
+        border-bottom: 1px solid #e5e7eb;
+        background: #f9fafb;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    .timeline-hour {
+        min-width: 60px;
+        padding: 8px 4px;
+        text-align: center;
+        font-size: 11px;
+        font-weight: 500;
+        color: #6b7280;
+        border-right: 1px solid #e5e7eb;
+    }
+    .timeline-slots {
+        display: flex;
+        flex: 1;
+        position: relative;
+        min-height: 60px;
+    }
+    .timeline-slot {
+        min-width: 60px;
+        border-right: 1px solid #f3f4f6;
+    }
+    .timeline-slot:nth-child(even) {
+        background: #fafafa;
+    }
+
+    /* Booking Blocks */
+    .booking-block {
+        position: absolute;
+        top: 4px;
+        bottom: 4px;
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 11px;
+        color: white;
+        overflow: hidden;
+        cursor: pointer;
+        transition: transform 0.1s, box-shadow 0.1s;
+        z-index: 5;
+    }
+    .booking-block:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10;
+    }
+    .booking-block.status-requested { background: linear-gradient(135deg, #fbbf24, #f59e0b); }
+    .booking-block.status-confirmed { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+    .booking-block.status-checked_in { background: linear-gradient(135deg, #a855f7, #9333ea); }
+    .booking-block.status-in_progress { background: linear-gradient(135deg, #f97316, #ea580c); }
+    .booking-block.status-completed { background: linear-gradient(135deg, #22c55e, #16a34a); }
+
+    .booking-block .patient-name {
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .booking-block .booking-time {
+        font-size: 10px;
+        opacity: 0.9;
+    }
+
+    /* Calendar Container */
+    #resource-calendar-container {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+
+    /* Date Navigation */
+    .date-nav {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .date-nav button {
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+        background: white;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .date-nav button:hover {
+        background: #f3f4f6;
+    }
+
+    /* Legend */
+    .status-legend {
+        display: flex;
+        gap: 16px;
+        padding: 12px 16px;
+        background: #f9fafb;
+        border-radius: 8px;
+        font-size: 12px;
+    }
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .legend-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+    }
+
+    /* Current Time Indicator */
+    .current-time-line {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #ef4444;
+        z-index: 15;
+    }
+    .current-time-line::before {
+        content: '';
+        position: absolute;
+        top: -4px;
+        left: -4px;
+        width: 10px;
+        height: 10px;
+        background: #ef4444;
+        border-radius: 50%;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">Resource Calendar</h1>
+            <p class="text-gray-500 text-sm mt-1">View and manage resource allocations</p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{{ url_for('appointment_views.dashboard') }}" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg flex items-center">
+                <i class="fas fa-arrow-left mr-2"></i> Back to Dashboard
+            </a>
+            <a href="{{ url_for('appointment_views.book_appointment') }}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center">
+                <i class="fas fa-plus mr-2"></i> Book Appointment
+            </a>
+        </div>
+    </div>
+
+    <!-- Controls Row -->
+    <div class="bg-white rounded-lg shadow p-4 mb-6">
+        <div class="flex flex-wrap gap-4 items-center justify-between">
+            <!-- Resource Type Tabs -->
+            <div class="resource-tabs">
+                <button class="resource-tab active" onclick="switchResourceType('room')" id="tab-room">
+                    <i class="fas fa-door-open mr-2"></i> Rooms
+                </button>
+                <button class="resource-tab" onclick="switchResourceType('doctor')" id="tab-doctor">
+                    <i class="fas fa-user-md mr-2"></i> Doctors
+                </button>
+                <button class="resource-tab" onclick="switchResourceType('therapist')" id="tab-therapist">
+                    <i class="fas fa-user-nurse mr-2"></i> Therapists
+                </button>
+            </div>
+
+            <!-- Date Navigation -->
+            <div class="date-nav">
+                <button onclick="navigateResourceDate(-1)" title="Previous Day">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <input type="date" id="resource-date" value="{{ selected_date.strftime('%Y-%m-%d') }}"
+                       onchange="loadResourceCalendar()"
+                       class="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                <button onclick="navigateResourceDate(1)" title="Next Day">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+                <button onclick="goToResourceToday()" class="text-sm bg-blue-100 text-blue-700 px-3 py-2 rounded-lg hover:bg-blue-200">
+                    Today
+                </button>
+                <span class="text-gray-600 font-medium" id="display-date">{{ selected_date.strftime('%A, %B %d, %Y') }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="status-legend mb-4">
+        <div class="legend-item"><div class="legend-dot" style="background: #fbbf24;"></div> Requested</div>
+        <div class="legend-item"><div class="legend-dot" style="background: #3b82f6;"></div> Confirmed</div>
+        <div class="legend-item"><div class="legend-dot" style="background: #a855f7;"></div> Checked In</div>
+        <div class="legend-item"><div class="legend-dot" style="background: #f97316;"></div> In Progress</div>
+        <div class="legend-item"><div class="legend-dot" style="background: #22c55e;"></div> Completed</div>
+    </div>
+
+    <!-- Resource Calendar -->
+    <div id="resource-calendar-container">
+        <!-- Timeline Header -->
+        <div class="timeline-header" id="timeline-header">
+            <div class="resource-info" style="background: #f3f4f6;">
+                <span class="text-sm font-medium text-gray-600">Resource</span>
+            </div>
+            <div class="timeline-container">
+                <div class="flex" id="time-slots-header">
+                    <!-- Time slots generated by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Resource Rows -->
+        <div id="resource-rows">
+            <!-- Rows generated by JS -->
+            <div class="p-12 text-center text-gray-400">
+                <i class="fas fa-spinner fa-spin text-3xl mb-4"></i>
+                <p>Loading resources...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Booking Details Tooltip/Modal -->
+<div id="booking-tooltip" class="fixed hidden bg-white rounded-lg shadow-xl border p-4 z-50 max-w-xs">
+    <div id="tooltip-content"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Configuration
+    const START_HOUR = 8;  // 8 AM
+    const END_HOUR = 20;   // 8 PM
+    const SLOT_WIDTH = 60; // pixels per hour
+
+    let currentResourceType = 'room';
+    let currentDate = document.getElementById('resource-date').value;
+    let resourceData = [];
+    let bookingsData = [];
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        generateTimeHeader();
+        loadResourceCalendar();
+
+        // Update current time indicator every minute
+        updateCurrentTimeIndicator();
+        setInterval(updateCurrentTimeIndicator, 60000);
+    });
+
+    // Generate time header slots
+    function generateTimeHeader() {
+        const header = document.getElementById('time-slots-header');
+        let html = '';
+        for (let hour = START_HOUR; hour < END_HOUR; hour++) {
+            const displayHour = hour > 12 ? hour - 12 : hour;
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            html += `<div class="timeline-hour">${displayHour}:00 ${ampm}</div>`;
+        }
+        header.innerHTML = html;
+    }
+
+    // Switch resource type
+    function switchResourceType(type) {
+        currentResourceType = type;
+
+        // Update tabs
+        document.querySelectorAll('.resource-tab').forEach(tab => tab.classList.remove('active'));
+        document.getElementById(`tab-${type}`).classList.add('active');
+
+        // Reload calendar
+        loadResourceCalendar();
+    }
+
+    // Navigate date
+    function navigateResourceDate(days) {
+        const dateInput = document.getElementById('resource-date');
+        const date = new Date(dateInput.value);
+        date.setDate(date.getDate() + days);
+        dateInput.value = date.toISOString().split('T')[0];
+        currentDate = dateInput.value;
+        updateDisplayDate();
+        loadResourceCalendar();
+    }
+
+    function goToResourceToday() {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('resource-date').value = today;
+        currentDate = today;
+        updateDisplayDate();
+        loadResourceCalendar();
+    }
+
+    function updateDisplayDate() {
+        const date = new Date(currentDate + 'T00:00:00');
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        document.getElementById('display-date').textContent = date.toLocaleDateString('en-US', options);
+    }
+
+    // Load resource calendar data
+    async function loadResourceCalendar() {
+        currentDate = document.getElementById('resource-date').value;
+
+        try {
+            const response = await fetch(`/api/appointment/resource-calendar?date=${currentDate}&type=${currentResourceType}`);
+            const data = await response.json();
+
+            if (data.success) {
+                resourceData = data.resources;
+                bookingsData = data.bookings;
+                renderResourceRows();
+            } else {
+                console.error('Error loading resource calendar:', data.error);
+                document.getElementById('resource-rows').innerHTML = `
+                    <div class="p-12 text-center text-red-400">
+                        <i class="fas fa-exclamation-circle text-3xl mb-4"></i>
+                        <p>Error loading resources: ${data.error}</p>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            document.getElementById('resource-rows').innerHTML = `
+                <div class="p-12 text-center text-red-400">
+                    <i class="fas fa-exclamation-circle text-3xl mb-4"></i>
+                    <p>Error loading resources</p>
+                </div>
+            `;
+        }
+    }
+
+    // Render resource rows
+    function renderResourceRows() {
+        const container = document.getElementById('resource-rows');
+
+        if (!resourceData || resourceData.length === 0) {
+            container.innerHTML = `
+                <div class="p-12 text-center text-gray-400">
+                    <i class="fas fa-${currentResourceType === 'room' ? 'door-open' : 'user'} text-3xl mb-4"></i>
+                    <p>No ${currentResourceType}s found</p>
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+        resourceData.forEach(resource => {
+            const resourceBookings = bookingsData.filter(b => b.resource_id === resource.id);
+            const avatarClass = resource.type || currentResourceType;
+            const initials = getInitials(resource.name);
+
+            html += `
+                <div class="resource-row" data-resource-id="${resource.id}">
+                    <div class="resource-info">
+                        <div class="resource-avatar ${avatarClass}">${initials}</div>
+                        <div class="resource-details">
+                            <h4>${resource.name}</h4>
+                            <p>${resource.subtitle || ''}</p>
+                        </div>
+                    </div>
+                    <div class="timeline-container">
+                        <div class="timeline-slots" style="width: ${(END_HOUR - START_HOUR) * SLOT_WIDTH}px;">
+                            ${generateTimeSlots()}
+                            ${renderBookings(resourceBookings)}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+        updateCurrentTimeIndicator();
+    }
+
+    // Generate empty time slots
+    function generateTimeSlots() {
+        let html = '';
+        for (let hour = START_HOUR; hour < END_HOUR; hour++) {
+            html += `<div class="timeline-slot" data-hour="${hour}"></div>`;
+        }
+        return html;
+    }
+
+    // Render bookings for a resource
+    function renderBookings(bookings) {
+        if (!bookings || bookings.length === 0) return '';
+
+        let html = '';
+        bookings.forEach(booking => {
+            const startMinutes = timeToMinutes(booking.start_time) - (START_HOUR * 60);
+            const endMinutes = timeToMinutes(booking.end_time) - (START_HOUR * 60);
+            const duration = endMinutes - startMinutes;
+
+            const left = (startMinutes / 60) * SLOT_WIDTH;
+            const width = Math.max((duration / 60) * SLOT_WIDTH - 4, 30); // minimum width
+
+            html += `
+                <div class="booking-block status-${booking.status}"
+                     style="left: ${left}px; width: ${width}px;"
+                     onclick="showBookingDetails('${booking.appointment_id}')"
+                     onmouseenter="showBookingTooltip(event, ${JSON.stringify(booking).replace(/"/g, '&quot;')})"
+                     onmouseleave="hideBookingTooltip()">
+                    <div class="patient-name">${booking.patient_name}</div>
+                    <div class="booking-time">${booking.start_time} - ${booking.end_time}</div>
+                </div>
+            `;
+        });
+        return html;
+    }
+
+    // Time helpers
+    function timeToMinutes(timeStr) {
+        if (!timeStr) return 0;
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return hours * 60 + minutes;
+    }
+
+    function getInitials(name) {
+        if (!name) return '?';
+        const parts = name.replace(/^(Dr\.|Room)\s*/i, '').split(' ');
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[1][0]).toUpperCase();
+        }
+        return parts[0].substring(0, 2).toUpperCase();
+    }
+
+    // Current time indicator
+    function updateCurrentTimeIndicator() {
+        // Remove existing indicators
+        document.querySelectorAll('.current-time-line').forEach(el => el.remove());
+
+        // Only show for today
+        const today = new Date().toISOString().split('T')[0];
+        if (currentDate !== today) return;
+
+        const now = new Date();
+        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+        const startMinutes = START_HOUR * 60;
+        const endMinutes = END_HOUR * 60;
+
+        if (currentMinutes < startMinutes || currentMinutes > endMinutes) return;
+
+        const position = ((currentMinutes - startMinutes) / 60) * SLOT_WIDTH;
+
+        document.querySelectorAll('.timeline-slots').forEach(container => {
+            const indicator = document.createElement('div');
+            indicator.className = 'current-time-line';
+            indicator.style.left = position + 'px';
+            container.appendChild(indicator);
+        });
+    }
+
+    // Booking tooltip
+    function showBookingTooltip(event, booking) {
+        const tooltip = document.getElementById('booking-tooltip');
+        const content = document.getElementById('tooltip-content');
+
+        content.innerHTML = `
+            <div class="space-y-2">
+                <div class="font-semibold text-gray-800">${booking.patient_name}</div>
+                <div class="text-sm text-gray-500">${booking.start_time} - ${booking.end_time}</div>
+                ${booking.service_name ? `<div class="text-sm text-purple-600"><i class="fas fa-concierge-bell mr-1"></i>${booking.service_name}</div>` : ''}
+                ${booking.doctor_name ? `<div class="text-sm text-blue-600"><i class="fas fa-user-md mr-1"></i>${booking.doctor_name}</div>` : ''}
+                <div class="text-xs text-gray-400 capitalize">Status: ${booking.status.replace('_', ' ')}</div>
+            </div>
+        `;
+
+        tooltip.style.left = event.pageX + 10 + 'px';
+        tooltip.style.top = event.pageY + 10 + 'px';
+        tooltip.classList.remove('hidden');
+    }
+
+    function hideBookingTooltip() {
+        document.getElementById('booking-tooltip').classList.add('hidden');
+    }
+
+    // Show booking details
+    function showBookingDetails(appointmentId) {
+        window.location.href = `/appointment/${appointmentId}`;
+    }
+</script>
+{% endblock %}

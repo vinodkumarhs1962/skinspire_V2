@@ -4,7 +4,7 @@ Provides endpoints for staff-related operations
 """
 from flask import Blueprint, jsonify, request
 from flask_login import login_required, current_user
-from app.models.master import Staff
+from app.models.master import Staff, StaffSpecialization
 from app.models.transaction import User
 from app.services.database_service import get_db_session
 import logging
@@ -33,6 +33,7 @@ def get_active_staff():
                     'first_name': str,
                     'last_name': str,
                     'title': str,
+                    'staff_type': str,
                     'specialization': str
                 },
                 ...
@@ -67,6 +68,7 @@ def get_active_staff():
                     'first_name': staff.first_name,
                     'last_name': staff.last_name,
                     'title': staff.title,
+                    'staff_type': staff.staff_type or 'staff',
                     'specialization': staff.specialization
                 })
 
@@ -129,6 +131,7 @@ def get_staff_by_id(staff_id):
                     'first_name': staff.first_name,
                     'last_name': staff.last_name,
                     'title': staff.title,
+                    'staff_type': staff.staff_type or 'staff',
                     'specialization': staff.specialization,
                     'is_active': staff.is_active
                 }
@@ -139,5 +142,163 @@ def get_staff_by_id(staff_id):
         return jsonify({
             'success': False,
             'error': 'Failed to fetch staff details',
+            'message': str(e)
+        }), 500
+
+
+@staff_api_bp.route('/specializations', methods=['GET'])
+@login_required
+def get_specializations():
+    """
+    Get specializations for a given staff type.
+
+    Query params:
+        - staff_type: Optional filter by staff type (doctor, nurse, therapist, etc.)
+                     If not provided, returns all specializations
+
+    Returns:
+        JSON: {
+            'success': bool,
+            'specializations': [
+                {
+                    'specialization_id': str,
+                    'code': str,
+                    'name': str,
+                    'description': str,
+                    'staff_type': str
+                },
+                ...
+            ]
+        }
+    """
+    try:
+        hospital_id = current_user.hospital_id
+        staff_type = request.args.get('staff_type', None)
+
+        logger.info(f"[Staff API] Fetching specializations for hospital: {hospital_id}, staff_type: {staff_type}")
+
+        with get_db_session() as session:
+            query = session.query(StaffSpecialization).filter(
+                StaffSpecialization.hospital_id == hospital_id,
+                StaffSpecialization.is_active == True,
+                StaffSpecialization.is_deleted == False
+            )
+
+            # Filter by staff type if provided
+            if staff_type:
+                query = query.filter(
+                    (StaffSpecialization.staff_type == staff_type) |
+                    (StaffSpecialization.staff_type == 'all')
+                )
+
+            specializations = query.order_by(
+                StaffSpecialization.display_order,
+                StaffSpecialization.name
+            ).all()
+
+            spec_list = []
+            for spec in specializations:
+                spec_list.append({
+                    'specialization_id': str(spec.specialization_id),
+                    'code': spec.code,
+                    'name': spec.name,
+                    'description': spec.description,
+                    'staff_type': spec.staff_type
+                })
+
+            logger.info(f"[Staff API] Found {len(spec_list)} specializations")
+
+            return jsonify({
+                'success': True,
+                'specializations': spec_list
+            })
+
+    except Exception as e:
+        logger.error(f"[Staff API] Error fetching specializations: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Failed to fetch specializations',
+            'message': str(e)
+        }), 500
+
+
+@staff_api_bp.route('/specializations', methods=['POST'])
+@login_required
+def create_specialization():
+    """
+    Create a new specialization.
+
+    Request body:
+        - staff_type: Required (doctor, nurse, therapist, technician, all)
+        - code: Required (unique short code)
+        - name: Required (display name)
+        - description: Optional
+        - display_order: Optional (default 0)
+
+    Returns:
+        JSON: {
+            'success': bool,
+            'specialization_id': str,
+            'message': str
+        }
+    """
+    try:
+        hospital_id = current_user.hospital_id
+        data = request.get_json()
+
+        if not data:
+            return jsonify({'success': False, 'error': 'Request body is required'}), 400
+
+        # Validate required fields
+        if not data.get('staff_type'):
+            return jsonify({'success': False, 'error': 'staff_type is required'}), 400
+        if not data.get('code'):
+            return jsonify({'success': False, 'error': 'code is required'}), 400
+        if not data.get('name'):
+            return jsonify({'success': False, 'error': 'name is required'}), 400
+
+        with get_db_session() as session:
+            # Check for duplicate code
+            existing = session.query(StaffSpecialization).filter(
+                StaffSpecialization.hospital_id == hospital_id,
+                StaffSpecialization.staff_type == data['staff_type'],
+                StaffSpecialization.code == data['code'],
+                StaffSpecialization.is_deleted == False
+            ).first()
+
+            if existing:
+                return jsonify({
+                    'success': False,
+                    'error': f"Specialization code '{data['code']}' already exists for {data['staff_type']}"
+                }), 400
+
+            spec = StaffSpecialization(
+                hospital_id=hospital_id,
+                staff_type=data['staff_type'],
+                code=data['code'].upper(),
+                name=data['name'],
+                description=data.get('description'),
+                display_order=data.get('display_order', 0),
+                is_active=True
+            )
+
+            session.add(spec)
+            session.flush()
+
+            spec_id = str(spec.specialization_id)
+
+        logger.info(f"[Staff API] Created specialization: {spec_id}")
+
+        return jsonify({
+            'success': True,
+            'specialization_id': spec_id,
+            'message': 'Specialization created successfully'
+        }), 201
+
+    except Exception as e:
+        logger.error(f"[Staff API] Error creating specialization: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Failed to create specialization',
             'message': str(e)
         }), 500

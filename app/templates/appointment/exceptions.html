@@ -1,0 +1,147 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Schedule Exceptions{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">Schedule Exceptions</h1>
+        <button onclick="showAddException()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+            <i class="fas fa-plus mr-2"></i> Add Exception
+        </button>
+    </div>
+
+    <div class="bg-white rounded-lg shadow">
+        {% if exceptions %}
+        <table class="w-full">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Doctor</th>
+                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Date</th>
+                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Type</th>
+                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Time</th>
+                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Reason</th>
+                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y">
+                {% for exc in exceptions %}
+                <tr>
+                    <td class="px-4 py-3">{{ exc.doctor_name }}</td>
+                    <td class="px-4 py-3">{{ exc.exception_date.strftime('%b %d, %Y') }}</td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 text-xs rounded-full
+                            {% if exc.exception_type == 'leave' %}bg-yellow-100 text-yellow-800
+                            {% elif exc.exception_type == 'holiday' %}bg-green-100 text-green-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ exc.exception_type|title }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3">
+                        {% if exc.is_full_day %}Full Day{% else %}{{ exc.start_time }} - {{ exc.end_time }}{% endif %}
+                    </td>
+                    <td class="px-4 py-3">{{ exc.reason or '-' }}</td>
+                    <td class="px-4 py-3">
+                        <button onclick="deleteException('{{ exc.exception_id }}')" class="text-red-600 hover:text-red-800">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="p-8 text-center text-gray-500">
+            <i class="fas fa-calendar-check text-4xl mb-4"></i>
+            <p>No upcoming exceptions</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add Exception Modal -->
+<div id="exception-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 class="text-lg font-semibold mb-4">Add Schedule Exception</h3>
+            <form id="exception-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Doctor</label>
+                    <select id="exc_staff_id" required class="w-full border rounded px-3 py-2">
+                        <option value="">Select Doctor</option>
+                        {% for doctor in doctors %}
+                        <option value="{{ doctor.staff_id }}">{{ doctor.first_name }} {{ doctor.last_name or '' }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                    <input type="date" id="exc_date" required class="w-full border rounded px-3 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                    <select id="exc_type" required class="w-full border rounded px-3 py-2">
+                        <option value="leave">Leave</option>
+                        <option value="holiday">Holiday</option>
+                        <option value="training">Training</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="exc_full_day" checked class="mr-2" onchange="toggleTimeInputs()">
+                    <label class="text-sm text-gray-700">Full Day</label>
+                </div>
+                <div id="time-inputs" class="hidden grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                        <input type="time" id="exc_start_time" class="w-full border rounded px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                        <input type="time" id="exc_end_time" class="w-full border rounded px-3 py-2">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Reason</label>
+                    <input type="text" id="exc_reason" class="w-full border rounded px-3 py-2">
+                </div>
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" onclick="closeExceptionModal()" class="px-4 py-2 text-gray-600">Cancel</button>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function showAddException() {
+        document.getElementById('exception-modal').classList.remove('hidden');
+    }
+
+    function closeExceptionModal() {
+        document.getElementById('exception-modal').classList.add('hidden');
+    }
+
+    function toggleTimeInputs() {
+        const isFullDay = document.getElementById('exc_full_day').checked;
+        document.getElementById('time-inputs').classList.toggle('hidden', isFullDay);
+    }
+
+    document.getElementById('exception-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        // Implementation for saving exception
+        alert('Exception saving feature coming soon');
+        closeExceptionModal();
+    });
+
+    function deleteException(id) {
+        if (confirm('Are you sure you want to delete this exception?')) {
+            // Implementation for deleting exception
+            alert('Exception deletion feature coming soon');
+        }
+    }
+</script>
+{% endblock %}

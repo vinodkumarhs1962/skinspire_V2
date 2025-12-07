@@ -1,0 +1,2269 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Appointment Dashboard{% endblock %}
+
+{% block extra_css %}
+<!-- FullCalendar CSS -->
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css" rel="stylesheet">
+
+<style>
+    /* Status Badges */
+    .status-badge {
+        padding: 4px 10px;
+        font-size: 11px;
+        font-weight: 600;
+        border-radius: 20px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .status-requested { background: #fef3c7; color: #92400e; }
+    .status-confirmed { background: #dbeafe; color: #1e40af; }
+    .status-checked_in { background: #e9d5ff; color: #6b21a8; }
+    .status-in_progress { background: #fed7aa; color: #c2410c; }
+    .status-completed { background: #d1fae5; color: #065f46; }
+    .status-cancelled { background: #fee2e2; color: #991b1b; }
+    .status-no_show { background: #f3f4f6; color: #374151; }
+
+    /* Resource Allocation Badges */
+    .resource-badge {
+        padding: 2px 8px;
+        font-size: 10px;
+        font-weight: 500;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .resource-pending { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+    .resource-partial { background: #fed7aa; color: #c2410c; border: 1px solid #fdba74; }
+    .resource-complete { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+    .resource-not_required { background: #f3f4f6; color: #6b7280; border: 1px solid #d1d5db; }
+
+    /* Priority Indicators */
+    .priority-emergency { border-left: 4px solid #ef4444; }
+    .priority-urgent { border-left: 4px solid #f97316; }
+    .priority-normal { border-left: 4px solid #22c55e; }
+
+    /* Queue Card */
+    .queue-card {
+        transition: all 0.2s ease-in-out;
+        background: white;
+    }
+    .queue-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        background: #f9fafb;
+    }
+
+    /* Waiting Animation */
+    .waiting-long {
+        animation: pulse-warning 2s infinite;
+    }
+    @keyframes pulse-warning {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+    }
+
+    /* View Tabs */
+    .view-tabs {
+        display: flex;
+        gap: 4px;
+        background: #f3f4f6;
+        padding: 4px;
+        border-radius: 10px;
+    }
+    .view-tab {
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-weight: 500;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: none;
+        background: transparent;
+        color: #6b7280;
+    }
+    .view-tab:hover {
+        color: #374151;
+    }
+    .view-tab.active {
+        background: white;
+        color: #2563eb;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    /* FullCalendar Customization */
+    .fc {
+        font-family: inherit;
+    }
+    .fc .fc-toolbar-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+    }
+    .fc .fc-button-primary {
+        background: #2563eb;
+        border-color: #2563eb;
+    }
+    .fc .fc-button-primary:hover {
+        background: #1d4ed8;
+        border-color: #1d4ed8;
+    }
+    .fc .fc-button-primary:not(:disabled).fc-button-active {
+        background: #1e40af;
+        border-color: #1e40af;
+    }
+    .fc .fc-daygrid-day.fc-day-today {
+        background: #eff6ff;
+    }
+    .fc .fc-timegrid-slot {
+        height: 40px;
+    }
+    .fc-event {
+        cursor: pointer;
+        border-radius: 4px;
+        font-size: 12px;
+        padding: 2px 4px;
+    }
+
+    /* Event Colors by Status */
+    .fc-event.status-requested { background: #fbbf24; border-color: #f59e0b; }
+    .fc-event.status-confirmed { background: #3b82f6; border-color: #2563eb; }
+    .fc-event.status-checked_in { background: #a855f7; border-color: #9333ea; }
+    .fc-event.status-in_progress { background: #f97316; border-color: #ea580c; }
+    .fc-event.status-completed { background: #22c55e; border-color: #16a34a; }
+    .fc-event.status-cancelled { background: #ef4444; border-color: #dc2626; }
+    .fc-event.status-no_show { background: #6b7280; border-color: #4b5563; }
+
+    /* Resource View (Doctor Columns) */
+    .fc .fc-resource-header {
+        font-weight: 600;
+        padding: 10px;
+        background: #f9fafb;
+    }
+
+    /* Calendar Container */
+    #calendar-container {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    /* Quick Stats Bar */
+    .quick-stats {
+        display: flex;
+        gap: 16px;
+        padding: 12px 16px;
+        background: #f9fafb;
+        border-radius: 8px;
+        margin-bottom: 16px;
+    }
+    .quick-stat {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+    }
+    .quick-stat .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+    }
+    .quick-stat .count {
+        font-weight: 600;
+        color: #111827;
+    }
+    .quick-stat .label {
+        color: #6b7280;
+    }
+
+    /* Context Menu */
+    .context-menu {
+        position: fixed;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        z-index: 1000;
+        min-width: 180px;
+        padding: 6px 0;
+        display: none;
+    }
+    .context-menu.show {
+        display: block;
+    }
+    .context-menu-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+        cursor: pointer;
+        font-size: 14px;
+        color: #374151;
+        transition: background 0.15s;
+    }
+    .context-menu-item:hover {
+        background: #f3f4f6;
+    }
+    .context-menu-item i {
+        width: 16px;
+        text-align: center;
+        color: #6b7280;
+    }
+    .context-menu-item.danger {
+        color: #dc2626;
+    }
+    .context-menu-item.danger i {
+        color: #dc2626;
+    }
+    .context-menu-divider {
+        height: 1px;
+        background: #e5e7eb;
+        margin: 6px 0;
+    }
+
+    /* Pulse animation for highlighting */
+    @keyframes pulse-highlight {
+        0%, 100% {
+            box-shadow: 0 0 0 3px #f59e0b, 0 0 20px rgba(245, 158, 11, 0.5);
+            transform: scale(1);
+        }
+        50% {
+            box-shadow: 0 0 0 5px #f59e0b, 0 0 30px rgba(245, 158, 11, 0.7);
+            transform: scale(1.02);
+        }
+    }
+    .event-highlight {
+        animation: pulse-highlight 1s ease-in-out 3;
+        z-index: 100 !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">Appointment Dashboard</h1>
+            <!-- Date Navigation -->
+            <div class="flex items-center gap-3 mt-2">
+                <button onclick="navigateDate(-1)" class="p-2 hover:bg-gray-100 rounded-lg text-gray-600" title="Previous Day">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <div class="flex items-center gap-2">
+                    <input type="date" id="dashboard-date" value="{{ selected_date.strftime('%Y-%m-%d') }}"
+                           onchange="changeDashboardDate(this.value)"
+                           class="border rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500">
+                    {% if selected_date != today %}
+                    <button onclick="goToToday()" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200">
+                        Today
+                    </button>
+                    {% endif %}
+                </div>
+                <button onclick="navigateDate(1)" class="p-2 hover:bg-gray-100 rounded-lg text-gray-600" title="Next Day">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+                <span class="text-gray-600 font-medium">{{ selected_date.strftime('%A, %B %d, %Y') }}</span>
+                {% if selected_date != today %}
+                <span class="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700">
+                    {% if selected_date < today %}Past{% else %}Future{% endif %}
+                </span>
+                {% else %}
+                <span class="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">Today</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="flex gap-2">
+            <a href="{{ url_for('appointment_views.resource_calendar') }}" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center" title="View Resource Calendar">
+                <i class="fas fa-th mr-2"></i> Resources
+            </a>
+            <a href="{{ url_for('appointment_views.walk_in_booking') }}" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center">
+                <i class="fas fa-walking mr-2"></i> Walk-In
+            </a>
+            <a href="{{ url_for('appointment_views.book_appointment') }}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center">
+                <i class="fas fa-plus mr-2"></i> Book Appointment
+            </a>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="card-grid cols-4 mb-6">
+        <div class="stat-card clickable" onclick="filterByStatus('')">
+            <div class="stat-card-icon primary">
+                <i class="fas fa-calendar-check"></i>
+            </div>
+            <div class="stat-card-value">{{ summary.total }}</div>
+            <div class="stat-card-label">Total Today</div>
+        </div>
+        <div class="stat-card clickable" onclick="filterByStatus('checked_in')">
+            <div class="stat-card-icon warning">
+                <i class="fas fa-user-clock"></i>
+            </div>
+            <div class="stat-card-value">{{ summary.waiting }}</div>
+            <div class="stat-card-label">Waiting</div>
+        </div>
+        <div class="stat-card clickable" onclick="filterByStatus('in_progress')">
+            <div class="stat-card-icon info">
+                <i class="fas fa-stethoscope"></i>
+            </div>
+            <div class="stat-card-value">{{ summary.in_progress }}</div>
+            <div class="stat-card-label">In Progress</div>
+        </div>
+        <div class="stat-card clickable" onclick="filterByStatus('completed')">
+            <div class="stat-card-icon success">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="stat-card-value">{{ summary.completed }}</div>
+            <div class="stat-card-label">Completed</div>
+        </div>
+    </div>
+
+    <!-- View Toggle & Filters -->
+    <div class="bg-white rounded-lg shadow p-4 mb-6">
+        <div class="flex flex-wrap gap-4 items-center justify-between">
+            <!-- View Tabs -->
+            <div class="view-tabs">
+                <button class="view-tab active" onclick="showView('queue')" id="tab-queue">
+                    <i class="fas fa-list mr-2"></i> Queue View
+                </button>
+                <button class="view-tab" onclick="showView('calendar')" id="tab-calendar">
+                    <i class="fas fa-calendar-alt mr-2"></i> Calendar View
+                </button>
+            </div>
+
+            <!-- Filters -->
+            <div class="flex gap-4 items-center">
+                <!-- Date Range Filter (Queue View only) -->
+                <div id="date-range-filter-container">
+                    <select id="date-range-filter" class="border rounded-lg px-3 py-2 text-sm" onchange="applyFilters()">
+                        <option value="today">Today</option>
+                        <option value="week">Next 7 Days</option>
+                    </select>
+                </div>
+                <div>
+                    <select id="doctor-filter" class="border rounded-lg px-3 py-2 text-sm" onchange="applyFilters()">
+                        <option value="">All Doctors</option>
+                        {% for doctor in doctors %}
+                        <option value="{{ doctor.staff_id }}">{{ doctor.first_name }} {{ doctor.last_name or '' }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div id="status-filter-container">
+                    <select id="status-filter" class="border rounded-lg px-3 py-2 text-sm" onchange="applyFilters()">
+                        <option value="">All Statuses</option>
+                        <option value="checked_in">Waiting</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="requested">Requested</option>
+                    </select>
+                </div>
+                <button onclick="refreshData()" class="bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg flex items-center text-sm">
+                    <i class="fas fa-sync-alt mr-2"></i> Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Queue View -->
+    <div id="queue-view">
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-gray-800" id="queue-title">Today's Queue</h2>
+                <div class="quick-stats">
+                    <div class="quick-stat">
+                        <div class="dot" style="background: #a855f7;"></div>
+                        <span class="count">{{ summary.waiting }}</span>
+                        <span class="label">Waiting</span>
+                    </div>
+                    <div class="quick-stat">
+                        <div class="dot" style="background: #f97316;"></div>
+                        <span class="count">{{ summary.in_progress }}</span>
+                        <span class="label">In Progress</span>
+                    </div>
+                    <div class="quick-stat">
+                        <div class="dot" style="background: #22c55e;"></div>
+                        <span class="count">{{ summary.completed }}</span>
+                        <span class="label">Done</span>
+                    </div>
+                </div>
+            </div>
+            <div class="divide-y" id="queue-list">
+                {% if queue %}
+                    {% for appt in queue %}
+                    <div class="queue-card p-4 priority-{{ appt.priority }}" data-appointment-id="{{ appt.appointment_id }}">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-4">
+                                <!-- Token Number -->
+                                <div class="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
+                                    {{ appt.token_number or '#' }}
+                                </div>
+
+                                <!-- Patient Info -->
+                                <div>
+                                    <div class="font-semibold text-gray-800">{{ appt.patient_name }}</div>
+                                    <div class="text-sm text-gray-500">
+                                        {% if appt.patient_mrn %}MRN: {{ appt.patient_mrn }}{% endif %}
+                                        {% if appt.patient_phone %} | {{ appt.patient_phone }}{% endif %}
+                                    </div>
+                                    {% if appt.service_name or appt.package_name %}
+                                    <div class="mt-2">
+                                        {% if appt.service_name %}
+                                        <span style="display: inline-flex; align-items: center; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; background: linear-gradient(135deg, #7c3aed 0%, #9333ea 100%); color: white; box-shadow: 0 2px 4px rgba(124, 58, 237, 0.3);">
+                                            <i class="fas fa-concierge-bell" style="margin-right: 6px;"></i>{{ appt.service_name }}
+                                        </span>
+                                        {% endif %}
+                                        {% if appt.package_name %}
+                                        <span style="display: inline-flex; align-items: center; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; background: linear-gradient(135deg, #059669 0%, #047857 100%); color: white; box-shadow: 0 2px 4px rgba(5, 150, 105, 0.3);">
+                                            <i class="fas fa-box" style="margin-right: 6px;"></i>{{ appt.package_name }}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                    {% if appt.chief_complaint %}
+                                    <div class="text-sm text-gray-400 italic">{{ appt.chief_complaint }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="flex items-center space-x-6">
+                                <!-- Time & Doctor -->
+                                <div class="text-right">
+                                    <div class="text-sm font-medium text-gray-800">
+                                        {% if appt.appointment_time %}{{ appt.appointment_time }}{% else %}Walk-in{% endif %}
+                                    </div>
+                                    <div class="text-sm text-gray-500">{{ appt.doctor_name }}</div>
+                                    {% if appt.waiting_minutes %}
+                                    <div class="text-xs mt-1 {% if appt.waiting_minutes > 30 %}text-red-600 font-semibold waiting-long{% else %}text-gray-400{% endif %}">
+                                        <i class="fas fa-clock mr-1"></i>{{ appt.waiting_minutes }} min wait
+                                    </div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Status & Tags -->
+                                <div class="flex flex-col items-end gap-1">
+                                    <span class="status-badge status-{{ appt.status }}">
+                                        {{ appt.status|replace('_', ' ')|title }}
+                                    </span>
+                                    <div class="flex gap-1 flex-wrap justify-end">
+                                        {% if appt.is_walk_in %}
+                                        <span class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">Walk-in</span>
+                                        {% endif %}
+                                        {% if appt.is_follow_up %}
+                                        <span class="px-2 py-0.5 text-xs bg-blue-50 text-blue-600 rounded-full">Follow-up</span>
+                                        {% endif %}
+                                        {% if appt.resource_allocation_status and appt.resource_allocation_status != 'not_required' %}
+                                        <span class="resource-badge resource-{{ appt.resource_allocation_status }}"
+                                              onclick="openResourceAllocation('{{ appt.appointment_id }}')" style="cursor: pointer;"
+                                              title="Click to allocate resources">
+                                            <i class="fas fa-{% if appt.resource_allocation_status == 'complete' %}check-circle{% elif appt.resource_allocation_status == 'partial' %}exclamation-circle{% else %}clock{% endif %}"></i>
+                                            {{ appt.resource_allocation_status|title }}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    {% if appt.room_name or appt.therapist_name %}
+                                    <div class="text-xs text-gray-500 text-right mt-1">
+                                        {% if appt.room_name %}<span class="mr-2"><i class="fas fa-door-open mr-1"></i>{{ appt.room_name }}</span>{% endif %}
+                                        {% if appt.therapist_name %}<span><i class="fas fa-user-nurse mr-1"></i>{{ appt.therapist_name }}</span>{% endif %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Actions -->
+                                <div class="flex space-x-2">
+                                    {% if appt.status == 'confirmed' %}
+                                    <button onclick="checkIn('{{ appt.appointment_id }}')" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                        <i class="fas fa-sign-in-alt mr-1"></i> Check In
+                                    </button>
+                                    {% elif appt.status == 'checked_in' %}
+                                    <button onclick="startConsultation('{{ appt.appointment_id }}')" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                        <i class="fas fa-play mr-1"></i> Start
+                                    </button>
+                                    {% elif appt.status == 'in_progress' %}
+                                    <button onclick="completeAppointment('{{ appt.appointment_id }}')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                        <i class="fas fa-check mr-1"></i> Complete
+                                    </button>
+                                    {% elif appt.status == 'requested' %}
+                                    <button onclick="confirmAppointment('{{ appt.appointment_id }}')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                        <i class="fas fa-check-circle mr-1"></i> Confirm
+                                    </button>
+                                    {% endif %}
+
+                                    <button onclick="showAppointmentDetails('{{ appt.appointment_id }}')" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-2 rounded-lg text-sm transition-colors">
+                                        <i class="fas fa-ellipsis-v"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="p-12 text-center text-gray-400">
+                        <i class="fas fa-calendar-check text-5xl mb-4"></i>
+                        <p class="text-lg">No appointments for today</p>
+                        <p class="text-sm mt-2">Try selecting "Next 7 Days" to see upcoming appointments</p>
+                        <p class="text-sm">or click "Book Appointment" to schedule one</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Calendar View -->
+    <div id="calendar-view" class="hidden">
+        <div id="calendar-container">
+            <!-- Legend -->
+            <div class="quick-stats mb-4">
+                <div class="quick-stat"><div class="dot" style="background: #fbbf24;"></div><span class="label">Requested</span></div>
+                <div class="quick-stat"><div class="dot" style="background: #3b82f6;"></div><span class="label">Confirmed</span></div>
+                <div class="quick-stat"><div class="dot" style="background: #a855f7;"></div><span class="label">Checked In</span></div>
+                <div class="quick-stat"><div class="dot" style="background: #f97316;"></div><span class="label">In Progress</span></div>
+                <div class="quick-stat"><div class="dot" style="background: #22c55e;"></div><span class="label">Completed</span></div>
+            </div>
+            <div id="fullcalendar"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Appointment Details Modal -->
+<div id="appointment-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto">
+            <div class="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
+                <h3 class="text-lg font-semibold">Appointment Details</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 p-1">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div id="modal-content" class="p-6">
+                <!-- Content loaded dynamically -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Resource Allocation Modal -->
+<div id="resource-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-xl w-full max-h-[80vh] overflow-y-auto">
+            <div class="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
+                <div>
+                    <h3 class="text-lg font-semibold">Allocate Resources</h3>
+                    <p class="text-sm text-gray-500" id="resource-modal-subtitle">Select room and staff for appointment</p>
+                </div>
+                <button onclick="closeResourceModal()" class="text-gray-400 hover:text-gray-600 p-1">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div id="resource-modal-content" class="p-6">
+                <div class="space-y-6">
+                    <!-- Room Selection -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-door-open mr-1"></i> Room
+                        </label>
+                        <div id="room-options" class="grid grid-cols-2 gap-2">
+                            <p class="text-gray-400 col-span-2 text-center py-4">Loading rooms...</p>
+                        </div>
+                    </div>
+
+                    <!-- Therapist Selection -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-user-nurse mr-1"></i> Therapist / Nurse
+                        </label>
+                        <div id="therapist-options" class="grid grid-cols-2 gap-2">
+                            <p class="text-gray-400 col-span-2 text-center py-4">Loading staff...</p>
+                        </div>
+                    </div>
+
+                    <!-- Also Approve Checkbox -->
+                    <div class="flex items-center">
+                        <input type="checkbox" id="also-approve" class="h-4 w-4 text-blue-600 rounded border-gray-300">
+                        <label for="also-approve" class="ml-2 text-sm text-gray-600">
+                            Also confirm/approve this appointment
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="p-4 border-t bg-gray-50 flex justify-end gap-2">
+                <button onclick="closeResourceModal()" class="px-4 py-2 border rounded-lg hover:bg-gray-100">
+                    Cancel
+                </button>
+                <button onclick="saveResourceAllocation()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <i class="fas fa-save mr-1"></i> Save Allocation
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Drag-Drop Reschedule Confirmation Modal -->
+<div id="reschedule-confirm-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 overflow-y-auto">
+    <div class="flex items-start justify-center min-h-screen p-4 pt-10 pb-20">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full flex flex-col max-h-[85vh]">
+            <div class="p-4 border-b flex justify-between items-center bg-gradient-to-r from-blue-600 to-blue-700 rounded-t-xl flex-shrink-0">
+                <h3 class="text-lg font-semibold text-white">
+                    <i class="fas fa-calendar-check mr-2"></i>Confirm Reschedule
+                </h3>
+                <button onclick="cancelReschedule()" class="text-white/80 hover:text-white p-1">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div id="reschedule-confirm-content" class="p-6 overflow-y-auto flex-grow">
+                <!-- Content loaded dynamically -->
+            </div>
+            <div class="p-4 border-t bg-gray-50 flex justify-end gap-2 rounded-b-xl flex-shrink-0">
+                <button onclick="cancelReschedule()" class="px-4 py-2 border rounded-lg hover:bg-gray-100">
+                    <i class="fas fa-undo mr-1"></i> Cancel
+                </button>
+                <button id="confirm-reschedule-btn" onclick="confirmDragDropReschedule()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <i class="fas fa-check mr-1"></i> Confirm Reschedule
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Context Menu (Right-Click) -->
+<div id="appointment-context-menu" class="context-menu">
+    <div class="context-menu-item" onclick="contextMenuAction('view')">
+        <i class="fas fa-eye"></i> View Details
+    </div>
+    <div class="context-menu-item" onclick="contextMenuAction('edit')">
+        <i class="fas fa-edit"></i> Edit Appointment
+    </div>
+    <div class="context-menu-item" onclick="contextMenuAction('resources')">
+        <i class="fas fa-th-large"></i> Allocate Resources
+    </div>
+    <div class="context-menu-divider"></div>
+    <div class="context-menu-item" onclick="contextMenuAction('reschedule')">
+        <i class="fas fa-calendar-alt"></i> Reschedule
+    </div>
+    <div class="context-menu-divider"></div>
+    <div class="context-menu-item danger" onclick="contextMenuAction('cancel')">
+        <i class="fas fa-times-circle"></i> Cancel Appointment
+    </div>
+</div>
+
+<!-- Edit Appointment Modal -->
+<div id="edit-appointment-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 overflow-y-auto">
+    <div class="flex items-start justify-center min-h-screen p-4 pt-10 pb-20">
+        <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full flex flex-col max-h-[85vh]">
+            <div class="p-4 border-b flex justify-between items-center bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-t-xl flex-shrink-0">
+                <h3 class="text-lg font-semibold text-white">
+                    <i class="fas fa-edit mr-2"></i>Edit Appointment
+                </h3>
+                <button onclick="closeEditModal()" class="text-white/80 hover:text-white p-1">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div id="edit-modal-content" class="p-6 overflow-y-auto flex-grow">
+                <form id="edit-appointment-form">
+                    <!-- Patient Info (Read-only) -->
+                    <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+                        <div class="text-sm text-gray-500 mb-1">Patient</div>
+                        <div class="font-semibold text-lg" id="edit-patient-name">Loading...</div>
+                        <div class="text-sm text-gray-500" id="edit-patient-mrn"></div>
+                    </div>
+
+                    <!-- Service/Package Info (Read-only) -->
+                    <div id="edit-service-info" class="mb-6 p-4 rounded-lg" style="display: none;">
+                        <div class="text-sm opacity-80 mb-1">Service/Package (cannot be changed)</div>
+                        <div class="font-semibold" id="edit-service-name"></div>
+                    </div>
+
+                    <!-- Editable Fields -->
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <!-- Date -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                <i class="fas fa-calendar mr-1"></i> Date
+                            </label>
+                            <input type="date" id="edit-date" name="date"
+                                   class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                        </div>
+
+                        <!-- Time -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                <i class="fas fa-clock mr-1"></i> Time
+                            </label>
+                            <input type="time" id="edit-time" name="time"
+                                   class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <!-- Doctor -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                <i class="fas fa-user-md mr-1"></i> Doctor
+                            </label>
+                            <select id="edit-doctor" name="doctor_id"
+                                    class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                                <option value="">Select Doctor</option>
+                            </select>
+                        </div>
+
+                        <!-- Room -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                <i class="fas fa-door-open mr-1"></i> Room
+                            </label>
+                            <select id="edit-room" name="room_id"
+                                    class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                                <option value="">Select Room</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <!-- Therapist -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                <i class="fas fa-user-nurse mr-1"></i> Therapist/Nurse
+                            </label>
+                            <select id="edit-therapist" name="therapist_id"
+                                    class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                                <option value="">Select Therapist</option>
+                            </select>
+                        </div>
+
+                        <!-- Priority -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                <i class="fas fa-exclamation-triangle mr-1"></i> Priority
+                            </label>
+                            <select id="edit-priority" name="priority"
+                                    class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                                <option value="normal">Normal</option>
+                                <option value="urgent">Urgent</option>
+                                <option value="emergency">Emergency</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            <i class="fas fa-sticky-note mr-1"></i> Internal Notes
+                        </label>
+                        <textarea id="edit-notes" name="internal_notes" rows="3"
+                                  class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
+                                  placeholder="Add any internal notes..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="p-4 border-t bg-gray-50 flex justify-end gap-2 rounded-b-xl flex-shrink-0">
+                <button onclick="closeEditModal()" class="px-4 py-2 border rounded-lg hover:bg-gray-100">
+                    Cancel
+                </button>
+                <button onclick="saveAppointmentEdit()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+                    <i class="fas fa-save mr-1"></i> Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cancel Appointment Modal -->
+<div id="cancel-appointment-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full">
+            <div class="p-4 border-b flex justify-between items-center bg-gradient-to-r from-red-600 to-red-700 rounded-t-xl">
+                <h3 class="text-lg font-semibold text-white">
+                    <i class="fas fa-times-circle mr-2"></i>Cancel Appointment
+                </h3>
+                <button onclick="closeCancelModal()" class="text-white/80 hover:text-white p-1">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-6">
+                <!-- Appointment Info -->
+                <div class="mb-4 p-4 bg-gray-50 rounded-lg">
+                    <div class="font-semibold" id="cancel-patient-name">Loading...</div>
+                    <div class="text-sm text-gray-500" id="cancel-appointment-info"></div>
+                </div>
+
+                <!-- Warning -->
+                <div class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+                    <i class="fas fa-exclamation-triangle mr-1"></i>
+                    This action cannot be undone. The appointment will be marked as cancelled and removed from Google Calendar if synced.
+                </div>
+
+                <!-- Cancellation Reason -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        Cancellation Reason <span class="text-red-500">*</span>
+                    </label>
+                    <select id="cancel-reason-type" onchange="toggleCancelOther()"
+                            class="w-full border rounded-lg px-3 py-2 mb-2 focus:ring-2 focus:ring-red-500">
+                        <option value="">Select reason...</option>
+                        <option value="patient_request">Patient Request</option>
+                        <option value="doctor_unavailable">Doctor Unavailable</option>
+                        <option value="rescheduled">Rescheduled to Different Date</option>
+                        <option value="duplicate">Duplicate Booking</option>
+                        <option value="no_show">No Show (Patient didn't arrive)</option>
+                        <option value="other">Other</option>
+                    </select>
+                    <textarea id="cancel-reason-text" rows="2"
+                              class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500"
+                              placeholder="Additional details (optional)..."></textarea>
+                </div>
+            </div>
+            <div class="p-4 border-t bg-gray-50 flex justify-end gap-2 rounded-b-xl">
+                <button onclick="closeCancelModal()" class="px-4 py-2 border rounded-lg hover:bg-gray-100">
+                    Keep Appointment
+                </button>
+                <button onclick="confirmCancelAppointment()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                    <i class="fas fa-times-circle mr-1"></i> Cancel Appointment
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- FullCalendar JS -->
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+
+<script>
+    let calendar = null;
+    let currentView = 'queue';
+    let refreshInterval = null;
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeCalendar();
+        startAutoRefresh();
+
+        // Check for URL parameters and apply them
+        const urlParams = new URLSearchParams(window.location.search);
+        const rangeParam = urlParams.get('range');
+        if (rangeParam === 'week') {
+            document.getElementById('date-range-filter').value = 'week';
+            refreshQueue();
+        }
+    });
+
+    // ====================================
+    // DATE NAVIGATION
+    // ====================================
+    function changeDashboardDate(dateStr) {
+        window.location.href = `{{ url_for('appointment_views.dashboard') }}?date=${dateStr}`;
+    }
+
+    function navigateDate(days) {
+        const currentDate = document.getElementById('dashboard-date').value;
+        const date = new Date(currentDate);
+        date.setDate(date.getDate() + days);
+        const newDate = date.toISOString().split('T')[0];
+        changeDashboardDate(newDate);
+    }
+
+    function goToToday() {
+        const today = new Date().toISOString().split('T')[0];
+        changeDashboardDate(today);
+    }
+
+    // ====================================
+    // VIEW SWITCHING
+    // ====================================
+    function showView(view) {
+        currentView = view;
+
+        // Update tabs
+        document.querySelectorAll('.view-tab').forEach(tab => tab.classList.remove('active'));
+        document.getElementById(`tab-${view}`).classList.add('active');
+
+        // Toggle views
+        document.getElementById('queue-view').classList.toggle('hidden', view !== 'queue');
+        document.getElementById('calendar-view').classList.toggle('hidden', view !== 'calendar');
+
+        // Show/hide filters based on view
+        document.getElementById('status-filter-container').style.display = view === 'queue' ? 'block' : 'none';
+        document.getElementById('date-range-filter-container').style.display = view === 'queue' ? 'block' : 'none';
+
+        // Refresh calendar when switching to it
+        if (view === 'calendar' && calendar) {
+            calendar.refetchEvents();
+            // Need to call render after the container becomes visible
+            setTimeout(() => calendar.render(), 100);
+        }
+    }
+
+    // ====================================
+    // FULLCALENDAR INITIALIZATION
+    // ====================================
+    function initializeCalendar() {
+        const calendarEl = document.getElementById('fullcalendar');
+        const selectedDate = document.getElementById('dashboard-date').value;
+
+        calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'timeGridDay',
+            initialDate: selectedDate,  // Start calendar at the selected dashboard date
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'timeGridDay,timeGridWeek,dayGridMonth'
+            },
+            slotMinTime: '08:00:00',
+            slotMaxTime: '20:00:00',
+            slotDuration: '00:15:00',
+            allDaySlot: false,
+            nowIndicator: true,
+            selectable: true,
+            selectMirror: true,
+            // Enable drag-and-drop
+            editable: true,
+            eventStartEditable: true,
+            eventDurationEditable: false, // Don't allow resizing (duration is fixed by service)
+            eventOverlap: true, // Allow visual overlap, we'll check conflicts on drop
+            dragRevertDuration: 300,
+
+            // Handle event drop - check availability and show confirmation
+            eventDrop: async function(info) {
+                const appointmentId = info.event.id;
+                const newStart = info.event.start;
+                const newDate = newStart.toISOString().split('T')[0];
+                const newTime = newStart.toTimeString().slice(0, 5);
+
+                // Show loading state
+                info.el.style.opacity = '0.6';
+                info.el.classList.add('border-2', 'border-dashed');
+
+                try {
+                    // Call API to check availability (simulation mode)
+                    const response = await fetch(`/api/appointment/web/${appointmentId}/reschedule-check`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            new_date: newDate,
+                            new_time: newTime,
+                            simulation: true
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    // Reset loading state
+                    info.el.style.opacity = '1';
+                    info.el.classList.remove('border-2', 'border-dashed');
+
+                    if (data.success) {
+                        // Show confirmation modal with availability info
+                        showRescheduleConfirmModal(info, data);
+                    } else {
+                        // Show error and revert
+                        alert('Cannot reschedule: ' + (data.error || 'Unknown error'));
+                        info.revert();
+                    }
+                } catch (error) {
+                    console.error('Error checking availability:', error);
+                    info.el.style.opacity = '1';
+                    info.el.classList.remove('border-2', 'border-dashed');
+                    alert('Error checking availability. Please try again.');
+                    info.revert();
+                }
+            },
+
+            // Fetch events from API
+            events: function(info, successCallback, failureCallback) {
+                const doctorFilter = document.getElementById('doctor-filter').value;
+                let url = `/api/appointment/calendar-events?start=${info.startStr}&end=${info.endStr}`;
+                if (doctorFilter) url += `&staff_id=${doctorFilter}`;
+
+                fetch(url)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            successCallback(data.events);
+                        } else {
+                            failureCallback(data.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching calendar events:', error);
+                        failureCallback(error);
+                    });
+            },
+
+            // Event click handler - show modal with details
+            eventClick: function(info) {
+                showAppointmentDetails(info.event.id);
+            },
+
+            // Event did mount - add status class, right-click menu, and double-click handler
+            eventDidMount: function(info) {
+                // Add status class
+                const status = info.event.extendedProps.status;
+                info.el.classList.add(`status-${status}`);
+
+                // Store appointment ID on element for later retrieval
+                info.el.dataset.appointmentId = info.event.id;
+
+                // Add tooltip
+                info.el.title = `${info.event.title}\nStatus: ${status}\nRight-click for options`;
+
+                // Right-click context menu
+                info.el.addEventListener('contextmenu', function(e) {
+                    e.preventDefault();
+                    contextMenuAppointmentId = info.event.id;
+                    showContextMenu(e.clientX, e.clientY);
+                });
+
+                // Double-click to navigate to appointment detail page
+                info.el.addEventListener('dblclick', function() {
+                    window.location.href = `/appointment/${info.event.id}`;
+                });
+            },
+
+            // Date click - for booking new appointment
+            dateClick: function(info) {
+                // Could open booking modal with pre-selected date/time
+                console.log('Date clicked:', info.dateStr);
+            },
+
+            // Loading indicator
+            loading: function(isLoading) {
+                // Could show/hide a loading spinner
+            }
+        });
+
+        // Don't render immediately - wait until view is shown
+        console.log('FullCalendar initialized');
+    }
+
+    // ====================================
+    // FILTERS & REFRESH
+    // ====================================
+    function applyFilters() {
+        if (currentView === 'queue') {
+            refreshQueue();
+        } else {
+            calendar.refetchEvents();
+        }
+    }
+
+    function refreshData() {
+        if (currentView === 'queue') {
+            refreshQueue();
+        } else {
+            calendar.refetchEvents();
+        }
+    }
+
+    function startAutoRefresh() {
+        refreshInterval = setInterval(() => {
+            if (currentView === 'queue') {
+                refreshQueue();
+            }
+        }, 30000);
+    }
+
+    async function refreshQueue() {
+        try {
+            const doctorFilter = document.getElementById('doctor-filter').value;
+            const statusFilter = document.getElementById('status-filter').value;
+            const dateRange = document.getElementById('date-range-filter').value;
+            const selectedDate = document.getElementById('dashboard-date').value;
+
+            // Update title based on date range and selected date
+            const queueTitle = document.getElementById('queue-title');
+            const today = new Date().toISOString().split('T')[0];
+            if (dateRange === 'week') {
+                queueTitle.textContent = 'Next 7 Days Queue';
+            } else if (selectedDate === today) {
+                queueTitle.textContent = "Today's Queue";
+            } else {
+                queueTitle.textContent = `Queue for ${new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+            }
+
+            // Include the selected date in the API call
+            let url = `/api/appointment/web/queue?range=${dateRange}&date=${selectedDate}`;
+            if (doctorFilter) url += `&staff_id=${doctorFilter}`;
+            if (statusFilter) url += `&status=${statusFilter}`;
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.success) {
+                updateQueueUI(data.queue, data.summary);
+                renderQueueList(data.queue);
+            }
+        } catch (error) {
+            console.error('Error refreshing queue:', error);
+        }
+    }
+
+    function renderQueueList(queue) {
+        const container = document.getElementById('queue-list');
+
+        if (!queue || queue.length === 0) {
+            const dateRange = document.getElementById('date-range-filter').value;
+            const message = dateRange === 'today'
+                ? 'No appointments for today'
+                : 'No appointments found for the selected period';
+            container.innerHTML = `
+                <div class="p-12 text-center text-gray-400">
+                    <i class="fas fa-calendar-check text-5xl mb-4"></i>
+                    <p class="text-lg">${message}</p>
+                    <p class="text-sm mt-2">${dateRange === 'today' ? 'Try selecting "Next 7 Days" to see upcoming appointments' : ''}</p>
+                    <p class="text-sm">or click "Book Appointment" to schedule one</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = queue.map(appt => `
+            <div class="queue-card p-4 priority-${appt.priority}" data-appointment-id="${appt.appointment_id}">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
+                            ${appt.token_number || '#'}
+                        </div>
+                        <div>
+                            <div class="font-semibold text-gray-800">${appt.patient_name}</div>
+                            <div class="text-sm text-gray-500">
+                                ${appt.appointment_date ? '<span class="mr-2">' + appt.appointment_date + '</span>' : ''}
+                                ${appt.patient_phone ? appt.patient_phone : ''}
+                            </div>
+                            ${appt.chief_complaint ? '<div class="text-sm text-gray-400 italic">' + appt.chief_complaint + '</div>' : ''}
+                        </div>
+                    </div>
+
+                    <div class="flex items-center space-x-6">
+                        <div class="text-right">
+                            <div class="text-sm font-medium text-gray-800">
+                                ${appt.appointment_time || 'Walk-in'}
+                            </div>
+                            <div class="text-sm text-gray-500">${appt.doctor_name || 'Unassigned'}</div>
+                            ${appt.waiting_minutes ? '<div class="text-xs mt-1 ' + (appt.waiting_minutes > 30 ? 'text-red-600 font-semibold waiting-long' : 'text-gray-400') + '"><i class="fas fa-clock mr-1"></i>' + appt.waiting_minutes + ' min wait</div>' : ''}
+                        </div>
+
+                        <div class="flex flex-col items-end gap-1">
+                            <span class="status-badge status-${appt.status}">
+                                ${appt.status.replace('_', ' ')}
+                            </span>
+                            <div class="flex gap-1 flex-wrap justify-end">
+                                ${appt.is_walk_in ? '<span class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">Walk-in</span>' : ''}
+                                ${appt.is_follow_up ? '<span class="px-2 py-0.5 text-xs bg-blue-50 text-blue-600 rounded-full">Follow-up</span>' : ''}
+                                ${appt.resource_allocation_status && appt.resource_allocation_status !== 'not_required' ?
+                                    '<span class="resource-badge resource-' + appt.resource_allocation_status + '" onclick="openResourceAllocation(\'' + appt.appointment_id + '\')" style="cursor: pointer;" title="Click to allocate resources">' +
+                                    '<i class="fas fa-' + (appt.resource_allocation_status === 'complete' ? 'check-circle' : appt.resource_allocation_status === 'partial' ? 'exclamation-circle' : 'clock') + '"></i> ' +
+                                    appt.resource_allocation_status.charAt(0).toUpperCase() + appt.resource_allocation_status.slice(1) +
+                                    '</span>' : ''}
+                            </div>
+                            ${appt.room_name || appt.therapist_name ? '<div class="text-xs text-gray-500 text-right mt-1">' +
+                                (appt.room_name ? '<span class="mr-2"><i class="fas fa-door-open mr-1"></i>' + appt.room_name + '</span>' : '') +
+                                (appt.therapist_name ? '<span><i class="fas fa-user-nurse mr-1"></i>' + appt.therapist_name + '</span>' : '') +
+                                '</div>' : ''}
+                        </div>
+
+                        <div class="flex space-x-2">
+                            ${getActionButton(appt)}
+                            <button onclick="showAppointmentDetails('${appt.appointment_id}')" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-2 rounded-lg text-sm transition-colors">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function getActionButton(appt) {
+        switch(appt.status) {
+            case 'confirmed':
+                return `<button onclick="checkIn('${appt.appointment_id}')" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                    <i class="fas fa-sign-in-alt mr-1"></i> Check In
+                </button>`;
+            case 'checked_in':
+                return `<button onclick="startConsultation('${appt.appointment_id}')" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                    <i class="fas fa-play mr-1"></i> Start
+                </button>`;
+            case 'in_progress':
+                return `<button onclick="completeAppointment('${appt.appointment_id}')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                    <i class="fas fa-check mr-1"></i> Complete
+                </button>`;
+            case 'requested':
+                return `<button onclick="confirmAppointment('${appt.appointment_id}')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                    <i class="fas fa-check-circle mr-1"></i> Confirm
+                </button>`;
+            default:
+                return '';
+        }
+    }
+
+    function updateQueueUI(queue, summary) {
+        // Update summary cards
+        document.querySelectorAll('.stat-card-value').forEach((el, index) => {
+            const values = [summary.total, summary.waiting, summary.in_progress, summary.completed];
+            if (values[index] !== undefined) {
+                el.textContent = values[index];
+            }
+        });
+
+        // Update quick stats
+        const quickStats = document.querySelectorAll('.quick-stat .count');
+        if (quickStats.length >= 3) {
+            quickStats[0].textContent = summary.waiting;
+            quickStats[1].textContent = summary.in_progress;
+            quickStats[2].textContent = summary.completed;
+        }
+
+        // Update queue list - could implement full re-render here
+        // For now, just refresh the page data periodically
+    }
+
+    function filterByStatus(status) {
+        document.getElementById('status-filter').value = status;
+        applyFilters();
+    }
+
+    // ====================================
+    // APPOINTMENT ACTIONS
+    // ====================================
+    async function checkIn(appointmentId) {
+        await updateAppointmentStatus(appointmentId, 'check_in');
+    }
+
+    async function startConsultation(appointmentId) {
+        await updateAppointmentStatus(appointmentId, 'start');
+    }
+
+    async function completeAppointment(appointmentId) {
+        await updateAppointmentStatus(appointmentId, 'complete');
+    }
+
+    async function confirmAppointment(appointmentId) {
+        await updateAppointmentStatus(appointmentId, 'confirm');
+    }
+
+    async function updateAppointmentStatus(appointmentId, action) {
+        try {
+            const response = await fetch(`/api/appointment/web/${appointmentId}/${action}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                refreshData();
+            } else {
+                alert(data.error || 'Action failed');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('An error occurred');
+        }
+    }
+
+    // ====================================
+    // MODAL
+    // ====================================
+    async function showAppointmentDetails(appointmentId) {
+        try {
+            const response = await fetch(`/api/appointment/web/${appointmentId}`);
+            const data = await response.json();
+
+            if (data.success) {
+                const appt = data.appointment;
+
+                // Build service/package banner HTML
+                let serviceBannerHtml = '';
+                if (appt.service_name) {
+                    serviceBannerHtml = `
+                        <div style="background: linear-gradient(135deg, #7c3aed 0%, #9333ea 100%); border-radius: 10px; padding: 14px 16px; color: white; margin-bottom: 16px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div style="width: 40px; height: 40px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                                        <i class="fas fa-concierge-bell" style="font-size: 18px;"></i>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 10px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px;">Service</div>
+                                        <div style="font-size: 16px; font-weight: 700;">${appt.service_name}</div>
+                                    </div>
+                                </div>
+                                ${appt.service_duration ? `
+                                <div style="background: rgba(255,255,255,0.2); border-radius: 6px; padding: 6px 12px; text-align: center;">
+                                    <div style="font-size: 9px; opacity: 0.85; text-transform: uppercase;">Duration</div>
+                                    <div style="font-size: 14px; font-weight: 700;">${appt.service_duration} min</div>
+                                </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                } else if (appt.package_name) {
+                    serviceBannerHtml = `
+                        <div style="background: linear-gradient(135deg, #059669 0%, #047857 100%); border-radius: 10px; padding: 14px 16px; color: white; margin-bottom: 16px;">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div style="width: 40px; height: 40px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                                    <i class="fas fa-box" style="font-size: 18px;"></i>
+                                </div>
+                                <div>
+                                    <div style="font-size: 10px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px;">Package Session</div>
+                                    <div style="font-size: 16px; font-weight: 700;">${appt.package_name}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                document.getElementById('modal-content').innerHTML = `
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h4 class="text-xl font-semibold">${appt.patient_name}</h4>
+                                <p class="text-gray-500">${appt.patient_mrn ? 'MRN: ' + appt.patient_mrn : ''}</p>
+                            </div>
+                            <span class="status-badge status-${appt.status}">${appt.status.replace('_', ' ')}</span>
+                        </div>
+
+                        ${serviceBannerHtml}
+
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <span class="text-gray-500">Date</span>
+                                <p class="font-medium">${appt.appointment_date}</p>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Time</span>
+                                <p class="font-medium">${appt.start_time || 'Walk-in'}</p>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Doctor</span>
+                                <p class="font-medium">${appt.doctor_name || 'Not assigned'}</p>
+                                ${appt.doctor_specialization ? `<p class="text-xs text-blue-600">${appt.doctor_specialization}</p>` : ''}
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Type</span>
+                                <p class="font-medium">${appt.appointment_type || 'General'}</p>
+                            </div>
+                        </div>
+
+                        ${appt.chief_complaint ? `
+                        <div>
+                            <span class="text-gray-500 text-sm">Chief Complaint</span>
+                            <p class="mt-1">${appt.chief_complaint}</p>
+                        </div>
+                        ` : ''}
+
+                        <div class="pt-4 border-t flex justify-end gap-2">
+                            <button onclick="closeModal()" class="px-4 py-2 border rounded-lg hover:bg-gray-50">Close</button>
+                            <a href="/appointment/${appointmentId}" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                View Full Details
+                            </a>
+                        </div>
+                    </div>
+                `;
+                document.getElementById('appointment-modal').classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+        }
+    }
+
+    function closeModal() {
+        document.getElementById('appointment-modal').classList.add('hidden');
+    }
+
+    // Close modal on outside click
+    document.getElementById('appointment-modal').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+    });
+
+    // ====================================
+    // RESOURCE ALLOCATION
+    // ====================================
+    let currentResourceAppointmentId = null;
+    let selectedRoomId = null;
+    let selectedTherapistId = null;
+
+    async function openResourceAllocation(appointmentId) {
+        currentResourceAppointmentId = appointmentId;
+        selectedRoomId = null;
+        selectedTherapistId = null;
+
+        // Show modal
+        document.getElementById('resource-modal').classList.remove('hidden');
+
+        // Load appointment details for subtitle
+        try {
+            const response = await fetch(`/api/appointment/web/${appointmentId}`);
+            const data = await response.json();
+            if (data.success) {
+                document.getElementById('resource-modal-subtitle').textContent =
+                    `Allocating for ${data.appointment.patient_name} - ${data.appointment.start_time || 'Walk-in'}`;
+
+                // Load available resources based on appointment time
+                loadAvailableResources(data.appointment);
+            }
+        } catch (error) {
+            console.error('Error loading appointment:', error);
+        }
+    }
+
+    async function loadAvailableResources(appt) {
+        const date = appt.appointment_date;
+        const startTime = appt.start_time || '09:00';
+        const endTime = appt.end_time || calculateEndTime(startTime, 30);
+        const serviceId = appt.service_id;
+
+        // Load available rooms
+        try {
+            let roomUrl = `/api/appointment/web/rooms/available?date=${date}&start_time=${startTime}&end_time=${endTime}`;
+            if (serviceId) roomUrl += `&service_id=${serviceId}`;
+
+            const roomResponse = await fetch(roomUrl);
+            const roomData = await roomResponse.json();
+
+            if (roomData.success) {
+                renderRoomOptions(roomData.rooms);
+            }
+        } catch (error) {
+            document.getElementById('room-options').innerHTML = '<p class="text-red-500 col-span-2 text-center">Error loading rooms</p>';
+        }
+
+        // Load available therapists
+        try {
+            let staffUrl = `/api/appointment/web/therapists/available?date=${date}&start_time=${startTime}&end_time=${endTime}`;
+            if (serviceId) staffUrl += `&service_id=${serviceId}`;
+
+            const staffResponse = await fetch(staffUrl);
+            const staffData = await staffResponse.json();
+
+            if (staffData.success) {
+                renderTherapistOptions(staffData.therapists);
+            }
+        } catch (error) {
+            document.getElementById('therapist-options').innerHTML = '<p class="text-red-500 col-span-2 text-center">Error loading staff</p>';
+        }
+    }
+
+    function calculateEndTime(startTime, durationMinutes) {
+        const [hours, minutes] = startTime.split(':').map(Number);
+        const endMinutes = hours * 60 + minutes + durationMinutes;
+        const endHours = Math.floor(endMinutes / 60);
+        const endMins = endMinutes % 60;
+        return `${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}`;
+    }
+
+    function renderRoomOptions(rooms) {
+        if (!rooms || rooms.length === 0) {
+            document.getElementById('room-options').innerHTML = '<p class="text-gray-400 col-span-2 text-center py-2">No rooms available</p>';
+            return;
+        }
+
+        document.getElementById('room-options').innerHTML = rooms.map(room => `
+            <button type="button" onclick="selectRoom('${room.room_id}', this)"
+                    class="room-option p-3 border rounded-lg text-left hover:border-blue-400 transition-colors ${!room.is_available ? 'opacity-50 cursor-not-allowed' : ''}"
+                    ${!room.is_available ? 'disabled' : ''}>
+                <div class="font-medium text-sm">${room.room_name}</div>
+                <div class="text-xs text-gray-500">${room.room_type}</div>
+                ${!room.is_available ? '<div class="text-xs text-red-500 mt-1">' + room.conflict_reason + '</div>' : ''}
+            </button>
+        `).join('');
+    }
+
+    function renderTherapistOptions(therapists) {
+        if (!therapists || therapists.length === 0) {
+            document.getElementById('therapist-options').innerHTML = '<p class="text-gray-400 col-span-2 text-center py-2">No staff available</p>';
+            return;
+        }
+
+        document.getElementById('therapist-options').innerHTML = therapists.map(staff => `
+            <button type="button" onclick="selectTherapist('${staff.staff_id}', this)"
+                    class="therapist-option p-3 border rounded-lg text-left hover:border-purple-400 transition-colors ${!staff.is_available ? 'opacity-50 cursor-not-allowed' : ''}"
+                    ${!staff.is_available ? 'disabled' : ''}>
+                <div class="font-medium text-sm">${staff.name}</div>
+                <div class="text-xs text-gray-500">${staff.staff_type}</div>
+                ${!staff.is_available ? '<div class="text-xs text-red-500 mt-1">' + staff.conflict_reason + '</div>' : ''}
+            </button>
+        `).join('');
+    }
+
+    function selectRoom(roomId, element) {
+        selectedRoomId = roomId;
+        document.querySelectorAll('.room-option').forEach(el => el.classList.remove('border-blue-500', 'bg-blue-50'));
+        element.classList.add('border-blue-500', 'bg-blue-50');
+    }
+
+    function selectTherapist(staffId, element) {
+        selectedTherapistId = staffId;
+        document.querySelectorAll('.therapist-option').forEach(el => el.classList.remove('border-purple-500', 'bg-purple-50'));
+        element.classList.add('border-purple-500', 'bg-purple-50');
+    }
+
+    async function saveResourceAllocation() {
+        if (!selectedRoomId && !selectedTherapistId) {
+            alert('Please select at least one resource to allocate');
+            return;
+        }
+
+        const approve = document.getElementById('also-approve').checked;
+
+        try {
+            const response = await fetch(`/api/appointment/web/appointment/${currentResourceAppointmentId}/allocate-resources`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    room_id: selectedRoomId,
+                    therapist_id: selectedTherapistId,
+                    approve: approve
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                closeResourceModal();
+                refreshData();
+                // Show success message
+                alert('Resources allocated successfully');
+            } else {
+                alert(data.error || 'Failed to allocate resources');
+            }
+        } catch (error) {
+            console.error('Error allocating resources:', error);
+            alert('Error allocating resources');
+        }
+    }
+
+    function closeResourceModal() {
+        document.getElementById('resource-modal').classList.add('hidden');
+        currentResourceAppointmentId = null;
+    }
+
+    // Close resource modal on outside click
+    document.getElementById('resource-modal').addEventListener('click', function(e) {
+        if (e.target === this) closeResourceModal();
+    });
+
+    // Check for allocate parameter on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const allocateId = urlParams.get('allocate');
+        if (allocateId) {
+            openResourceAllocation(allocateId);
+        }
+    });
+
+    // ====================================
+    // DRAG-DROP RESCHEDULE CONFIRMATION
+    // ====================================
+    let pendingRescheduleInfo = null;
+    let pendingRescheduleData = null;
+
+    function showRescheduleConfirmModal(info, data) {
+        pendingRescheduleInfo = info;
+        pendingRescheduleData = data;
+
+        const event = info.event;
+        const oldStart = info.oldEvent.start;
+        const newStart = info.event.start;
+
+        // Format dates and times
+        const oldDate = oldStart.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        const oldTime = oldStart.toTimeString().slice(0, 5);
+        const newDate = newStart.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        const newTime = newStart.toTimeString().slice(0, 5);
+
+        // Build conflict info HTML with alternatives
+        let conflictHtml = '';
+        let statusClass = 'bg-green-50 border-green-200 text-green-800';
+        let statusIcon = 'check-circle';
+        let statusText = 'All resources available';
+
+        if (data.availability) {
+            const avail = data.availability;
+
+            if (avail.status === 'alternative' || avail.status === 'unavailable') {
+                if (avail.status === 'alternative') {
+                    statusClass = 'bg-amber-50 border-amber-200 text-amber-800';
+                    statusIcon = 'exclamation-triangle';
+                    statusText = 'Requires resource reallocation';
+                } else {
+                    statusClass = 'bg-red-50 border-red-200 text-red-800';
+                    statusIcon = 'times-circle';
+                    statusText = 'Resource conflicts detected';
+                }
+
+                // Build detailed conflict HTML with alternatives
+                conflictHtml = '<div class="mt-3 space-y-3">';
+
+                if (avail.conflict_details && avail.conflict_details.length > 0) {
+                    avail.conflict_details.forEach((detail, idx) => {
+                        const colorClass = avail.status === 'alternative' ? 'amber' : 'red';
+                        const iconMap = {
+                            'doctor': 'user-md',
+                            'room': 'door-open',
+                            'staff': 'user-nurse'
+                        };
+                        const icon = iconMap[detail.type] || 'exclamation-circle';
+
+                        conflictHtml += `
+                            <div class="bg-white rounded-lg p-3 border border-${colorClass}-200">
+                                <div class="flex items-center text-sm text-${colorClass}-700 font-medium">
+                                    <i class="fas fa-${icon} mr-2"></i>
+                                    ${detail.message}
+                                </div>
+                        `;
+
+                        // Show alternatives if available
+                        if (detail.alternatives && detail.alternatives.length > 0) {
+                            conflictHtml += `
+                                <div class="mt-2 pl-6">
+                                    <div class="text-xs text-gray-500 mb-1">Available alternatives:</div>
+                                    <div class="flex flex-wrap gap-1">
+                            `;
+                            detail.alternatives.slice(0, 5).forEach(alt => {
+                                const altLabel = alt.name + (alt.specialization ? ` (${alt.specialization})` : '') + (alt.type && detail.type !== 'doctor' ? ` - ${alt.type}` : '');
+                                conflictHtml += `
+                                    <button type="button"
+                                            onclick="selectAlternativeResource('${detail.type}', '${alt.id}', '${alt.name}', ${idx})"
+                                            class="alt-resource-btn px-2 py-1 text-xs rounded-full border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
+                                            data-conflict-idx="${idx}" data-resource-id="${alt.id}">
+                                        <i class="fas fa-check-circle mr-1"></i>${alt.name}
+                                    </button>
+                                `;
+                            });
+                            if (detail.alternatives.length > 5) {
+                                conflictHtml += `<span class="text-xs text-gray-400">+${detail.alternatives.length - 5} more</span>`;
+                            }
+                            conflictHtml += `</div></div>`;
+                        } else {
+                            conflictHtml += `
+                                <div class="mt-2 pl-6 text-xs text-red-500">
+                                    <i class="fas fa-times-circle mr-1"></i>No alternatives available
+                                </div>
+                            `;
+                        }
+
+                        conflictHtml += `</div>`;
+                    });
+                }
+
+                conflictHtml += '</div>';
+            }
+        }
+
+        // Update modal content
+        document.getElementById('reschedule-confirm-content').innerHTML = `
+            <div class="space-y-4">
+                <!-- Patient & Service Info -->
+                <div class="text-center">
+                    <div class="font-semibold text-lg text-gray-800">${event.title}</div>
+                    ${event.extendedProps.service_name ? `<div class="text-sm text-purple-600">${event.extendedProps.service_name}</div>` : ''}
+                </div>
+
+                <!-- Time Change -->
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="flex items-center justify-between">
+                        <!-- Old Time -->
+                        <div class="text-center">
+                            <div class="text-xs text-gray-500 uppercase mb-1">From</div>
+                            <div class="font-medium text-gray-600">${oldDate}</div>
+                            <div class="text-lg font-bold text-gray-800">${oldTime}</div>
+                        </div>
+
+                        <!-- Arrow -->
+                        <div class="px-4">
+                            <i class="fas fa-arrow-right text-2xl text-blue-500"></i>
+                        </div>
+
+                        <!-- New Time -->
+                        <div class="text-center">
+                            <div class="text-xs text-gray-500 uppercase mb-1">To</div>
+                            <div class="font-medium text-blue-600">${newDate}</div>
+                            <div class="text-lg font-bold text-blue-700">${newTime}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Availability Status -->
+                <div class="border rounded-lg p-4 ${statusClass}">
+                    <div class="flex items-center">
+                        <i class="fas fa-${statusIcon} text-xl mr-3"></i>
+                        <div class="font-medium">${statusText}</div>
+                    </div>
+                    ${conflictHtml}
+                </div>
+
+                ${data.availability && data.availability.status === 'alternative' ? `
+                <div class="text-sm text-green-600 bg-green-50 rounded p-3">
+                    <i class="fas fa-lightbulb mr-1"></i>
+                    Select alternative resources above, then confirm to reschedule with new allocation.
+                </div>
+                ` : ''}
+            </div>
+        `;
+
+        // Show modal
+        document.getElementById('reschedule-confirm-modal').classList.remove('hidden');
+
+        // Update button state based on availability
+        const confirmBtn = document.getElementById('confirm-reschedule-btn');
+        if (data.availability && data.availability.status === 'unavailable') {
+            // Check if all conflicts have alternatives selected or available
+            const hasAnyAlternatives = data.availability.conflict_details &&
+                data.availability.conflict_details.some(d => d.alternatives && d.alternatives.length > 0);
+
+            if (hasAnyAlternatives) {
+                confirmBtn.disabled = false;
+                confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                confirmBtn.innerHTML = '<i class="fas fa-exchange-alt mr-1"></i> Reschedule with Reallocation';
+            } else {
+                confirmBtn.disabled = true;
+                confirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+        } else {
+            confirmBtn.disabled = false;
+            confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            if (data.availability && data.availability.status === 'alternative') {
+                confirmBtn.innerHTML = '<i class="fas fa-exchange-alt mr-1"></i> Reschedule with Reallocation';
+            } else {
+                confirmBtn.innerHTML = '<i class="fas fa-check mr-1"></i> Confirm Reschedule';
+            }
+        }
+    }
+
+    // Track selected alternative resources
+    let selectedAlternatives = {};
+
+    function selectAlternativeResource(type, resourceId, resourceName, conflictIdx) {
+        // Store the selection
+        selectedAlternatives[conflictIdx] = {
+            type: type,
+            id: resourceId,
+            name: resourceName
+        };
+
+        // Update button styling
+        document.querySelectorAll(`[data-conflict-idx="${conflictIdx}"]`).forEach(btn => {
+            btn.classList.remove('bg-green-600', 'text-white', 'border-green-600');
+            btn.classList.add('bg-green-50', 'text-green-700', 'border-green-300');
+        });
+
+        const selectedBtn = document.querySelector(`[data-conflict-idx="${conflictIdx}"][data-resource-id="${resourceId}"]`);
+        if (selectedBtn) {
+            selectedBtn.classList.remove('bg-green-50', 'text-green-700', 'border-green-300');
+            selectedBtn.classList.add('bg-green-600', 'text-white', 'border-green-600');
+        }
+
+        // Enable confirm button if we have selections for conflicts
+        const confirmBtn = document.getElementById('confirm-reschedule-btn');
+        confirmBtn.disabled = false;
+        confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+
+    function cancelReschedule() {
+        // Hide modal
+        document.getElementById('reschedule-confirm-modal').classList.add('hidden');
+
+        // Revert the drag
+        if (pendingRescheduleInfo) {
+            pendingRescheduleInfo.revert();
+        }
+
+        // Clear pending data
+        pendingRescheduleInfo = null;
+        pendingRescheduleData = null;
+        selectedAlternatives = {};
+    }
+
+    async function confirmDragDropReschedule() {
+        if (!pendingRescheduleInfo || !pendingRescheduleData) {
+            return;
+        }
+
+        const appointmentId = pendingRescheduleInfo.event.id;
+        const newStart = pendingRescheduleInfo.event.start;
+        const newDate = newStart.toISOString().split('T')[0];
+        const newTime = newStart.toTimeString().slice(0, 5);
+
+        // Check if we have any conflicts that need reallocation
+        const hasConflicts = pendingRescheduleData.availability &&
+            (pendingRescheduleData.availability.status === 'alternative' ||
+             pendingRescheduleData.availability.status === 'unavailable');
+
+        // Disable button during submission
+        const confirmBtn = document.getElementById('confirm-reschedule-btn');
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Rescheduling...';
+
+        try {
+            // Build request body with selected alternatives
+            const requestBody = {
+                new_date: newDate,
+                new_time: newTime,
+                requires_reallocation: hasConflicts
+            };
+
+            // Add selected alternative resources
+            if (Object.keys(selectedAlternatives).length > 0) {
+                requestBody.resource_changes = [];
+                for (const idx in selectedAlternatives) {
+                    const alt = selectedAlternatives[idx];
+                    requestBody.resource_changes.push({
+                        type: alt.type,
+                        new_resource_id: alt.id
+                    });
+
+                    // Set specific IDs for doctor/room/therapist
+                    if (alt.type === 'doctor') {
+                        requestBody.staff_id = alt.id;
+                    } else if (alt.type === 'room') {
+                        requestBody.room_id = alt.id;
+                    } else if (alt.type === 'staff') {
+                        requestBody.therapist_id = alt.id;
+                    }
+                }
+            }
+
+            // Perform actual reschedule
+            const response = await fetch(`/api/appointment/web/${appointmentId}/reschedule`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Close modal
+                document.getElementById('reschedule-confirm-modal').classList.add('hidden');
+
+                // Show success and refresh calendar
+                calendar.refetchEvents();
+
+                // Show notification
+                if (hasConflicts && Object.keys(selectedAlternatives).length > 0) {
+                    showNotification('Appointment rescheduled with new resource allocation', 'success');
+                } else if (data.requires_reallocation) {
+                    showNotification('Appointment rescheduled - resources need manual reallocation', 'warning');
+                } else {
+                    showNotification('Appointment rescheduled successfully', 'success');
+                }
+            } else {
+                // Show error
+                alert('Failed to reschedule: ' + (data.error || 'Unknown error'));
+                pendingRescheduleInfo.revert();
+            }
+        } catch (error) {
+            console.error('Error rescheduling:', error);
+            alert('Error rescheduling appointment. Please try again.');
+            pendingRescheduleInfo.revert();
+        } finally {
+            // Reset button
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i class="fas fa-check mr-1"></i> Confirm Reschedule';
+
+            // Clear pending data
+            pendingRescheduleInfo = null;
+            pendingRescheduleData = null;
+            selectedAlternatives = {};
+        }
+    }
+
+    function showNotification(message, type = 'success') {
+        // Create notification element
+        const colors = {
+            success: 'bg-green-500',
+            warning: 'bg-amber-500',
+            error: 'bg-red-500',
+            info: 'bg-blue-500'
+        };
+
+        const notification = document.createElement('div');
+        notification.className = `fixed bottom-4 right-4 ${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center`;
+        notification.innerHTML = `
+            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'} mr-2"></i>
+            ${message}
+        `;
+
+        document.body.appendChild(notification);
+
+        // Auto-remove after 3 seconds
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            notification.style.transition = 'opacity 0.3s';
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+
+    // Close reschedule modal on outside click
+    document.getElementById('reschedule-confirm-modal').addEventListener('click', function(e) {
+        if (e.target === this) cancelReschedule();
+    });
+
+    // ====================================
+    // CONTEXT MENU (Right-Click)
+    // ====================================
+    let contextMenuAppointmentId = null;
+
+    // Hide context menu on any click
+    document.addEventListener('click', function(e) {
+        const contextMenu = document.getElementById('appointment-context-menu');
+        if (!contextMenu.contains(e.target)) {
+            contextMenu.classList.remove('show');
+        }
+    });
+
+    // Hide context menu on scroll
+    document.addEventListener('scroll', function() {
+        document.getElementById('appointment-context-menu').classList.remove('show');
+    });
+
+    // Handle right-click on queue cards
+    document.getElementById('queue-list').addEventListener('contextmenu', function(e) {
+        const card = e.target.closest('.queue-card');
+        if (card) {
+            e.preventDefault();
+            contextMenuAppointmentId = card.dataset.appointmentId;
+            showContextMenu(e.clientX, e.clientY);
+        }
+    });
+
+    function showContextMenu(x, y) {
+        const menu = document.getElementById('appointment-context-menu');
+        menu.style.left = x + 'px';
+        menu.style.top = y + 'px';
+
+        // Ensure menu stays within viewport
+        const rect = menu.getBoundingClientRect();
+        if (rect.right > window.innerWidth) {
+            menu.style.left = (x - rect.width) + 'px';
+        }
+        if (rect.bottom > window.innerHeight) {
+            menu.style.top = (y - rect.height) + 'px';
+        }
+
+        menu.classList.add('show');
+    }
+
+    function contextMenuAction(action) {
+        document.getElementById('appointment-context-menu').classList.remove('show');
+
+        if (!contextMenuAppointmentId) return;
+
+        switch(action) {
+            case 'view':
+                showAppointmentDetails(contextMenuAppointmentId);
+                break;
+            case 'edit':
+                openEditModal(contextMenuAppointmentId);
+                break;
+            case 'resources':
+                openResourceAllocation(contextMenuAppointmentId);
+                break;
+            case 'reschedule':
+                openRescheduleFromContextMenu(contextMenuAppointmentId);
+                break;
+            case 'cancel':
+                openCancelModal(contextMenuAppointmentId);
+                break;
+        }
+    }
+
+    async function openRescheduleFromContextMenu(appointmentId) {
+        // Get appointment details to navigate to the correct date
+        try {
+            const response = await fetch(`/api/appointment/web/${appointmentId}`);
+            const data = await response.json();
+
+            if (data.success) {
+                const appt = data.appointment;
+                const apptDate = appt.appointment_date;
+
+                // Switch to calendar view
+                showView('calendar');
+
+                // Wait for calendar to render, then navigate to the appointment's date
+                setTimeout(() => {
+                    // Change calendar to week view and go to the appointment date
+                    calendar.changeView('timeGridWeek', apptDate);
+
+                    // Highlight the appointment after events load
+                    setTimeout(() => {
+                        // Find and highlight the event
+                        const events = calendar.getEvents();
+                        const targetEvent = events.find(e => e.id === appointmentId);
+
+                        if (targetEvent) {
+                            // Scroll to the event time
+                            calendar.scrollToTime(appt.start_time || '09:00:00');
+
+                            // Find event element by data-appointment-id attribute
+                            const eventEl = document.querySelector(`[data-appointment-id="${appointmentId}"]`);
+
+                            if (eventEl) {
+                                // Add highlight class
+                                eventEl.classList.add('event-highlight');
+
+                                // Remove highlight after animation
+                                setTimeout(() => {
+                                    eventEl.classList.remove('event-highlight');
+                                }, 3500);
+                            }
+                        }
+
+                        showNotification('Drag the highlighted appointment to reschedule it', 'info');
+                    }, 500);
+                }, 200);
+            } else {
+                showView('calendar');
+                showNotification('Drag the appointment to reschedule it', 'info');
+            }
+        } catch (error) {
+            console.error('Error loading appointment for reschedule:', error);
+            showView('calendar');
+            showNotification('Drag the appointment to reschedule it', 'info');
+        }
+    }
+
+    // ====================================
+    // EDIT APPOINTMENT
+    // ====================================
+    let editAppointmentId = null;
+    let editAppointmentData = null;
+
+    async function openEditModal(appointmentId) {
+        editAppointmentId = appointmentId;
+
+        // Show modal
+        document.getElementById('edit-appointment-modal').classList.remove('hidden');
+
+        try {
+            // Load appointment details
+            const response = await fetch(`/api/appointment/web/${appointmentId}`);
+            const data = await response.json();
+
+            if (data.success) {
+                editAppointmentData = data.appointment;
+                populateEditForm(data.appointment);
+
+                // Load dropdown options
+                await loadEditDropdowns(data.appointment);
+            } else {
+                alert('Failed to load appointment details');
+                closeEditModal();
+            }
+        } catch (error) {
+            console.error('Error loading appointment:', error);
+            alert('Error loading appointment');
+            closeEditModal();
+        }
+    }
+
+    function populateEditForm(appt) {
+        // Patient info (read-only)
+        document.getElementById('edit-patient-name').textContent = appt.patient_name || 'Unknown Patient';
+        document.getElementById('edit-patient-mrn').textContent = appt.patient_mrn ? `MRN: ${appt.patient_mrn}` : '';
+
+        // Service/Package info (read-only)
+        const serviceInfo = document.getElementById('edit-service-info');
+        if (appt.service_name) {
+            serviceInfo.style.display = 'block';
+            serviceInfo.style.background = 'linear-gradient(135deg, #7c3aed 0%, #9333ea 100%)';
+            serviceInfo.style.color = 'white';
+            document.getElementById('edit-service-name').textContent = appt.service_name;
+        } else if (appt.package_name) {
+            serviceInfo.style.display = 'block';
+            serviceInfo.style.background = 'linear-gradient(135deg, #059669 0%, #047857 100%)';
+            serviceInfo.style.color = 'white';
+            document.getElementById('edit-service-name').textContent = appt.package_name;
+        } else {
+            serviceInfo.style.display = 'none';
+        }
+
+        // Editable fields
+        document.getElementById('edit-date').value = appt.appointment_date || '';
+        document.getElementById('edit-time').value = appt.start_time || '';
+        document.getElementById('edit-priority').value = appt.priority || 'normal';
+        document.getElementById('edit-notes').value = appt.internal_notes || '';
+    }
+
+    async function loadEditDropdowns(appt) {
+        // Load doctors
+        try {
+            const doctorResponse = await fetch('/api/appointment/web/doctors');
+            const doctorData = await doctorResponse.json();
+            if (doctorData.success) {
+                const doctorSelect = document.getElementById('edit-doctor');
+                doctorSelect.innerHTML = '<option value="">Select Doctor</option>' +
+                    doctorData.doctors.map(d =>
+                        `<option value="${d.staff_id}" ${d.staff_id === appt.staff_id ? 'selected' : ''}>${d.name}${d.specialization ? ' - ' + d.specialization : ''}</option>`
+                    ).join('');
+            }
+        } catch (e) {
+            console.error('Error loading doctors:', e);
+        }
+
+        // Load rooms
+        try {
+            const roomResponse = await fetch('/api/appointment/web/rooms');
+            const roomData = await roomResponse.json();
+            if (roomData.success) {
+                const roomSelect = document.getElementById('edit-room');
+                roomSelect.innerHTML = '<option value="">Select Room</option>' +
+                    roomData.rooms.map(r =>
+                        `<option value="${r.room_id}" ${r.room_id === appt.room_id ? 'selected' : ''}>${r.room_name} (${r.room_type})</option>`
+                    ).join('');
+            }
+        } catch (e) {
+            console.error('Error loading rooms:', e);
+        }
+
+        // Load therapists
+        try {
+            const therapistResponse = await fetch('/api/appointment/web/therapists');
+            const therapistData = await therapistResponse.json();
+            if (therapistData.success) {
+                const therapistSelect = document.getElementById('edit-therapist');
+                therapistSelect.innerHTML = '<option value="">Select Therapist</option>' +
+                    therapistData.therapists.map(t =>
+                        `<option value="${t.staff_id}" ${t.staff_id === appt.therapist_id ? 'selected' : ''}>${t.name}</option>`
+                    ).join('');
+            }
+        } catch (e) {
+            console.error('Error loading therapists:', e);
+        }
+    }
+
+    function closeEditModal() {
+        document.getElementById('edit-appointment-modal').classList.add('hidden');
+        editAppointmentId = null;
+        editAppointmentData = null;
+    }
+
+    async function saveAppointmentEdit() {
+        if (!editAppointmentId) return;
+
+        const formData = {
+            appointment_date: document.getElementById('edit-date').value,
+            start_time: document.getElementById('edit-time').value,
+            staff_id: document.getElementById('edit-doctor').value || null,
+            room_id: document.getElementById('edit-room').value || null,
+            therapist_id: document.getElementById('edit-therapist').value || null,
+            priority: document.getElementById('edit-priority').value,
+            internal_notes: document.getElementById('edit-notes').value
+        };
+
+        try {
+            const response = await fetch(`/api/appointment/web/${editAppointmentId}/edit`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                closeEditModal();
+                refreshData();
+                showNotification('Appointment updated successfully', 'success');
+            } else {
+                alert('Failed to update: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error saving:', error);
+            alert('Error saving appointment');
+        }
+    }
+
+    // Close edit modal on outside click
+    document.getElementById('edit-appointment-modal').addEventListener('click', function(e) {
+        if (e.target === this) closeEditModal();
+    });
+
+    // ====================================
+    // CANCEL APPOINTMENT
+    // ====================================
+    let cancelAppointmentId = null;
+
+    async function openCancelModal(appointmentId) {
+        cancelAppointmentId = appointmentId;
+
+        // Reset form
+        document.getElementById('cancel-reason-type').value = '';
+        document.getElementById('cancel-reason-text').value = '';
+
+        // Show modal
+        document.getElementById('cancel-appointment-modal').classList.remove('hidden');
+
+        try {
+            const response = await fetch(`/api/appointment/web/${appointmentId}`);
+            const data = await response.json();
+
+            if (data.success) {
+                const appt = data.appointment;
+                document.getElementById('cancel-patient-name').textContent = appt.patient_name || 'Unknown Patient';
+                document.getElementById('cancel-appointment-info').textContent =
+                    `${appt.appointment_date} at ${appt.start_time || 'Walk-in'} with ${appt.doctor_name || 'Unassigned'}`;
+            }
+        } catch (error) {
+            console.error('Error loading appointment:', error);
+        }
+    }
+
+    function closeCancelModal() {
+        document.getElementById('cancel-appointment-modal').classList.add('hidden');
+        cancelAppointmentId = null;
+    }
+
+    function toggleCancelOther() {
+        const reasonType = document.getElementById('cancel-reason-type').value;
+        const reasonText = document.getElementById('cancel-reason-text');
+        reasonText.placeholder = reasonType === 'other' ? 'Please provide reason... *' : 'Additional details (optional)...';
+    }
+
+    async function confirmCancelAppointment() {
+        if (!cancelAppointmentId) return;
+
+        const reasonType = document.getElementById('cancel-reason-type').value;
+        const reasonText = document.getElementById('cancel-reason-text').value;
+
+        if (!reasonType) {
+            alert('Please select a cancellation reason');
+            return;
+        }
+
+        if (reasonType === 'other' && !reasonText.trim()) {
+            alert('Please provide a reason for cancellation');
+            return;
+        }
+
+        const cancellationReason = reasonType === 'other' ? reasonText : `${reasonType}: ${reasonText}`.trim();
+
+        try {
+            const response = await fetch(`/api/appointment/web/${cancelAppointmentId}/cancel`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    reason: cancellationReason
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                closeCancelModal();
+                refreshData();
+                showNotification('Appointment cancelled successfully', 'success');
+            } else {
+                alert('Failed to cancel: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error cancelling:', error);
+            alert('Error cancelling appointment');
+        }
+    }
+
+    // Close cancel modal on outside click
+    document.getElementById('cancel-appointment-modal').addEventListener('click', function(e) {
+        if (e.target === this) closeCancelModal();
+    });
+</script>
+{% endblock %}

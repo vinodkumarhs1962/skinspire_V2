@@ -1,0 +1,139 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}{% if is_edit %}Edit{% else %}Create{% endif %} Doctor Schedule{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">{% if is_edit %}Edit{% else %}Create{% endif %} Doctor Schedule</h1>
+        <a href="{{ url_for('appointment_views.schedule_list') }}" class="text-blue-600 hover:text-blue-700">
+            <i class="fas fa-arrow-left mr-2"></i> Back to Schedules
+        </a>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6 max-w-2xl">
+        <form id="schedule-form" class="space-y-6">
+            <div class="grid grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Doctor *</label>
+                    <select id="staff_id" name="staff_id" required class="w-full border rounded-lg px-4 py-2">
+                        <option value="">-- Select Doctor --</option>
+                        {% for doctor in doctors %}
+                        <option value="{{ doctor.staff_id }}">{{ doctor.first_name }} {{ doctor.last_name or '' }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Branch *</label>
+                    <select id="branch_id" name="branch_id" required class="w-full border rounded-lg px-4 py-2">
+                        {% for branch in branches %}
+                        <option value="{{ branch.branch_id }}" {% if current_branch_id == branch.branch_id|string %}selected{% endif %}>
+                            {{ branch.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Day of Week *</label>
+                <select id="day_of_week" name="day_of_week" required class="w-full border rounded-lg px-4 py-2">
+                    {% for i in range(7) %}
+                    <option value="{{ i }}">{{ day_names[i] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Start Time *</label>
+                    <input type="time" id="start_time" name="start_time" required
+                           class="w-full border rounded-lg px-4 py-2" value="09:00">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">End Time *</label>
+                    <input type="time" id="end_time" name="end_time" required
+                           class="w-full border rounded-lg px-4 py-2" value="17:00">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Slot Duration (minutes)</label>
+                    <input type="number" id="slot_duration_minutes" name="slot_duration_minutes"
+                           class="w-full border rounded-lg px-4 py-2" value="15" min="5" max="120">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Max Patients Per Slot</label>
+                    <input type="number" id="max_patients_per_slot" name="max_patients_per_slot"
+                           class="w-full border rounded-lg px-4 py-2" value="1" min="1" max="10">
+                </div>
+            </div>
+
+            <div class="border-t pt-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Break Time (Optional)</label>
+                <div class="grid grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Break Start</label>
+                        <input type="time" id="break_start_time" name="break_start_time"
+                               class="w-full border rounded-lg px-4 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Break End</label>
+                        <input type="time" id="break_end_time" name="break_end_time"
+                               class="w-full border rounded-lg px-4 py-2">
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end space-x-4 pt-4 border-t">
+                <a href="{{ url_for('appointment_views.schedule_list') }}"
+                   class="px-6 py-2 text-gray-600 hover:text-gray-800">
+                    Cancel
+                </a>
+                <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
+                    <i class="fas fa-save mr-2"></i> Save Schedule
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.getElementById('schedule-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const formData = {
+            staff_id: document.getElementById('staff_id').value,
+            branch_id: document.getElementById('branch_id').value,
+            day_of_week: parseInt(document.getElementById('day_of_week').value),
+            start_time: document.getElementById('start_time').value,
+            end_time: document.getElementById('end_time').value,
+            slot_duration_minutes: parseInt(document.getElementById('slot_duration_minutes').value),
+            max_patients_per_slot: parseInt(document.getElementById('max_patients_per_slot').value),
+            break_start_time: document.getElementById('break_start_time').value || undefined,
+            break_end_time: document.getElementById('break_end_time').value || undefined
+        };
+
+        try {
+            const response = await fetch('/api/appointment/schedules', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                alert('Schedule saved successfully!');
+                window.location.href = '{{ url_for("appointment_views.schedule_list") }}';
+            } else {
+                alert(result.error || 'Failed to save schedule');
+            }
+        } catch (error) {
+            alert('Error saving schedule');
+        }
+    });
+</script>
+{% endblock %}

@@ -175,12 +175,26 @@ class MenuService:
         ]
 
 def register_menu_context_processor(app):
-    """Register menu context processor with Flask app."""
-    
+    """Register menu context processor with Flask app.
+
+    IMPORTANT: This now uses the menu_utils.py functions which contain
+    the complete three-level menu structure including Appointments,
+    Master Data, Procurement, Financial Management, etc.
+    """
+
     @app.context_processor
     def inject_menu():
         from flask_login import current_user
-        
-        return {
-            'menu_items': MenuService.get_menu_for_user(current_user)
-        }
+        from app.utils.menu_utils import get_menu_items
+
+        # Use the correct menu function from menu_utils.py
+        # which includes all the proper menu items including Appointments
+        if current_user and current_user.is_authenticated:
+            return {
+                'menu_items': get_menu_items(current_user)
+            }
+        else:
+            # Fallback for unauthenticated users
+            return {
+                'menu_items': MenuService.get_menu_for_user(current_user)
+            }

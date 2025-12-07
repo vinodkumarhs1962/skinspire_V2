@@ -77,18 +77,50 @@ def _search_patients(
         
         # Apply search filter if provided
         if search_term and search_term.strip():
-            search_term = f"%{search_term.strip()}%"
-            
-            # Simplify search to just use standard fields
-            from sqlalchemy import or_
-            query = query.filter(
-                or_(
-                    Patient.first_name.ilike(search_term),
-                    Patient.last_name.ilike(search_term),
-                    Patient.full_name.ilike(search_term),
-                    Patient.mrn.ilike(search_term)
+            term = search_term.strip()
+            search_pattern = f"%{term}%"
+
+            # Check if search term looks like a phone number (digits only or with + prefix)
+            normalized_phone = ''.join(c for c in term if c.isdigit())
+            is_phone_search = len(normalized_phone) >= 2  # Start phone search with 2+ digits
+
+            from sqlalchemy import or_, cast
+            from sqlalchemy.dialects.postgresql import TEXT
+
+            # Build search conditions
+            conditions = [
+                Patient.first_name.ilike(search_pattern),
+                Patient.last_name.ilike(search_pattern),
+                Patient.full_name.ilike(search_pattern),
+                Patient.mrn.ilike(search_pattern)
+            ]
+
+            # Add phone search if it looks like a phone number
+            if is_phone_search:
+                # Normalize stored phone (remove all non-digits)
+                normalized_phone_col = func.regexp_replace(
+                    cast(Patient.contact_info['phone'], TEXT),
+                    '[^0-9]', '', 'g'
                 )
-            )
+
+                if len(normalized_phone) == 10:
+                    # For 10-digit search, match the last 10 digits of stored phone
+                    # This handles country codes: stored +919876543210, search 9876543210
+                    conditions.append(normalized_phone_col.like(f'%{normalized_phone}'))
+                else:
+                    # For partial numbers (2-9 digits), match from START of phone
+                    # Example: searching "96" matches "9876543210" but not "1296543210"
+                    # Also check if it matches after country code (last N digits start with search)
+                    conditions.append(
+                        or_(
+                            # Match from start of full number (including country code)
+                            normalized_phone_col.like(f'{normalized_phone}%'),
+                            # Match from start of local number (last 10 digits)
+                            func.right(normalized_phone_col, 10).like(f'{normalized_phone}%')
+                        )
+                    )
+
+            query = query.filter(or_(*conditions))
         
         # Apply pagination - EXPLICITLY USE THE LIMIT PARAMETER
         total_count = query.count()  # Get total before pagination

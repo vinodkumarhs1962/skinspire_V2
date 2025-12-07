@@ -947,18 +947,24 @@ class InvoiceItemComponent {
       
       // Attach event listeners
       itemSearchInput.addEventListener('input', function() {
+        // Skip if populating from barcode scan
+        if (window.isPopulatingFromBarcode) return;
         const query = this.value.trim();
         performSearch(query);
       });
 
       // Show top items on focus
       itemSearchInput.addEventListener('focus', function() {
+        // Skip if populating from barcode scan
+        if (window.isPopulatingFromBarcode) return;
         const query = this.value.trim();
         performSearch(query);
       });
 
       // Show top items on click
       itemSearchInput.addEventListener('click', function() {
+        // Skip if populating from barcode scan
+        if (window.isPopulatingFromBarcode) return;
         const query = this.value.trim();
         performSearch(query);
       });

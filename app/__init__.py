@@ -71,7 +71,7 @@ except ImportError:
     setup_environment()
 
 from flask_wtf.csrf import CSRFProtect
-from flask import Flask, Blueprint, session, request, g, render_template
+from flask import Flask, Blueprint, session, request, g, render_template, redirect, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, current_user
@@ -462,6 +462,13 @@ def register_view_blueprints(app: Flask) -> None:
         except ImportError as e:
             app.logger.warning(f"Promotion views blueprint could not be loaded: {str(e)}")
 
+        try:
+            # Appointment views (Patient Lifecycle Phase 1)
+            from app.views.appointment_views import appointment_views_bp
+            view_blueprints.append(appointment_views_bp)
+        except ImportError as e:
+            app.logger.warning(f"Appointment views blueprint could not be loaded: {str(e)}")
+
         app.logger.info("Registered view blueprints")
     except ImportError as e:
         app.logger.warning(f"View blueprints could not be loaded: {str(e)}")
@@ -575,6 +582,33 @@ def register_api_blueprints(app: Flask) -> None:
         csrf.exempt(discount_bp)
     except ImportError as e:
         app.logger.warning(f"Discount API blueprint could not be loaded: {str(e)}")
+
+    # Register barcode scanner API blueprint (Added 2025-12-03)
+    try:
+        from app.api.routes.barcode_api import barcode_api_bp
+        blueprints.append(barcode_api_bp)
+        # Exempt barcode API from CSRF protection (uses fetch with JSON)
+        csrf.exempt(barcode_api_bp)
+    except ImportError as e:
+        app.logger.warning(f"Barcode API blueprint could not be loaded: {str(e)}")
+
+    # Register appointment API blueprint (Patient Lifecycle Phase 1)
+    try:
+        from app.api.routes.appointment_api import appointment_api_bp
+        blueprints.append(appointment_api_bp)
+        # Exempt appointment API from CSRF protection (uses fetch with JSON)
+        csrf.exempt(appointment_api_bp)
+    except ImportError as e:
+        app.logger.warning(f"Appointment API blueprint could not be loaded: {str(e)}")
+
+    # Register Google Calendar API blueprint
+    try:
+        from app.api.routes.google_calendar_api import google_calendar_bp
+        blueprints.append(google_calendar_bp)
+        # Exempt Google Calendar API from CSRF protection
+        csrf.exempt(google_calendar_bp)
+    except ImportError as e:
+        app.logger.warning(f"Google Calendar API blueprint could not be loaded: {str(e)}")
 
     # Register each blueprint
     for blueprint in blueprints:

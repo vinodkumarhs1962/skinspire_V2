@@ -1,0 +1,250 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Queue Management{% endblock %}
+
+{% block extra_css %}
+<style>
+    .queue-column {
+        min-height: 400px;
+    }
+    .patient-card {
+        @apply bg-white rounded-lg shadow p-4 mb-3 border-l-4 transition-all cursor-pointer;
+    }
+    .patient-card:hover {
+        transform: translateX(5px);
+    }
+    .patient-card.priority-emergency { border-color: #ef4444; }
+    .patient-card.priority-urgent { border-color: #f97316; }
+    .patient-card.priority-normal { border-color: #22c55e; }
+
+    .waiting-badge {
+        @apply px-2 py-1 text-xs rounded-full;
+    }
+    .waiting-normal { @apply bg-green-100 text-green-700; }
+    .waiting-moderate { @apply bg-yellow-100 text-yellow-700; }
+    .waiting-long { @apply bg-red-100 text-red-700; }
+
+    .column-header {
+        @apply p-3 rounded-t-lg text-white font-semibold flex justify-between items-center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">Queue Management</h1>
+            <p class="text-gray-600" id="current-time"></p>
+        </div>
+        <div class="flex gap-4 items-center">
+            <select id="doctor-filter" class="border rounded px-4 py-2">
+                <option value="">All Doctors</option>
+                {% for doctor in doctors %}
+                <option value="{{ doctor.staff_id }}">{{ doctor.name }}</option>
+                {% endfor %}
+            </select>
+            <button onclick="refreshQueue()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                <i class="fas fa-sync-alt mr-2"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Queue Columns -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Waiting Column -->
+        <div class="bg-gray-100 rounded-lg">
+            <div class="column-header bg-purple-600">
+                <span><i class="fas fa-hourglass-half mr-2"></i> Waiting</span>
+                <span id="waiting-count" class="bg-white text-purple-600 px-2 py-1 rounded text-sm">0</span>
+            </div>
+            <div class="p-3 queue-column" id="waiting-queue">
+                <!-- Populated dynamically -->
+            </div>
+        </div>
+
+        <!-- In Progress Column -->
+        <div class="bg-gray-100 rounded-lg">
+            <div class="column-header bg-orange-600">
+                <span><i class="fas fa-user-md mr-2"></i> In Progress</span>
+                <span id="progress-count" class="bg-white text-orange-600 px-2 py-1 rounded text-sm">0</span>
+            </div>
+            <div class="p-3 queue-column" id="progress-queue">
+                <!-- Populated dynamically -->
+            </div>
+        </div>
+
+        <!-- Completed Column -->
+        <div class="bg-gray-100 rounded-lg">
+            <div class="column-header bg-green-600">
+                <span><i class="fas fa-check-circle mr-2"></i> Completed</span>
+                <span id="completed-count" class="bg-white text-green-600 px-2 py-1 rounded text-sm">0</span>
+            </div>
+            <div class="p-3 queue-column" id="completed-queue">
+                <!-- Populated dynamically -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Action Modal -->
+<div id="action-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
+            <h3 class="text-lg font-semibold mb-4" id="modal-title">Patient Action</h3>
+            <div id="modal-actions" class="space-y-3">
+                <!-- Populated dynamically -->
+            </div>
+            <button onclick="closeActionModal()" class="mt-4 text-gray-500 hover:text-gray-700 w-full text-center">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let refreshInterval;
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        updateTime();
+        refreshQueue();
+        refreshInterval = setInterval(refreshQueue, 15000); // Refresh every 15 seconds
+        setInterval(updateTime, 1000);
+    });
+
+    function updateTime() {
+        document.getElementById('current-time').textContent = new Date().toLocaleTimeString();
+    }
+
+    async function refreshQueue() {
+        try {
+            const doctorFilter = document.getElementById('doctor-filter').value;
+            let url = '/api/appointment/queue/today?';
+            if (doctorFilter) url += `staff_id=${doctorFilter}`;
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.success) {
+                renderQueues(data.queue, data.summary);
+            }
+        } catch (error) {
+            console.error('Error refreshing queue:', error);
+        }
+    }
+
+    function renderQueues(queue, summary) {
+        const waiting = queue.filter(a => a.status === 'checked_in');
+        const inProgress = queue.filter(a => a.status === 'in_progress');
+        const completed = queue.filter(a => a.status === 'completed');
+
+        document.getElementById('waiting-count').textContent = waiting.length;
+        document.getElementById('progress-count').textContent = inProgress.length;
+        document.getElementById('completed-count').textContent = completed.length;
+
+        document.getElementById('waiting-queue').innerHTML = waiting.map(a => renderPatientCard(a, 'waiting')).join('');
+        document.getElementById('progress-queue').innerHTML = inProgress.map(a => renderPatientCard(a, 'in_progress')).join('');
+        document.getElementById('completed-queue').innerHTML = completed.map(a => renderPatientCard(a, 'completed')).join('');
+    }
+
+    function renderPatientCard(appointment, status) {
+        const waitingClass = getWaitingClass(appointment.waiting_minutes);
+
+        return `
+            <div class="patient-card priority-${appointment.priority}" onclick="showActions('${appointment.appointment_id}', '${status}', '${appointment.patient_name}')">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <div class="flex items-center">
+                            <span class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold mr-2">
+                                ${appointment.token_number || '#'}
+                            </span>
+                            <div>
+                                <div class="font-semibold">${appointment.patient_name}</div>
+                                <div class="text-sm text-gray-500">${appointment.doctor_name || 'Not assigned'}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        ${status === 'waiting' && appointment.waiting_minutes ? `
+                            <span class="waiting-badge ${waitingClass}">${appointment.waiting_minutes} min</span>
+                        ` : ''}
+                        <div class="text-xs text-gray-500 mt-1">${appointment.appointment_time || 'Walk-in'}</div>
+                    </div>
+                </div>
+                ${appointment.chief_complaint ? `
+                    <div class="text-sm text-gray-600 mt-2 truncate">${appointment.chief_complaint}</div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    function getWaitingClass(minutes) {
+        if (!minutes) return 'waiting-normal';
+        if (minutes < 15) return 'waiting-normal';
+        if (minutes < 30) return 'waiting-moderate';
+        return 'waiting-long';
+    }
+
+    function showActions(appointmentId, status, patientName) {
+        document.getElementById('modal-title').textContent = patientName;
+
+        let actions = '';
+
+        if (status === 'waiting') {
+            actions = `
+                <button onclick="performAction('${appointmentId}', 'start')" class="w-full bg-orange-600 text-white py-3 rounded-lg hover:bg-orange-700">
+                    <i class="fas fa-play mr-2"></i> Start Consultation
+                </button>
+                <button onclick="performAction('${appointmentId}', 'no-show')" class="w-full bg-gray-600 text-white py-3 rounded-lg hover:bg-gray-700">
+                    <i class="fas fa-user-slash mr-2"></i> Mark No-Show
+                </button>
+            `;
+        } else if (status === 'in_progress') {
+            actions = `
+                <button onclick="performAction('${appointmentId}', 'complete')" class="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700">
+                    <i class="fas fa-check mr-2"></i> Complete Consultation
+                </button>
+            `;
+        } else if (status === 'completed') {
+            actions = `
+                <a href="/appointment/${appointmentId}" class="block w-full bg-blue-600 text-white py-3 rounded-lg text-center hover:bg-blue-700">
+                    <i class="fas fa-eye mr-2"></i> View Details
+                </a>
+            `;
+        }
+
+        document.getElementById('modal-actions').innerHTML = actions;
+        document.getElementById('action-modal').classList.remove('hidden');
+    }
+
+    function closeActionModal() {
+        document.getElementById('action-modal').classList.add('hidden');
+    }
+
+    async function performAction(appointmentId, action) {
+        try {
+            const response = await fetch(`/api/appointment/${appointmentId}/${action}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                closeActionModal();
+                refreshQueue();
+            } else {
+                alert(data.error || 'Action failed');
+            }
+        } catch (error) {
+            alert('Error performing action');
+        }
+    }
+
+    // Filter change
+    document.getElementById('doctor-filter').addEventListener('change', refreshQueue);
+</script>
+{% endblock %}

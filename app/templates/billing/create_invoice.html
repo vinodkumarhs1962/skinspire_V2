@@ -579,6 +579,19 @@
         </div>
     </div>
 
+    <!-- Barcode Scanner Settings Row -->
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 24px; background: #f8f9fa; border-bottom: 1px solid #dee2e6;">
+        <span style="color: #6c757d;"><i class="fas fa-barcode mr-1"></i>Barcode Scanner</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <button type="button" class="btn btn-success btn-sm" id="enableScannerBtn" title="Enable barcode scanner">
+                <i class="fas fa-barcode mr-1"></i><span id="scannerStatusText">Scanner Enabled</span>
+            </button>
+            <button type="button" class="btn btn-outline-info btn-sm" id="manualLinkBtn" title="Manually link a barcode to medicine">
+                <i class="fas fa-link mr-1"></i>Link Barcode
+            </button>
+        </div>
+    </div>
+
     <div class="px-6">
 
         <!-- Flash messages section -->
@@ -3060,9 +3073,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const itemIdInput = row.querySelector('.item-id');
 
         if (!batchSelect || !quantityInput || !itemIdInput) return;
+
+        // Skip validation if no batch selected or batch is empty/undefined
         if (batchSelect.selectedIndex <= 0) return;
 
         const selectedBatch = batchSelect.value;
+        if (!selectedBatch || selectedBatch === 'undefined' || selectedBatch === '') return;
+
         const requestedQty = parseFloat(quantityInput.value || 1);
 
         // Get available quantity from the selected option's data attribute
@@ -3071,8 +3088,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
         console.log(`Validating batch ${selectedBatch}: requested=${requestedQty}, available=${availableQty}`);
 
+        // Skip stock validation if data-available is not set (manual entry or barcode scan)
+        if (!selectedOption.hasAttribute('data-available')) {
+            console.log('Batch added manually or via barcode - skipping stock validation');
+            return;
+        }
+
         if (availableQty <= 0) {
-            alert("⚠️ Warning: This batch has no available stock. Please select a different batch.");
+            // Just log warning, don't block - user may be adding new stock
+            console.warn("Warning: This batch has no available stock in inventory");
             return;
         }
 
@@ -3217,5 +3241,389 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+</script>
+
+<!-- SweetAlert2 for Barcode Link Popup -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<!-- Barcode Scanner Script - Must load before usage -->
+<script src="{{ url_for('static', filename='js/components/barcode_scanner.js') }}"></script>
+
+<script>
+//=============================================================================
+// BARCODE SCANNER INTEGRATION (Added 2025-12-03)
+// Pre-populates line items from scanned barcodes using EXISTING flow
+// Does NOT change validation, autocomplete, or promotion logic
+//=============================================================================
+(function() {
+    'use strict';
+
+    var barcodeScanner = null;
+    var barcodeLinkModal = null;
+
+    function initBarcodeScanner() {
+        // Only initialize if BarcodeScanner class is available
+        if (typeof BarcodeScanner === 'undefined') {
+            console.log('[PatientInvoice] BarcodeScanner not loaded, skipping initialization');
+            return;
+        }
+
+        console.log('[PatientInvoice] Initializing barcode scanner...');
+
+        barcodeScanner = new BarcodeScanner({
+            timeout: 50,
+            minLength: 6,
+            debug: true,  // Enable for troubleshooting
+            onScan: handleBarcodeScan,
+            onNotFound: handleBarcodeNotFound,
+            onError: function(msg) {
+                showToast(msg, 'error');
+            }
+        });
+
+        // Initialize link modal if available
+        if (typeof BarcodeLinkModal !== 'undefined') {
+            barcodeLinkModal = new BarcodeLinkModal({
+                onLinked: function(linkedData) {
+                    // After linking, process the scan again
+                    handleLinkedBarcode(linkedData);
+                }
+            });
+        }
+
+        // Disable scanner when modals are open
+        BarcodeScanner.setupModalHandlers(barcodeScanner);
+
+        // Setup scanner control buttons
+        setupScannerControls();
+
+        console.log('[PatientInvoice] Barcode scanner initialized');
+    }
+
+    function setupScannerControls() {
+        var enableScannerBtn = document.getElementById('enableScannerBtn');
+        var scannerStatusText = document.getElementById('scannerStatusText');
+        var manualLinkBtn = document.getElementById('manualLinkBtn');
+        var scannerEnabled = true;
+
+        // Scanner enable/disable toggle
+        if (enableScannerBtn) {
+            enableScannerBtn.addEventListener('click', function() {
+                scannerEnabled = !scannerEnabled;
+                if (scannerEnabled) {
+                    barcodeScanner.enable();
+                    enableScannerBtn.classList.remove('btn-outline-secondary');
+                    enableScannerBtn.classList.add('btn-success');
+                    scannerStatusText.textContent = 'Scanner Enabled';
+                    showToast('Barcode scanner enabled', 'success');
+                } else {
+                    barcodeScanner.disable();
+                    enableScannerBtn.classList.remove('btn-success');
+                    enableScannerBtn.classList.add('btn-outline-secondary');
+                    scannerStatusText.textContent = 'Scanner Disabled';
+                    showToast('Barcode scanner disabled', 'info');
+                }
+            });
+        }
+
+        // Manual Link Barcode button
+        if (manualLinkBtn) {
+            manualLinkBtn.addEventListener('click', function() {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        title: 'Enter Barcode',
+                        input: 'text',
+                        inputPlaceholder: 'Enter barcode to link...',
+                        showCancelButton: true,
+                        confirmButtonText: 'Lookup',
+                        inputValidator: function(value) {
+                            if (!value || value.trim().length < 6) {
+                                return 'Please enter a valid barcode (min 6 characters)';
+                            }
+                        }
+                    }).then(function(result) {
+                        if (result.isConfirmed && result.value) {
+                            lookupAndLinkBarcode(result.value.trim());
+                        }
+                    });
+                } else {
+                    var barcode = prompt('Enter barcode to link:');
+                    if (barcode && barcode.trim().length >= 6) {
+                        lookupAndLinkBarcode(barcode.trim());
+                    }
+                }
+            });
+        }
+    }
+
+    function lookupAndLinkBarcode(barcode) {
+        fetch('/api/barcode/lookup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ barcode: barcode })
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.success) {
+                if (data.medicine_found) {
+                    showToast('Barcode already linked to: ' + data.medicine.medicine_name, 'info');
+                } else if (barcodeLinkModal) {
+                    barcodeLinkModal.show(data);
+                }
+            } else {
+                showToast(data.error || 'Failed to lookup barcode', 'error');
+            }
+        })
+        .catch(function(error) {
+            console.error('Error:', error);
+            showToast('Failed to lookup barcode', 'error');
+        });
+    }
+
+    // Flag to prevent autocomplete during barcode population (exposed on window for invoice_item.js)
+    window.isPopulatingFromBarcode = false;
+
+    function handleBarcodeScan(data) {
+        console.log('[PatientInvoice] Barcode scanned:', data);
+
+        if (!data.medicine_found) {
+            handleBarcodeNotFound(data);
+            return;
+        }
+
+        // Check if medicine already exists in invoice
+        var existingRow = findExistingLineRow(data.medicine.medicine_id);
+        if (existingRow) {
+            // Increment quantity
+            updateExistingLine(existingRow, data);
+        } else {
+            // Add new row
+            addMedicineFromBarcode(data);
+        }
+    }
+
+    function handleBarcodeNotFound(data) {
+        console.log('[PatientInvoice] Barcode not found:', data);
+
+        if (barcodeLinkModal) {
+            barcodeLinkModal.show(data);
+        } else {
+            showToast('Barcode not linked to any medicine. GTIN: ' + (data.parsed?.gtin || 'unknown'), 'warning');
+        }
+    }
+
+    function handleLinkedBarcode(linkedData) {
+        console.log('[PatientInvoice] Barcode linked, processing:', linkedData);
+
+        fetch('/api/barcode/lookup', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({ barcode: linkedData.barcode })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.medicine_found) {
+                var existingRow = findExistingLineRow(data.medicine.medicine_id);
+                if (existingRow) {
+                    updateExistingLine(existingRow, data);
+                } else {
+                    addMedicineFromBarcode(data);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('[PatientInvoice] Error after linking:', error);
+        });
+    }
+
+    function findExistingLineRow(medicineId) {
+        var rows = document.querySelectorAll('.line-item-row');
+        for (var i = 0; i < rows.length; i++) {
+            var itemIdInput = rows[i].querySelector('.item-id');
+            if (itemIdInput && itemIdInput.value === medicineId) {
+                return rows[i];
+            }
+        }
+        return null;
+    }
+
+    function updateExistingLine(row, data) {
+        var quantityInput = row.querySelector('.quantity');
+        if (quantityInput) {
+            var currentQty = parseInt(quantityInput.value) || 0;
+            quantityInput.value = currentQty + 1;
+            quantityInput.style.borderColor = '#28a745';
+            quantityInput.style.borderWidth = '2px';
+
+            // Recalculate
+            if (window.invoiceItemComponent) {
+                window.invoiceItemComponent.calculateLineTotal(row);
+                window.invoiceItemComponent.calculateTotals();
+            }
+
+            // Highlight row briefly
+            row.style.backgroundColor = '#d4edda';
+            setTimeout(function() {
+                row.style.backgroundColor = '';
+            }, 2000);
+
+            showToast(data.medicine.medicine_name + ': Qty +1', 'success');
+        }
+    }
+
+    function addMedicineFromBarcode(data) {
+        if (!window.invoiceItemComponent) {
+            console.error('[PatientInvoice] InvoiceItemComponent not found');
+            showToast('Invoice component not ready', 'error');
+            return;
+        }
+
+        // Set flag to prevent autocomplete
+        window.isPopulatingFromBarcode = true;
+
+        var row = window.invoiceItemComponent.addLineItem();
+        if (!row) {
+            console.error('[PatientInvoice] Failed to create new row');
+            window.isPopulatingFromBarcode = false;
+            return;
+        }
+
+        // Small delay to ensure row is fully initialized
+        setTimeout(function() {
+            populateRowFromBarcode(row, data);
+            // Reset flag after population
+            setTimeout(function() {
+                window.isPopulatingFromBarcode = false;
+            }, 300);
+        }, 100);
+    }
+
+    function populateRowFromBarcode(row, data) {
+        var medicine = data.medicine;
+        var parsed = data.parsed;
+        var batches = data.available_batches || [];
+
+        // Set item type to Medicine
+        var itemTypeSelect = row.querySelector('.item-type');
+        if (itemTypeSelect) {
+            itemTypeSelect.value = medicine.medicine_type || 'OTC';
+            // Trigger change event for any dependent logic
+            itemTypeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        // Set medicine ID and name
+        var itemIdInput = row.querySelector('.item-id');
+        var itemNameInput = row.querySelector('.item-name');  // Hidden input
+        var itemSearchInput = row.querySelector('.item-search');  // Visible search field
+
+        if (itemIdInput) itemIdInput.value = medicine.medicine_id;
+        if (itemNameInput) itemNameInput.value = medicine.medicine_name;
+
+        // Set the visible search input and close dropdown
+        if (itemSearchInput) {
+            itemSearchInput.value = medicine.medicine_name;
+            // Blur to close any dropdown and prevent reopening
+            itemSearchInput.blur();
+            // Also explicitly hide the dropdown
+            var dropdown = row.querySelector('.item-search-results');
+            if (dropdown) {
+                dropdown.classList.add('hidden');
+                dropdown.innerHTML = '';
+            }
+        }
+
+        // Set unit price
+        var unitPriceInput = row.querySelector('.unit-price');
+        if (unitPriceInput && medicine.selling_price) {
+            unitPriceInput.value = medicine.selling_price;
+        }
+
+        // Set quantity to 1
+        var quantityInput = row.querySelector('.quantity');
+        if (quantityInput) {
+            quantityInput.value = 1;
+        }
+
+        // Set batch using FIFO (earliest expiry first)
+        var batchSelect = row.querySelector('.batch-select');
+        if (batchSelect && batches.length > 0) {
+            // Get FIFO batch (first in list, sorted by expiry)
+            var fifoBatch = batches[0];
+
+            // Check if option exists
+            var optionExists = Array.from(batchSelect.options).some(opt => opt.value === fifoBatch.batch);
+            if (!optionExists) {
+                // Add the batch option
+                var newOption = document.createElement('option');
+                newOption.value = fifoBatch.batch;
+                newOption.textContent = fifoBatch.batch + ' (Exp: ' + (fifoBatch.expiry_formatted || fifoBatch.expiry_date || 'N/A') + ')';
+                newOption.dataset.expiryDate = fifoBatch.expiry_date;
+                newOption.dataset.availableQty = fifoBatch.available_qty;
+                batchSelect.appendChild(newOption);
+            }
+            batchSelect.value = fifoBatch.batch;
+            batchSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        } else if (parsed.batch) {
+            // If no batches in inventory but barcode has batch, use that
+            // (This might happen for new stock)
+            var batchInput = row.querySelector('.batch-select, .batch-input');
+            if (batchInput) {
+                if (batchInput.tagName === 'SELECT') {
+                    var newBatchOption = document.createElement('option');
+                    newBatchOption.value = parsed.batch;
+                    newBatchOption.textContent = parsed.batch;
+                    batchInput.appendChild(newBatchOption);
+                    batchInput.value = parsed.batch;
+                } else {
+                    batchInput.value = parsed.batch;
+                }
+            }
+        }
+
+        // Set expiry if available
+        var expiryInput = row.querySelector('.expiry-date, [name*="expiry"]');
+        if (expiryInput && batches.length > 0 && batches[0].expiry_date) {
+            expiryInput.value = batches[0].expiry_date;
+        } else if (expiryInput && parsed.expiry_date) {
+            expiryInput.value = parsed.expiry_date;
+        }
+
+        // Calculate line total using existing component
+        window.invoiceItemComponent.calculateLineTotal(row);
+        window.invoiceItemComponent.calculateTotals();
+
+        // Notify other components (bulk discount, promotions, etc.)
+        document.dispatchEvent(new Event('line-item-changed'));
+
+        // Show appropriate message
+        if (batches.length > 0) {
+            showToast('Added: ' + medicine.medicine_name + ' (Batch: ' + batches[0].batch + ')', 'success');
+        } else if (parsed.batch) {
+            showToast('Added: ' + medicine.medicine_name + ' (Batch from barcode: ' + parsed.batch + ')', 'success');
+        } else {
+            showToast('Added: ' + medicine.medicine_name + ' - Please enter batch & expiry manually', 'warning');
+        }
+    }
+
+    function getCSRFToken() {
+        var metaToken = document.querySelector('meta[name="csrf-token"]');
+        if (metaToken) return metaToken.content;
+
+        var inputToken = document.querySelector('input[name="csrf_token"]');
+        if (inputToken) return inputToken.value;
+
+        return '';
+    }
+
+    // Initialize on DOM ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initBarcodeScanner);
+    } else {
+        initBarcodeScanner();
+    }
+})();
 </script>
 {% endblock %}

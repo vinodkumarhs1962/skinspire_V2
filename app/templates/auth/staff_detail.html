@@ -99,8 +99,23 @@
                 </div>
                 
                 <div>
-                    <label for="specialization" class="block text-sm font-medium text-gray-700">Specialization</label>
-                    {{ form.specialization(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm") }}
+                    <label for="staff_type" class="block text-sm font-medium text-gray-700">Staff Type</label>
+                    {{ form.staff_type(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm", id="staff_type") }}
+                </div>
+
+                <div>
+                    <label for="specialization_id" class="block text-sm font-medium text-gray-700">Specialization</label>
+                    <select id="specialization_id" name="specialization_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        <option value="">-- Select Specialization --</option>
+                        <!-- Populated dynamically based on staff_type -->
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500">Choose from predefined specializations</p>
+                </div>
+
+                <div>
+                    <label for="specialization" class="block text-sm font-medium text-gray-700">Custom Specialization</label>
+                    {{ form.specialization(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm", placeholder="Enter if not in list above") }}
+                    <p class="mt-1 text-xs text-gray-500">Or enter a custom specialization if not found in the list above</p>
                 </div>
                 
                 <div>
@@ -116,6 +131,18 @@
                 <div>
                     <label for="status" class="block text-sm font-medium text-gray-700">Status</label>
                     {{ form.status(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm") }}
+                </div>
+
+                <div class="col-span-1 md:col-span-3">
+                    <div class="flex items-center mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <input type="checkbox" id="is_resource" name="is_resource"
+                               class="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                               {% if staff.is_resource %}checked{% endif %}>
+                        <label for="is_resource" class="ml-3">
+                            <span class="block text-sm font-medium text-gray-900">Available as Resource</span>
+                            <span class="block text-xs text-gray-500">Enable if this staff member can be allocated to appointments (e.g., therapists, nurses, technicians)</span>
+                        </label>
+                    </div>
                 </div>
             </div>
             
@@ -227,7 +254,7 @@
         // Generate Employee ID button
         const generateIdBtn = document.getElementById('generate-id-btn');
         const employeeCodeInput = document.getElementById('employee_code');
-        
+
         generateIdBtn.addEventListener('click', function() {
             fetch('{{ url_for("admin_views.generate_employee_id") }}', {
                 method: 'POST',
@@ -249,6 +276,50 @@
                 alert('An error occurred while generating the ID');
             });
         });
+
+        // ================================================================
+        // SPECIALIZATION DROPDOWN - Dynamic loading based on staff_type
+        // ================================================================
+        const staffTypeSelect = document.getElementById('staff_type');
+        const specializationSelect = document.getElementById('specialization_id');
+        const currentSpecializationId = '{{ staff.specialization_id or "" }}';
+
+        // Load specializations when staff type changes
+        staffTypeSelect.addEventListener('change', function() {
+            loadSpecializations(this.value);
+        });
+
+        // Load specializations for the current staff type on page load
+        if (staffTypeSelect.value) {
+            loadSpecializations(staffTypeSelect.value);
+        }
+
+        async function loadSpecializations(staffType) {
+            if (!staffType) {
+                specializationSelect.innerHTML = '<option value="">-- Select Specialization --</option>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/staff/specializations?staff_type=${staffType}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    let options = '<option value="">-- Select Specialization --</option>';
+
+                    data.specializations.forEach(spec => {
+                        const selected = spec.specialization_id === currentSpecializationId ? 'selected' : '';
+                        options += `<option value="${spec.specialization_id}" ${selected}>${spec.name}</option>`;
+                    });
+
+                    specializationSelect.innerHTML = options;
+                } else {
+                    console.error('Error loading specializations:', data.error);
+                }
+            } catch (error) {
+                console.error('Error fetching specializations:', error);
+            }
+        }
     });
 </script>
 {% endblock %}

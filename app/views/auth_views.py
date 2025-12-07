@@ -70,7 +70,10 @@ def login():
     hospital = None
     try:
         with get_db_session() as session:
-            hospital = session.query(Hospital).first()
+            hospital_obj = session.query(Hospital).first()
+            if hospital_obj:
+                # Create a detached copy to use after session closes
+                hospital = get_detached_copy(hospital_obj)
     except Exception as e:
         current_app.logger.error(f"Hospital fetch error: {str(e)}")
 
@@ -162,12 +165,15 @@ def register():
         
     form = RegistrationForm()
     from app.models.master import Hospital
-    from app.services.database_service import get_db_session
+    from app.services.database_service import get_db_session, get_detached_copy
     # Fetch hospital for logo
     hospital = None
     try:
         with get_db_session() as session:
-            hospital = session.query(Hospital).first()
+            hospital_obj = session.query(Hospital).first()
+            if hospital_obj:
+                # Create a detached copy to use after session closes
+                hospital = get_detached_copy(hospital_obj)
             current_app.logger.info(f"Hospital for registration: {hospital}")
     except Exception as e:
         current_app.logger.error(f"Hospital fetch error: {str(e)}")

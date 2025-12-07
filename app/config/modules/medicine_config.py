@@ -170,6 +170,23 @@ MEDICINE_FIELDS = [
         section="basic_details",
         view_order=5
     ),
+
+    # Barcode/GTIN for scanner integration (Added 2025-12-03)
+    FieldDefinition(
+        name="barcode",
+        label="Barcode/GTIN",
+        field_type=FieldType.TEXT,
+        show_in_list=True,
+        show_in_detail=True,
+        show_in_form=True,
+        searchable=True,
+        required=False,
+        placeholder="Enter barcode or GTIN",
+        help_text="GTIN (Global Trade Item Number) for barcode scanner integration",
+        tab_group="basic_info",
+        section="basic_details",
+        view_order=6
+    ),
     FieldDefinition(
         name="medicine_type",
         label="Medicine Type",
@@ -1222,7 +1239,7 @@ MEDICINE_ENTITY_FILTER_CONFIG = EntityFilterConfiguration(
 MEDICINE_SEARCH_CONFIG = EntitySearchConfiguration(
     target_entity='medicines',
     search_endpoint='/api/universal/medicines/search',
-    search_fields=['medicine_name', 'generic_name', 'medicine_type'],
+    search_fields=['medicine_name', 'generic_name', 'medicine_type', 'barcode'],
     display_template='{medicine_name} ({medicine_type})',
     value_field='medicine_name',
     min_chars=1,
@@ -1292,7 +1309,7 @@ MEDICINE_CONFIG = EntityConfiguration(
     icon="fas fa-pills",
     page_title="Medicine Management",
     description="Manage medicines and pharmaceutical products",
-    searchable_fields=["medicine_name", "generic_name", "hsn_code"],
+    searchable_fields=["medicine_name", "generic_name", "hsn_code", "barcode"],
     default_sort_field="medicine_name",
     default_sort_direction="asc",
 
@@ -1361,6 +1378,7 @@ MEDICINE_CONFIG = EntityConfiguration(
         "generic_name",
         "dosage_form",
         "unit_of_measure",
+        "barcode",
         "medicine_type",
         "manufacturer_id",
         "preferred_supplier_id",
@@ -1389,6 +1407,7 @@ MEDICINE_CONFIG = EntityConfiguration(
         "generic_name",
         "dosage_form",
         "unit_of_measure",
+        "barcode",
         "medicine_type",
         "manufacturer_id",
         "preferred_supplier_id",
@@ -1470,7 +1489,256 @@ MEDICINE_CONFIG = EntityConfiguration(
     # Document permissions
     document_permissions={
         "profile": "medicines_view"
+    },
+
+    # Barcode Scanner Integration - Form Scripts
+    form_scripts=[
+        'js/components/barcode_scanner.js'
+    ],
+
+    # Barcode Scanner Inline Script for Medicine Form
+    form_inline_script="""
+(function() {
+    'use strict';
+
+    // Dynamically load SweetAlert2 if not available
+    function loadSweetAlert2(callback) {
+        if (typeof Swal !== 'undefined') {
+            callback();
+            return;
+        }
+
+        var script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/sweetalert2@11';
+        script.onload = callback;
+        script.onerror = function() {
+            console.log('[MedicineBarcodeScanner] SweetAlert2 failed to load, using alerts');
+            callback();
+        };
+        document.head.appendChild(script);
     }
+
+    // Wait for DOM ready
+    document.addEventListener('DOMContentLoaded', function() {
+        loadSweetAlert2(initMedicineBarcodeScanner);
+    });
+
+    // Also init if DOMContentLoaded already fired
+    if (document.readyState !== 'loading') {
+        loadSweetAlert2(initMedicineBarcodeScanner);
+    }
+
+    function initMedicineBarcodeScanner() {
+        // Find the barcode input field
+        const barcodeInput = document.querySelector('input[name="barcode"]');
+        if (!barcodeInput) {
+            console.log('[MedicineBarcodeScanner] Barcode field not found');
+            return;
+        }
+
+        // Check if already initialized
+        if (barcodeInput.dataset.scannerInitialized) {
+            return;
+        }
+        barcodeInput.dataset.scannerInitialized = 'true';
+
+        console.log('[MedicineBarcodeScanner] Initializing barcode scanner for medicine form');
+
+        // Check for barcode in URL query parameter (from invoice link modal)
+        const urlParams = new URLSearchParams(window.location.search);
+        const barcodeFromUrl = urlParams.get('barcode');
+        if (barcodeFromUrl && !barcodeInput.value) {
+            barcodeInput.value = barcodeFromUrl;
+            barcodeInput.dispatchEvent(new Event('change', { bubbles: true }));
+            console.log('[MedicineBarcodeScanner] Pre-populated barcode from URL:', barcodeFromUrl);
+            setTimeout(() => {
+                showScanNotification('info', 'Barcode pre-filled from scan: ' + barcodeFromUrl);
+            }, 500);
+        }
+
+        // Add scan button next to barcode field
+        addScanButton(barcodeInput);
+
+        // Create scanner for direct barcode capture (no API lookup)
+        let scanBuffer = '';
+        let lastKeyTime = 0;
+        const SCAN_TIMEOUT = 50; // ms between keystrokes
+        const MIN_LENGTH = 6;
+        let scannerEnabled = false;
+
+        // Update button appearance
+        function updateButtonState(enabled) {
+            const btn = document.getElementById('barcode-scan-btn');
+            if (btn) {
+                if (enabled) {
+                    btn.classList.remove('btn-outline-secondary');
+                    btn.classList.add('btn-success');
+                    btn.innerHTML = '<i class="fas fa-barcode fa-fw"></i> Scanning...';
+                } else {
+                    btn.classList.remove('btn-success');
+                    btn.classList.add('btn-outline-secondary');
+                    btn.innerHTML = '<i class="fas fa-barcode fa-fw"></i> Scan';
+                }
+            }
+        }
+
+        // Handle keypress events for scanner detection
+        function handleKeyPress(e) {
+            if (!scannerEnabled) return;
+
+            const currentTime = Date.now();
+            const timeDiff = currentTime - lastKeyTime;
+
+            // Reset buffer if too much time passed (manual typing)
+            if (timeDiff > SCAN_TIMEOUT && scanBuffer.length > 0) {
+                scanBuffer = '';
+            }
+            lastKeyTime = currentTime;
+
+            // Enter key signals end of barcode
+            if (e.key === 'Enter') {
+                if (scanBuffer.length >= MIN_LENGTH) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    // Parse barcode - extract GTIN from GS1 if present
+                    const parsedBarcode = parseBarcode(scanBuffer);
+
+                    // Populate the barcode field
+                    barcodeInput.value = parsedBarcode;
+                    barcodeInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+                    // Show success notification
+                    showScanNotification('success', 'Barcode captured: ' + parsedBarcode);
+
+                    // Disable scanner after successful scan
+                    scannerEnabled = false;
+                    updateButtonState(false);
+                }
+                scanBuffer = '';
+                return;
+            }
+
+            // Accumulate printable characters
+            if (e.key.length === 1) {
+                scanBuffer += e.key;
+            }
+        }
+
+        // Parse barcode to extract GTIN from GS1-128 or use raw value
+        function parseBarcode(barcode) {
+            // Check for GS1-128 format with (01) Application Identifier
+            // Format: ]C1 01 NNNNNNNNNNNNNN or (01)NNNNNNNNNNNNNN
+            const gs1Match = barcode.match(/(?:\\]C1)?(?:01|\\(01\\))?(\\d{13,14})/);
+            if (gs1Match) {
+                return gs1Match[1];
+            }
+
+            // Check for EAN-13 (13 digits) or EAN-8 (8 digits)
+            if (/^\\d{8}$/.test(barcode) || /^\\d{13}$/.test(barcode)) {
+                return barcode;
+            }
+
+            // Return as-is for other formats
+            return barcode;
+        }
+
+        // Add keypress listener
+        document.addEventListener('keypress', handleKeyPress, true);
+
+        // Toggle scanner button handler
+        window.toggleMedicineBarcodeScanner = function() {
+            scannerEnabled = !scannerEnabled;
+            scanBuffer = '';
+            updateButtonState(scannerEnabled);
+
+            if (scannerEnabled) {
+                showScanNotification('info', 'Ready to scan barcode...');
+            } else {
+                showScanNotification('info', 'Scanner disabled');
+            }
+        };
+
+        // Manual barcode entry button handler
+        window.showManualBarcodeEntry = function() {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Enter Barcode Manually',
+                    input: 'text',
+                    inputPlaceholder: 'Enter barcode/GTIN...',
+                    showCancelButton: true,
+                    confirmButtonText: 'Set Barcode',
+                    inputValidator: (value) => {
+                        if (!value) {
+                            return 'Please enter a barcode';
+                        }
+                        if (value.length < 6) {
+                            return 'Barcode must be at least 6 characters';
+                        }
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed && result.value) {
+                        barcodeInput.value = result.value;
+                        barcodeInput.dispatchEvent(new Event('change', { bubbles: true }));
+                        showScanNotification('success', 'Barcode set: ' + result.value);
+                    }
+                });
+            } else {
+                const value = prompt('Enter barcode/GTIN:');
+                if (value && value.length >= 6) {
+                    barcodeInput.value = value;
+                    barcodeInput.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+        };
+    }
+
+    function addScanButton(inputField) {
+        // Get the parent container
+        const parent = inputField.parentElement;
+
+        // Create button container
+        const btnContainer = document.createElement('div');
+        btnContainer.className = 'mt-2';
+        btnContainer.innerHTML = `
+            <button type="button" id="barcode-scan-btn" class="btn btn-outline-secondary btn-sm" onclick="toggleMedicineBarcodeScanner()">
+                <i class="fas fa-barcode fa-fw"></i> Scan
+            </button>
+            <button type="button" class="btn btn-outline-info btn-sm ms-1" onclick="showManualBarcodeEntry()">
+                <i class="fas fa-keyboard fa-fw"></i> Manual Entry
+            </button>
+            <small class="text-muted ms-2">Click 'Scan' then scan barcode with scanner</small>
+        `;
+
+        // Insert after input or its parent
+        parent.appendChild(btnContainer);
+    }
+
+    function showScanNotification(type, message) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: type === 'error' ? 'error' : type === 'warning' ? 'warning' : type === 'info' ? 'info' : 'success',
+                title: message,
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 2000
+            });
+        } else if (typeof toastr !== 'undefined') {
+            toastr[type](message);
+        } else {
+            // Simple visual feedback using a temporary div
+            var toast = document.createElement('div');
+            toast.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; padding: 12px 24px; border-radius: 4px; color: white; font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,0.15);';
+            toast.style.backgroundColor = type === 'error' ? '#dc3545' : type === 'warning' ? '#ffc107' : type === 'info' ? '#17a2b8' : '#28a745';
+            if (type === 'warning') toast.style.color = '#212529';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(function() { toast.remove(); }, 2000);
+        }
+    }
+})();
+"""
 )
 
 # ========== SIMPLIFIED EXPORTS ==========

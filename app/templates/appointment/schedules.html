@@ -1,0 +1,179 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Doctor Schedules{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">Doctor Schedules</h1>
+            <p class="text-gray-600">Manage doctor availability and schedules</p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{{ url_for('appointment_views.create_schedule') }}" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                <i class="fas fa-plus mr-2"></i> Add Schedule
+            </a>
+            <button onclick="generateSlots()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+                <i class="fas fa-calendar-plus mr-2"></i> Generate Slots
+            </button>
+        </div>
+    </div>
+
+    <!-- Branch Filter -->
+    <div class="bg-white rounded-lg shadow p-4 mb-6">
+        <div class="flex items-center gap-4">
+            <label class="text-sm font-medium text-gray-700">Branch:</label>
+            <select id="branch-filter" class="border rounded px-4 py-2" onchange="filterBranch()">
+                {% for branch in branches %}
+                <option value="{{ branch.branch_id }}" {% if current_branch_id == branch.branch_id|string %}selected{% endif %}>
+                    {{ branch.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <!-- Schedule Cards by Doctor -->
+    {% if schedule_data %}
+        {% for staff_id, data in schedule_data.items() %}
+        <div class="bg-white rounded-lg shadow mb-6">
+            <div class="p-4 border-b bg-gray-50 flex justify-between items-center">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-800">Dr. {{ data.doctor_name }}</h2>
+                </div>
+                <button onclick="editDoctorSchedule('{{ staff_id }}')" class="text-blue-600 hover:text-blue-700">
+                    <i class="fas fa-edit mr-1"></i> Edit
+                </button>
+            </div>
+            <div class="p-4">
+                <div class="grid grid-cols-7 gap-2">
+                    {% for day_num in range(7) %}
+                    <div class="text-center">
+                        <div class="text-sm font-medium text-gray-500 mb-2">{{ day_names[day_num][:3] }}</div>
+                        {% set day_schedules = data.schedules|selectattr('day_of_week', 'equalto', day_num)|list %}
+                        {% if day_schedules %}
+                            {% for schedule in day_schedules %}
+                            <div class="bg-blue-100 text-blue-800 rounded p-2 text-sm mb-1">
+                                <div class="font-medium">{{ schedule.start_time }} - {{ schedule.end_time }}</div>
+                                <div class="text-xs text-blue-600">{{ schedule.slot_duration }} min slots</div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="bg-gray-100 text-gray-400 rounded p-2 text-sm">
+                                Off
+                            </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="bg-white rounded-lg shadow p-8 text-center">
+            <i class="fas fa-calendar-times text-4xl text-gray-400 mb-4"></i>
+            <p class="text-gray-600">No schedules configured for this branch</p>
+            <a href="{{ url_for('appointment_views.create_schedule') }}" class="text-blue-600 hover:underline mt-2 inline-block">
+                Add a schedule
+            </a>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Generate Slots Modal -->
+<div id="generate-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 class="text-lg font-semibold mb-4">Generate Appointment Slots</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="date" id="gen-start-date" class="border rounded px-3 py-2 w-full">
+                        <input type="date" id="gen-end-date" class="border rounded px-3 py-2 w-full">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Doctor (Optional)</label>
+                    <select id="gen-doctor" class="border rounded px-3 py-2 w-full">
+                        <option value="">All Doctors</option>
+                        {% for doctor in doctors %}
+                        <option value="{{ doctor.staff_id }}">{{ doctor.first_name }} {{ doctor.last_name or '' }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="gen-regenerate" class="mr-2">
+                    <label class="text-sm text-gray-700">Regenerate existing unbooked slots</label>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3 mt-6">
+                <button onclick="closeGenerateModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800">
+                    Cancel
+                </button>
+                <button onclick="submitGenerateSlots()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                    Generate
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Set default dates
+    document.addEventListener('DOMContentLoaded', function() {
+        const today = new Date().toISOString().split('T')[0];
+        const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        document.getElementById('gen-start-date').value = today;
+        document.getElementById('gen-end-date').value = nextWeek;
+    });
+
+    function filterBranch() {
+        const branchId = document.getElementById('branch-filter').value;
+        window.location.href = `?branch_id=${branchId}`;
+    }
+
+    function generateSlots() {
+        document.getElementById('generate-modal').classList.remove('hidden');
+    }
+
+    function closeGenerateModal() {
+        document.getElementById('generate-modal').classList.add('hidden');
+    }
+
+    async function submitGenerateSlots() {
+        const data = {
+            branch_id: document.getElementById('branch-filter').value,
+            start_date: document.getElementById('gen-start-date').value,
+            end_date: document.getElementById('gen-end-date').value,
+            staff_id: document.getElementById('gen-doctor').value || undefined,
+            regenerate: document.getElementById('gen-regenerate').checked
+        };
+
+        try {
+            const response = await fetch('/api/appointment/slots/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                alert(`Generated ${result.slots_created} slots successfully!`);
+                closeGenerateModal();
+            } else {
+                alert(result.error || 'Failed to generate slots');
+            }
+        } catch (error) {
+            alert('Error generating slots');
+        }
+    }
+
+    function editDoctorSchedule(staffId) {
+        window.location.href = `/appointment/schedules/edit?staff_id=${staffId}`;
+    }
+</script>
+{% endblock %}

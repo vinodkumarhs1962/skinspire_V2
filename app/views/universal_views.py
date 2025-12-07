@@ -1426,6 +1426,9 @@ def handle_universal_create_get(entity_type: str, config):
                     field_type = field_def.field_type.value if hasattr(field_def.field_type, 'value') else str(field_def.field_type)
                     field_type = field_type.lower().replace('fieldtype.', '')
                     
+                    # Use query param value if available, otherwise use default
+                    field_value = query_params.get(field_name, getattr(field_def, 'default_value', ''))
+
                     form_fields.append({
                         'name': field_def.name,
                         'label': field_def.label,
@@ -1434,7 +1437,7 @@ def handle_universal_create_get(entity_type: str, config):
                         'placeholder': getattr(field_def, 'placeholder', ''),
                         'help_text': getattr(field_def, 'help_text', ''),
                         'options': getattr(field_def, 'options', []),
-                        'value': getattr(field_def, 'default_value', ''),
+                        'value': field_value,
                         'column_width': getattr(field_def, 'columns_span', 6),
                         'readonly': False,
                         'section': getattr(field_def, 'section', 'default'),

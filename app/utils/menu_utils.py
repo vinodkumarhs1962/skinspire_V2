@@ -75,7 +75,87 @@ def generate_menu_for_role(role):
     ]
     
     if role in ['staff', 'system_admin', 'hospital_admin']:
-        
+
+        # =========================================================================
+        # 0. APPOINTMENTS (PATIENT LIFECYCLE PHASE 1)
+        # =========================================================================
+        menu.append({
+            'name': 'Appointments',
+            'url': '#',
+            'icon': 'calendar-alt',
+            'icon_path': 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+            'children': [
+                {
+                    'name': 'Dashboard',
+                    'url': safe_url_for('appointment_views.dashboard'),
+                    'icon': 'tachometer-alt',
+                    'description': 'Today\'s appointments overview'
+                },
+                {
+                    'name': 'Queue Management',
+                    'url': safe_url_for('appointment_views.queue_view'),
+                    'icon': 'users',
+                    'description': 'Real-time patient queue'
+                },
+                {
+                    'name': 'Booking',
+                    'url': '#',
+                    'icon': 'calendar-plus',
+                    'children': [
+                        {
+                            'name': 'Book Appointment',
+                            'url': safe_url_for('appointment_views.book_appointment'),
+                            'icon': 'plus-circle',
+                            'description': 'Schedule new appointment'
+                        },
+                        {
+                            'name': 'Walk-In',
+                            'url': safe_url_for('appointment_views.walk_in_booking'),
+                            'icon': 'walking',
+                            'description': 'Quick walk-in registration'
+                        },
+                        {
+                            'name': 'Calendar View',
+                            'url': safe_url_for('appointment_views.calendar_view'),
+                            'icon': 'calendar',
+                            'description': 'View appointments calendar'
+                        }
+                    ]
+                },
+                {
+                    'name': 'Schedules',
+                    'url': '#',
+                    'icon': 'clock',
+                    'children': [
+                        {
+                            'name': 'Doctor Schedules',
+                            'url': safe_url_for('appointment_views.schedule_list'),
+                            'icon': 'user-md',
+                            'description': 'Manage doctor schedules'
+                        },
+                        {
+                            'name': 'Add Schedule',
+                            'url': safe_url_for('appointment_views.create_schedule'),
+                            'icon': 'plus',
+                            'description': 'Create new schedule'
+                        },
+                        {
+                            'name': 'Exceptions',
+                            'url': safe_url_for('appointment_views.exception_list'),
+                            'icon': 'calendar-times',
+                            'description': 'Leaves and holidays'
+                        }
+                    ]
+                },
+                {
+                    'name': 'Reports',
+                    'url': safe_url_for('appointment_views.reports'),
+                    'icon': 'chart-bar',
+                    'description': 'Appointment analytics'
+                }
+            ]
+        })
+
         # =========================================================================
         # 1. MASTER DATA (UNIVERSAL ENGINE)
         # =========================================================================
@@ -651,27 +731,30 @@ def generate_menu_for_role(role):
 # KEPT: Existing functions for backward compatibility
 def get_menu_items(current_user):
     """
-    Get menu items based on user role and permissions
-    UNCHANGED: Preserves existing functionality with Universal Engine integration
+    Get menu items based on user role and permissions.
+
+    IMPORTANT: This function is called from a context processor for EVERY request.
+    It must NOT open a database session to avoid nested session errors.
+    Instead, use the role/entity_type directly from the current_user object
+    which is already loaded by Flask-Login.
     """
-    from flask import current_app
-    from app.services.database_service import get_db_session, get_detached_copy
-    
     try:
-        with get_db_session() as session:
-            from app.models.transaction import User
-            # Ensure user_id is string (phone number), not UUID
-            user_id_str = str(current_user.user_id) if current_user.user_id else None
-            user = session.query(User).filter_by(user_id=user_id_str).first()
+        # Get role directly from current_user without database query
+        # Flask-Login already provides the user object with entity_type
+        role = getattr(current_user, 'entity_type', None)
 
-            if not user:
-                role = getattr(current_user, 'entity_type', 'patient')
-                return generate_menu_for_role(role)
+        # If no entity_type, try to infer from other attributes
+        if not role:
+            if hasattr(current_user, 'is_admin') and current_user.is_admin:
+                role = 'system_admin'
+            elif hasattr(current_user, 'is_hospital_admin') and current_user.is_hospital_admin:
+                role = 'hospital_admin'
+            else:
+                role = 'staff'  # Default to staff for authenticated users
 
-            detached_user = get_detached_copy(user)
-            role = getattr(detached_user, 'entity_type', 'patient')
-            return generate_menu_for_role(role)
-    except Exception as e:
-        current_app.logger.error(f"Error in get_menu_items: {str(e)}", exc_info=True)
-        role = getattr(current_user, 'entity_type', 'staff')
         return generate_menu_for_role(role)
+    except Exception as e:
+        # Fallback to staff menu on any error
+        import logging
+        logging.getLogger(__name__).warning(f"Error in get_menu_items: {str(e)}")
+        return generate_menu_for_role('staff')

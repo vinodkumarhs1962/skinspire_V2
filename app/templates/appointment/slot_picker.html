@@ -1,0 +1,126 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Select Time Slot{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <h1 class="text-2xl font-bold text-gray-800 mb-2">Select Time Slot</h1>
+    <div class="mb-6">
+        {% if service_name %}
+        <p class="text-lg font-medium text-gray-700 mb-1">
+            <i class="fas fa-concierge-bell text-purple-500 mr-2"></i>
+            Service: <span class="text-purple-600 font-semibold">{{ service_name }}</span>
+        </p>
+        {% endif %}
+        {% if package_name %}
+        <p class="text-lg font-medium text-gray-700 mb-1">
+            <i class="fas fa-box text-green-500 mr-2"></i>
+            Package: <span class="text-green-600 font-semibold">{{ package_name }}</span>
+        </p>
+        {% endif %}
+        <p id="selected-date-display" class="text-lg text-blue-600 font-medium">
+            {% if selected_date %}
+                <i class="fas fa-calendar-alt mr-2"></i>
+                {% if selected_date is string %}
+                    {{ selected_date }}
+                {% else %}
+                    {{ selected_date.strftime('%A, %B %d, %Y') }}
+                {% endif %}
+            {% else %}
+                <i class="fas fa-calendar-alt mr-2"></i>
+                <span class="text-gray-500">Select a date</span>
+            {% endif %}
+        </p>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Select Doctor</label>
+                <select id="staff_id" class="w-full border rounded-lg px-4 py-2" onchange="loadSlots()">
+                    <option value="">-- Select Doctor --</option>
+                    {% for doctor in doctors %}
+                    <option value="{{ doctor.staff_id }}" {% if selected_staff_id == doctor.staff_id|string %}selected{% endif %}>
+                        {{ doctor.first_name }} {{ doctor.last_name or '' }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Select Date</label>
+                <input type="date" id="slot_date" class="w-full border rounded-lg px-4 py-2"
+                       value="{{ selected_date_str or selected_date }}" onchange="loadSlots(); updateDateDisplay();">
+            </div>
+        </div>
+
+        <div id="slots-container" class="min-h-[200px]">
+            <div class="text-center text-gray-500 py-8">
+                <i class="fas fa-clock text-4xl mb-4"></i>
+                <p>Select a doctor and date to view available slots</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function updateDateDisplay() {
+        const dateInput = document.getElementById('slot_date').value;
+        if (dateInput) {
+            const date = new Date(dateInput + 'T00:00:00');
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            const formatted = date.toLocaleDateString('en-US', options);
+            const displayEl = document.getElementById('selected-date-display');
+            displayEl.innerHTML = '<i class="fas fa-calendar-alt mr-2"></i>' + formatted;
+        }
+    }
+
+    // Update display on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        updateDateDisplay();
+    });
+
+    async function loadSlots() {
+        const staffId = document.getElementById('staff_id').value;
+        const date = document.getElementById('slot_date').value;
+
+        if (!staffId || !date) return;
+
+        try {
+            const response = await fetch(`/api/appointment/slots/available?date=${date}&staff_id=${staffId}`);
+            const data = await response.json();
+
+            if (data.success && data.slots.length > 0) {
+                document.getElementById('slots-container').innerHTML = `
+                    <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+                        ${data.slots.map(slot => `
+                            <button class="px-3 py-2 border rounded text-sm hover:bg-blue-50 hover:border-blue-300"
+                                    onclick="selectSlot('${slot.slot_id}', '${slot.start_time}')">
+                                ${slot.start_time}
+                            </button>
+                        `).join('')}
+                    </div>
+                `;
+            } else {
+                document.getElementById('slots-container').innerHTML = `
+                    <div class="text-center text-gray-500 py-8">
+                        <i class="fas fa-calendar-times text-4xl mb-4"></i>
+                        <p>No available slots for this date</p>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Error loading slots:', error);
+        }
+    }
+
+    function selectSlot(slotId, time) {
+        // Return to parent page with slot selection
+        if (window.opener) {
+            window.opener.postMessage({ slotId, time }, '*');
+            window.close();
+        }
+    }
+</script>
+{% endblock %}

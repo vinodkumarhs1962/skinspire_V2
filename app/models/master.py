@@ -108,6 +108,45 @@ class Branch(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     supplier_invoices = relationship("SupplierInvoice", back_populates="branch")
     supplier_payments = relationship("SupplierPayment", back_populates="branch")
 
+class StaffSpecialization(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
+    """
+    Lookup table for staff specializations at hospital level.
+    Different specializations can be defined for different staff types:
+    - Doctors: Dermatology, Cardiology, General Medicine, etc.
+    - Nurses: ICU, OT, General, Pediatric, etc.
+    - Therapists: Physiotherapy, Occupational, Speech, etc.
+    """
+    __tablename__ = 'staff_specializations'
+
+    specialization_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+
+    # Which staff type this specialization applies to
+    staff_type = Column(String(20), nullable=False)  # 'doctor', 'nurse', 'therapist', 'technician', 'all'
+
+    # Specialization details
+    code = Column(String(20), nullable=False)  # Short code like 'DERM', 'CARDIO'
+    name = Column(String(100), nullable=False)  # Full name like 'Dermatology'
+    description = Column(Text)
+
+    # Display order for UI
+    display_order = Column(Integer, default=0)
+
+    # Status
+    is_active = Column(Boolean, default=True)
+
+    # Relationships
+    hospital = relationship("Hospital", backref="staff_specializations")
+
+    # Unique constraint: code should be unique per hospital and staff_type
+    __table_args__ = (
+        UniqueConstraint('hospital_id', 'staff_type', 'code', name='uq_specialization_code'),
+    )
+
+    def __repr__(self):
+        return f"<StaffSpecialization {self.name} ({self.staff_type})>"
+
+
 class Staff(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     """Staff member information"""
     __tablename__ = 'staff'
@@ -116,8 +155,10 @@ class Staff(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
     branch_id = Column(UUID(as_uuid=True), ForeignKey('branches.branch_id'))
     employee_code = Column(String(20), unique=True)
+    staff_type = Column(String(20), default='staff')  # 'doctor', 'nurse', 'therapist', 'receptionist', 'admin', 'staff'
     title = Column(String(10))
-    specialization = Column(String(100))
+    specialization = Column(String(100))  # Legacy field - kept for backward compatibility
+    specialization_id = Column(UUID(as_uuid=True), ForeignKey('staff_specializations.specialization_id'), nullable=True)  # New FK to lookup
     first_name = Column(String(100))
     last_name = Column(String(100))
     full_name = Column(String(200))
@@ -126,11 +167,14 @@ class Staff(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     professional_info = Column(JSONB)  # qualifications, certifications
     employment_info = Column(JSONB)    # join date, designation, etc.
     documents = Column(JSONB)          # ID proofs, certificates
+    settings = Column(JSONB, default={})  # Staff settings including Google Calendar tokens
     is_active = Column(Boolean, default=True)
+    is_resource = Column(Boolean, default=False)  # Can be allocated as resource to appointments
 
     # Relationships
     hospital = relationship("Hospital", back_populates="staff")
     branch = relationship("Branch", back_populates="staff")
+    specialization_ref = relationship("StaffSpecialization", backref="staff_members")
 
     @hybrid_property
     def full_name(self):
@@ -510,11 +554,17 @@ class Service(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     duration_minutes = Column(Integer, nullable=True)  # Expected duration of the service
     is_active = Column(Boolean, default=True, nullable=False)  # Indicates if service is currently available
 
+    # Resource and Approval Settings (Added 2025-12-05)
+    auto_approval_eligible = Column(Boolean, default=False)  # Can be auto-approved when fully paid via self-service
+    requires_room_allocation = Column(Boolean, default=False)  # Must have room allocated before starting
+    requires_staff_allocation = Column(Boolean, default=True)  # Must have therapist/nurse allocated
+
     # Relationships
     hospital = relationship("Hospital")
     package_mappings = relationship("PackageServiceMapping", back_populates="service")
     consumable_standards = relationship("ConsumableStandard", back_populates="service")
     gl_account = relationship("ChartOfAccounts")
+    resource_requirements = relationship("ServiceResourceRequirement", back_populates="service")
 
 class PackageServiceMapping(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     """Maps services to packages"""
@@ -665,6 +715,10 @@ class Medicine(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
     generic_name = Column(String(100))
     dosage_form = Column(String(50))  # Tablet, Syrup, Injection, etc.
     unit_of_measure = Column(String(20))  # Strips, Bottles
+
+    # Barcode/GTIN for scanner integration (Added 2025-12-03)
+    # Stores GTIN - unique per manufacturer+product+pack size
+    barcode = Column(String(50), nullable=True)
     
     # Medicine Type (Business Rule #2)
     medicine_type = Column(String(20), nullable=False)  # OTC/Prescription/Product/Consumable/Misc
@@ -1048,3 +1102,195 @@ class PromotionGroupItem(Base):
 
     # Relationships
     group = relationship("PromotionCampaignGroup", back_populates="items")
+
+
+# =============================================================================
+# RESOURCE MANAGEMENT MODELS
+# =============================================================================
+
+class Room(Base, TimestampMixin, TenantMixin, SoftDeleteMixin):
+    """
+    Clinic rooms - procedure rooms, OT, consultation rooms, treatment rooms, etc.
+    Used for resource allocation in appointment scheduling.
+    """
+    __tablename__ = 'rooms'
+
+    room_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+    branch_id = Column(UUID(as_uuid=True), ForeignKey('branches.branch_id'), nullable=False)
+
+    # Room identification
+    room_code = Column(String(20), nullable=False)
+    room_name = Column(String(100), nullable=False)
+
+    # Room type determines what procedures can be done here
+    room_type = Column(String(30), nullable=False)  # 'procedure', 'ot', 'consultation', 'treatment', 'laser', 'recovery'
+
+    # Capacity and features
+    capacity = Column(Integer, default=1)
+    features = Column(JSONB)  # {"has_ac": true, "equipment": ["laser_machine", "surgical_bed"]}
+
+    # Scheduling
+    default_slot_duration_minutes = Column(Integer, default=30)
+    buffer_minutes = Column(Integer, default=10)  # Buffer time between appointments
+
+    # Operating hours
+    operating_start_time = Column(String(8))  # Time stored as string HH:MM:SS
+    operating_end_time = Column(String(8))
+
+    # Status
+    is_active = Column(Boolean, default=True)
+
+    # Room types enum
+    ROOM_TYPES = ['procedure', 'ot', 'consultation', 'treatment', 'laser', 'recovery']
+
+    __table_args__ = (
+        UniqueConstraint('branch_id', 'room_code', name='uq_room_code'),
+    )
+
+    # Relationships
+    hospital = relationship("Hospital")
+    branch = relationship("Branch")
+    slots = relationship("RoomSlot", back_populates="room")
+
+    def __repr__(self):
+        return f"<Room {self.room_code}: {self.room_name} ({self.room_type})>"
+
+
+class RoomSlot(Base):
+    """
+    Availability calendar for rooms - similar to appointment_slots but for rooms.
+    Tracks when rooms are available and when they're allocated to appointments.
+    """
+    __tablename__ = 'room_slots'
+
+    slot_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+
+    # References
+    room_id = Column(UUID(as_uuid=True), ForeignKey('rooms.room_id'), nullable=False)
+    branch_id = Column(UUID(as_uuid=True), ForeignKey('branches.branch_id'), nullable=False)
+
+    # Slot timing
+    slot_date = Column(Date, nullable=False)
+    start_time = Column(String(8), nullable=False)  # HH:MM:SS
+    end_time = Column(String(8), nullable=False)
+
+    # Availability
+    is_available = Column(Boolean, default=True)
+    is_blocked = Column(Boolean, default=False)
+    block_reason = Column(String(255))
+    blocked_by = Column(UUID(as_uuid=True))
+    blocked_at = Column(DateTime(timezone=True))
+
+    # Allocation
+    allocated_to_appointment_id = Column(UUID(as_uuid=True), ForeignKey('appointments.appointment_id'))
+
+    # Audit
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        CheckConstraint('start_time < end_time', name='room_slot_valid_time'),
+        UniqueConstraint('room_id', 'slot_date', 'start_time', name='uq_room_slot'),
+    )
+
+    # Relationships
+    room = relationship("Room", back_populates="slots")
+    branch = relationship("Branch")
+
+
+class ServiceResourceRequirement(Base):
+    """
+    Defines what resources (rooms, staff) each service requires.
+    Used to validate and auto-suggest resource allocation during booking.
+    """
+    __tablename__ = 'service_resource_requirements'
+
+    requirement_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey('hospitals.hospital_id'), nullable=False)
+    service_id = Column(UUID(as_uuid=True), ForeignKey('services.service_id'), nullable=False)
+
+    # Resource type requirement
+    resource_type = Column(String(20), nullable=False)  # 'room', 'staff'
+
+    # For rooms
+    room_type = Column(String(30))  # 'procedure', 'ot', 'laser', etc.
+
+    # For staff
+    staff_type = Column(String(20))  # 'doctor', 'therapist', 'nurse'
+    staff_role = Column(String(50))  # 'lead_therapist', 'assisting_nurse'
+
+    # Requirement details
+    quantity_required = Column(Integer, default=1)
+    is_mandatory = Column(Boolean, default=True)
+    duration_minutes = Column(Integer)  # If different from service duration
+
+    # Specific resource (optional)
+    specific_resource_id = Column(UUID(as_uuid=True))
+
+    # Notes
+    notes = Column(Text)
+
+    # Status
+    is_active = Column(Boolean, default=True)
+
+    # Audit
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        CheckConstraint("resource_type IN ('room', 'staff')", name='valid_resource_type'),
+    )
+
+    # Relationships
+    hospital = relationship("Hospital")
+    service = relationship("Service")
+
+    def __repr__(self):
+        return f"<ServiceResourceRequirement {self.resource_type}: {self.room_type or self.staff_type}>"
+
+
+class AppointmentResource(Base):
+    """
+    Tracks which rooms and staff are allocated to each appointment.
+    Enables resource utilization tracking and conflict detection.
+    """
+    __tablename__ = 'appointment_resources'
+
+    allocation_id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+
+    # References
+    appointment_id = Column(UUID(as_uuid=True), ForeignKey('appointments.appointment_id'), nullable=False)
+
+    # Resource allocated
+    resource_type = Column(String(20), nullable=False)  # 'room', 'staff'
+    resource_id = Column(UUID(as_uuid=True), nullable=False)
+
+    # Timing
+    start_time = Column(String(8), nullable=False)
+    end_time = Column(String(8), nullable=False)
+    allocation_date = Column(Date, nullable=False)
+
+    # Status
+    status = Column(String(20), default='allocated')  # 'allocated', 'in_use', 'released', 'cancelled'
+
+    # Role (for staff)
+    role = Column(String(50))  # 'primary_therapist', 'assisting_nurse', 'consulting_doctor'
+
+    # Notes
+    notes = Column(Text)
+
+    # Audit
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    allocated_by = Column(String(100))
+
+    __table_args__ = (
+        CheckConstraint("resource_type IN ('room', 'staff')", name='valid_allocation_resource_type'),
+    )
+
+    # Resource status values
+    ALLOCATION_STATUSES = ['allocated', 'in_use', 'released', 'cancelled']
+
+    def __repr__(self):
+        return f"<AppointmentResource {self.resource_type} for appointment {self.appointment_id}>"

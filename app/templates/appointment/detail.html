@@ -1,0 +1,931 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Appointment Details{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">Appointment #{{ appointment.appointment_number }}</h1>
+            <p class="text-gray-600">
+                <span class="px-3 py-1 rounded-full text-sm font-medium
+                    {% if appointment.status == 'completed' %}bg-green-100 text-green-800
+                    {% elif appointment.status == 'in_progress' %}bg-orange-100 text-orange-800
+                    {% elif appointment.status == 'checked_in' %}bg-purple-100 text-purple-800
+                    {% elif appointment.status == 'confirmed' %}bg-blue-100 text-blue-800
+                    {% elif appointment.status == 'cancelled' %}bg-red-100 text-red-800
+                    {% else %}bg-gray-100 text-gray-800{% endif %}">
+                    {{ appointment.status|replace('_', ' ')|title }}
+                </span>
+            </p>
+        </div>
+        <a href="{{ url_for('appointment_views.dashboard') }}" class="text-blue-600 hover:text-blue-700">
+            <i class="fas fa-arrow-left mr-2"></i> Back to Dashboard
+        </a>
+    </div>
+
+    <!-- Service/Package Banner (Prominent) -->
+    {% if service or package %}
+    <div style="margin-bottom: 24px; {% if service %}background: linear-gradient(135deg, #7c3aed 0%, #9333ea 100%);{% else %}background: linear-gradient(135deg, #059669 0%, #047857 100%);{% endif %} border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(124, 58, 237, 0.3); padding: 20px; color: white;">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+            <div style="display: flex; align-items: center; gap: 16px;">
+                <div style="width: 56px; height: 56px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                    <i class="fas {% if service %}fa-concierge-bell{% else %}fa-box{% endif %}" style="font-size: 24px;"></i>
+                </div>
+                <div>
+                    <div style="font-size: 12px; opacity: 0.85; text-transform: uppercase; letter-spacing: 1px;">{% if service %}Service Appointment{% else %}Package Session{% endif %}</div>
+                    <div style="font-size: 22px; font-weight: 700;">{% if service %}{{ service.service_name }}{% else %}{{ package.package_name }}{% endif %}</div>
+                    {% if service and service.duration_minutes %}
+                    <div style="font-size: 14px; opacity: 0.9; margin-top: 4px;"><i class="fas fa-clock" style="margin-right: 6px;"></i>{{ service.duration_minutes }} minutes</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% if service and service.price %}
+            <div style="text-align: right; background: rgba(255,255,255,0.15); border-radius: 10px; padding: 12px 20px;">
+                <div style="font-size: 11px; opacity: 0.85; text-transform: uppercase;">Price</div>
+                <div style="font-size: 24px; font-weight: 700;">₹{{ "{:,.0f}".format(service.price) }}</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main Details -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Appointment Info -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold mb-4 border-b pb-2">Appointment Information</h2>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-sm text-gray-500">Date</label>
+                        <p class="font-medium">{{ appointment.appointment_date.strftime('%A, %B %d, %Y') }}</p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-500">Time</label>
+                        <p class="font-medium">
+                            {% if appointment.start_time %}
+                                {{ appointment.start_time.strftime('%I:%M %p') }}
+                                {% if appointment.end_time %} - {{ appointment.end_time.strftime('%I:%M %p') }}{% endif %}
+                            {% else %}
+                                Walk-in
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-500">Type</label>
+                        <p class="font-medium">{{ appointment_type.type_name if appointment_type else 'General Consultation' }}</p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-500">Priority</label>
+                        <p class="font-medium capitalize
+                            {% if appointment.priority == 'emergency' %}text-red-600
+                            {% elif appointment.priority == 'urgent' %}text-orange-600
+                            {% else %}text-green-600{% endif %}">
+                            {{ appointment.priority }}
+                        </p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-500">Token Number</label>
+                        <p class="font-medium">{{ appointment.token_number or 'N/A' }}</p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-500">Booking Source</label>
+                        <p class="font-medium capitalize">{{ appointment.booking_source|replace('_', ' ') }}</p>
+                    </div>
+                </div>
+
+                {% if appointment.chief_complaint %}
+                <div class="mt-4 pt-4 border-t">
+                    <label class="text-sm text-gray-500">Chief Complaint</label>
+                    <p class="font-medium">{{ appointment.chief_complaint }}</p>
+                </div>
+                {% endif %}
+
+                {% if appointment.patient_notes %}
+                <div class="mt-4 pt-4 border-t">
+                    <label class="text-sm text-gray-500">Patient Notes</label>
+                    <p class="font-medium">{{ appointment.patient_notes }}</p>
+                </div>
+                {% endif %}
+
+                {% if appointment.internal_notes %}
+                <div class="mt-4 pt-4 border-t">
+                    <label class="text-sm text-gray-500">Internal Notes</label>
+                    <p class="font-medium">{{ appointment.internal_notes }}</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Timeline -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold mb-4 border-b pb-2">Status Timeline</h2>
+                <div class="space-y-4">
+                    {% for history in status_history %}
+                    <div class="flex items-start">
+                        <div class="w-3 h-3 bg-blue-600 rounded-full mt-1 mr-4"></div>
+                        <div class="flex-1">
+                            <div class="flex justify-between">
+                                <span class="font-medium">
+                                    {{ history.from_status|replace('_', ' ')|title if history.from_status else 'Created' }}
+                                    <i class="fas fa-arrow-right mx-2 text-gray-400"></i>
+                                    {{ history.to_status|replace('_', ' ')|title }}
+                                </span>
+                                <span class="text-sm text-gray-500">
+                                    {{ history.changed_at.strftime('%I:%M %p') }}
+                                </span>
+                            </div>
+                            {% if history.notes %}
+                            <p class="text-sm text-gray-600 mt-1">{{ history.notes }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+
+                    <!-- Created timestamp -->
+                    <div class="flex items-start">
+                        <div class="w-3 h-3 bg-gray-400 rounded-full mt-1 mr-4"></div>
+                        <div class="flex-1">
+                            <div class="flex justify-between">
+                                <span class="font-medium text-gray-500">Appointment Created</span>
+                                <span class="text-sm text-gray-500">
+                                    {{ appointment.created_at.strftime('%I:%M %p') if appointment.created_at else 'N/A' }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actual Times -->
+            {% if appointment.checked_in_at or appointment.actual_start_time or appointment.actual_end_time %}
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold mb-4 border-b pb-2">Actual Times</h2>
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label class="text-sm text-gray-500">Checked In</label>
+                        <p class="font-medium">
+                            {{ appointment.checked_in_at.strftime('%I:%M %p') if appointment.checked_in_at else '-' }}
+                        </p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-500">Consultation Started</label>
+                        <p class="font-medium">
+                            {{ appointment.actual_start_time.strftime('%I:%M %p') if appointment.actual_start_time else '-' }}
+                        </p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-500">Consultation Ended</label>
+                        <p class="font-medium">
+                            {{ appointment.actual_end_time.strftime('%I:%M %p') if appointment.actual_end_time else '-' }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- Patient Info -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold mb-4 border-b pb-2">Patient</h2>
+                {% if patient %}
+                <div class="flex items-center mb-4">
+                    <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mr-4">
+                        <span class="text-blue-600 font-bold text-lg">{{ patient.first_name[0] if patient.first_name else '?' }}</span>
+                    </div>
+                    <div>
+                        <p class="font-semibold">{{ patient.full_name }}</p>
+                        <p class="text-sm text-gray-600">MRN: {{ patient.mrn or 'N/A' }}</p>
+                    </div>
+                </div>
+                {% if patient.contact_info %}
+                <div class="space-y-2 text-sm">
+                    {% if patient.contact_info.mobile %}
+                    <div class="flex items-center">
+                        <i class="fas fa-phone w-5 text-gray-400"></i>
+                        <span>{{ patient.contact_info.mobile }}</span>
+                    </div>
+                    {% endif %}
+                    {% if patient.contact_info.email %}
+                    <div class="flex items-center">
+                        <i class="fas fa-envelope w-5 text-gray-400"></i>
+                        <span>{{ patient.contact_info.email }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                <div class="mt-4 pt-4 border-t">
+                    <a href="#" class="text-blue-600 hover:text-blue-700 text-sm">
+                        <i class="fas fa-user mr-1"></i> View Patient Profile
+                    </a>
+                </div>
+                {% else %}
+                <p class="text-gray-500">Patient information not available</p>
+                {% endif %}
+            </div>
+
+            <!-- Doctor Info -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold mb-4 border-b pb-2">Doctor</h2>
+                {% if doctor %}
+                <div class="flex items-center">
+                    <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mr-4">
+                        <span class="text-green-600 font-bold text-lg">{{ doctor.first_name[0] if doctor.first_name else '?' }}</span>
+                    </div>
+                    <div>
+                        <p class="font-semibold">Dr. {{ doctor.first_name }} {{ doctor.last_name or '' }}</p>
+                        <p class="text-sm text-gray-600">{{ doctor.specialization or 'General Physician' }}</p>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-gray-500">Not assigned</p>
+                {% endif %}
+            </div>
+
+            <!-- Resource Allocation -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold mb-4 border-b pb-2">
+                    <i class="fas fa-cogs mr-2 text-gray-400"></i>Resources
+                </h2>
+                {% if resources %}
+                <div class="space-y-3">
+                    {% for resource in resources %}
+                    <div class="flex items-center p-3 bg-gray-50 rounded-lg">
+                        {% if resource.type == 'room' %}
+                        <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                            <i class="fas fa-door-open text-blue-600"></i>
+                        </div>
+                        <div>
+                            <p class="font-medium">{{ resource.name }}</p>
+                            <p class="text-xs text-gray-500">{{ resource.room_type|title }} Room ({{ resource.code }})</p>
+                        </div>
+                        {% elif resource.type == 'staff' %}
+                        <div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mr-3">
+                            <i class="fas fa-user-nurse text-purple-600"></i>
+                        </div>
+                        <div>
+                            <p class="font-medium">{{ resource.name }}</p>
+                            <p class="text-xs text-gray-500">{{ resource.staff_type|title }}{% if resource.role %} - {{ resource.role|replace('_', ' ')|title }}{% endif %}</p>
+                        </div>
+                        {% endif %}
+                        <span class="ml-auto text-xs px-2 py-1 rounded-full
+                            {% if resource.status == 'in_use' %}bg-green-100 text-green-700
+                            {% else %}bg-blue-100 text-blue-700{% endif %}">
+                            {{ resource.status|replace('_', ' ')|title }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% elif room or therapist %}
+                <div class="space-y-3">
+                    {% if room %}
+                    <div class="flex items-center p-3 bg-gray-50 rounded-lg">
+                        <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                            <i class="fas fa-door-open text-blue-600"></i>
+                        </div>
+                        <div>
+                            <p class="font-medium">{{ room.room_name }}</p>
+                            <p class="text-xs text-gray-500">{{ room.room_type|title }} Room ({{ room.room_code }})</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% if therapist %}
+                    <div class="flex items-center p-3 bg-gray-50 rounded-lg">
+                        <div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mr-3">
+                            <i class="fas fa-user-nurse text-purple-600"></i>
+                        </div>
+                        <div>
+                            <p class="font-medium">{{ therapist.first_name }} {{ therapist.last_name or '' }}</p>
+                            <p class="text-xs text-gray-500">{{ therapist.staff_type|title }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <p class="text-gray-400 text-sm">No resources allocated</p>
+                    {% if appointment.status not in ['completed', 'cancelled', 'no_show'] %}
+                    <button onclick="openResourceAllocation('{{ appointment.appointment_id }}')"
+                            class="mt-2 text-blue-600 hover:text-blue-700 text-sm">
+                        <i class="fas fa-plus mr-1"></i> Allocate Resources
+                    </button>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {% if appointment.resource_allocation_status %}
+                <div class="mt-3 pt-3 border-t text-sm">
+                    <span class="text-gray-500">Allocation Status:</span>
+                    <span class="ml-2 px-2 py-1 rounded-full text-xs font-medium
+                        {% if appointment.resource_allocation_status == 'complete' %}bg-green-100 text-green-700
+                        {% elif appointment.resource_allocation_status == 'partial' %}bg-yellow-100 text-yellow-700
+                        {% elif appointment.resource_allocation_status == 'pending' %}bg-orange-100 text-orange-700
+                        {% else %}bg-gray-100 text-gray-700{% endif %}">
+                        {{ appointment.resource_allocation_status|replace('_', ' ')|title }}
+                    </span>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Branch Info -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold mb-4 border-b pb-2">Branch</h2>
+                {% if branch %}
+                <p class="font-semibold">{{ branch.name }}</p>
+                {% if branch.address %}
+                <p class="text-sm text-gray-600 mt-1">{{ branch.address }}</p>
+                {% endif %}
+                {% else %}
+                <p class="text-gray-500">Branch information not available</p>
+                {% endif %}
+            </div>
+
+            <!-- Actions -->
+            {% if appointment.status not in ['completed', 'cancelled', 'no_show'] %}
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold mb-4 border-b pb-2">Actions</h2>
+                <div class="space-y-3">
+                    {% if appointment.status == 'requested' %}
+                    <button onclick="confirmAppointment('{{ appointment.appointment_id }}')"
+                        class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+                        <i class="fas fa-check mr-2"></i> Confirm
+                    </button>
+                    {% endif %}
+
+                    {% if appointment.status == 'confirmed' %}
+                    <button onclick="checkIn('{{ appointment.appointment_id }}')"
+                        class="w-full bg-purple-600 text-white py-2 rounded hover:bg-purple-700">
+                        <i class="fas fa-sign-in-alt mr-2"></i> Check In
+                    </button>
+                    {% endif %}
+
+                    {% if appointment.status == 'checked_in' %}
+                    <button onclick="startConsultation('{{ appointment.appointment_id }}')"
+                        class="w-full bg-orange-600 text-white py-2 rounded hover:bg-orange-700">
+                        <i class="fas fa-play mr-2"></i> Start Consultation
+                    </button>
+                    {% endif %}
+
+                    {% if appointment.status == 'in_progress' %}
+                    <button onclick="completeAppointment('{{ appointment.appointment_id }}')"
+                        class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">
+                        <i class="fas fa-check-circle mr-2"></i> Complete
+                    </button>
+                    {% endif %}
+
+                    <button onclick="rescheduleAppointment('{{ appointment.appointment_id }}')"
+                        class="w-full bg-gray-200 text-gray-700 py-2 rounded hover:bg-gray-300">
+                        <i class="fas fa-calendar-alt mr-2"></i> Reschedule
+                    </button>
+
+                    <button onclick="cancelAppointment('{{ appointment.appointment_id }}')"
+                        class="w-full bg-red-100 text-red-700 py-2 rounded hover:bg-red-200">
+                        <i class="fas fa-times mr-2"></i> Cancel
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Reschedule Modal -->
+<div id="reschedule-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center overflow-y-auto">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 my-8">
+        <!-- Header with Service Info -->
+        <div class="p-4 border-b" style="background: linear-gradient(135deg, #7c3aed 0%, #9333ea 100%);">
+            <div class="flex justify-between items-start">
+                <div class="text-white">
+                    <h3 class="text-lg font-semibold flex items-center">
+                        <i class="fas fa-calendar-alt mr-2"></i> Reschedule Appointment
+                    </h3>
+                    <!-- Service/Package Info -->
+                    <div id="reschedule-service-info" class="mt-2">
+                        {% if service %}
+                        <div class="flex items-center text-sm opacity-90">
+                            <i class="fas fa-concierge-bell mr-2"></i>
+                            <span>{{ service.name }}</span>
+                            <span class="mx-2">|</span>
+                            <i class="fas fa-clock mr-1"></i>
+                            <span id="reschedule-duration">{{ service.duration_minutes or appointment.estimated_duration_minutes or 30 }} mins</span>
+                        </div>
+                        {% elif package %}
+                        <div class="flex items-center text-sm opacity-90">
+                            <i class="fas fa-box mr-2"></i>
+                            <span>{{ package.name }}</span>
+                            <span class="mx-2">|</span>
+                            <i class="fas fa-clock mr-1"></i>
+                            <span id="reschedule-duration">{{ appointment.estimated_duration_minutes or 30 }} mins</span>
+                        </div>
+                        {% else %}
+                        <div class="flex items-center text-sm opacity-90">
+                            <i class="fas fa-stethoscope mr-2"></i>
+                            <span>Consultation</span>
+                            <span class="mx-2">|</span>
+                            <i class="fas fa-clock mr-1"></i>
+                            <span id="reschedule-duration">{{ appointment.estimated_duration_minutes or 30 }} mins</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <!-- Resource Requirements Indicator -->
+                    <div id="reschedule-requirements" class="mt-2 text-xs opacity-75 hidden">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        <span id="requirements-text"></span>
+                    </div>
+                </div>
+                <button onclick="closeRescheduleModal()" class="text-white hover:text-gray-200 p-1">
+                    <i class="fas fa-times text-lg"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Left Column: Date & Doctor Selection -->
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-calendar mr-1 text-purple-600"></i> Select Date
+                        </label>
+                        <input type="date" id="reschedule-date"
+                               class="w-full border-2 border-gray-200 rounded-lg px-4 py-3 focus:border-purple-500 focus:ring-purple-500"
+                               onchange="loadRescheduleSlots()">
+                        <p class="text-xs text-gray-500 mt-1">Choose a new date for this appointment</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-user-md mr-1 text-purple-600"></i> Doctor
+                        </label>
+                        <select id="reschedule-doctor"
+                                class="w-full border-2 border-gray-200 rounded-lg px-4 py-3 focus:border-purple-500 focus:ring-purple-500"
+                                onchange="loadRescheduleSlots()">
+                            <option value="{{ doctor.staff_id if doctor else '' }}">
+                                {{ ('Dr. ' + doctor.first_name + ' ' + (doctor.last_name or '')) if doctor else 'Current Doctor' }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-comment mr-1 text-purple-600"></i> Reason (Optional)
+                        </label>
+                        <textarea id="reschedule-reason"
+                                  class="w-full border-2 border-gray-200 rounded-lg px-4 py-2 focus:border-purple-500 focus:ring-purple-500"
+                                  rows="2"
+                                  placeholder="Enter reason for rescheduling..."></textarea>
+                    </div>
+
+                    <!-- Current Appointment Info -->
+                    <div class="bg-gray-50 rounded-lg p-3 border">
+                        <p class="text-xs text-gray-500 mb-1">Current Appointment</p>
+                        <p class="font-medium text-gray-700">
+                            <i class="far fa-calendar mr-1"></i>
+                            {{ appointment.appointment_date.strftime('%A, %d %B %Y') }}
+                        </p>
+                        <p class="text-sm text-gray-600">
+                            <i class="far fa-clock mr-1"></i>
+                            {{ appointment.start_time.strftime('%H:%M') if appointment.start_time else 'N/A' }}
+                            {% if doctor %} with Dr. {{ doctor.first_name }}{% endif %}
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Right Column: Time Slots -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-clock mr-1 text-purple-600"></i> Available Time Slots
+                    </label>
+                    <div id="reschedule-slots" class="border-2 border-gray-200 rounded-lg p-4 min-h-[280px] max-h-[350px] overflow-y-auto bg-gray-50">
+                        <div class="flex flex-col items-center justify-center h-full text-gray-400 py-8">
+                            <i class="fas fa-calendar-day text-4xl mb-3"></i>
+                            <p class="text-center">Select a date to view<br>available time slots</p>
+                        </div>
+                    </div>
+                    <!-- Slot Legend -->
+                    <div class="mt-3 flex items-center justify-center flex-wrap gap-3 text-xs">
+                        <span class="flex items-center">
+                            <span class="w-3 h-3 rounded bg-green-500 mr-1"></span> Preferred
+                        </span>
+                        <span class="flex items-center">
+                            <span class="w-3 h-3 rounded bg-amber-400 mr-1"></span> Alternative
+                        </span>
+                        <span class="flex items-center">
+                            <span class="w-3 h-3 rounded bg-gray-300 mr-1"></span> Unavailable
+                        </span>
+                        <span class="flex items-center">
+                            <span class="w-3 h-3 rounded bg-purple-600 mr-1"></span> Selected
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="p-4 border-t bg-gray-50 flex justify-between items-center">
+            <div id="selected-slot-display" class="text-sm text-gray-600 hidden">
+                <i class="fas fa-check-circle text-green-600 mr-1"></i>
+                <span>Selected: <strong id="selected-slot-text"></strong></span>
+            </div>
+            <div class="flex space-x-3 ml-auto">
+                <button onclick="closeRescheduleModal()"
+                        class="px-4 py-2 border rounded-lg hover:bg-gray-100 transition-colors">
+                    Cancel
+                </button>
+                <button id="confirm-reschedule-btn" onclick="confirmReschedule()"
+                        class="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
+                        disabled>
+                    <i class="fas fa-calendar-check mr-2"></i> Confirm Reschedule
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let selectedSlotTime = null;
+    const appointmentId = '{{ appointment.appointment_id }}';
+    const currentStaffId = '{{ doctor.staff_id if doctor else "" }}';
+
+    async function performAction(appointmentId, action, extraData = {}) {
+        try {
+            // Use the web endpoint with session-based auth
+            const response = await fetch(`/api/appointment/web/${appointmentId}/${action}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(extraData)
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                location.reload();
+            } else {
+                alert(data.error || 'Action failed');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error performing action');
+        }
+    }
+
+    function confirmAppointment(id) { performAction(id, 'confirm'); }
+    function checkIn(id) { performAction(id, 'check_in'); }
+    function startConsultation(id) { performAction(id, 'start'); }
+    function completeAppointment(id) { performAction(id, 'complete'); }
+
+    function cancelAppointment(id) {
+        const reason = prompt('Please provide a cancellation reason:');
+        if (reason) {
+            performAction(id, 'cancel', { reason: reason });
+        }
+    }
+
+    function rescheduleAppointment(id) {
+        // Set minimum date to today
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('reschedule-date').min = today;
+        document.getElementById('reschedule-date').value = '';
+        document.getElementById('reschedule-reason').value = '';
+        selectedSlotTime = null;
+        document.getElementById('confirm-reschedule-btn').disabled = true;
+        document.getElementById('selected-slot-display').classList.add('hidden');
+        document.getElementById('reschedule-slots').innerHTML = `
+            <div class="flex flex-col items-center justify-center h-full text-gray-400 py-8">
+                <i class="fas fa-calendar-day text-4xl mb-3"></i>
+                <p class="text-center">Select a date to view<br>available time slots</p>
+            </div>
+        `;
+        document.getElementById('reschedule-modal').classList.remove('hidden');
+    }
+
+    function closeRescheduleModal() {
+        document.getElementById('reschedule-modal').classList.add('hidden');
+    }
+
+    async function loadRescheduleSlots() {
+        const date = document.getElementById('reschedule-date').value;
+        const staffId = document.getElementById('reschedule-doctor').value || currentStaffId;
+
+        // Reset selection
+        selectedSlotTime = null;
+        document.getElementById('confirm-reschedule-btn').disabled = true;
+        document.getElementById('selected-slot-display').classList.add('hidden');
+
+        if (!date) {
+            document.getElementById('reschedule-slots').innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full text-gray-400 py-8">
+                    <i class="fas fa-calendar-day text-4xl mb-3"></i>
+                    <p class="text-center">Select a date to view<br>available time slots</p>
+                </div>
+            `;
+            return;
+        }
+
+        document.getElementById('reschedule-slots').innerHTML = `
+            <div class="flex flex-col items-center justify-center py-8 text-gray-500">
+                <i class="fas fa-spinner fa-spin text-3xl mb-3 text-purple-600"></i>
+                <p>Checking resource availability...</p>
+            </div>
+        `;
+
+        try {
+            // Use the new resource-aware endpoint
+            let url = `/api/appointment/web/${appointmentId}/reschedule-slots?date=${date}`;
+            if (staffId) {
+                url += `&staff_id=${staffId}`;
+            }
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.success && data.slots && data.slots.length > 0) {
+                // Update requirements display
+                const reqDiv = document.getElementById('reschedule-requirements');
+                const reqText = document.getElementById('requirements-text');
+                if (data.resource_requirements && (data.resource_requirements.rooms > 0 || data.resource_requirements.staff > 0)) {
+                    let reqParts = [];
+                    if (data.resource_requirements.rooms > 0) {
+                        reqParts.push(`${data.resource_requirements.rooms} room(s)`);
+                    }
+                    if (data.resource_requirements.staff > 0) {
+                        reqParts.push(`${data.resource_requirements.staff} staff`);
+                    }
+                    reqText.textContent = `Requires: ${reqParts.join(', ')}`;
+                    reqDiv.classList.remove('hidden');
+                }
+
+                // Count available slots
+                const availableCount = data.slots.filter(s => s.is_available).length;
+
+                // Build slots HTML with three status types
+                const slotsHtml = data.slots.map(slot => {
+                    if (slot.status === 'preferred') {
+                        // Green - Same resources available (preferred)
+                        return `
+                            <button type="button"
+                                    class="slot-btn available-slot preferred-slot px-3 py-2 border-2 border-green-300 rounded-lg text-sm
+                                           bg-green-50 hover:bg-green-100 hover:border-green-500 transition-all
+                                           flex flex-col items-center"
+                                    data-time="${slot.start_time}"
+                                    data-status="preferred"
+                                    onclick="selectRescheduleSlot(this, '${slot.start_time}', 'preferred')">
+                                <span class="font-semibold text-green-700">${slot.start_time}</span>
+                                <span class="text-xs text-green-600">Same resources</span>
+                            </button>
+                        `;
+                    } else if (slot.status === 'alternative') {
+                        // Yellow/Amber - Alternative resources available (needs reallocation)
+                        const altInfo = slot.alternative_info.length > 0
+                            ? slot.alternative_info.join(', ')
+                            : 'Other resources';
+                        return `
+                            <button type="button"
+                                    class="slot-btn available-slot alternative-slot px-3 py-2 border-2 border-amber-300 rounded-lg text-sm
+                                           bg-amber-50 hover:bg-amber-100 hover:border-amber-500 transition-all
+                                           flex flex-col items-center"
+                                    data-time="${slot.start_time}"
+                                    data-status="alternative"
+                                    title="Needs reallocation: ${altInfo}"
+                                    onclick="selectRescheduleSlot(this, '${slot.start_time}', 'alternative')">
+                                <span class="font-semibold text-amber-700">${slot.start_time}</span>
+                                <span class="text-xs text-amber-600 truncate w-full text-center">Reallocation</span>
+                            </button>
+                        `;
+                    } else {
+                        // Gray - Unavailable
+                        const reasonText = slot.unavailable_reasons.length > 0
+                            ? slot.unavailable_reasons[0]
+                            : 'Unavailable';
+                        return `
+                            <div class="slot-btn unavailable-slot px-3 py-2 border-2 border-gray-200 rounded-lg text-sm
+                                        bg-gray-100 cursor-not-allowed flex flex-col items-center opacity-60"
+                                 title="${slot.unavailable_reasons.join(', ')}">
+                                <span class="font-semibold text-gray-400 line-through">${slot.start_time}</span>
+                                <span class="text-xs text-gray-400">${reasonText}</span>
+                            </div>
+                        `;
+                    }
+                }).join('');
+
+                // Show summary header with preferred/alternative counts
+                const dateObj = new Date(date);
+                const dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                const preferredCount = data.slots.filter(s => s.status === 'preferred').length;
+                const alternativeCount = data.slots.filter(s => s.status === 'alternative').length;
+
+                let countBadges = '';
+                if (preferredCount > 0) {
+                    countBadges += `<span class="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 mr-1">${preferredCount} preferred</span>`;
+                }
+                if (alternativeCount > 0) {
+                    countBadges += `<span class="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700">${alternativeCount} alternative</span>`;
+                }
+                if (availableCount === 0) {
+                    countBadges = `<span class="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">No slots</span>`;
+                }
+
+                document.getElementById('reschedule-slots').innerHTML = `
+                    <div class="mb-3 pb-2 border-b flex justify-between items-center flex-wrap gap-1">
+                        <span class="text-sm font-medium text-gray-700">
+                            <i class="far fa-calendar-alt mr-1"></i> ${dateStr}
+                        </span>
+                        <div>${countBadges}</div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">${slotsHtml}</div>
+                `;
+
+                if (availableCount === 0) {
+                    document.getElementById('reschedule-slots').innerHTML += `
+                        <div class="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>
+                            No slots available on this date. No resources available.
+                            Please try a different date.
+                        </div>
+                    `;
+                } else if (preferredCount === 0 && alternativeCount > 0) {
+                    document.getElementById('reschedule-slots').innerHTML += `
+                        <div class="mt-3 p-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Yellow slots require resource reallocation after reschedule.
+                        </div>
+                    `;
+                }
+            } else {
+                document.getElementById('reschedule-slots').innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-8 text-gray-500">
+                        <i class="fas fa-calendar-times text-3xl mb-3 text-gray-400"></i>
+                        <p class="text-center">No slots available<br>for this date</p>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Error loading slots:', error);
+            document.getElementById('reschedule-slots').innerHTML = `
+                <div class="flex flex-col items-center justify-center py-8 text-red-500">
+                    <i class="fas fa-exclamation-circle text-3xl mb-3"></i>
+                    <p class="text-center">Error loading slots</p>
+                    <button onclick="loadRescheduleSlots()" class="mt-2 text-sm text-blue-600 hover:underline">
+                        <i class="fas fa-redo mr-1"></i> Retry
+                    </button>
+                </div>
+            `;
+        }
+    }
+
+    let selectedSlotStatus = null;
+
+    function selectRescheduleSlot(element, time, status = 'preferred') {
+        // Reset all preferred slots to green
+        document.querySelectorAll('.preferred-slot').forEach(btn => {
+            btn.classList.remove('bg-purple-600', 'border-purple-600');
+            btn.classList.add('bg-green-50', 'border-green-300');
+            btn.querySelectorAll('span').forEach(span => {
+                span.classList.remove('text-white');
+                span.classList.add('text-green-700', 'text-green-600');
+            });
+        });
+
+        // Reset all alternative slots to amber
+        document.querySelectorAll('.alternative-slot').forEach(btn => {
+            btn.classList.remove('bg-purple-600', 'border-purple-600');
+            btn.classList.add('bg-amber-50', 'border-amber-300');
+            btn.querySelectorAll('span').forEach(span => {
+                span.classList.remove('text-white');
+                span.classList.add('text-amber-700', 'text-amber-600');
+            });
+        });
+
+        // Add selection to clicked slot
+        element.classList.remove('bg-green-50', 'border-green-300', 'bg-amber-50', 'border-amber-300');
+        element.classList.add('bg-purple-600', 'border-purple-600');
+        element.querySelectorAll('span').forEach(span => {
+            span.classList.remove('text-green-700', 'text-green-600', 'text-amber-700', 'text-amber-600');
+            span.classList.add('text-white');
+        });
+
+        selectedSlotTime = time;
+        selectedSlotStatus = status;
+        document.getElementById('confirm-reschedule-btn').disabled = false;
+
+        // Update selected slot display in footer
+        const date = document.getElementById('reschedule-date').value;
+        const dateObj = new Date(date);
+        const dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+        const statusText = status === 'alternative' ? ' (needs reallocation)' : '';
+        const iconClass = status === 'alternative' ? 'text-amber-600' : 'text-green-600';
+
+        document.getElementById('selected-slot-display').innerHTML = `
+            <i class="fas fa-check-circle ${iconClass} mr-1"></i>
+            <span>Selected: <strong>${dateStr} at ${time}</strong>${statusText}</span>
+        `;
+        document.getElementById('selected-slot-display').classList.remove('hidden');
+    }
+
+    async function confirmReschedule() {
+        const date = document.getElementById('reschedule-date').value;
+        const reason = document.getElementById('reschedule-reason').value;
+        const staffId = document.getElementById('reschedule-doctor').value || currentStaffId;
+
+        if (!date || !selectedSlotTime) {
+            alert('Please select a date and time slot');
+            return;
+        }
+
+        // Show warning for alternative slots that need reallocation
+        if (selectedSlotStatus === 'alternative') {
+            const confirmed = confirm(
+                'This time slot requires RESOURCE REALLOCATION.\n\n' +
+                'The current doctor or resources are not available at this time.\n' +
+                'After rescheduling, you will need to:\n' +
+                '1. Reallocate resources (room/staff) for this appointment\n' +
+                '2. Possibly assign a different doctor\n\n' +
+                'Do you want to proceed?'
+            );
+            if (!confirmed) {
+                return;
+            }
+        }
+
+        // Disable button while processing
+        const confirmBtn = document.getElementById('confirm-reschedule-btn');
+        const originalText = confirmBtn.innerHTML;
+        confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Rescheduling...';
+        confirmBtn.disabled = true;
+
+        try {
+            const response = await fetch(`/api/appointment/web/${appointmentId}/reschedule`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    new_date: date,
+                    new_time: selectedSlotTime,
+                    staff_id: staffId,
+                    reason: reason,
+                    requires_reallocation: selectedSlotStatus === 'alternative'
+                })
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                closeRescheduleModal();
+                // Show reallocation reminder for alternative slots
+                if (selectedSlotStatus === 'alternative') {
+                    alert('Appointment rescheduled successfully!\n\nReminder: Please reallocate resources for this appointment.');
+                }
+                // Redirect to the new appointment if created
+                if (data.new_appointment_id) {
+                    window.location.href = `/appointment/${data.new_appointment_id}`;
+                } else {
+                    location.reload();
+                }
+            } else {
+                // Handle conflict errors with better display
+                if (data.conflicts && data.conflicts.length > 0) {
+                    let conflictMsg = 'Cannot reschedule - Resource conflicts:\n\n';
+                    data.conflicts.forEach((conflict, i) => {
+                        conflictMsg += `${i + 1}. ${conflict}\n`;
+                    });
+                    conflictMsg += '\nPlease select a different time slot.';
+                    alert(conflictMsg);
+                } else {
+                    alert(data.error || data.message || 'Failed to reschedule appointment');
+                }
+                // Re-enable button
+                confirmBtn.innerHTML = originalText;
+                confirmBtn.disabled = false;
+            }
+        } catch (error) {
+            console.error('Error rescheduling:', error);
+            alert('Error rescheduling appointment');
+            confirmBtn.innerHTML = originalText;
+            confirmBtn.disabled = false;
+        }
+    }
+
+    // Close modal on escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeRescheduleModal();
+        }
+    });
+
+    // Close modal on outside click
+    document.getElementById('reschedule-modal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeRescheduleModal();
+        }
+    });
+
+    // Resource Allocation
+    function openResourceAllocation(apptId) {
+        // Navigate to dashboard with resource allocation modal
+        // Or open inline modal if on this page
+        window.location.href = `/appointment/dashboard?allocate=${apptId}`;
+    }
+</script>
+{% endblock %}

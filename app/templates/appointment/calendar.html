@@ -1,0 +1,22 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Appointment Calendar{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">Appointment Calendar</h1>
+        <a href="{{ url_for('appointment_views.dashboard') }}" class="text-blue-600 hover:text-blue-700">
+            <i class="fas fa-arrow-left mr-2"></i> Back to Dashboard
+        </a>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="text-center text-gray-500 py-8">
+            <i class="fas fa-calendar-alt text-6xl mb-4"></i>
+            <p class="text-lg">Calendar View Coming Soon</p>
+            <p class="text-sm">This feature will show a full calendar view of appointments</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1074,9 +1074,27 @@ def staff_detail(staff_id):
                 })
                 staff.personal_info = personal_info
                 
-                # Update specialization
-                staff.specialization = form.specialization.data
-                
+                # Update staff type
+                if form.staff_type.data:
+                    staff.staff_type = form.staff_type.data
+
+                # Update specialization (both ID and legacy text field)
+                specialization_id = request.form.get('specialization_id')
+                if specialization_id:
+                    from uuid import UUID
+                    staff.specialization_id = UUID(specialization_id)
+                    # Also update the legacy text field from the lookup table
+                    from app.models.master import StaffSpecialization
+                    spec = session.query(StaffSpecialization).filter_by(
+                        specialization_id=specialization_id
+                    ).first()
+                    if spec:
+                        staff.specialization = spec.name
+                elif form.specialization.data:
+                    # Use custom text field if no ID selected
+                    staff.specialization = form.specialization.data
+                    staff.specialization_id = None
+
                 # Update branch if provided
                 if form.branch_id.data:
                     staff.branch_id = form.branch_id.data
@@ -1093,7 +1111,10 @@ def staff_detail(staff_id):
                 # Update active status
                 is_active = form.status.data == 'active'
                 staff.is_active = is_active
-                
+
+                # Update is_resource flag (can be allocated to appointments)
+                staff.is_resource = request.form.get('is_resource') == 'on'
+
                 # Also update user active status
                 user = session.query(User).filter_by(
                     entity_id=staff_id,
@@ -1156,8 +1177,9 @@ def staff_detail(staff_id):
             form.title.data = personal_info.get('title')
             form.first_name.data = personal_info.get('first_name')
             form.last_name.data = personal_info.get('last_name')
+            form.staff_type.data = staff.staff_type or 'staff'
             form.specialization.data = staff.specialization
-            
+
             # Set branch if available
             if staff.branch_id:
                 form.branch_id.data = str(staff.branch_id)
